@@ -1,12 +1,12 @@
 # SealLink Protocol Specification
 
-**Version:** `1.0.0-draft.2`  
+**Version:** `1.0.0-draft.3`  
 **Status:** `draft` *(wire format not yet frozen; open items tracked in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md))*  
-**Evidence / Maturity:** `vectors` *(Draft 2020-12 schemas, unit vectors, 4 end-to-end RFC 8448-style byte traces, and an executable 84/84 refusal coverage matrix verified by the reference Tier 1 verifier in CI; two-node `nc28.0` `P2A` regtest proof in `conformance/p2a-regtest/`; `dual-impl` Rust + Go follows next)*  
+**Evidence / Maturity:** `vectors` *(Draft 2020-12 schemas published live at `https://seallink.org/releases/v1.0.0-draft.3/schemas/`, pure-Python BIP-340 / Ed25519 / low-S P-256 reference primitives, 4 end-to-end RFC 8448-style byte traces, schema-validated `84/84` refusal matrix, security-conformance & verifier-mutation test suite executed by the Reference Verifier Core in CI, and two-node `nc28.0` `P2A` regtest proof in `conformance/p2a-regtest/`; `dual-impl` Rust + Go and full-trace regtest follow next)*  
 **Authors:** Ivan Oparin, Alexey Grigorev  
 **License:** Prose under CC BY 4.0; registries, schemas, vectors, and tooling under MIT ([LICENSE.md](LICENSE.md)).
 
-> **Single-File Release Bundle:** Download the compiled self-contained Markdown specification and SHA-256 checksum from [GitHub Releases](https://github.com/relux-works/seallink-spec/releases).
+> **Web Edition & Release Bundles:** Browse the rendered HTML / Print-to-PDF edition and live `$id` JSON Schemas at **[seallink.org](https://seallink.org/)**, or download the compiled single-file Markdown specification and SHA-256 checksum from [GitHub Releases](https://github.com/relux-works/seallink-spec/releases).
 
 ---
 
@@ -54,27 +54,28 @@ SealLink is an open protocol enabling **intelligent actors — people, organizat
   - [`constraints.json`](registry/constraints.json) — 7 conservative Constraint Algebra predicates and quota windows.
 - **Formal JSON Schemas ([`schemas/`](schemas/)):** 12 Draft 2020-12 schemas (`common`, `name-value`, `manifest`, `card`, `origin`, `guardian`, `contract`, `credential`, `grant`, `invocation`, `profile-mail`, `profile-agent`).
 - **Executable Conformance Vectors ([`vectors/`](vectors/)):**
-  - `wire-jcs-and-hashes.json` — Restricted JCS positive/negative, 3 hashes, `clause_hash`, BIP-340 `SignatureSet`.
-  - `ledger-scripts-and-opreturn.json` — All 3 Namecoin prefix scripts, all `ScriptPolicy` compilations, `P2A` CPFP (`240`-sat dust floor), `SLNK` `OP_RETURN` hex frames (`0x01`–`0x12`), and 5-leaf Merkle batch `0x02` inclusion proofs.
-  - `constraints-and-schemas.json` — All 7 Constraint Algebra predicates (match + narrowing + conservative rejections) and negative schema/semantic fixtures (including `SL-ORIG-016` guardianship consistency cases).
+  - `wire-jcs-and-hashes.json` — Restricted JCS positive/negative, 3 hashes, `clause_hash`, BIP-340 `SignatureSet`, plus RFC 8032 Ed25519 and strict low-S NIST P-256 device-key signature vectors (positive, high-S negative, wrong-type negative).
+  - `ledger-scripts-and-opreturn.json` — All 3 Namecoin prefix scripts, all `ScriptPolicy` compilations, `P2A` CPFP (`240`-sat dust floor, mandatory TRUC v3 for zero-fee), `SLNK` `OP_RETURN` hex frames (`0x01`–`0x12`), and 5-leaf Merkle batch `0x02` inclusion proofs.
+  - `constraints-and-schemas.json` — All 7 Constraint Algebra predicates (match + narrowing + conservative rejections) and negative schema/semantic fixtures (including `SL-ORIG-016` guardianship consistency and `disposer_pk` rotation `retain_active` refusal cases).
   - `trace-01-mail-offline-revoke.json` — Executable end-to-end mail trace (offline issuer, `recipient.mode = "name"`, 69B MIME `mail/read` receipt, constraint refusal, mempool seal spend -> `GRANT_CLOSED`).
-  - `trace-02-guardian-succession-assent.json` — Executable end-to-end guardianship trace (initial activation `0x12`, halt, acyclic Stage 1 `0x0d` -> Stage 2 `0x0e`, roster `0x0f`, ward contract `ward_origin_id` + `guardian_approvals[]`, ward alone refused `WARD_AUTONOMOUS_FORBIDDEN`, halted guardian refused `GUARDIAN_INACTIVE`, active successor admitted).
-  - `trace-03-delegation-pool-single-use.json` — Executable end-to-end delegation & single-use trace (2 groups sharing 1 pool under R8.5/R8.6, acyclic `0x11` single-use execution, crash-in-effect-window `uncertain` recovery, post-settlement replay idempotency, new-nonce `INVOKE_REPLAY`, issuer revocation -> `GRANT_CLOSED`).
+  - `trace-02-guardian-succession-assent.json` — Executable end-to-end guardianship trace (initial activation `0x12` + guardian assent, halt, acyclic Stage 1 `0x0d` -> Stage 2 `0x0e`, roster `0x0f`, ward contract `ward_origin_id` + `party_id` + `guardian_approvals[]`, co-tenant same-role `party_id` contract assent, and both positive `name_recovery` continuation branches: timely `0x10` restoration of `B_1` and post-delay promotion to `B_3`).
+  - `trace-03-delegation-pool-single-use.json` — Executable end-to-end delegation & single-use trace (2 groups sharing 1 pool under R8.5/R8.6, atomic dual-account `own` + `row` multi-quota reservation/settlement & partial-failure rollback, acyclic `0x11` single-use execution, crash-in-effect-window `uncertain` recovery, post-settlement replay idempotency, new-nonce `INVOKE_REPLAY`, issuer revocation -> `GRANT_CLOSED`).
   - `trace-04-agent-guardian-intake.json` — Executable end-to-end `PROFILE-agent-v1` `agent/guardian-message` trace (`strict_drop`, inactive guardian `GUARDIAN_INACTIVE`, downgraded `routine_read` -> `GUARDIAN_QUORUM_UNMET`, valid `effect_grant` + `guardian_approvals[]` -> `ADMIT` + Authority Frame `AgentGuardianMessageResult`).
-  - `refusal-coverage-matrix.json` — Executable conformance matrix driving all `84/84` registered refusal codes through `tools/seallink_verifier.py`, `tools/seallink_ref.py`, and Draft 2020-12 schemas.
+  - `refusal-coverage-matrix.json` — Executable conformance matrix driving all `84/84` registered refusal codes with Draft 2020-12 schema-validated semantic fixtures through `tools/seallink_verifier.py` and `tools/seallink_ref.py`.
+  - `security-conformance.json` — Executable adversarial/false-admit regression suite (stranger-signed `origin`/`guardian`/`roster`/`capacity`/`end`/`migration`, empty `trusted_origin_issuers`, closed-schema unknown/missing field refusal, zero healthy comparison peers -> `CHAIN_UNHEALTHY`, `mail/send` on `mail/read` `executor_ref` -> `INVOKE_ACTION_DENIED`, `disposer_pk` rotation `retain_active` refusal, and rule-assertion mapping).
 - **Informative Guides & Traceability:**
-  - [GUIDE-01-custody-and-signers.md](guides/GUIDE-01-custody-and-signers.md) — Hardware/cold custody, Namecoin `namepsbt`, crash-safe delegation reservation ledger, and Agent Isolation Runtime integration.
-  - [archive/rule-inventory.md](archive/rule-inventory.md) — Granular invariant-level migration traceability from the historical draft corpus.
+  - [GUIDE-01-custody-and-signers.md](guides/GUIDE-01-custody-and-signers.md) — Hardware/cold custody, Namecoin `namepsbt`, crash-safe delegation reservation ledger, Agent Isolation Runtime integration, and TLS SPKI pinning / managed CDN guidance.
+  - [archive/rule-inventory.md](archive/rule-inventory.md) — Complete per-rule conformance index covering all 113 declared `SL-*` rules plus migration traceability from the historical draft corpus.
 
 ---
 
 ## Automated Verification and Release Bundles
 
-Run the specification linter (validating registries, cross-registry signer coherence, rule uniqueness, Draft 2020-12 metaschemas, cryptographic verification, and **live execution of every trace and all 84/84 refusal codes through `tools/seallink_verifier.py`**) and the single-file bundle check locally:
+Run the specification linter (validating registries, cross-registry signer coherence, rule uniqueness, Draft 2020-12 metaschemas, schema validity of all semantic refusal inputs, cryptographic verification, **live execution of every trace, all 84/84 refusal codes, and adversarial security regressions through the Reference Verifier Core (`tools/seallink_verifier.py`), plus verifier-check mutation self-tests**) and the single-file bundle check locally:
 
 ```bash
 python3 tools/speclint.py --require-jsonschema
-python3 tools/build_bundle.py --version v1.0.0-draft.2 --check
+python3 tools/build_bundle.py --version v1.0.0-draft.3 --check
 ```
 
 Pushing a signed release tag (`v*`) triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which runs the full lint and executable verifier suite, compiles the entire specification into one deterministic Markdown file (`seallink-spec-<tag>.md` + `.sha256`), and publishes a GitHub Release automatically.

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.2/schemas/guardian.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.3/schemas/guardian.schema.json",
   "title": "SealLink v1.0 Name Binding, Guardianship, Roster Transition, Capacity & Subject End",
   "$defs": {
     "NameBinding": {
@@ -159,6 +159,7 @@
               "type": "array",
               "minItems": 1,
               "maxItems": 32,
+              "description": "Per-slot transition actions (retain_active, retain_vacant, new_vacant). Verifiers MUST forbid retain_active and retain_vacant whenever disposer_pk or arbiter_pk changes relative to the previous roster revision (SL-ORIG-015, SL-ORIG-016).",
               "items": {
                 "oneOf": [
                   {

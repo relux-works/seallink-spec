@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.2/schemas/contract.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.3/schemas/contract.schema.json",
   "title": "SealLink v1.0 Contracts, Assent, Termination & Violation Verdicts",
   "$defs": {
     "Contract": {
@@ -17,13 +17,15 @@
           "type": "array",
           "minItems": 2,
           "maxItems": 32,
+          "description": "Every party entry MUST carry a distinct party_id within the contract; multiple parties MAY share a legal role (e.g. co-tenants).",
           "items": {
             "oneOf": [
               {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["role", "signing_policy"],
+                "required": ["party_id", "role", "signing_policy"],
                 "properties": {
+                  "party_id": { "$ref": "common.schema.json#/$defs/PartyId" },
                   "role": { "type": "string", "minLength": 1, "maxLength": 64 },
                   "name_pin": { "$ref": "common.schema.json#/$defs/NamePin" },
                   "signing_policy": { "$ref": "common.schema.json#/$defs/ThresholdPolicy" }
@@ -32,8 +34,9 @@
               {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["role", "ward_origin_id", "name_pin"],
+                "required": ["party_id", "role", "ward_origin_id", "name_pin"],
                 "properties": {
+                  "party_id": { "$ref": "common.schema.json#/$defs/PartyId" },
                   "role": { "type": "string", "minLength": 1, "maxLength": 64 },
                   "ward_origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
                   "name_pin": { "$ref": "common.schema.json#/$defs/NamePin" }
@@ -85,7 +88,7 @@
     "AssentPayload": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "network", "genesis", "target_type", "target_id", "party_role", "issued_at", "expires_at", "nonce"],
+      "required": ["type", "network", "genesis", "target_type", "target_id", "party_id", "party_role", "issued_at", "expires_at", "nonce"],
       "properties": {
         "type": { "const": "seallink-assent/1" },
         "network": { "$ref": "common.schema.json#/$defs/Network" },
@@ -95,6 +98,7 @@
           "enum": ["seallink-contract/1", "seallink-guardian/1", "seallink-guardian-roster/1", "seallink-migration/1"]
         },
         "target_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "party_id": { "$ref": "common.schema.json#/$defs/PartyId" },
         "party_role": { "type": "string", "minLength": 1, "maxLength": 64 },
         "party_name": { "$ref": "common.schema.json#/$defs/NameStr" },
         "guardian_context": { "$ref": "common.schema.json#/$defs/GuardianContext" },

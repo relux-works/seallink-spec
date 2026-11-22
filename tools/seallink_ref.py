@@ -16,6 +16,7 @@ Implements normative primitives from SPEC-01, SPEC-02, SPEC-04, SPEC-05, SPEC-06
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import re
 import struct
@@ -538,22 +539,391 @@ def schnorr_verify(msg32: bytes, pubkey_hex: str, sig_hex: str) -> bool:
     return r_pt is not None and r_pt[1] % 2 == 0 and r_pt[0] == r
 
 
+# ============================================================================
+# 4b. Pure-Python RFC 8032 Ed25519 & SEC 1 NIST P-256 ECDSA (Strict Low-S)
+# ============================================================================
+
+DEVICE_ALG_ALLOWED_TYPES = frozenset({
+    "seallink-owner-command/1",
+    "seallink-statement/1",
+})
+
+# --- RFC 8032 Ed25519 (Twisted Edwards: -x^2 + y^2 = 1 + d*x^2*y^2 mod p) ---
+_ED_P = (1 << 255) - 19
+_ED_L = (1 << 252) + 27742317777372353535851937790883648493
+_ED_D = (-121665 * pow(121666, _ED_P - 2, _ED_P)) % _ED_P
+_ED_I = pow(2, (_ED_P - 1) // 4, _ED_P)
+
+
+def _ed_recover_x(y: int, sign: int) -> int | None:
+    if y >= _ED_P:
+        return None
+    x2 = ((y * y - 1) * pow(_ED_D * y * y + 1, _ED_P - 2, _ED_P)) % _ED_P
+    if x2 == 0:
+        return None if sign else 0
+    x = pow(x2, (_ED_P + 3) // 8, _ED_P)
+    if (x * x - x2) % _ED_P != 0:
+        x = (x * _ED_I) % _ED_P
+    if (x * x - x2) % _ED_P != 0:
+        return None
+    if (x & 1) != sign:
+        x = _ED_P - x
+    return x
+
+
+_ED_BY = (4 * pow(5, _ED_P - 2, _ED_P)) % _ED_P
+_ED_BX = _ed_recover_x(_ED_BY, 0)
+assert _ED_BX is not None
+_ED_B = (_ED_BX, _ED_BY, 1, (_ED_BX * _ED_BY) % _ED_P)
+_ED_ID = (0, 1, 1, 0)
+
+
+def _ed_add(p: tuple[int, int, int, int], q: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    x1, y1, z1, t1 = p
+    x2, y2, z2, t2 = q
+    a = ((y1 - x1) * (y2 - x2)) % _ED_P
+    b = ((y1 + x1) * (y2 + x2)) % _ED_P
+    c = (2 * _ED_D * t1 * t2) % _ED_P
+    d = (2 * z1 * z2) % _ED_P
+    e = (b - a) % _ED_P
+    f = (d - c) % _ED_P
+    g = (d + c) % _ED_P
+    h = (b + a) % _ED_P
+    return ((e * f) % _ED_P, (g * h) % _ED_P, (f * g) % _ED_P, (e * h) % _ED_P)
+
+
+def _ed_mul(pt: tuple[int, int, int, int], s: int) -> tuple[int, int, int, int]:
+    r = _ED_ID
+    addend = pt
+    k = s
+    while k > 0:
+        if k & 1:
+            r = _ed_add(r, addend)
+        addend = _ed_add(addend, addend)
+        k >>= 1
+    return r
+
+
+def _ed_encode_point(pt: tuple[int, int, int, int]) -> bytes:
+    x, y, z, _ = pt
+    zi = pow(z, _ED_P - 2, _ED_P)
+    ax = (x * zi) % _ED_P
+    ay = (y * zi) % _ED_P
+    b = bytearray(ay.to_bytes(32, "little"))
+    b[31] |= (ax & 1) << 7
+    return bytes(b)
+
+
+def _ed_decode_point(b: bytes) -> tuple[int, int, int, int] | None:
+    if len(b) != 32:
+        return None
+    sign = (b[31] >> 7) & 1
+    y = int.from_bytes(b, "little") & ((1 << 255) - 1)
+    x = _ed_recover_x(y, sign)
+    if x is None:
+        return None
+    return (x, y, 1, (x * y) % _ED_P)
+
+
+def deterministic_ed25519_seed(label: str) -> bytes:
+    """Derive a reproducible 32-byte Ed25519 seed for test vectors ONLY."""
+    return sha256(b"seallink-test-vector-ed25519:" + label.encode("utf-8"))
+
+
+def ed25519_pubkey(seed32: bytes) -> str:
+    if len(seed32) != 32:
+        raise ValueError("Ed25519 seed must be 32 bytes")
+    h = hashlib.sha512(seed32).digest()
+    a = int.from_bytes(h[:32], "little")
+    a &= (1 << 254) - 8
+    a |= 1 << 254
+    return _ed_encode_point(_ed_mul(_ED_B, a)).hex()
+
+
+def is_valid_ed25519_pubkey(hex_pk: str) -> bool:
+    if len(hex_pk) != 64 or hex_pk != hex_pk.lower():
+        return False
+    try:
+        raw = bytes.fromhex(hex_pk)
+    except ValueError:
+        return False
+    return _ed_decode_point(raw) is not None
+
+
+def ed25519_sign(msg: bytes, seed32: bytes) -> str:
+    if len(seed32) != 32:
+        raise ValueError("Ed25519 seed must be 32 bytes")
+    h = hashlib.sha512(seed32).digest()
+    a = int.from_bytes(h[:32], "little")
+    a &= (1 << 254) - 8
+    a |= 1 << 254
+    prefix = h[32:]
+    pub_b = _ed_encode_point(_ed_mul(_ED_B, a))
+    r = int.from_bytes(hashlib.sha512(prefix + msg).digest(), "little") % _ED_L
+    r_b = _ed_encode_point(_ed_mul(_ED_B, r))
+    k = int.from_bytes(hashlib.sha512(r_b + pub_b + msg).digest(), "little") % _ED_L
+    s = (r + k * a) % _ED_L
+    sig = r_b + s.to_bytes(32, "little")
+    assert ed25519_verify(msg, pub_b.hex(), sig.hex())
+    return sig.hex()
+
+
+def ed25519_verify(msg: bytes, pubkey_hex: str, sig_hex: str) -> bool:
+    if len(pubkey_hex) != 64 or len(sig_hex) != 128:
+        return False
+    if pubkey_hex != pubkey_hex.lower() or sig_hex != sig_hex.lower():
+        return False
+    try:
+        pub_b = bytes.fromhex(pubkey_hex)
+        sig_b = bytes.fromhex(sig_hex)
+    except ValueError:
+        return False
+    a_pt = _ed_decode_point(pub_b)
+    r_pt = _ed_decode_point(sig_b[:32])
+    if a_pt is None or r_pt is None:
+        return False
+    s = int.from_bytes(sig_b[32:], "little")
+    if s >= _ED_L:
+        return False
+    k = int.from_bytes(hashlib.sha512(sig_b[:32] + pub_b + msg).digest(), "little") % _ED_L
+    lhs = _ed_mul(_ED_B, s)
+    rhs = _ed_add(r_pt, _ed_mul(a_pt, k))
+    # Strict non-cofactor comparison in projective coordinates: X1*Z2 == X2*Z1 and Y1*Z2 == Y2*Z1
+    return (lhs[0] * rhs[2] - rhs[0] * lhs[2]) % _ED_P == 0 and (lhs[1] * rhs[2] - rhs[1] * lhs[2]) % _ED_P == 0
+
+
+# --- SEC 1 NIST P-256 (secp256r1) ECDSA with Strict Low-S (s <= n/2) ---
+_P256_P = 0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF
+_P256_A = _P256_P - 3
+_P256_B = 0x5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B
+_P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+_P256_HALF_N = _P256_N // 2
+_P256_G = (
+    0x6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296,
+    0x4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5,
+)
+
+
+def _p256_jac_double(pt: tuple[int, int, int]) -> tuple[int, int, int]:
+    x1, y1, z1 = pt
+    if y1 == 0 or z1 == 0:
+        return (0, 1, 0)
+    z1z1 = (z1 * z1) % _P256_P
+    # Shortcut for a = -3 mod p: 3*(x1 - z1^2)*(x1 + z1^2)
+    m = (3 * (x1 - z1z1) * (x1 + z1z1)) % _P256_P
+    yy = (y1 * y1) % _P256_P
+    yyyy = (yy * yy) % _P256_P
+    s = (4 * x1 * yy) % _P256_P
+    x3 = (m * m - 2 * s) % _P256_P
+    y3 = (m * (s - x3) - 8 * yyyy) % _P256_P
+    z3 = (2 * y1 * z1) % _P256_P
+    return (x3, y3, z3)
+
+
+def _p256_jac_add(p1: tuple[int, int, int], p2: tuple[int, int, int]) -> tuple[int, int, int]:
+    x1, y1, z1 = p1
+    x2, y2, z2 = p2
+    if z1 == 0:
+        return p2
+    if z2 == 0:
+        return p1
+    z1z1 = (z1 * z1) % _P256_P
+    z2z2 = (z2 * z2) % _P256_P
+    u1 = (x1 * z2z2) % _P256_P
+    u2 = (x2 * z1z1) % _P256_P
+    s1 = (y1 * z2 * z2z2) % _P256_P
+    s2 = (y2 * z1 * z1z1) % _P256_P
+    if u1 == u2:
+        if s1 != s2:
+            return (0, 1, 0)
+        return _p256_jac_double(p1)
+    h = (u2 - u1) % _P256_P
+    hh = (h * h) % _P256_P
+    hhh = (h * hh) % _P256_P
+    r = (s2 - s1) % _P256_P
+    v = (u1 * hh) % _P256_P
+    x3 = (r * r - hhh - 2 * v) % _P256_P
+    y3 = (r * (v - x3) - s1 * hhh) % _P256_P
+    z3 = (h * z1 * z2) % _P256_P
+    return (x3, y3, z3)
+
+
+def _p256_point_mul(p: tuple[int, int] | None, n: int) -> tuple[int, int] | None:
+    if p is None:
+        return None
+    k = n % _P256_N
+    if k == 0:
+        return None
+    r = (0, 1, 0)
+    addend = (p[0], p[1], 1)
+    while k:
+        if k & 1:
+            r = _p256_jac_add(r, addend)
+        addend = _p256_jac_double(addend)
+        k >>= 1
+    rx, ry, rz = r
+    if rz == 0:
+        return None
+    z_inv = pow(rz, _P256_P - 2, _P256_P)
+    z_inv2 = (z_inv * z_inv) % _P256_P
+    return ((rx * z_inv2) % _P256_P, (ry * z_inv2 * z_inv) % _P256_P)
+
+
+def _p256_point_add(p1: tuple[int, int] | None, p2: tuple[int, int] | None) -> tuple[int, int] | None:
+    if p1 is None:
+        return p2
+    if p2 is None:
+        return p1
+    rx, ry, rz = _p256_jac_add((p1[0], p1[1], 1), (p2[0], p2[1], 1))
+    if rz == 0:
+        return None
+    z_inv = pow(rz, _P256_P - 2, _P256_P)
+    z_inv2 = (z_inv * z_inv) % _P256_P
+    return ((rx * z_inv2) % _P256_P, (ry * z_inv2 * z_inv) % _P256_P)
+
+
+def _p256_decompress(hex_pk: str) -> tuple[int, int] | None:
+    if len(hex_pk) != 66 or hex_pk != hex_pk.lower() or hex_pk[:2] not in ("02", "03"):
+        return None
+    try:
+        x = int(hex_pk[2:], 16)
+    except ValueError:
+        return None
+    if x >= _P256_P:
+        return None
+    y_sq = (pow(x, 3, _P256_P) + _P256_A * x + _P256_B) % _P256_P
+    # _P256_P % 4 == 3
+    y = pow(y_sq, (_P256_P + 1) // 4, _P256_P)
+    if (y * y) % _P256_P != y_sq:
+        return None
+    want_odd = hex_pk[:2] == "03"
+    if (y & 1) != (1 if want_odd else 0):
+        y = _P256_P - y
+    return (x, y)
+
+
+def deterministic_p256_privkey(label: str) -> bytes:
+    """Derive a reproducible non-zero NIST P-256 test secret key from an ASCII label (test vectors ONLY)."""
+    h = sha256(b"seallink-test-vector-p256:" + label.encode("utf-8"))
+    d = int.from_bytes(h, "big") % (_P256_N - 1) + 1
+    return d.to_bytes(32, "big")
+
+
+def p256_compressed_pubkey(privkey: bytes) -> str:
+    d = int.from_bytes(privkey, "big")
+    if not (1 <= d < _P256_N):
+        raise ValueError("Invalid P-256 secret key")
+    pt = _p256_point_mul(_P256_G, d)
+    assert pt is not None
+    prefix = b"\x02" if pt[1] % 2 == 0 else b"\x03"
+    return (prefix + pt[0].to_bytes(32, "big")).hex()
+
+
+def is_valid_p256_compressed_pubkey(hex_pk: str) -> bool:
+    return _p256_decompress(hex_pk) is not None
+
+
+def _rfc6979_k_p256(priv32: bytes, digest32: bytes) -> int:
+    """RFC 6979 deterministic nonce generation for NIST P-256 with SHA-256."""
+    h1_int = int.from_bytes(digest32, "big") % _P256_N
+    h1_octets = h1_int.to_bytes(32, "big")
+    v = b"\x01" * 32
+    k = b"\x00" * 32
+    k = hmac.new(k, v + b"\x00" + priv32 + h1_octets, hashlib.sha256).digest()
+    v = hmac.new(k, v, hashlib.sha256).digest()
+    k = hmac.new(k, v + b"\x01" + priv32 + h1_octets, hashlib.sha256).digest()
+    v = hmac.new(k, v, hashlib.sha256).digest()
+    while True:
+        v = hmac.new(k, v, hashlib.sha256).digest()
+        cand = int.from_bytes(v, "big")
+        if 1 <= cand < _P256_N:
+            return cand
+        k = hmac.new(k, v + b"\x00", hashlib.sha256).digest()
+        v = hmac.new(k, v, hashlib.sha256).digest()
+
+
+def p256_sign_low_s(msg32: bytes, privkey: bytes) -> str:
+    """Sign 32-byte digest with NIST P-256 ECDSA returning 64-byte raw low-S r||s hex (SPEC-01 §4.1)."""
+    if len(msg32) != 32 or len(privkey) != 32:
+        raise ValueError("P-256 requires 32-byte digest and secret key")
+    d = int.from_bytes(privkey, "big")
+    if not (1 <= d < _P256_N):
+        raise ValueError("Invalid P-256 secret key")
+    e = int.from_bytes(msg32, "big")
+    k = _rfc6979_k_p256(privkey, msg32)
+    r_pt = _p256_point_mul(_P256_G, k)
+    assert r_pt is not None
+    r = r_pt[0] % _P256_N
+    if r == 0:
+        raise ValueError("Zero r")
+    s = (pow(k, _P256_N - 2, _P256_N) * (e + r * d)) % _P256_N
+    if s == 0:
+        raise ValueError("Zero s")
+    if s > _P256_HALF_N:
+        s = _P256_N - s
+    sig = r.to_bytes(32, "big") + s.to_bytes(32, "big")
+    pub_hex = p256_compressed_pubkey(privkey)
+    assert p256_verify_low_s(msg32, pub_hex, sig.hex())
+    return sig.hex()
+
+
+def p256_verify_low_s(msg32: bytes, pubkey_hex: str, sig_hex: str) -> bool:
+    """Verify 64-byte raw low-S NIST P-256 ECDSA signature over 32-byte pre-hashed digest."""
+    if len(msg32) != 32 or len(pubkey_hex) != 66 or len(sig_hex) != 128:
+        return False
+    if pubkey_hex != pubkey_hex.lower() or sig_hex != sig_hex.lower():
+        return False
+    q_pt = _p256_decompress(pubkey_hex)
+    if q_pt is None:
+        return False
+    try:
+        sig_b = bytes.fromhex(sig_hex)
+    except ValueError:
+        return False
+    r = int.from_bytes(sig_b[:32], "big")
+    s = int.from_bytes(sig_b[32:], "big")
+    # Strict low-S enforcement: 1 <= r < n and 1 <= s <= n/2
+    if not (1 <= r < _P256_N) or not (1 <= s <= _P256_HALF_N):
+        return False
+    e = int.from_bytes(msg32, "big")
+    w = pow(s, _P256_N - 2, _P256_N)
+    u1 = (e * w) % _P256_N
+    u2 = (r * w) % _P256_N
+    pt = _p256_point_add(_p256_point_mul(_P256_G, u1), _p256_point_mul(q_pt, u2))
+    return pt is not None and (pt[0] % _P256_N) == r
+
+
 def sign_envelope(
     payload: dict[str, Any],
     signers: list[bytes],
     policy_pks: list[str] | None = None,
     m: int | None = None,
+    alg: str = "bip340",
 ) -> dict[str, Any]:
-    """Build a canonical signed SealLink envelope with pure BIP-340 SignatureSet."""
+    """Build a canonical signed SealLink envelope supporting bip340, ed25519, and low-S p256."""
     digest = signing_digest(payload)
-    derived_pks = [xonly_pubkey(sk) for sk in signers]
+    if alg == "bip340":
+        pub_fn = xonly_pubkey
+        sig_fn = schnorr_sign
+    elif alg == "ed25519":
+        pub_fn = ed25519_pubkey
+        sig_fn = ed25519_sign
+    elif alg == "p256":
+        pub_fn = p256_compressed_pubkey
+        sig_fn = p256_sign_low_s
+    else:
+        raise ValueError(f"Unsupported alg: {alg}")
+    derived_pks = [pub_fn(sk) for sk in signers]
     pks = sorted(set(policy_pks if policy_pks is not None else derived_pks))
     threshold = m if m is not None else len(signers)
     sigs = []
-    for sk in sorted(signers, key=xonly_pubkey):
-        pk = xonly_pubkey(sk)
-        sigs.append({"pk": pk, "sig": schnorr_sign(digest, sk)})
-    return {"payload": payload, "signatures": {"policy": {"m": threshold, "pks": pks}, "sigs": sigs}}
+    for sk in sorted(signers, key=pub_fn):
+        pk = pub_fn(sk)
+        sigs.append({"pk": pk, "sig": sig_fn(digest, sk)})
+    policy: dict[str, Any] = {"m": threshold, "pks": pks}
+    if alg != "bip340":
+        policy["alg"] = alg
+    return {"payload": payload, "signatures": {"policy": policy, "sigs": sigs}}
 
 
 def sign_guardian_envelope(
@@ -587,13 +957,18 @@ def verify_signature_set(
     digest: bytes,
     sigset: dict[str, Any],
     expected_policy: dict[str, Any] | None = None,
+    obj_type: str | None = None,
 ) -> tuple[bool, str]:
-    """Verify a BIP-340 SignatureSet over `digest`, optionally requiring exact policy equality (SL-WIRE-013)."""
+    """Verify a SignatureSet (bip340, ed25519, or low-S p256) over `digest`, enforcing SL-WIRE-013."""
     if not isinstance(sigset, dict) or "policy" not in sigset or "sigs" not in sigset:
         return False, "WIRE_SIGNATURE"
     policy = sigset["policy"]
+    if not isinstance(policy, dict):
+        return False, "WIRE_SIGNATURE"
     alg = policy.get("alg", "bip340")
-    if alg != "bip340":
+    if alg not in ("bip340", "ed25519", "p256"):
+        return False, "WIRE_SIGNATURE"
+    if alg != "bip340" and obj_type is not None and obj_type not in DEVICE_ALG_ALLOWED_TYPES:
         return False, "WIRE_SIGNATURE"
     pks = policy.get("pks", [])
     m = policy.get("m", 0)
@@ -603,23 +978,35 @@ def verify_signature_set(
         return False, "WIRE_SIGNATURE"
     if pks != sorted(set(pks)):
         return False, "WIRE_SIGNATURE"
+    if alg == "bip340":
+        pk_ok_fn = is_valid_xonly_pubkey
+        ver_fn = schnorr_verify
+    elif alg == "ed25519":
+        pk_ok_fn = is_valid_ed25519_pubkey
+        ver_fn = ed25519_verify
+    else:
+        pk_ok_fn = is_valid_p256_compressed_pubkey
+        ver_fn = p256_verify_low_s
     for pk in pks:
-        if not isinstance(pk, str) or not is_valid_xonly_pubkey(pk):
+        if not isinstance(pk, str) or not pk_ok_fn(pk):
             return False, "WIRE_KEY"
     if expected_policy is not None:
         exp_alg = expected_policy.get("alg", "bip340")
         if exp_alg != alg or expected_policy.get("m") != m or expected_policy.get("pks") != pks:
             return False, "WIRE_SIGNATURE"
+    sigs = sigset["sigs"]
+    if not isinstance(sigs, list):
+        return False, "WIRE_SIGNATURE"
     seen: set[str] = set()
     valid = 0
-    for entry in sigset["sigs"]:
+    for entry in sigs:
         if not isinstance(entry, dict) or set(entry.keys()) != {"pk", "sig"}:
             return False, "WIRE_SIGNATURE"
         pk = entry["pk"]
         if pk not in pks or pk in seen:
             return False, "WIRE_SIGNATURE"
         seen.add(pk)
-        if not schnorr_verify(digest, pk, entry["sig"]):
+        if not isinstance(entry["sig"], str) or not ver_fn(digest, pk, entry["sig"]):
             return False, "WIRE_SIGNATURE"
         valid += 1
     if valid < m:
@@ -633,22 +1020,28 @@ def verify_envelope_signatures(
 ) -> tuple[bool, str]:
     """Verify either an ordinary `signatures` envelope or a ward `guardian_approvals` envelope."""
     payload = env.get("payload")
-    if not isinstance(payload, dict) or "type" not in payload:
+    if not isinstance(payload, dict) or "type" not in payload or not isinstance(payload["type"], str):
         return False, "WIRE_MEMBER"
+    obj_type = payload["type"]
     digest = signing_digest(payload)
     if "signatures" in env and "guardian_approvals" not in env:
-        return verify_signature_set(digest, env["signatures"], expected_policy=expected_policy)
+        return verify_signature_set(digest, env["signatures"], expected_policy=expected_policy, obj_type=obj_type)
     if "guardian_approvals" in env and "signatures" not in env:
+        if obj_type not in ("seallink-grant/1", "seallink-assent/1"):
+            return False, "WIRE_MEMBER"
         approvals = env["guardian_approvals"]
         if not isinstance(approvals, list) or not (1 <= len(approvals) <= 32):
             return False, "WIRE_SIGNATURE"
         prev_slot = 0
         for item in approvals:
+            if not isinstance(item, dict):
+                return False, "WIRE_SIGNATURE"
             slot = item.get("slot")
             if not isinstance(slot, int) or isinstance(slot, bool) or not (1 <= slot <= 32) or slot <= prev_slot:
                 return False, "WIRE_SIGNATURE"
             prev_slot = slot
-            ok, code = verify_signature_set(digest, item.get("signatures", {}))
+            # guardian_approvals MUST strictly use bip340 (SL-WIRE-013 item 2)
+            ok, code = verify_signature_set(digest, item.get("signatures", {}), obj_type="__guardian_approval__")
             if not ok:
                 return False, code
         return True, "OK"
@@ -1190,23 +1583,28 @@ def required_guardian_slots(quorum: dict[str, int], revision_size: int) -> int:
     return max(mn, ceil_val)
 
 
-def check_guardian_policy_consistency(policy: dict[str, Any]) -> tuple[bool, str]:
-    """Validate SL-ORIG-016 mechanical consistency on origin.guardian_policy or GuardianRoster.payload."""
+def check_guardian_policy_consistency(
+    policy: dict[str, Any],
+    prev_roster: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
+    """Validate SL-ORIG-015 / SL-ORIG-016 mechanical consistency on origin.guardian_policy or GuardianRoster.payload."""
     rev_size = policy.get("revision_size", 0)
-    if not isinstance(rev_size, int) or not (1 <= rev_size <= 32):
+    if not isinstance(rev_size, int) or isinstance(rev_size, bool) or not (1 <= rev_size <= 32):
         return False, "WIRE_INTEGER"
     quorums = policy.get("quorums", {})
-    if set(quorums.keys()) != set(EVENT_CLASS_ORDER.keys()):
+    if not isinstance(quorums, dict) or set(quorums.keys()) != set(EVENT_CLASS_ORDER.keys()):
         return False, "WIRE_MEMBER"
     for q in quorums.values():
+        if not isinstance(q, dict):
+            return False, "WIRE_MEMBER"
         num, den, mn = q.get("num", 0), q.get("den", 0), q.get("min", 0)
         if not (1 <= num <= den <= 32) or not (1 <= mn <= rev_size):
             return False, "WIRE_INTEGER"
     slots = policy.get("slots", [])
-    if len(slots) != rev_size:
+    if not isinstance(slots, list) or len(slots) != rev_size:
         return False, "WIRE_INTEGER"
-    slot_nums = [s.get("slot") for s in slots]
-    if len(set(slot_nums)) != rev_size or set(slot_nums) != set(range(1, rev_size + 1)):
+    slot_nums = [s.get("slot") for s in slots if isinstance(s, dict)]
+    if len(slot_nums) != rev_size or len(set(slot_nums)) != rev_size or set(slot_nums) != set(range(1, rev_size + 1)):
         return False, "WIRE_INTEGER"
     disp = policy.get("disposer_pk")
     arb = policy.get("arbiter_pk")
@@ -1217,15 +1615,37 @@ def check_guardian_policy_consistency(policy: dict[str, Any]) -> tuple[bool, str
         return False, "WIRE_KEY"
     if disp == arb:
         return False, "ORIGIN_UNVERIFIED"
+    expected_both = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp, "b": arb}}
+    exp_both_spk, _ = compile_script_policy(expected_both)
     if "roster_seal" in policy:
-        expected_roster = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp, "b": arb}}
         try:
             got_spk, _ = compile_script_policy(policy["roster_seal"]["script_policy"])
-            exp_spk, _ = compile_script_policy(expected_roster)
-        except ValueError:
+        except (ValueError, KeyError, TypeError):
             return False, "CHAIN_SCRIPT_UNSUPPORTED"
-        if got_spk != exp_spk:
+        if got_spk != exp_both_spk:
             return False, "CHAIN_SCRIPT_UNSUPPORTED"
+    if "next_roster_policy" in policy:
+        try:
+            got_spk, _ = compile_script_policy(policy["next_roster_policy"])
+        except (ValueError, KeyError, TypeError):
+            return False, "CHAIN_SCRIPT_UNSUPPORTED"
+        if got_spk != exp_both_spk:
+            return False, "CHAIN_SCRIPT_UNSUPPORTED"
+    keys_rotated = (
+        prev_roster is not None
+        and (disp != prev_roster.get("disposer_pk") or arb != prev_roster.get("arbiter_pk"))
+    )
+    for s in slots:
+        act = s.get("action")
+        if act in ("retain_active", "retain_vacant") and keys_rotated:
+            return False, "CHAIN_SCRIPT_UNSUPPORTED"
+        if act == "new_vacant":
+            try:
+                got_vac_spk, _ = compile_script_policy(s["new_vacant_policy"])
+            except (ValueError, KeyError, TypeError):
+                return False, "CHAIN_SCRIPT_UNSUPPORTED"
+            if got_vac_spk != exp_both_spk:
+                return False, "CHAIN_SCRIPT_UNSUPPORTED"
     return True, "OK"
 
 
@@ -1254,7 +1674,7 @@ def derive_guardian_event_class(payload: dict[str, Any]) -> str:
 
 
 def self_test() -> None:
-    """Verify pure-Python BIP-340 against official BIP-340 Vector 0 and clause_commit Vector."""
+    """Verify pure-Python BIP-340, RIPEMD-160, RFC 8032 Ed25519, and low-S NIST P-256 against official vectors."""
     # Official BIP-340 Test Vector 0
     sk0 = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000003")
     pk0_exp = "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"
@@ -1269,6 +1689,40 @@ def self_test() -> None:
     assert sig0 == sig0_exp, f"BIP-340 sig mismatch: {sig0}"
     assert schnorr_verify(msg0, pk0_exp, sig0), "BIP-340 verify failed"
 
+    # Official RFC 8032 §7.1 Ed25519 Test Vector 1 (empty message)
+    ed_sk1 = bytes.fromhex("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
+    ed_pk1_exp = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+    ed_sig1_exp = (
+        "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e06522490155"
+        "5fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    )
+    assert ed25519_pubkey(ed_sk1) == ed_pk1_exp, "RFC 8032 Ed25519 TV1 pubkey mismatch"
+    assert ed25519_sign(b"", ed_sk1) == ed_sig1_exp, "RFC 8032 Ed25519 TV1 sig mismatch"
+    assert ed25519_verify(b"", ed_pk1_exp, ed_sig1_exp), "RFC 8032 Ed25519 TV1 verify failed"
+
+    # Official RFC 8032 §7.1 Ed25519 Test Vector 2 (message = 0x72)
+    ed_sk2 = bytes.fromhex("4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb")
+    ed_pk2_exp = "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"
+    ed_sig2_exp = (
+        "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da"
+        "085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00"
+    )
+    assert ed25519_pubkey(ed_sk2) == ed_pk2_exp, "RFC 8032 Ed25519 TV2 pubkey mismatch"
+    assert ed25519_sign(b"\x72", ed_sk2) == ed_sig2_exp, "RFC 8032 Ed25519 TV2 sig mismatch"
+    assert ed25519_verify(b"\x72", ed_pk2_exp, ed_sig2_exp), "RFC 8032 Ed25519 TV2 verify failed"
+
+    # Official RFC 6979 Appendix A.2.5 NIST P-256 SHA-256 test vector (low-S normalized + high-S rejected)
+    rfc_p256_sk = bytes.fromhex("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721")
+    rfc_p256_pk_exp = "0360fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29fb6"
+    assert p256_compressed_pubkey(rfc_p256_sk) == rfc_p256_pk_exp, "RFC 6979 P-256 pubkey mismatch"
+    rfc_h = sha256(b"sample")
+    rfc_r = "efd48b2aacb6a8fd1140dd9cd45e81d69d2c877b56aaf991c34d0ea84eaf3716"
+    rfc_high_s = "f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8"
+    rfc_low_s = f"{(_P256_N - int(rfc_high_s, 16)):064x}"
+    assert p256_sign_low_s(rfc_h, rfc_p256_sk) == rfc_r + rfc_low_s, "RFC 6979 P-256 low-S sig mismatch"
+    assert p256_verify_low_s(rfc_h, rfc_p256_pk_exp, rfc_r + rfc_low_s), "RFC 6979 P-256 low-S verify failed"
+    assert not p256_verify_low_s(rfc_h, rfc_p256_pk_exp, rfc_r + rfc_high_s), "P-256 high-S signature MUST be rejected"
+
     # Official RIPEMD-160 test vector for "abc"
     assert ripemd160(b"abc").hex() == "8eb208f7e05d987a9b044a8e98c6b087f15a0bfc", "RIPEMD-160 mismatch"
 
@@ -1276,7 +1730,7 @@ def self_test() -> None:
     salt = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
     c_hash = clause_commit(salt, {"text": "Room inspection"})
     assert c_hash.startswith("b030a8a82ef79e9d"), f"clause_commit mismatch: {c_hash}"
-    print(f"seallink_ref self_test PASS | clause_commit={c_hash}")
+    print(f"seallink_ref self_test PASS (BIP-340 + RFC8032 Ed25519 + low-S P-256 + RIPEMD-160) | clause_commit={c_hash}")
 
 
 if __name__ == "__main__":

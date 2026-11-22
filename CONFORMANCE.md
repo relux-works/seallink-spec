@@ -1,6 +1,6 @@
 # SealLink Conformance Requirements
 
-- **Version:** `1.0.0-draft.2`
+- **Version:** `1.0.0-draft.3`
 - **Status:** `draft`
 - **Normative Language:** [RFC2119], [RFC8174]
 
@@ -30,9 +30,21 @@ An implementation claiming conformance to SealLink v1.0 **MUST** declare which o
 
 ---
 
-## 3. Interoperability Bar for Advancing Specification Maturity
+## 3. Reference Verifier Core vs. Production Tier 1 Conformance Boundary
+
+`tools/seallink_verifier.py` serves as the **Reference Verifier Core** for SealLink v1.0: it enforces Draft 2020-12 closed schemas, pure-Python BIP-340 / RFC 8032 Ed25519 / low-S NIST P-256 cryptography, authoritative issuer/guardian/executor key resolution, derived chain-history/witness evaluation over a declarative `ChainView`, and an in-memory hash-chained `FencedJournal`.
+
+A production **Tier 1 Verifier** or **Effect Executor** claiming full operational conformance additionally requires:
+1. A live read-only Namecoin Core (`txindex=1`) RPC adapter populating `ChainView` directly from confirmed blocks, UTXOs, witnesses, and local mempool;
+2. At least one operator-controlled independent comparison node (`SPEC-02 §4`);
+3. Raw wire byte ingress prior to parsing (`SPEC-01 §7`); and
+4. Durable crash-safe local storage coupled to an external CAS witness outside the local backup domain (`SPEC-06 §6`).
+
+---
+
+## 4. Interoperability Bar for Advancing Specification Maturity
 
 Per `SPEC-00 §5.1`:
-- **`prose` -> `vectors`:** Every `decided` rule and every registered refusal code (`84/84`) is exercised by executable positive, negative, and stateful trace fixtures in `vectors/`, verified automatically by CI via Draft 2020-12 metaschemas and the reference Tier 1 verifier (`tools/seallink_verifier.py`).
+- **`prose` -> `vectors`:** Every registered refusal code (`84/84`) is exercised by schema-valid semantic refusal fixtures and raw wire fixtures, every `decided` normative rule is explicitly mapped in the rule-coverage audit, negative security/false-admit regressions and verifier-check mutation tests pass, and all suites execute live through `tools/seallink_verifier.py` and Draft 2020-12 metaschemas in CI.
 - **`vectors` -> `dual-impl`:** At least two independent implementations with disjoint cryptographic and JSON stacks pass 100% of `vectors/` byte-for-byte (identical object IDs, digests, content addresses, refusal codes, and journal commitments).
-- **`dual-impl` -> `chain-tested`:** All four end-to-end traces (`trace-01` mail offline + revoke, `trace-02` initial & successor guardian activation + ward assent, `trace-03` parent pool + single-use + crash-uncertain + replay + revoke, `trace-04` ward agent guardian intake) plus TRUC v3 / `P2A` CPFP package relay (`conformance/p2a-regtest/`) are executed and recorded against a live Namecoin Core `nc28.0` regtest (and/or mainnet) network.
+- **`dual-impl` -> `chain-tested`:** All four end-to-end traces (`trace-01` mail offline + revoke, `trace-02` initial & successor guardian activation + ward assent + recovery, `trace-03` parent pool + dual-account multi-quota + single-use + crash-uncertain + replay + revoke, `trace-04` ward agent guardian intake) plus TRUC v3 / `P2A` CPFP package relay (`conformance/p2a-regtest/`) are executed with raw transaction artifacts against a live Namecoin Core `nc28.0` regtest (and/or mainnet) network.

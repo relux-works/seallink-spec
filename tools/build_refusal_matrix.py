@@ -4,8 +4,9 @@ Executable 84/84 Refusal Code Coverage Matrix Builder for SealLink v1.0.
 
 Builds `vectors/refusal-coverage-matrix.json`, where every single one of the 84
 registered refusal codes in `registry/refusal-codes.json` has a concrete,
-self-contained, executable test case driven through `tools/seallink_verifier.py`
-and `tools/seallink_ref.py`.
+self-contained, Draft 2020-12 schema-valid (for all non-WIRE_* cases) executable
+test case driven through `tools/seallink_verifier.py` and `tools/seallink_ref.py`
+using derived ChainView history, witness inputs, and authoritative key binding.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import seallink_ref as sl
 import seallink_verifier as sv
 
 ROOT = Path(__file__).resolve().parent.parent
+VERSION = "1.0.0-draft.3"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 
 
@@ -51,7 +53,7 @@ def _base_invocation_fixture() -> dict[str, Any]:
 
 
 def _build_base_invocation_fixture() -> dict[str, Any]:
-    """Build a valid, self-contained invocation fixture that returns ADMIT by default."""
+    """Build a valid, self-contained invocation fixture with derived history/witnesses returning ADMIT."""
     alice_own = _kp("alice-owner")
     alice_gr = _kp("alice-grant")
     alice_seal = _kp("alice-seal")
@@ -64,6 +66,10 @@ def _build_base_invocation_fixture() -> dict[str, Any]:
     host_owner_pol = {"kind": "key", "pk": host_own["comp"]}
     agent_owner_pol = {"kind": "key", "pk": agent_own["comp"]}
     seal_pol = {"kind": "key", "pk": alice_seal["comp"]}
+
+    alice_reg = {"txid": _h32("alice-reg"), "vout": 0}
+    host_reg = {"txid": _h32("host-reg"), "vout": 0}
+    agent_reg = {"txid": _h32("agent-reg"), "vout": 0}
 
     host_man = {
         "network": "main",
@@ -87,7 +93,7 @@ def _build_base_invocation_fixture() -> dict[str, Any]:
                 "provider": {
                     "name": "id/mail-host-a",
                     "owner_policy": host_owner_pol,
-                    "registration": {"txid": _h32("host-reg"), "vout": 0},
+                    "registration": host_reg,
                 },
                 "service_type": "mail",
             }
@@ -96,9 +102,9 @@ def _build_base_invocation_fixture() -> dict[str, Any]:
         "type": "seallink-manifest/1",
     }
 
-    alice_val = sl.jcs_encode({"link": {"grant": alice_gr["xonly"]}, "m": {"h": sl.content_addr(alice_man), "s": 1}}).decode()
-    host_val = sl.jcs_encode({"m": {"h": sl.content_addr(host_man), "s": 1}}).decode()
-    agent_val = sl.jcs_encode({"nostr": agent_req["xonly"]}).decode()
+    alice_val_obj = {"link": {"grant": alice_gr["xonly"]}, "m": {"h": sl.content_addr(alice_man), "s": 1}}
+    host_val_obj = {"m": {"h": sl.content_addr(host_man), "s": 1}}
+    agent_val_obj = {"nostr": agent_req["xonly"]}
 
     seal_txid = _h32("alice-seal-tx")
     iss_txid = _h32("alice-iss-tx")
@@ -117,7 +123,7 @@ def _build_base_invocation_fixture() -> dict[str, Any]:
         "issuer": {
             "name": "id/alice",
             "owner_policy": alice_owner_pol,
-            "registration": {"txid": _h32("alice-reg"), "vout": 0},
+            "registration": alice_reg,
             "role_policy": {"m": 1, "pks": [alice_gr["xonly"]]},
         },
         "network": "main",
@@ -174,46 +180,22 @@ def _build_base_invocation_fixture() -> dict[str, Any]:
         "comparison_peers": [{"healthy": True, "height": 750010, "hash_at_tip": _h32("tip-750010")}],
         "blocks": {recent_blk: 749990},
         "names": {
-            "id/alice": {
-                "registration": {"txid": _h32("alice-reg"), "vout": 0},
-                "expiry_height": 780000,
-                "owner_policy": alice_owner_pol,
-                "value_raw": alice_val,
-                "writer_verified": True,
-                "history_available": True,
-                "role_changed_since_recent": [],
-                "compromised_breaks": [],
-            },
-            "id/mail-host-a": {
-                "registration": {"txid": _h32("host-reg"), "vout": 0},
-                "expiry_height": 780000,
-                "owner_policy": host_owner_pol,
-                "value_raw": host_val,
-                "writer_verified": True,
-                "history_available": True,
-                "role_changed_since_recent": [],
-                "compromised_breaks": [],
-            },
-            "id/alice-acct-agent": {
-                "registration": {"txid": _h32("agent-reg"), "vout": 0},
-                "expiry_height": 780000,
-                "owner_policy": agent_owner_pol,
-                "value_raw": agent_val,
-                "writer_verified": True,
-                "history_available": True,
-                "role_changed_since_recent": [],
-                "compromised_breaks": [],
-            },
+            "id/alice": sv.make_name_history("id/alice", alice_reg, alice_owner_pol, alice_val_obj, first_height=748000, update_height=749000),
+            "id/mail-host-a": sv.make_name_history("id/mail-host-a", host_reg, host_owner_pol, host_val_obj, first_height=748000, update_height=749000),
+            "id/alice-acct-agent": sv.make_name_history("id/alice-acct-agent", agent_reg, agent_owner_pol, agent_val_obj, first_height=748000, update_height=749000),
         },
         "txs": {
             seal_txid: {
                 "confirmed_height": 749995,
-                "segwit_w": True,
-                "outputs": {"0": {"script_pubkey_hex": _spk_hex(seal_pol)}},
+                "inputs": [sv.make_segwit_input(_h32("alice-fund-tx"), 0)],
+                "outputs": {
+                    "0": {"script_pubkey_hex": _spk_hex(seal_pol)},
+                    "1": {"script_pubkey_hex": _spk_hex(alice_owner_pol)},
+                },
             },
             iss_txid: {
                 "confirmed_height": 749998,
-                "segwit_w": True,
+                "inputs": [sv.make_segwit_input(seal_txid, 1)],
                 "opreturn_hex": iss_opret,
                 "outputs": {},
             },
@@ -254,6 +236,10 @@ def _build_base_invocation_fixture() -> dict[str, Any]:
         "_keys": keys,
         "_alice_man": alice_man,
         "_host_man": host_man,
+        "_alice_reg": alice_reg,
+        "_host_reg": host_reg,
+        "_alice_owner_pol": alice_owner_pol,
+        "_host_owner_pol": host_owner_pol,
     }
 
 
@@ -286,7 +272,7 @@ def _base_origin_fixture() -> dict[str, Any]:
 
 
 def _build_base_origin_fixture() -> dict[str, Any]:
-    """Build a valid ward origin bundle + chain state for SPEC-04 tests."""
+    """Build a valid ward origin bundle + authoritative chain state (including civil-registry + guardian assent)."""
     reg_own = _kp("o-reg-own")
     reg_cred = _kp("o-reg-cred")
     disp = _kp("o-disp")
@@ -307,6 +293,8 @@ def _build_base_origin_fixture() -> dict[str, Any]:
     sch_own = _kp("o-sch-own")
     sch_gr = _kp("o-sch-gr")
 
+    reg_owner_pol = {"kind": "key", "pk": reg_own["comp"]}
+    reg_outpoint = {"txid": _h32("oreg-tx"), "vout": 0}
     vac_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp["comp"], "b": arb["comp"]}}
     stat_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": stat_cap["comp"], "b": stat_end["comp"]}}
     rec_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": rec_disp["comp"], "b": rec_arb["comp"]}}
@@ -327,7 +315,7 @@ def _build_base_origin_fixture() -> dict[str, Any]:
     }
     origin_p = {
         "binding_seal": {"script_policy": {"kind": "key", "pk": bind_seal["comp"]}, "txid": _h32("obind-tx"), "vout": 0},
-        "capacity_authority": {"name": "id/civil-registry", "owner_policy": {"kind": "key", "pk": reg_own["comp"]}, "registration": {"txid": _h32("oreg-tx"), "vout": 0}},
+        "capacity_authority": {"name": "id/civil-registry", "owner_policy": reg_owner_pol, "registration": reg_outpoint},
         "claims": {
             "intended_name": "id/child-leo",
             "intended_owner_policy": ward_owner_pol,
@@ -348,7 +336,7 @@ def _build_base_origin_fixture() -> dict[str, Any]:
                 {"initial_guardian_commitment": sl.clause_commit(salt_g2, g2_pin), "slot": 2, "vacant_utxo": {"txid": _h32("os2-vac"), "vout": 0}},
             ],
         },
-        "issuer": {"name": "id/civil-registry", "owner_policy": {"kind": "key", "pk": reg_own["comp"]}, "registration": {"txid": _h32("oreg-tx"), "vout": 0}, "role_policy": {"m": 1, "pks": [reg_cred["xonly"]]}},
+        "issuer": {"name": "id/civil-registry", "owner_policy": reg_owner_pol, "registration": reg_outpoint, "role_policy": {"m": 1, "pks": [reg_cred["xonly"]]}},
         "name_recovery": {
             "arbiter_pk": rec_arb["comp"],
             "delay_blocks": 144,
@@ -394,6 +382,22 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         "type": "seallink-guardian/1",
     }
     g1_rec = sl.sign_envelope(g1_rec_p, [reg_cred["sk"]])
+    g1_assent = sl.sign_envelope(
+        {
+            "expires_at": 1795400000,
+            "genesis": GENESIS_MAIN,
+            "issued_at": 1795220000,
+            "network": "main",
+            "nonce": _h32("og1-assent-nonce"),
+            "party_id": "slot-1",
+            "party_name": "id/parent-a",
+            "party_role": "guardian",
+            "target_id": sl.object_id(g1_rec_p),
+            "target_type": "seallink-guardian/1",
+            "type": "seallink-assent/1",
+        },
+        [g1_gr["sk"]],
+    )
     g1_init_txid = _h32("og1-init-0x12")
 
     contract = {
@@ -403,8 +407,8 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         "machine_clause_indices": [0],
         "network": "main",
         "parties": [
-            {"name_pin": {"name": "id/child-leo", "owner_policy": ward_owner_pol, "registration": binding["registration"]}, "role": "student_ward", "ward_origin_id": origin_id},
-            {"name_pin": {"name": "id/school", "owner_policy": {"kind": "key", "pk": sch_own["comp"]}, "registration": {"txid": _h32("sch-reg"), "vout": 0}}, "role": "school", "signing_policy": {"m": 1, "pks": [sch_gr["xonly"]]}},
+            {"name_pin": {"name": "id/child-leo", "owner_policy": ward_owner_pol, "registration": binding["registration"]}, "party_id": "student-1", "role": "student_ward", "ward_origin_id": origin_id},
+            {"name_pin": {"name": "id/school", "owner_policy": {"kind": "key", "pk": sch_own["comp"]}, "registration": {"txid": _h32("sch-reg"), "vout": 0}}, "party_id": "school-1", "role": "school", "signing_policy": {"m": 1, "pks": [sch_gr["xonly"]]}},
         ],
         "profile": "org.seallink/enrollment-v1",
         "seal": {"script_policy": {"kind": "branch", "template": "either_of_2", "keys": {"a": disp["comp"], "b": sch_own["comp"]}}, "txid": _h32("ocseal-tx"), "vout": 0},
@@ -426,22 +430,15 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         "credible_utc_interval": [1795220000, 1795220020],
         "comparison_peers": [{"healthy": True, "height": 750100, "hash_at_tip": _h32("otip-750100")}],
         "names": {
-            "id/parent-a": {
-                "registration": g1_pin["registration"],
-                "expiry_height": 780000,
-                "owner_policy": g1_pin["owner_policy"],
-                "value_raw": sl.jcs_encode({"link": {"grant": g1_gr["xonly"]}}).decode(),
-                "writer_verified": True,
-                "history_available": True,
-            },
-            "id/child-leo": {
-                "registration": binding["registration"],
-                "expiry_height": 780000,
-                "owner_policy": ward_owner_pol,
-                "value_raw": sl.jcs_encode({"link": {"origin": origin_id}}).decode(),
-                "writer_verified": True,
-                "history_available": True,
-            },
+            "id/civil-registry": sv.make_name_history(
+                "id/civil-registry", reg_outpoint, reg_owner_pol, {"link": {"cred": reg_cred["xonly"]}}, first_height=748000, update_height=748500
+            ),
+            "id/parent-a": sv.make_name_history(
+                "id/parent-a", g1_pin["registration"], g1_pin["owner_policy"], {"link": {"grant": g1_gr["xonly"]}}, first_height=748000, update_height=748600
+            ),
+            "id/child-leo": sv.make_name_history(
+                "id/child-leo", binding["registration"], ward_owner_pol, {"link": {"origin": origin_id}}, first_height=749005, update_height=749015
+            ),
         },
         "txs": {
             origin_txid: {"confirmed_height": 749000, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(origin_env)).hex(), "outputs": {}},
@@ -464,6 +461,7 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         "name_binding": binding,
         "name_binding_txid": bind_txid,
         "guardian_records": [g1_rec],
+        "guardian_assents": [g1_assent],
         "roster_records": [],
         "initial_guardian_disclosures": {"1": {"salt_hex": salt_g1, "name_pin": g1_pin}},
         "opened_majority_unix": maj_unix,
@@ -473,6 +471,7 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         "origin_bundle": origin_bundle,
         "contract": contract,
         "chain": chain,
+        "trusted_origin_issuers": ["id/civil-registry"],
         "_keys": {
             "reg_own": reg_own, "reg_cred": reg_cred, "disp": disp, "arb": arb,
             "ward_gr": ward_gr, "g1_gr": g1_gr, "g2_gr": g2_gr, "sch_gr": sch_gr,
@@ -480,6 +479,7 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         },
         "_origin_id": origin_id,
         "_maj_unix": maj_unix,
+        "_rec_pol": rec_pol,
     }
 
 
@@ -491,7 +491,7 @@ def _strip_private(obj: Any) -> Any:
     return obj
 
 
-def execute_matrix_case(case: dict[str, Any]) -> str | None:
+def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = False) -> str | None:
     """Execute one refusal-coverage-matrix case using ONLY seallink_verifier / seallink_ref.
     Returns the computed refusal code (or None if admitted). NEVER reads case['expected_refusal'].
     """
@@ -503,6 +503,8 @@ def execute_matrix_case(case: dict[str, Any]) -> str | None:
         operator_min_depth=inp.get("operator_min_depth", 1),
         allow_window_only=inp.get("allow_window_only", False),
         trusted_origin_issuers=set(inp.get("trusted_origin_issuers", [])),
+        enforce_schemas=True,
+        require_jsonschema=require_jsonschema,
     )
 
     if runner == "wire_raw":
@@ -538,7 +540,7 @@ def execute_matrix_case(case: dict[str, Any]) -> str | None:
         return res.refusal_code
     if runner == "origin_status":
         chain = sv.ChainView(inp["chain"])
-        _, err = v.verify_origin_and_status(inp["origin_bundle"], chain)
+        _, err = v.verify_origin_and_status(inp["origin_bundle"], chain, assert_binding_id=inp.get("assert_binding_id"))
         return err
     if runner == "credential":
         chain = sv.ChainView(inp["chain"])
@@ -559,11 +561,13 @@ def execute_matrix_case(case: dict[str, Any]) -> str | None:
         res = v.verify_bearer_session(inp["token"], inp["slot_binding"], chain, journal)
         return res.refusal_code
     if runner == "migration":
+        chain = sv.ChainView(inp["chain"])
         journal = sv.FencedJournal.from_dict(inp["journal"])
-        res = v.verify_migration(inp["migration"], inp["export_bundle"], journal)
+        res = v.verify_migration(inp["migration"], inp["export_bundle"], journal, chain, inp.get("manifests"))
         return res.refusal_code
     if runner == "federation":
-        res = v.verify_federation_disclosure(inp["policy"], inp["peer_ctx"], inp["grant"])
+        chain = sv.ChainView(inp["chain"]) if "chain" in inp else None
+        res = v.verify_federation_disclosure(inp["policy"], inp["peer_ctx"], inp["grant"], chain=chain)
         return res.refusal_code
     raise ValueError(f"Unknown matrix runner: {runner}")
 
@@ -594,9 +598,8 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("WIRE_STRING", "SL-WIRE-005", "wire_raw", {"raw_hex": b'{"a":"bad\x7fstr"}'.hex()})
     add("WIRE_NOT_CANONICAL", "SL-WIRE-006", "wire_raw", {"raw_hex": b'{"b":1,"a":2}'.hex()})
     add("WIRE_TYPE", "SL-WIRE-010", "wire_raw", {"raw_hex": b'{"type":"seallink-unknown/99"}'.hex()})
-    # WIRE_MEMBER: signed envelope missing payload
     add("WIRE_MEMBER", "SL-WIRE-010", "wire_raw", {"raw_hex": b'{"signatures":{"policy":{"m":1,"pks":[]},"sigs":[]}}'.hex()})
-    # WIRE_KEY: invalid x-only pubkey (not on secp256k1: x = p-1 -> y^2 has no sqrt; test x = 05... or verify)
+    # WIRE_KEY: invalid x-only pubkey (not on secp256k1)
     bad_pk = None
     for cand in range(1, 200):
         hx = f"{cand:064x}"
@@ -646,13 +649,13 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     fx["chain"]["rebracket_tip"] = {"height": 750011, "hash": _h32("tip-changed")}
     add("CHAIN_OBSERVATION_VOID", "SL-LDGR-008", "invocation", fx)
 
-    # CHAIN_SCRIPT_UNSUPPORTED: legacy P2PKH tail on NAME_UPDATE
     legacy_tail = bytes.fromhex("76a914" + "11" * 20 + "88ac")
     bad_name_script = sl.encode_name_output("NAME_UPDATE", legacy_tail, name=b"id/alice", value=b"{}")
     add("CHAIN_SCRIPT_UNSUPPORTED", "SL-LDGR-005", "script_parse", {"script_hex": bad_name_script.hex()})
 
     fx = _base_invocation_fixture()
-    fx["chain"]["txs"][_h32("alice-iss-tx")]["segwit_w"] = False
+    # Non-empty scriptSig on issuance tx input -> violates Witness Profile W!
+    fx["chain"]["txs"][_h32("alice-iss-tx")]["inputs"][0]["script_sig_hex"] = "483045"
     add("CHAIN_TX_CONSTRUCTION", "SL-LDGR-009", "invocation", fx)
 
     reserved_06 = bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x06, 0x22, 0x01]) + bytes.fromhex(_h32("r06")) + bytes([0x00])
@@ -664,7 +667,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("CHAIN_DEPTH_INSUFFICIENT", "SL-LDGR-008", "invocation", fx)
 
     fx = _base_invocation_fixture()
-    fx["chain"]["blocks"] = {_h32("recent-blk-749990"): 749000}  # 749998 > 749000 + 432
+    fx["chain"]["blocks"] = {_h32("recent-blk-749990"): 749000}
     add("CHAIN_RECENCY_INVALID", "SL-LDGR-008", "invocation", fx)
 
     fx = _base_invocation_fixture()
@@ -675,36 +678,77 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     fx["chain"]["txs"][_h32("alice-seal-tx")]["outputs"]["0"]["spent_by_txid"] = _h32("revoke-tx")
     add("SEAL_SPENT", "SL-LDGR-011", "invocation", fx)
 
-    # ---- 3. NAME_*, MANIFEST_*, AUTH_*, DEVICE_* (14 codes) ----
+    # ---- 3. NAME_*, MANIFEST_*, AUTH_*, DEVICE_* (14 codes — ALL derived from history/scripts!) ----
     fx = _base_invocation_fixture()
     del fx["chain"]["names"]["id/alice"]
     add("NAME_NOT_FOUND", "SL-IDEN-004", "invocation", fx)
 
     fx = _base_invocation_fixture()
-    fx["chain"]["names"]["id/alice"]["expiry_height"] = 750000
+    # Last update at 714010 + D(36000) == 750010 == tip_height -> derived NAME_EXPIRED!
+    fx["chain"]["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx["_alice_reg"],
+        fx["_alice_owner_pol"],
+        {"link": {"grant": fx["_keys"]["alice_gr"]["xonly"]}, "m": {"h": sl.content_addr(fx["_alice_man"]), "s": 1}},
+        first_height=710000,
+        update_height=714010,
+    )
     add("NAME_EXPIRED", "SL-LDGR-003", "invocation", fx)
 
     fx = _base_invocation_fixture()
     other_k = _kp("hijacker")
-    fx["chain"]["names"]["id/alice"]["owner_policy"] = {"kind": "key", "pk": other_k["comp"]}
+    fx["chain"]["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx["_alice_reg"],
+        {"kind": "key", "pk": other_k["comp"]},
+        {"link": {"grant": fx["_keys"]["alice_gr"]["xonly"]}, "m": {"h": sl.content_addr(fx["_alice_man"]), "s": 1}},
+    )
     add("NAME_OWNER_MISMATCH", "SL-IDEN-004", "invocation", fx)
 
     fx = _base_invocation_fixture()
-    fx["chain"]["names"]["id/alice"]["writer_verified"] = False
+    # Funding-wallet FIRSTUPDATE with no owner-authored SIGHASH_ALL NAME_UPDATE -> derived NAME_WRITER_UNVERIFIED!
+    fx["chain"]["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx["_alice_reg"],
+        fx["_alice_owner_pol"],
+        {"link": {"grant": fx["_keys"]["alice_gr"]["xonly"]}, "m": {"h": sl.content_addr(fx["_alice_man"]), "s": 1}},
+        first_height=749000,
+        first_only=True,
+    )
     add("NAME_WRITER_UNVERIFIED", "SL-LDGR-007", "invocation", fx)
 
     fx = _base_invocation_fixture()
-    fx["chain"]["names"]["id/alice"]["history_available"] = False
+    # Truncated history chain -> derived NAME_HISTORY_UNAVAILABLE!
+    fx["chain"]["names"]["id/alice"]["history_truncated"] = True
     add("NAME_HISTORY_UNAVAILABLE", "SL-IDEN-004", "invocation", fx)
 
     fx = _base_invocation_fixture()
-    # Role key reused across grant and nostr -> NAME_VALUE_INVALID
+    # Role key reused across grant and nostr inside encoded NAME_UPDATE script -> derived NAME_VALUE_INVALID!
     dup_pk = fx["_keys"]["alice_gr"]["xonly"]
-    fx["chain"]["names"]["id/alice"]["value_raw"] = sl.jcs_encode({"link": {"grant": dup_pk}, "nostr": dup_pk}).decode()
+    fx["chain"]["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx["_alice_reg"],
+        fx["_alice_owner_pol"],
+        {"link": {"grant": dup_pk}, "nostr": dup_pk},
+    )
     add("NAME_VALUE_INVALID", "SL-IDEN-003", "invocation", fx)
 
     fx = _base_invocation_fixture()
-    fx["chain"]["names"]["id/alice"]["role_changed_since_recent"] = ["grant"]
+    # Name update AFTER recent_block (749990) rotates link.grant -> derived NAME_ROLE_CHANGED!
+    rot_gr = _kp("alice-grant-rotated")
+    fx["chain"]["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx["_alice_reg"],
+        fx["_alice_owner_pol"],
+        {"link": {"grant": fx["_keys"]["alice_gr"]["xonly"]}, "m": {"h": sl.content_addr(fx["_alice_man"]), "s": 1}},
+        first_height=748000,
+        update_height=749000,
+        extra_updates=[{
+            "txid": _h32("alice-role-rot-upd"),
+            "confirmed_height": 749995,
+            "value": {"link": {"grant": rot_gr["xonly"]}, "m": {"h": sl.content_addr(fx["_alice_man"]), "s": 1}},
+        }],
+    )
     add("NAME_ROLE_CHANGED", "SL-IDEN-003", "invocation", fx)
 
     # MANIFEST_* via executor_ref
@@ -738,16 +782,14 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     }]
     add("MANIFEST_ROLLBACK", "SL-IDEN-008", "invocation", fx)
 
-    # AUTH_* (3 codes)
+    # AUTH_* (3 codes — strictly Draft 2020-12 schema-valid AuthChallenge: NO network/genesis!)
     auth_k = _kp("auth-key")
     auth_seal_k = _kp("auth-seal")
     auth_chal_p = {
         "auth_pubkey": auth_k["xonly"],
         "expires_at": 1795220005,
-        "genesis": GENESIS_MAIN,
         "issued_at": 1795219950,
         "name": "id/alice",
-        "network": "main",
         "nonce": _h32("auth-n1"),
         "service_id": "id/mail-host-a",
         "type": "seallink-auth-challenge/1",
@@ -780,10 +822,10 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "manifests": fx_a["bundle"]["manifests"],
     })
 
-    # DEVICE_UNAUTHORIZED
+    # DEVICE_UNAUTHORIZED (strictly Draft 2020-12 schema-valid OwnerCommand!)
     dev_k = _kp("dev-l1")
     cmd_p = {
-        "arguments": {"reason": "emergency"},
+        "arguments": {"scope": "all"},
         "command": "keyholder-halt",
         "exp": 1795220300,
         "genesis": GENESIS_MAIN,
@@ -791,12 +833,20 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "level": 2,
         "network": "main",
         "nonce": _h32("cmd-n1"),
-        "target_host": "id/station-a",
+        "owner": "id/alice",
+        "target_executor": "id/station-a",
         "type": "seallink-owner-command/1",
     }
     cmd_env = sl.sign_envelope(cmd_p, [dev_k["sk"]])
     dev_list = {
-        "devices": [{"alg": "bip340", "ceiling": 1, "key": dev_k["xonly"], "label": "laptop", "presence": False, "seal": {"script_policy": {"kind": "key", "pk": auth_seal_k["comp"]}, "txid": _h32("dseal"), "vout": 0}}],
+        "devices": [{
+            "alg": "bip340",
+            "ceiling": 1,
+            "key": dev_k["xonly"],
+            "label": "laptop",
+            "presence": False,
+            "seal": {"script_policy": {"kind": "key", "pk": auth_seal_k["comp"]}, "txid": _h32("dseal"), "vout": 0},
+        }],
         "network": "main",
         "owner": "id/alice",
         "seq": 1,
@@ -822,15 +872,16 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("ORIGIN_BINDING_INVALID", "SL-ORIG-003", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
+        "trusted_origin_issuers": of["trusted_origin_issuers"],
     })
 
     of = _base_origin_fixture()
-    # status_seal spent without presenting capacity/1 or end/1
     of["chain"]["txs"][_h32("ostat-tx")]["outputs"]["0"]["spent_by_txid"] = _h32("unpresented-status-spend")
     of["chain"]["txs"][_h32("unpresented-status-spend")] = {"confirmed_height": 750050, "opreturn_hex": sl.encode_opreturn(0x09, _h32("unknown-doc")).hex(), "outputs": {}}
     add("ORIGIN_STATUS_INCOMPLETE", "SL-ORIG-002", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
+        "trusted_origin_issuers": of["trusted_origin_issuers"],
     })
 
     of = _base_origin_fixture()
@@ -841,6 +892,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             "issued_at": 1795220000,
             "network": "main",
             "nonce": _h32("wa-1"),
+            "party_id": "student-1",
             "party_name": "id/child-leo",
             "party_role": "student_ward",
             "target_id": sl.object_id(of["contract"]),
@@ -854,10 +906,10 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "contract": of["contract"],
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
+        "trusted_origin_issuers": of["trusted_origin_issuers"],
     })
 
     of = _base_origin_fixture()
-    # Slot 2 is still initial_vacant -> GUARDIAN_INACTIVE
     assent_inactive = sl.sign_guardian_envelope(
         {
             "expires_at": 1795400000,
@@ -866,6 +918,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             "issued_at": 1795220000,
             "network": "main",
             "nonce": _h32("wi-2"),
+            "party_id": "student-1",
             "party_name": "id/child-leo",
             "party_role": "student_ward",
             "target_id": sl.object_id(of["contract"]),
@@ -879,10 +932,10 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "contract": of["contract"],
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
+        "trusted_origin_issuers": of["trusted_origin_issuers"],
     })
 
     of = _base_origin_fixture()
-    # Slot 1 active, but contract_assent requires 2 slots -> GUARDIAN_QUORUM_UNMET
     assent_1of2 = sl.sign_guardian_envelope(
         {
             "expires_at": 1795400000,
@@ -891,6 +944,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             "issued_at": 1795220000,
             "network": "main",
             "nonce": _h32("wq-1"),
+            "party_id": "student-1",
             "party_name": "id/child-leo",
             "party_role": "student_ward",
             "target_id": sl.object_id(of["contract"]),
@@ -904,22 +958,24 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "contract": of["contract"],
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
+        "trusted_origin_issuers": of["trusted_origin_issuers"],
     })
 
     of = _base_origin_fixture()
+    # Majority reached (t_low >= maj_unix), but ward name.updates[] has NOT transferred to fresh subject owner_policy!
     of["chain"]["credible_utc_interval"] = [of["_maj_unix"] + 100, of["_maj_unix"] + 200]
-    of["origin_bundle"]["handover_transfer_completed"] = False
     add("GUARDIAN_TRANSFER_PENDING", "SL-ORIG-011", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
+        "trusted_origin_issuers": of["trusted_origin_issuers"],
     })
 
     of = _base_origin_fixture()
-    # Interval straddles majority_unix
     of["chain"]["credible_utc_interval"] = [of["_maj_unix"] - 10, of["_maj_unix"] + 10]
     add("GUARDIAN_TIME_BOUNDARY", "SL-ORIG-010", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
+        "trusted_origin_issuers": of["trusted_origin_issuers"],
     })
 
     of = _base_origin_fixture()
@@ -944,6 +1000,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("SUBJECT_ENDED", "SL-ORIG-012", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
+        "trusted_origin_issuers": of["trusted_origin_issuers"],
     })
 
     of = _base_origin_fixture()
@@ -951,7 +1008,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "genesis": GENESIS_MAIN,
         "name": "id/child-leo-recovered",
         "network": "main",
-        "next_recovery_policy": of["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]["script_policy"],
+        "next_recovery_policy": of["_rec_pol"],
         "next_recovery_vout": 0,
         "origin_id": of["_origin_id"],
         "owner_policy": of["origin_bundle"]["name_binding"]["owner_policy"],
@@ -961,14 +1018,34 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "type": "seallink-name-binding/1",
     }
     rec_txid = _h32("orec-0x0c-tx")
-    of["chain"]["txs"][rec_txid] = {"confirmed_height": 750050, "opreturn_hex": sl.encode_opreturn(0x0C, sl.object_id(rec_binding)).hex(), "outputs": {}}
-    # Live owner issued 0x10 RECOVERY_CANCEL
-    of["chain"]["names"]["id/child-leo"]["recovery_cancel_ids"] = [sl.object_id(rec_binding)]
-    of["origin_bundle"]["pending_recovery_binding"] = rec_binding
-    of["origin_bundle"]["pending_recovery_txid"] = rec_txid
+    rec_id = sl.object_id(rec_binding)
+    of["chain"]["txs"][_h32("orecov-tx")]["outputs"]["0"]["spent_by_txid"] = rec_txid
+    of["chain"]["txs"][rec_txid] = {
+        "confirmed_height": 750050,
+        "opreturn_hex": sl.encode_opreturn(0x0C, rec_id).hex(),
+        "outputs": {"0": {"script_pubkey_hex": _spk_hex(of["_rec_pol"])}},
+    }
+    # Live owner broadcasts owner-authored SIGHASH_ALL NAME_UPDATE with OP_RETURN 0x10 RECOVERY_CANCEL!
+    leo_upds = of["chain"]["names"]["id/child-leo"]["updates"]
+    prev_leo = leo_upds[-1]
+    cancel_spk, _ = sl.compile_script_policy(prev_leo["owner_policy"])
+    cancel_val = sl.jcs_encode({"link": {"origin": of["_origin_id"]}})
+    leo_upds.append({
+        "op": "NAME_UPDATE",
+        "txid": _h32("leo-0x10-cancel-tx"),
+        "vout": 0,
+        "confirmed_height": 750060,
+        "owner_policy": prev_leo["owner_policy"],
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", cancel_spk, name=b"id/child-leo", value=cancel_val).hex(),
+        "prev_input": {"txid": prev_leo["txid"], "vout": prev_leo["vout"], "witness_policy": prev_leo["owner_policy"], "sighash_bytes": [0x01]},
+        "opreturn_hex": sl.encode_opreturn(0x10, rec_id).hex(),
+    })
+    of["origin_bundle"]["recovery_bindings"] = [rec_binding]
     add("RECOVERY_FORBIDDEN", "SL-ORIG-014", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
+        "trusted_origin_issuers": of["trusted_origin_issuers"],
+        "assert_binding_id": rec_id,
     })
 
     # ---- 5. CONTRACT_*, CRED_*, NOTARY_* (11 codes) ----
@@ -987,8 +1064,8 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             "machine_clause_indices": [0],
             "network": "main",
             "parties": [
-                {"role": "client", "signing_policy": {"m": 1, "pks": [f["_keys"]["alice_gr"]["xonly"]]}},
-                {"role": "worker", "signing_policy": {"m": 1, "pks": [f["_keys"]["agent_req"]["xonly"]]}},
+                {"party_id": "client-1", "role": "client", "signing_policy": {"m": 1, "pks": [f["_keys"]["alice_gr"]["xonly"]]}},
+                {"party_id": "worker-1", "role": "worker", "signing_policy": {"m": 1, "pks": [f["_keys"]["agent_req"]["xonly"]]}},
             ],
             "profile": "org.seallink/agent-session-v1",
             "seal": {"script_policy": cseal_pol, "txid": _h32("cseal-tx"), "vout": 0},
@@ -998,11 +1075,11 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         cid = sl.object_id(c_obj)
         a1 = sl.sign_envelope({
             "expires_at": 1795400000, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main",
-            "nonce": _h32("ca-1"), "party_role": "client", "target_id": cid, "target_type": "seallink-contract/1", "type": "seallink-assent/1",
+            "nonce": _h32("ca-1"), "party_id": "client-1", "party_role": "client", "target_id": cid, "target_type": "seallink-contract/1", "type": "seallink-assent/1",
         }, [f["_keys"]["alice_gr"]["sk"]])
         a2 = sl.sign_envelope({
             "expires_at": 1795400000, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main",
-            "nonce": _h32("ca-2"), "party_role": "worker", "target_id": cid, "target_type": "seallink-contract/1", "type": "seallink-assent/1",
+            "nonce": _h32("ca-2"), "party_id": "worker-1", "party_role": "worker", "target_id": cid, "target_type": "seallink-contract/1", "type": "seallink-assent/1",
         }, [f["_keys"]["agent_req"]["sk"]])
         gp = copy.deepcopy(f["bundle"]["grants"][0]["payload"])
         gp["contract_id"] = cid
@@ -1034,7 +1111,6 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
 
     fx = _contract_fx()
     del fx["bundle"]["contract"]["seal"]
-    # Recompute contract_id & assents so it reaches CONTRACT_SEAL_MISSING cleanly
     new_cid = sl.object_id(fx["bundle"]["contract"])
     gp_cs = copy.deepcopy(fx["bundle"]["grants"][0]["payload"])
     gp_cs["contract_id"] = new_cid
@@ -1046,27 +1122,31 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("CONTRACT_SEAL_MISSING", "SL-CONT-005", "invocation", fx)
 
     fx = _contract_fx()
-    fx["bundle"]["disclosed_clauses"] = {}  # Missing machine_clause_indices[0]
+    fx["bundle"]["disclosed_clauses"] = {}
     add("CONTRACT_TERMS_MISMATCH", "SL-CONT-002", "invocation", fx)
 
     fx = _contract_fx()
     fx["executor_cfg"]["runtime_config_sha256"] = _h32("different-runtime-config")
     add("CONTRACT_CONFIG_MISMATCH", "SL-CONT-006", "invocation", fx)
 
-    # CRED_* (4 codes)
-    def _cred_fx(lifecycle: str = "revocable") -> dict[str, Any]:
+    # CRED_* (4 codes — strictly Draft 2020-12 schema-valid Credential with claims & issued_at!)
+    def _cred_fx(lifecycle: str = "revocable", break_h_c: int | None = None) -> dict[str, Any]:
         iss_own = _kp("cred-iss-own")
         iss_cr = _kp("cred-iss-cr")
         cseal_k = _kp("cred-seal")
         cseal_pol = {"kind": "key", "pk": cseal_k["comp"]}
+        iss_owner_pol = {"kind": "key", "pk": iss_own["comp"]}
+        iss_reg = {"txid": _h32("ciss-reg"), "vout": 0}
         cp: dict[str, Any] = {
             "claim_commitments": {"verified": sl.clause_commit(_h32("cs1"), {"verified": True})},
+            "claims": {"verified": True},
             "credential_kind": "subject-claim",
             "genesis": GENESIS_MAIN,
+            "issued_at": 1795220000,
             "issuer": {
                 "name": "id/issuer-a",
-                "owner_policy": {"kind": "key", "pk": iss_own["comp"]},
-                "registration": {"txid": _h32("ciss-reg"), "vout": 0},
+                "owner_policy": iss_owner_pol,
+                "registration": iss_reg,
                 "role_policy": {"m": 1, "pks": [iss_cr["xonly"]]},
             },
             "lifecycle": lifecycle,
@@ -1080,22 +1160,38 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             cp["revocation_seal"] = {"script_policy": cseal_pol, "txid": _h32("cr-seal-tx"), "vout": 0}
         c_env = sl.sign_envelope(cp, [iss_cr["sk"]])
         atx = _h32("cr-anchor-tx")
+        extra_upds = None
+        if break_h_c is not None:
+            brk_obj = {
+                "compromised_policy": {"m": 1, "pks": [iss_cr["xonly"]]},
+                "genesis": GENESIS_MAIN,
+                "h_c": break_h_c,
+                "issuer": {"name": "id/issuer-a", "owner_policy": iss_owner_pol, "registration": iss_reg},
+                "name_input": iss_reg,
+                "role": "cred",
+                "type": "seallink-credential-break/1",
+            }
+            extra_upds = [{
+                "txid": _h32("ciss-0x0b-break-tx"),
+                "confirmed_height": 749600,
+                "value": {"link": {"cred": _kp("cred-iss-cr-new")["xonly"]}},
+                "opreturn_hex": sl.encode_opreturn(0x0B, sl.signing_digest(brk_obj).hex(), 0x00, h_c=break_h_c).hex(),
+                "break_role": "cred",
+            }]
         chain = {
             "network": "main",
             "genesis": GENESIS_MAIN,
             "tip_height": 750010,
             "tip_hash": _h32("ctip"),
+            "tip_header_time": 1795220000,
+            "tip_first_sight": 1795220005,
             "now": 1795220010,
+            "comparison_peers": [{"healthy": True, "height": 750010, "hash_at_tip": _h32("ctip")}],
             "names": {
-                "id/issuer-a": {
-                    "registration": {"txid": _h32("ciss-reg"), "vout": 0},
-                    "expiry_height": 780000,
-                    "owner_policy": {"kind": "key", "pk": iss_own["comp"]},
-                    "value_raw": sl.jcs_encode({"link": {"cred": iss_cr["xonly"]}}).decode(),
-                    "writer_verified": True,
-                    "history_available": True,
-                    "compromised_breaks": [],
-                }
+                "id/issuer-a": sv.make_name_history(
+                    "id/issuer-a", iss_reg, iss_owner_pol, {"link": {"cred": iss_cr["xonly"]}},
+                    first_height=748000, update_height=749000, extra_updates=extra_upds,
+                ),
             },
             "txs": {
                 atx: {"confirmed_height": 749500, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(c_env)).hex(), "outputs": {}},
@@ -1108,17 +1204,28 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     cf["anchor_txid"] = None
     add("CRED_ANCHOR_MISSING", "SL-CONT-008", "credential", cf)
 
-    cf = _cred_fx("eternal")
-    cf["chain"]["names"]["id/issuer-a"]["compromised_breaks"] = [{"role": "cred", "h_c": 749400}]  # anchor 749500 >= h_c
+    cf = _cred_fx("eternal", break_h_c=749400)  # anchor 749500 >= h_c 749400 -> derived 0x0b CRED_ISSUER_CLOSED!
     add("CRED_ISSUER_CLOSED", "SL-CONT-009", "credential", cf)
 
     cf = _cred_fx()
-    cf["chain"]["tip_height"] = 760000  # == not_after_height
+    cf["chain"]["tip_height"] = 760000
+    cf["chain"]["comparison_peers"] = [{"healthy": True, "height": 760000, "hash_at_tip": _h32("ctip")}]
     add("CRED_WINDOW_CLOSED", "SL-CONT-010", "credential", cf)
 
     cf = _cred_fx("revocable")
-    cf["chain"]["txs"][_h32("cr-seal-tx")]["outputs"]["0"]["spent_by_txid"] = _h32("cause-spend")
-    cf["chain"]["txs"][_h32("cr-seal-tx")]["outputs"]["0"]["spend_has_0x0a"] = True
+    cause_tx = _h32("cause-spend")
+    cf["chain"]["txs"][_h32("cr-seal-tx")]["outputs"]["0"]["spent_by_txid"] = cause_tx
+    wdr_obj = {
+        "cause_sha256": _h32("cause-reason"),
+        "credential_id": sl.object_id(cf["credential"]["payload"]),
+        "genesis": GENESIS_MAIN,
+        "type": "seallink-credential-withdrawal/1",
+    }
+    cf["chain"]["txs"][cause_tx] = {
+        "confirmed_height": 750005,
+        "opreturn_hex": sl.encode_opreturn(0x0A, sl.signing_digest(wdr_obj).hex()).hex(),
+        "outputs": {},
+    }
     add("CRED_REVOKED_FOR_CAUSE", "SL-CONT-010", "credential", cf)
 
     # ---- 6. GRANT_*, INVOKE_*, QUOTA_*, SESSION_*, JOURNAL_* (20 codes) + NOTARY_REQUIRED ----
@@ -1172,17 +1279,22 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         p_itx = _h32("p-iss-tx")
         c_itx = _h32("c-iss-tx")
         f["chain"]["txs"][p_itx] = {
-            "confirmed_height": 749998, "segwit_w": True,
+            "confirmed_height": 749998,
+            "inputs": [sv.make_segwit_input(_h32("alice-seal-tx"), 1)],
             "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(parent_env), "grant_id": pid, "type": "seallink-issuance/1"}).hex()).hex(),
             "outputs": {},
         }
         f["chain"]["txs"][c_itx] = {
-            "confirmed_height": 749999, "segwit_w": True,
-            "spent_outpoints": [f"{_h32('row-tx')}:0"],
+            "confirmed_height": 749999,
+            "inputs": [sv.make_segwit_input(_h32("row-tx"), 0), sv.make_segwit_input(_h32("child-seal-tx"), 1)],
             "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(child_env), "grant_id": cid, "type": "seallink-issuance/1"}).hex()).hex(),
             "outputs": {},
         }
-        f["chain"]["txs"][_h32("child-seal-tx")] = {"confirmed_height": 749995, "segwit_w": True, "outputs": {"0": {"script_pubkey_hex": _spk_hex(cseal_pol)}}}
+        f["chain"]["txs"][_h32("child-seal-tx")] = {
+            "confirmed_height": 749995,
+            "inputs": [sv.make_segwit_input(_h32("cseal-fund"), 0)],
+            "outputs": {"0": {"script_pubkey_hex": _spk_hex(cseal_pol)}, "1": {"script_pubkey_hex": _spk_hex(cseal_pol)}},
+        }
         if with_stop:
             f["chain"]["txs"][_h32("stop-tx")] = {"confirmed_height": 749990, "outputs": {"0": {"script_pubkey_hex": _spk_hex({"kind": "key", "pk": stop_k["comp"]})}}}
         inv_p = copy.deepcopy(f["invocation"]["payload"])
@@ -1204,7 +1316,8 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("GRANT_CLOSED", "SL-GRNT-012", "invocation", fx)
 
     fx = _base_invocation_fixture()
-    fx["chain"]["tip_height"] = 760000  # == not_after_height
+    fx["chain"]["tip_height"] = 760000
+    fx["chain"]["comparison_peers"] = [{"healthy": True, "height": 760000, "hash_at_tip": _h32("tip-750010")}]
     add("GRANT_WINDOW_CLOSED", "SL-GRNT-004", "invocation", fx)
 
     fx = _base_invocation_fixture()
@@ -1248,7 +1361,6 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("GRANT_TEXT_FORBIDDEN", "SL-GRNT-005", "invocation", fx)
 
     fx = _delegation_fx()
-    # Remove delegate from parent -> GRANT_NOT_DELEGABLE
     p_nodel = copy.deepcopy(fx["bundle"]["grants"][0]["payload"])
     del p_nodel["delegate"]
     p_env_nd = sl.sign_envelope(p_nodel, [fx["_keys"]["alice_gr"]["sk"]])
@@ -1265,7 +1377,6 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("GRANT_NOT_DELEGABLE", "SL-GRNT-009", "invocation", fx)
 
     fx = _delegation_fx()
-    # Child widens where clause beyond parent template
     c_wide = copy.deepcopy(fx["bundle"]["grants"][1]["payload"])
     c_wide["capabilities"][0]["where"] = {"tool_name": {"eq": "rm-rf"}}
     c_env_w = sl.sign_envelope(c_wide, [fx["_del_k"]["sk"]])
@@ -1278,8 +1389,8 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("GRANT_CHILD_WIDER", "SL-GRNT-010", "invocation", fx)
 
     fx = _delegation_fx()
-    # Child anchor tx did NOT spend row coin -> GRANT_ROW_INVALID
-    fx["chain"]["txs"][_h32("c-iss-tx")]["spent_outpoints"] = []
+    # Child issuance tx inputs[] omit the ordinal row coin -> derived GRANT_ROW_INVALID!
+    fx["chain"]["txs"][_h32("c-iss-tx")]["inputs"] = [sv.make_segwit_input(_h32("child-seal-tx"), 1)]
     add("GRANT_ROW_INVALID", "SL-GRNT-009", "invocation", fx)
 
     fx = _delegation_fx(with_stop=True)
@@ -1289,7 +1400,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     fx = _base_invocation_fixture()
     inv_ad = copy.deepcopy(fx["invocation"]["payload"])
     inv_ad["action"] = "mail/list"
-    inv_ad["arguments"] = {"page": 0}
+    inv_ad["arguments"] = {"folder": "Invoices", "page": 0}  # Schema-valid MailListArgs!
     fx["invocation"] = sl.sign_envelope(inv_ad, [fx["_keys"]["agent_req"]["sk"]])
     add("INVOKE_ACTION_DENIED", "SL-GRNT-012", "invocation", fx)
 
@@ -1300,7 +1411,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("INVOKE_CONSTRAINT_FAILED", "SL-WIRE-016", "invocation", fx)
 
     fx = _base_invocation_fixture()
-    fx["chain"]["now"] = fx["invocation"]["payload"]["exp"]  # half-open [iat, exp)
+    fx["chain"]["now"] = fx["invocation"]["payload"]["exp"]
     add("INVOKE_TIME_INVALID", "SL-GRNT-006", "invocation", fx)
 
     fx = _base_invocation_fixture()
@@ -1347,46 +1458,114 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     fx["journal"]["write_token_active"] = False
     add("JOURNAL_FENCED", "SL-GRNT-014", "invocation", fx)
 
-    # ---- 7. SERVICE_*, FEDERATION_* (3 codes) ----
+    # ---- 7. SERVICE_*, FEDERATION_* (3 codes — ALL schema-valid & derived!) ----
     fx = _eref_fx()
-    # Replace Alice's manifest with empty providers[] (matching hash in name value)
     empty_man = copy.deepcopy(fx["_alice_man"])
     empty_man["providers"] = []
     em_h = sl.content_addr(empty_man)
-    fx["chain"]["names"]["id/alice"]["value_raw"] = sl.jcs_encode({"link": {"grant": fx["_keys"]["alice_gr"]["xonly"]}, "m": {"h": em_h, "s": 1}}).decode()
+    fx["chain"]["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx["_alice_reg"],
+        fx["_alice_owner_pol"],
+        {"link": {"grant": fx["_keys"]["alice_gr"]["xonly"]}, "m": {"h": em_h, "s": 1}},
+    )
     fx["bundle"]["manifests"][em_h] = empty_man
     fx["chain"]["manifests"][em_h] = empty_man
     add("SERVICE_PROVIDER_UNBOUND", "SL-SERV-001", "invocation", fx)
 
-    mig_k = _kp("mig-src")
+    # SERVICE_MIGRATION_INVALID: Draft 2020-12 schema-valid MigrationManifest signed by real source_executor receipt_key,
+    # with derived export files[] leaking a forbidden dkim_key!
+    fx_mig = _base_invocation_fixture()
+    dest_own = _kp("mail-host-b-own")
+    export_files = [
+        {"content_sha256": _h32("msg-blob-1"), "kind": "mail_blob", "media_type": "message/rfc822", "path": "mail/msg-1.eml"},
+        {"content_sha256": _h32("leaked-dkim"), "kind": "dkim_key", "media_type": "application/x-pem-file", "path": "secrets/dkim.pem"},
+    ]
+    inv_sha = sl.sha256(sl.jcs_encode({"files": export_files})).hex()
     mig_env = sl.sign_envelope(
         {
-            "dest_executor": "id/mail-host-b",
+            "dest_executor": {"name": "id/mail-host-b", "owner_policy": {"kind": "key", "pk": dest_own["comp"]}, "registration": {"txid": _h32("host-b-reg"), "vout": 0}},
             "genesis": GENESIS_MAIN,
-            "holder_name": "id/alice",
-            "inventory_sha256": _h32("inv-sha"),
+            "holder": {"name": "id/alice", "owner_policy": fx_mig["_alice_owner_pol"], "registration": fx_mig["_alice_reg"]},
+            "inventory_sha256": inv_sha,
             "issued_at": 1795220000,
             "journal_commitment": _h32("jc"),
             "journal_pos": 10,
+            "migration_id": _h32("mig-id-1"),
             "network": "main",
             "outstanding_exposure": [],
             "service_type": "mail",
-            "source_executor": "id/mail-host-a",
+            "source_executor": {"name": "id/mail-host-a", "owner_policy": fx_mig["_host_owner_pol"], "registration": fx_mig["_host_reg"]},
             "type": "seallink-migration/1",
         },
-        [mig_k["sk"]],
+        [fx_mig["_keys"]["host_rcpt"]["sk"]],
     )
     add("SERVICE_MIGRATION_INVALID", "SL-SERV-002", "migration", {
         "migration": mig_env,
-        "export_bundle": {"contains_execution_credentials": True, "source_fenced": True, "predecessor_grants_closed": True, "inventory_sha256": _h32("inv-sha")},
+        "export_bundle": {
+            "files": export_files,
+            "open_predecessor_grants": [],
+            "source_journal_commitment": _h32("jc"),
+            "source_journal_pos": 10,
+            "source_write_token_fenced": True,
+        },
+        "chain": fx_mig["chain"],
+        "manifests": fx_mig["bundle"]["manifests"],
         "journal": {"journal_id": _h32("mj")},
     })
 
+    # FEDERATION_POLICY_DENIED: valid L2 OwnerCommand + route_hops passing through screening_agent!
     fx_fed = _base_invocation_fixture()
+    l2_dev = _kp("fed-l2-dev")
+    l2_seal_k = _kp("fed-l2-seal")
+    l2_seal_pol = {"kind": "key", "pk": l2_seal_k["comp"]}
+    fx_fed["chain"]["txs"][_h32("fed-l2-seal-tx")] = {
+        "confirmed_height": 749990,
+        "outputs": {"0": {"script_pubkey_hex": _spk_hex(l2_seal_pol)}},
+    }
+    l2_cmd = sl.sign_envelope(
+        {
+            "arguments": {"config_sha256": _h32("contour-a-cfg"), "statement_id": _h32("contour-a-stmt")},
+            "command": "policy-apply",
+            "exp": 1795220300,
+            "genesis": GENESIS_MAIN,
+            "iat": 1795220000,
+            "level": 2,
+            "network": "main",
+            "nonce": _h32("fed-l2-nonce"),
+            "owner": "id/alice",
+            "target_executor": "id/station-a",
+            "type": "seallink-owner-command/1",
+        },
+        [l2_dev["sk"]],
+    )
+    l2_dev_list = {
+        "devices": [{
+            "alg": "bip340",
+            "ceiling": 2,
+            "key": l2_dev["xonly"],
+            "label": "yubikey-l2",
+            "presence": True,
+            "seal": {"script_policy": l2_seal_pol, "txid": _h32("fed-l2-seal-tx"), "vout": 0},
+        }],
+        "network": "main",
+        "owner": "id/alice",
+        "seq": 1,
+        "type": "seallink-device-list/1",
+    }
     add("FEDERATION_POLICY_DENIED", "SL-SERV-004", "federation", {
-        "policy": {"require_contour_a": True},
-        "peer_ctx": {"phase": "pii_disclosure", "routed_through_screening_agent": True, "l2_human_approved": True},
+        "policy": {"require_contour_a": True, "trusted_peers": ["id/peer-b"]},
+        "peer_ctx": {
+            "phase": "pii_disclosure",
+            "route_hops": [
+                {"actor": "id/screener-bot", "role": "screening_agent"},
+                {"actor": "id/peer-b", "role": "counterparty"},
+            ],
+            "approval_command": l2_cmd,
+            "device_list": l2_dev_list,
+        },
         "grant": fx_fed["bundle"]["grants"][0],
+        "chain": fx_fed["chain"],
     })
 
     # Verify 100% coverage against registry/refusal-codes.json
@@ -1398,8 +1577,8 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
 
     return {
         "suite": "refusal-coverage-matrix",
-        "version": "1.0.0-draft.2",
-        "description": "Executable 84/84 refusal-code conformance matrix exercising every registered refusal code through tools/seallink_verifier.py and tools/seallink_ref.py.",
+        "version": VERSION,
+        "description": "Executable 84/84 refusal-code conformance matrix with Draft 2020-12 schema-validated semantic fixtures and derived ChainView evidence.",
         "total_registered_codes": len(reg_codes),
         "total_covered_codes": len(built_codes),
         "cases": sorted(cases, key=lambda c: c["code"]),

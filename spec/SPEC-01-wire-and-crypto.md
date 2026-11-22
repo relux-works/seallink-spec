@@ -1,6 +1,6 @@
 # SPEC-01: Wire Format, Cryptography, Thresholds, and Constraint Algebra
 
-- **Version:** `1.0.0-draft.2`
+- **Version:** `1.0.0-draft.3`
 - **Status:** `draft` (normative rules `decided`; see `OPEN-QUESTIONS.md` for deferred algorithm extensions)
 - **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/constraints-and-schemas.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/refusal-codes.json`, `registry/constraints.json`
@@ -59,8 +59,8 @@ SealLink v1.0 specifies three exact off-chain signature algorithms plus one on-c
 | Algorithm / Role | Public Key Hex Encoding | Signature Hex Encoding | Normative Spec |
 | --- | --- | --- | --- |
 | `bip340` (default for all protocol objects) | 64 lowercase hex (`xonly_64hex`): valid secp256k1 x-coordinate (even Y). | 128 lowercase hex (64B BIP-340 Schnorr over `digest`). | [BIP-340] |
-| `p256` (device keys ONLY) | 66 lowercase hex (`02`/`03` + 32B X): valid compressed SEC 1 point on NIST P-256. | 128 lowercase hex (64B raw `r \|\| s`, strict low-S `s <= n/2`, over `digest`). | [SEC1] |
-| `ed25519` (device keys ONLY) | 64 lowercase hex: valid compressed Ed25519 point. | 128 lowercase hex (64B RFC 8032 signature over `digest`). | [RFC8032] |
+| `p256` (device keys ONLY) | 66 lowercase hex (`02`/`03` + 32B X): valid compressed SEC 1 point on NIST P-256. | 128 lowercase hex (64B raw `r \|\| s`, strict low-S `s <= n/2`, over pre-hashed `e = big_endian_uint256(digest)` without double-hashing). | [SEC1] |
+| `ed25519` (device keys ONLY) | 64 lowercase hex: valid compressed Ed25519 point. | 128 lowercase hex (64B RFC 8032 PureEdDSA signature with message `M = digest`). | [RFC8032] |
 | Ledger `ScriptPolicy` keys (`SPEC-02`) | 66 lowercase hex (`compressed_66hex`, `02`/`03` + 32B X): valid secp256k1 point. | DER ECDSA + `0x01` (`SIGHASH_ALL`) inside SegWit v0 witness. | [BIP-141], [BIP-143] |
 
 Invalid curve points, non-lowercase hex, wrong byte lengths, or high-S `p256` signatures MUST refuse with `WIRE_KEY` (key defect) or `WIRE_SIGNATURE` (signature defect).

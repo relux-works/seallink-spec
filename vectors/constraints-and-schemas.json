@@ -317,6 +317,132 @@
       },
       "id": "orig-disposer-equals-arbiter",
       "rule": "SL-ORIG-016"
+    },
+    {
+      "expected_refusal": "CHAIN_SCRIPT_UNSUPPORTED",
+      "guardian_policy": {
+        "arbiter_pk": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597",
+        "challenger_pk": "035ea1bbe2cfaa7e5d9e973927014035b501dae2ea76f21c45e30c725e632c59e9",
+        "disposer_pk": "0221b448e89c0ca942087eb2038da1c8c0831fb8ed1fc2feeb669fa114a02b6ab7",
+        "next_roster_policy": {
+          "keys": {
+            "a": "0221b448e89c0ca942087eb2038da1c8c0831fb8ed1fc2feeb669fa114a02b6ab7",
+            "b": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597"
+          },
+          "kind": "branch",
+          "template": "both_of_2"
+        },
+        "quorums": {
+          "contract_assent": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "custody_change": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "effect_grant": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          },
+          "routine_read": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          }
+        },
+        "revision": 2,
+        "revision_size": 2,
+        "slots": [
+          {
+            "action": "retain_active",
+            "active_outpoint": {
+              "txid": "4bd6cd79dcf8f085f1a34af2068cd73b9fd201d2590bc500012dc9aad5e86780",
+              "vout": 0
+            },
+            "guardian_id": "f5ced8afb64707703bd0ede1f582f4371bf8f2ede265ace2bbf3ca89d50c1815",
+            "slot": 1
+          },
+          {
+            "action": "new_vacant",
+            "new_vacant_policy": {
+              "keys": {
+                "a": "0221b448e89c0ca942087eb2038da1c8c0831fb8ed1fc2feeb669fa114a02b6ab7",
+                "b": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597"
+              },
+              "kind": "branch",
+              "template": "both_of_2"
+            },
+            "new_vacant_vout": 1,
+            "slot": 2
+          }
+        ]
+      },
+      "id": "orig-disposer-rotation-forbids-retain-active",
+      "prev_roster": {
+        "appointment_delay_blocks": 144,
+        "arbiter_pk": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597",
+        "challenger_pk": "035ea1bbe2cfaa7e5d9e973927014035b501dae2ea76f21c45e30c725e632c59e9",
+        "disposer_pk": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+        "quorums": {
+          "contract_assent": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "custody_change": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "effect_grant": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          },
+          "routine_read": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          }
+        },
+        "revision": 1,
+        "revision_size": 2,
+        "roster_seal": {
+          "script_policy": {
+            "keys": {
+              "a": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+              "b": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597"
+            },
+            "kind": "branch",
+            "template": "both_of_2"
+          },
+          "txid": "ba87b4f42ef827694b961b6cf795a6ce16c5dd722276acc13803e14e8e6c763a",
+          "vout": 0
+        },
+        "slots": [
+          {
+            "initial_guardian_commitment": "036581e9c2c41f212fb06fc85a5da032e17c59ef3c33df6bebde36bb6810b5dc",
+            "slot": 1,
+            "vacant_utxo": {
+              "txid": "d794932ce865c2bfb6ba84be9d970b4cfc41f2ea8214b4c354170fabe86f1eff",
+              "vout": 0
+            }
+          },
+          {
+            "initial_guardian_commitment": "94a46147f404b4a34e628a8957545494dad4d6272bfc220fb4f539bf35747958",
+            "slot": 2,
+            "vacant_utxo": {
+              "txid": "42b27c27f992703a8b76976fffef21c54be3701ec25a393538be5da467bfa44a",
+              "vout": 0
+            }
+          }
+        ]
+      },
+      "rule": "SL-ORIG-015"
     }
   ],
   "negative_schema_fixtures": [
@@ -1121,5 +1247,5 @@
     }
   ],
   "suite": "constraints-and-schemas",
-  "version": "1.0.0-draft.2"
+  "version": "1.0.0-draft.3"
 }

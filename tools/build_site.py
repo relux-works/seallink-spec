@@ -12,7 +12,7 @@ ready directory (`site/` by default) containing:
   - Exact single-file Markdown bundle + SHA-256 (`/releases/<tag>/seallink-spec-<tag>.md{,.sha256}`)
   - Exact live `$id` endpoints for all 12 Draft 2020-12 JSON Schemas:
       /releases/<tag>/schemas/<name>.schema.json (plus /schemas/<name>.schema.json)
-  - All 6 registries and 8 executable vector suites under /releases/<tag>/{registry,vectors}/
+  - All 6 registries and 9 executable vector suites under /releases/<tag>/{registry,vectors}/
   - Optional SealLink Channel 2 /.well-known/ assets copied verbatim from well-known/ if present
   - Cloudflare Pages `_headers` (CORS, application/schema+json, immutable caching)
 """
@@ -499,6 +499,7 @@ def render_page(
     body_html: str,
     toc: list[tuple[int, str, str]] | None = None,
     description: str = "SealLink Protocol Specification — sovereign identities, revocable UTXO seals, contracts, and verifiable grants.",
+    inline_css: bool = False,
 ) -> str:
     toc_html = ""
     if toc:
@@ -511,6 +512,8 @@ def render_page(
     else:
         main_content = body_html
 
+    css_tag = f"<style>\n{STYLE_CSS}\n</style>" if inline_css else '<link rel="stylesheet" href="/assets/style.css">'
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -518,7 +521,7 @@ def render_page(
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{html.escape(title)} — SealLink</title>
   <meta name="description" content="{html.escape(description)}">
-  <link rel="stylesheet" href="/assets/style.css">
+  {css_tag}
 </head>
 <body>
   <header class="topbar">
@@ -666,10 +669,18 @@ def build_site(version: str, out_dir: Path) -> dict[str, Any]:
         f'<a class="btn" href="/releases/{html.escape(version)}/{html.escape(md_name)}.sha256">SHA-256 Checksum</a>'
         "</div>"
     )
-    (rel_base / f"seallink-spec-{version}.html").write_text(
-        render_page(f"Complete Specification ({version})", version, print_banner + full_body, full_toc),
-        encoding="utf-8",
+    html_name = f"seallink-spec-{version}.html"
+    full_html = render_page(
+        f"Complete Specification ({version})",
+        version,
+        print_banner + full_body,
+        full_toc,
+        inline_css=True,
     )
+    full_html_bytes = full_html.encode("utf-8")
+    full_html_sha = hashlib.sha256(full_html_bytes).hexdigest()
+    (rel_base / html_name).write_bytes(full_html_bytes)
+    (rel_base / f"{html_name}.sha256").write_text(f"{full_html_sha}  {html_name}\n", encoding="utf-8")
 
     # 6. Build landing page `/index.html`
     reg_obj = json.loads((ROOT / "registry" / "object-types.json").read_text(encoding="utf-8"))
@@ -849,7 +860,7 @@ def build_site(version: str, out_dir: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build static website & live schema host for seallink.org.")
-    parser.add_argument("--version", default="v1.0.0-draft.2", help="Release version label (e.g. v1.0.0-draft.2)")
+    parser.add_argument("--version", default="v1.0.0-draft.3", help="Release version label (e.g. v1.0.0-draft.3)")
     parser.add_argument("--out", default=str(ROOT / "site"), help="Output directory for generated static site")
     args = parser.parse_args()
 

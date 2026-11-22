@@ -153,46 +153,130 @@
     },
     "names": {
       "id/alice": {
-        "expiry_height": 780000,
-        "history_available": true,
-        "owner_policy": {
-          "kind": "key",
-          "pk": "0398f3cacd40151403dcf7451288bf7a65c8b23a17a1bd3b05b3cec5ed5498c761"
-        },
         "registration": {
           "txid": "cb5537b9d9768982b51e49423d19634329e0456bb5746f57f56a61f361780451",
           "vout": 0
         },
-        "value_raw": "{\"link\":{\"grant\":\"92eb5e1e2c0ceb439b5c01db7bfba28a692f7f091c6126dc24d12427a5d571a9\"},\"m\":{\"h\":\"8b0742005e99c5c301ab336dcb4a25c8f8f219ae9cff26b63a7311087b74c009\",\"s\":1}}",
-        "writer_verified": true
+        "updates": [
+          {
+            "confirmed_height": 748000,
+            "op": "NAME_FIRSTUPDATE",
+            "output_script_hex": "520869642f616c69636514192ed73acaf0ff25e3f49c86632169e8a476f6ee4ca87b226c696e6b223a7b226772616e74223a2239326562356531653263306365623433396235633031646237626662613238613639326637663039316336313236646332346431323432376135643537316139227d2c226d223a7b2268223a2238623037343230303565393963356333303161623333366463623461323563386638663231396165396366663236623633613733313130383762373463303039222c2273223a317d7d6d6d001402eb96959a9ab32dbf7ae66b3c09805cb8976294",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0398f3cacd40151403dcf7451288bf7a65c8b23a17a1bd3b05b3cec5ed5498c761"
+            },
+            "prev_input": null,
+            "txid": "cb5537b9d9768982b51e49423d19634329e0456bb5746f57f56a61f361780451",
+            "vout": 0
+          },
+          {
+            "confirmed_height": 749000,
+            "op": "NAME_UPDATE",
+            "output_script_hex": "530869642f616c6963654ca87b226c696e6b223a7b226772616e74223a2239326562356531653263306365623433396235633031646237626662613238613639326637663039316336313236646332346431323432376135643537316139227d2c226d223a7b2268223a2238623037343230303565393963356333303161623333366463623461323563386638663231396165396366663236623633613733313130383762373463303039222c2273223a317d7d6d75001402eb96959a9ab32dbf7ae66b3c09805cb8976294",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0398f3cacd40151403dcf7451288bf7a65c8b23a17a1bd3b05b3cec5ed5498c761"
+            },
+            "prev_input": {
+              "sighash_bytes": [
+                1
+              ],
+              "txid": "cb5537b9d9768982b51e49423d19634329e0456bb5746f57f56a61f361780451",
+              "vout": 0,
+              "witness_policy": {
+                "kind": "key",
+                "pk": "0398f3cacd40151403dcf7451288bf7a65c8b23a17a1bd3b05b3cec5ed5498c761"
+              }
+            },
+            "txid": "fa920f55426d5268bcbb78983ec953d188669aa9b97135dc863961ea4681c5ea",
+            "vout": 0
+          }
+        ]
       },
       "id/alice-acct-agent": {
-        "expiry_height": 780000,
-        "history_available": true,
-        "owner_policy": {
-          "kind": "key",
-          "pk": "022b962349449262c584142223d7b523ba719a3a1a85eb7f960bd6d2ef2686cefc"
-        },
         "registration": {
           "txid": "84620db17ec258c3bff4cd50a171ebcb3214dad689166a382e589824520326a8",
           "vout": 0
         },
-        "value_raw": "{\"nostr\":\"c116fe12568b04e5a4b0d56308587c832cf594c7c03e1519a2d10424a070a572\"}",
-        "writer_verified": true
+        "updates": [
+          {
+            "confirmed_height": 748000,
+            "op": "NAME_FIRSTUPDATE",
+            "output_script_hex": "521369642f616c6963652d616363742d6167656e74143ad80e2f99bb99be9e5a8b72c0b6523472d507524c4c7b226e6f737472223a2263313136666531323536386230346535613462306435363330383538376338333263663539346337633033653135313961326431303432346130373061353732227d6d6d0014fe88daee1ddae772f31748c670f6b85b10c5c4bc",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "022b962349449262c584142223d7b523ba719a3a1a85eb7f960bd6d2ef2686cefc"
+            },
+            "prev_input": null,
+            "txid": "84620db17ec258c3bff4cd50a171ebcb3214dad689166a382e589824520326a8",
+            "vout": 0
+          },
+          {
+            "confirmed_height": 749000,
+            "op": "NAME_UPDATE",
+            "output_script_hex": "531369642f616c6963652d616363742d6167656e744c4c7b226e6f737472223a2263313136666531323536386230346535613462306435363330383538376338333263663539346337633033653135313961326431303432346130373061353732227d6d750014fe88daee1ddae772f31748c670f6b85b10c5c4bc",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "022b962349449262c584142223d7b523ba719a3a1a85eb7f960bd6d2ef2686cefc"
+            },
+            "prev_input": {
+              "sighash_bytes": [
+                1
+              ],
+              "txid": "84620db17ec258c3bff4cd50a171ebcb3214dad689166a382e589824520326a8",
+              "vout": 0,
+              "witness_policy": {
+                "kind": "key",
+                "pk": "022b962349449262c584142223d7b523ba719a3a1a85eb7f960bd6d2ef2686cefc"
+              }
+            },
+            "txid": "4e33789c5b6e7fc17431c4e4dc1a9c5da33033676021ec9723f1b43c2975eadb",
+            "vout": 0
+          }
+        ]
       },
       "id/mail-host-a": {
-        "expiry_height": 780000,
-        "history_available": true,
-        "owner_policy": {
-          "kind": "key",
-          "pk": "0329ec9f2eaebebd406b40b7c1688f434d6e3d896f45828bb3c307aded972b23c2"
-        },
         "registration": {
           "txid": "925527c11b33214cacad527983af94f40d1ded991e3a3d8481f01ef303e36a11",
           "vout": 0
         },
-        "value_raw": "{\"m\":{\"h\":\"4fc0d6fe9e48456688d3a1072a1579bd89a7302cd7c0e566f33d6a1b27f6c7eb\",\"s\":1}}",
-        "writer_verified": true
+        "updates": [
+          {
+            "confirmed_height": 748000,
+            "op": "NAME_FIRSTUPDATE",
+            "output_script_hex": "520e69642f6d61696c2d686f73742d6114c817f59732ba1284c90fe3ffe05ffefc556ae5534c547b226d223a7b2268223a2234666330643666653965343834353636383864336131303732613135373962643839613733303263643763306535363666333364366131623237663663376562222c2273223a317d7d6d6d00147771e3e2443e9104b0fdc936673c5bad27cf488e",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0329ec9f2eaebebd406b40b7c1688f434d6e3d896f45828bb3c307aded972b23c2"
+            },
+            "prev_input": null,
+            "txid": "925527c11b33214cacad527983af94f40d1ded991e3a3d8481f01ef303e36a11",
+            "vout": 0
+          },
+          {
+            "confirmed_height": 749000,
+            "op": "NAME_UPDATE",
+            "output_script_hex": "530e69642f6d61696c2d686f73742d614c547b226d223a7b2268223a2234666330643666653965343834353636383864336131303732613135373962643839613733303263643763306535363666333364366131623237663663376562222c2273223a317d7d6d7500147771e3e2443e9104b0fdc936673c5bad27cf488e",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0329ec9f2eaebebd406b40b7c1688f434d6e3d896f45828bb3c307aded972b23c2"
+            },
+            "prev_input": {
+              "sighash_bytes": [
+                1
+              ],
+              "txid": "925527c11b33214cacad527983af94f40d1ded991e3a3d8481f01ef303e36a11",
+              "vout": 0,
+              "witness_policy": {
+                "kind": "key",
+                "pk": "0329ec9f2eaebebd406b40b7c1688f434d6e3d896f45828bb3c307aded972b23c2"
+              }
+            },
+            "txid": "97c15694bfc149d239d02bd52e3de7fa3041ffdc520639b7856ccac7d32ecca2",
+            "vout": 0
+          }
+        ]
       }
     },
     "network": "main",
@@ -204,18 +288,41 @@
     "txs": {
       "565ecad7166da08aef0a1c3f3c2ae693f1366e34040d7a8c908868bde0deab53": {
         "confirmed_height": 749995,
+        "inputs": [
+          {
+            "prev_txid": "630f609113a850bc8830f2b4e43e754ce5f1c7850d27f273e54c4afd5b8a8525",
+            "prev_vout": 0,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          }
+        ],
         "outputs": {
           "0": {
             "script_pubkey_hex": "001450c97028903986968b473ff41b45fdbe60424bd0"
+          },
+          "1": {
+            "script_pubkey_hex": "001402eb96959a9ab32dbf7ae66b3c09805cb8976294"
           }
-        },
-        "segwit_w": true
+        }
       },
       "c98fad2416b02739861c138b9e167cad9ef944143d553ff410905323d9b29018": {
         "confirmed_height": 749998,
+        "inputs": [
+          {
+            "prev_txid": "565ecad7166da08aef0a1c3f3c2ae693f1366e34040d7a8c908868bde0deab53",
+            "prev_vout": 1,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          }
+        ],
         "opreturn_hex": "6a05534c4e4b012201eedb64434427d22131f59c13c49487c177ddf17f199c7295edaae0ba51d2629300",
-        "outputs": {},
-        "segwit_w": true
+        "outputs": {}
       }
     }
   },
@@ -704,5 +811,5 @@
     }
   ],
   "suite": "trace-01-mail-offline-revoke",
-  "version": "1.0.0-draft.2"
+  "version": "1.0.0-draft.3"
 }

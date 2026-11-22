@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.2.
+Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.3.
 
-Produces eight executable JSON vector suites under vectors/:
+Produces nine executable JSON vector suites under vectors/:
   1. wire-jcs-and-hashes.json
   2. ledger-scripts-and-opreturn.json
   3. constraints-and-schemas.json
@@ -11,6 +11,7 @@ Produces eight executable JSON vector suites under vectors/:
   6. trace-03-delegation-pool-single-use.json
   7. trace-04-agent-guardian-intake.json
   8. refusal-coverage-matrix.json
+  9. security-conformance.json
 """
 
 from __future__ import annotations
@@ -25,10 +26,11 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build_refusal_matrix as rm
+import build_security_suite as sec
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.2"
+VERSION = "1.0.0-draft.3"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 VECTORS_DIR = ROOT / "vectors"
 
@@ -203,10 +205,42 @@ def build_wire_vectors() -> dict[str, Any]:
     s0 = bad_flipped["signatures"]["sigs"][0]["sig"]
     bad_flipped["signatures"]["sigs"][0]["sig"] = ("0" if s0[0] != "0" else "1") + s0[1:]
 
+    # Device signature algorithm vectors (RFC 8032 Ed25519 & SEC 1 NIST P-256 low-S + high-S negative + wrong-type negative)
+    ed_seed = sl.deterministic_ed25519_seed("wire-device-ed25519")
+    p256_sk = sl.deterministic_p256_privkey("wire-device-p256")
+    dev_cmd_payload = {
+        "arguments": {"scope": "all"},
+        "command": "keyholder-halt",
+        "exp": 1795220300,
+        "genesis": GENESIS_MAIN,
+        "iat": 1795220000,
+        "level": 2,
+        "network": "main",
+        "nonce": h32("wire-dev-cmd-nonce"),
+        "owner": "id/alice",
+        "target_executor": "id/station-a",
+        "type": "seallink-owner-command/1",
+    }
+    env_cmd_ed25519 = sl.sign_envelope(dev_cmd_payload, [ed_seed], alg="ed25519")
+    env_cmd_p256 = sl.sign_envelope({**dev_cmd_payload, "nonce": h32("wire-dev-cmd-nonce-2")}, [p256_sk], alg="p256")
+    assert sl.verify_envelope_signatures(env_cmd_ed25519)[0]
+    assert sl.verify_envelope_signatures(env_cmd_p256)[0]
+
+    env_cmd_p256_high_s = copy.deepcopy(env_cmd_p256)
+    low_sig = env_cmd_p256_high_s["signatures"]["sigs"][0]["sig"]
+    env_cmd_p256_high_s["signatures"]["sigs"][0]["sig"] = low_sig[:64] + f"{(sl._P256_N - int(low_sig[64:], 16)):064x}"
+    assert sl.verify_envelope_signatures(env_cmd_p256_high_s) == (False, "WIRE_SIGNATURE")
+
+    # Non-bip340 alg on non-device object type (seallink-grant/1) MUST refuse WIRE_SIGNATURE (SL-WIRE-013 item 2)
+    bad_ed_on_grant = sl.sign_envelope(grant_payload, [ed_seed], alg="ed25519")
+    bad_p256_on_grant = sl.sign_envelope(grant_payload, [p256_sk], alg="p256")
+    assert sl.verify_envelope_signatures(bad_ed_on_grant) == (False, "WIRE_SIGNATURE")
+    assert sl.verify_envelope_signatures(bad_p256_on_grant) == (False, "WIRE_SIGNATURE")
+
     return {
         "suite": "wire-jcs-and-hashes",
         "version": VERSION,
-        "description": "Restricted RFC 8785 JCS positive/negative vectors, 3 hashes, clause_commit, and BIP-340 SignatureSet checks.",
+        "description": "Restricted RFC 8785 JCS positive/negative vectors, 3 hashes, clause_commit, BIP-340 SignatureSet, and RFC 8032 Ed25519 + low-S NIST P-256 device-key signature checks.",
         "jcs_positive": positive_jcs,
         "jcs_negative": negative_jcs,
         "clause_commitment": {
@@ -225,7 +259,15 @@ def build_wire_vectors() -> dict[str, Any]:
                 {"id": "sigset-5-of-2", "object": bad_5of2, "expected_refusal": "WIRE_SIGNATURE"},
                 {"id": "sigset-duplicate-pk", "object": bad_dup_sig, "expected_refusal": "WIRE_SIGNATURE"},
                 {"id": "sigset-tampered-sig", "object": bad_flipped, "expected_refusal": "WIRE_SIGNATURE"},
+                {"id": "sigset-p256-high-s", "object": env_cmd_p256_high_s, "expected_refusal": "WIRE_SIGNATURE"},
+                {"id": "sigset-ed25519-forbidden-on-grant", "object": bad_ed_on_grant, "expected_refusal": "WIRE_SIGNATURE"},
+                {"id": "sigset-p256-forbidden-on-grant", "object": bad_p256_on_grant, "expected_refusal": "WIRE_SIGNATURE"},
             ],
+        },
+        "device_signature_algorithms": {
+            "rule": "SL-WIRE-012",
+            "owner_command_ed25519": envelope_record(env_cmd_ed25519, "schemas/invocation.schema.json#/$defs/OwnerCommand"),
+            "owner_command_p256_low_s": envelope_record(env_cmd_p256, "schemas/invocation.schema.json#/$defs/OwnerCommand"),
         },
     }
 
@@ -477,15 +519,33 @@ def build_constraints_vectors() -> dict[str, Any]:
     gp_same_disp_arb = copy.deepcopy(base_gp)
     gp_same_disp_arb["arbiter_pk"] = disp["compressed_pk"]
 
+    new_disp = make_keypair("neg-g-disp-rotated")
+    new_both_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": new_disp["compressed_pk"], "b": arb["compressed_pk"]}}
+    roster_rot_bad = {
+        "arbiter_pk": arb["compressed_pk"],
+        "challenger_pk": chal["compressed_pk"],
+        "disposer_pk": new_disp["compressed_pk"],
+        "next_roster_policy": new_both_pol,
+        "quorums": base_gp["quorums"],
+        "revision": 2,
+        "revision_size": 2,
+        "slots": [
+            {"action": "retain_active", "active_outpoint": {"txid": h32("act1"), "vout": 0}, "guardian_id": h32("gid1"), "slot": 1},
+            {"action": "new_vacant", "new_vacant_policy": new_both_pol, "new_vacant_vout": 1, "slot": 2},
+        ],
+    }
+    assert sl.check_guardian_policy_consistency(roster_rot_bad, prev_roster=base_gp) == (False, "CHAIN_SCRIPT_UNSUPPORTED")
+
     guardian_consistency_negative = [
         {"id": "orig-quorum-num-gt-den", "rule": "SL-ORIG-016", "guardian_policy": gp_num_gt_den, "expected_refusal": "WIRE_INTEGER"},
         {"id": "orig-quorum-min-gt-revision-size", "rule": "SL-ORIG-016", "guardian_policy": gp_min_gt_size, "expected_refusal": "WIRE_INTEGER"},
         {"id": "orig-duplicate-slot-number", "rule": "SL-ORIG-016", "guardian_policy": gp_dup_slot, "expected_refusal": "WIRE_INTEGER"},
         {"id": "orig-slots-length-mismatch", "rule": "SL-ORIG-016", "guardian_policy": gp_missing_slot, "expected_refusal": "WIRE_INTEGER"},
         {"id": "orig-disposer-equals-arbiter", "rule": "SL-ORIG-016", "guardian_policy": gp_same_disp_arb, "expected_refusal": "ORIGIN_UNVERIFIED"},
+        {"id": "orig-disposer-rotation-forbids-retain-active", "rule": "SL-ORIG-015", "guardian_policy": roster_rot_bad, "prev_roster": base_gp, "expected_refusal": "CHAIN_SCRIPT_UNSUPPORTED"},
     ]
     for gc_case in guardian_consistency_negative:
-        ok_gc, code_gc = sl.check_guardian_policy_consistency(gc_case["guardian_policy"])
+        ok_gc, code_gc = sl.check_guardian_policy_consistency(gc_case["guardian_policy"], prev_roster=gc_case.get("prev_roster"))
         assert (not ok_gc) and code_gc == gc_case["expected_refusal"], f"{gc_case['id']}: got {(ok_gc, code_gc)}"
 
     return {
@@ -714,34 +774,28 @@ def build_trace_01_mail() -> dict[str, Any]:
         "comparison_peers": [{"healthy": True, "height": 750010, "hash_at_tip": h32("t1-tip-750010")}],
         "blocks": {recent_blk: 749990},
         "names": {
-            "id/alice": {
-                "registration": {"txid": h32("t1-alice-reg"), "vout": 0},
-                "expiry_height": 780000,
-                "owner_policy": alice_owner_pol,
-                "value_raw": sl.jcs_encode(alice_name_val).decode(),
-                "writer_verified": True,
-                "history_available": True,
-            },
-            "id/mail-host-a": {
-                "registration": {"txid": h32("t1-host-reg"), "vout": 0},
-                "expiry_height": 780000,
-                "owner_policy": host_owner_pol,
-                "value_raw": sl.jcs_encode(host_name_val).decode(),
-                "writer_verified": True,
-                "history_available": True,
-            },
-            "id/alice-acct-agent": {
-                "registration": {"txid": h32("t1-agent-reg"), "vout": 0},
-                "expiry_height": 780000,
-                "owner_policy": agent_owner_pol,
-                "value_raw": sl.jcs_encode(agent_name_val).decode(),
-                "writer_verified": True,
-                "history_available": True,
-            },
+            "id/alice": sv.make_name_history(
+                "id/alice", {"txid": h32("t1-alice-reg"), "vout": 0}, alice_owner_pol, alice_name_val, first_height=748000, update_height=749000
+            ),
+            "id/mail-host-a": sv.make_name_history(
+                "id/mail-host-a", {"txid": h32("t1-host-reg"), "vout": 0}, host_owner_pol, host_name_val, first_height=748000, update_height=749000
+            ),
+            "id/alice-acct-agent": sv.make_name_history(
+                "id/alice-acct-agent", {"txid": h32("t1-agent-reg"), "vout": 0}, agent_owner_pol, agent_name_val, first_height=748000, update_height=749000
+            ),
         },
         "txs": {
-            seal_txid: {"confirmed_height": 749995, "segwit_w": True, "outputs": {"0": {"script_pubkey_hex": spk_hex(seal_pol)}}},
-            issuance_txid: {"confirmed_height": 749998, "segwit_w": True, "opreturn_hex": issuance_opreturn_hex, "outputs": {}},
+            seal_txid: {
+                "confirmed_height": 749995,
+                "inputs": [sv.make_segwit_input(h32("t1-alice-fund"), 0)],
+                "outputs": {"0": {"script_pubkey_hex": spk_hex(seal_pol)}, "1": {"script_pubkey_hex": spk_hex(alice_owner_pol)}},
+            },
+            issuance_txid: {
+                "confirmed_height": 749998,
+                "inputs": [sv.make_segwit_input(seal_txid, 1)],
+                "opreturn_hex": issuance_opreturn_hex,
+                "outputs": {},
+            },
         },
         "manifests": {
             sl.content_addr(alice_manifest): alice_manifest,
@@ -996,6 +1050,7 @@ def build_trace_02_guardian() -> dict[str, Any]:
             "issued_at": 1795220000,
             "network": "main",
             "nonce": h32("t2-parent-a-init-assent"),
+            "party_id": "slot-1",
             "party_name": "id/parent-a",
             "party_role": "guardian",
             "target_id": init_guardian_id,
@@ -1045,6 +1100,7 @@ def build_trace_02_guardian() -> dict[str, Any]:
             "issued_at": 1795220000,
             "network": "main",
             "nonce": h32("t2-carol-assent-nonce"),
+            "party_id": "slot-1",
             "party_name": "id/guardian-carol",
             "party_role": "guardian",
             "target_id": guardian_id,
@@ -1106,11 +1162,13 @@ def build_trace_02_guardian() -> dict[str, Any]:
         "parties": [
             {
                 "name_pin": make_name_pin("id/child-leo", "t2-leo-reg-tx", ward_owner_policy),
+                "party_id": "student-1",
                 "role": "student_ward",
                 "ward_origin_id": origin_id,
             },
             {
                 "name_pin": make_name_pin("id/music-school", "t2-school-reg", {"kind": "key", "pk": counterparty_owner["compressed_pk"]}),
+                "party_id": "school-1",
                 "role": "school",
                 "signing_policy": {"m": 1, "pks": [counterparty_grant["xonly_pk"]]},
             },
@@ -1134,6 +1192,7 @@ def build_trace_02_guardian() -> dict[str, Any]:
             "issued_at": 1795220000,
             "network": "main",
             "nonce": h32("t2-assent-ward-alone"),
+            "party_id": "student-1",
             "party_name": "id/child-leo",
             "party_role": "student_ward",
             "target_id": contract_id,
@@ -1152,6 +1211,7 @@ def build_trace_02_guardian() -> dict[str, Any]:
             "issued_at": 1795220000,
             "network": "main",
             "nonce": h32("t2-assent-old-g"),
+            "party_id": "student-1",
             "party_name": "id/child-leo",
             "party_role": "student_ward",
             "target_id": contract_id,
@@ -1170,6 +1230,7 @@ def build_trace_02_guardian() -> dict[str, Any]:
             "issued_at": 1795220000,
             "network": "main",
             "nonce": h32("t2-assent-new-g"),
+            "party_id": "student-1",
             "party_name": "id/child-leo",
             "party_role": "student_ward",
             "target_id": contract_id,
@@ -1179,7 +1240,7 @@ def build_trace_02_guardian() -> dict[str, Any]:
         [{"slot": 1, "revision": 2, "guardian_name": "id/guardian-carol", "signers": [g_new_grant["_sk"]]}],
     )
 
-    # Declarative chain state capturing the FULL UTXO history (0x09 -> 0x0c -> 0x12 -> halt -> 0x0d -> 0x0e -> 0x0f)!
+    # Declarative chain state capturing the FULL derived UTXO & name update history (0x09 -> 0x0c -> 0x12 -> halt -> 0x0d -> 0x0e -> 0x0f)!
     chain_state = {
         "network": "main",
         "genesis": GENESIS_MAIN,
@@ -1191,30 +1252,22 @@ def build_trace_02_guardian() -> dict[str, Any]:
         "credible_utc_interval": [1795220000, 1795220020],
         "comparison_peers": [{"healthy": True, "height": 750600, "hash_at_tip": h32("t2-tip-750600")}],
         "names": {
-            "id/parent-a": {
-                "registration": p_old_pin["registration"],
-                "expiry_height": 780000,
-                "owner_policy": p_old_pin["owner_policy"],
-                "value_raw": sl.jcs_encode({"link": {"grant": p_old_grant["xonly_pk"]}}).decode(),
-                "writer_verified": True,
-                "history_available": True,
-            },
-            "id/guardian-carol": {
-                "registration": g_new_pin["registration"],
-                "expiry_height": 780000,
-                "owner_policy": g_new_pin["owner_policy"],
-                "value_raw": sl.jcs_encode({"link": {"grant": g_new_grant["xonly_pk"]}}).decode(),
-                "writer_verified": True,
-                "history_available": True,
-            },
-            "id/child-leo": {
-                "registration": binding["registration"],
-                "expiry_height": 780000,
-                "owner_policy": ward_owner_policy,
-                "value_raw": sl.jcs_encode({"link": {"origin": origin_id}}).decode(),
-                "writer_verified": True,
-                "history_available": True,
-            },
+            "id/civil-registry": sv.make_name_history(
+                "id/civil-registry", {"txid": h32("t2-reg-outpoint"), "vout": 0}, {"kind": "key", "pk": reg_owner["compressed_pk"]},
+                {"link": {"cred": reg_cred["xonly_pk"]}}, first_height=748000, update_height=748500,
+            ),
+            "id/parent-a": sv.make_name_history(
+                "id/parent-a", p_old_pin["registration"], p_old_pin["owner_policy"],
+                {"link": {"grant": p_old_grant["xonly_pk"]}}, first_height=748000, update_height=748600,
+            ),
+            "id/guardian-carol": sv.make_name_history(
+                "id/guardian-carol", g_new_pin["registration"], g_new_pin["owner_policy"],
+                {"link": {"grant": g_new_grant["xonly_pk"]}}, first_height=748000, update_height=748600,
+            ),
+            "id/child-leo": sv.make_name_history(
+                "id/child-leo", binding["registration"], ward_owner_policy,
+                {"link": {"origin": origin_id}}, first_height=749005, update_height=749015,
+            ),
         },
         "txs": {
             origin_txid: {"confirmed_height": 749000, "opreturn_hex": origin_opreturn_hex, "outputs": {}},
@@ -1238,13 +1291,14 @@ def build_trace_02_guardian() -> dict[str, Any]:
         "name_binding": binding,
         "name_binding_txid": binding_txid,
         "guardian_records": [init_guardian_env, guardian_env],
+        "guardian_assents": [init_guardian_assent, guardian_assent],
         "roster_records": [roster_env],
         "initial_guardian_disclosures": {"1": {"salt_hex": salt_g1, "name_pin": p_old_pin}},
         "opened_majority_unix": maj_unix,
         "majority_salt_hex": salt_maj,
     }
 
-    # Live-execute all 3 verdicts through Tier1Verifier!
+    # Live-execute all 3 ward assent verdicts through Tier1Verifier!
     v = sv.Tier1Verifier(trusted_origin_issuers={"id/civil-registry"})
     ch = sv.ChainView(chain_state)
     res1 = v.verify_assent(assent_ward_alone, contract_obj, origin_bundle, ch)
@@ -1254,10 +1308,121 @@ def build_trace_02_guardian() -> dict[str, Any]:
     res3 = v.verify_assent(assent_new_guardian, contract_obj, origin_bundle, ch)
     assert res3.verdict == "ADMIT" and res3.details["verified_slots"] == [1] and res3.details["verified_revision"] == 2, res3
 
+    # Co-tenant same-role contract positive control (two autonomous parties both with role="tenant", distinct party_id!)
+    ll_k = make_keypair("t2-landlord-gr")
+    t1_k = make_keypair("t2-cotenant1-gr")
+    t2_k = make_keypair("t2-cotenant2-gr")
+    lease_contract = {
+        "clause_commitments": [sl.clause_commit(h32("t2-lease-c0"), {"text": "Joint residential lease"})],
+        "contract_salt": h32("t2-lease-salt"),
+        "genesis": GENESIS_MAIN,
+        "machine_clause_indices": [0],
+        "network": "main",
+        "parties": [
+            {"party_id": "landlord-1", "role": "landlord", "signing_policy": {"m": 1, "pks": [ll_k["xonly_pk"]]}},
+            {"party_id": "tenant-1", "role": "tenant", "signing_policy": {"m": 1, "pks": [t1_k["xonly_pk"]]}},
+            {"party_id": "tenant-2", "role": "tenant", "signing_policy": {"m": 1, "pks": [t2_k["xonly_pk"]]}},
+        ],
+        "profile": "org.seallink/co-tenant-lease-v1",
+        "seal": contract_obj["seal"],
+        "type": "seallink-contract/1",
+        "window": {"not_after_height": 790000, "not_before_height": 750500},
+    }
+    lease_cid = sl.object_id(lease_contract)
+    lease_assents = [
+        sl.sign_envelope({"expires_at": 1795400000, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main", "nonce": h32("t2-la-ll"), "party_id": "landlord-1", "party_role": "landlord", "target_id": lease_cid, "target_type": "seallink-contract/1", "type": "seallink-assent/1"}, [ll_k["_sk"]]),
+        sl.sign_envelope({"expires_at": 1795400000, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main", "nonce": h32("t2-la-t1"), "party_id": "tenant-1", "party_role": "tenant", "target_id": lease_cid, "target_type": "seallink-contract/1", "type": "seallink-assent/1"}, [t1_k["_sk"]]),
+        sl.sign_envelope({"expires_at": 1795400000, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main", "nonce": h32("t2-la-t2"), "party_id": "tenant-2", "party_role": "tenant", "target_id": lease_cid, "target_type": "seallink-contract/1", "type": "seallink-assent/1"}, [t2_k["_sk"]]),
+    ]
+    res_lease = v.verify_contract_assents(lease_contract, lease_assents, None, ch)
+    assert res_lease.verdict == "ADMIT" and res_lease.details["covered_party_ids"] == ["landlord-1", "tenant-1", "tenant-2"], res_lease
+
+    # Positive name_recovery traces (SPEC-04 §6):
+    # Branch A: recovery_seal spent with 0x0c proposing B2 -> owner broadcasts 0x10 cancel -> B1 restored & recovery_seal advances to (T_rec1, 0)!
+    # Branch B: subsequent 0x0c spends (T_rec1, 0) proposing B3 -> after 1008 blocks without 0x10 -> B3 promoted & recovery_seal advances to (T_rec2, 0)!
+    b2 = {
+        "genesis": GENESIS_MAIN,
+        "name": "id/child-leo-attempted-rec",
+        "network": "main",
+        "next_recovery_policy": recovery_policy,
+        "next_recovery_vout": 0,
+        "origin_id": origin_id,
+        "owner_policy": ward_owner_policy,
+        "registration": {"txid": h32("t2-leo-b2-reg"), "vout": 0},
+        "seq": 2,
+        "supersedes_binding_id": sl.object_id(binding),
+        "type": "seallink-name-binding/1",
+    }
+    b2_id = sl.object_id(b2)
+    t_rec1 = h32("t2-rec1-0x0c-tx")
+    b3_owner = make_keypair("t2-leo-b3-new-owner")
+    b3_owner_pol = {"kind": "key", "pk": b3_owner["compressed_pk"]}
+    b3 = {
+        "genesis": GENESIS_MAIN,
+        "name": "id/child-leo-recovered-final",
+        "network": "main",
+        "next_recovery_policy": recovery_policy,
+        "next_recovery_vout": 0,
+        "origin_id": origin_id,
+        "owner_policy": b3_owner_pol,
+        "registration": {"txid": h32("t2-leo-b3-reg"), "vout": 0},
+        "seq": 3,
+        "supersedes_binding_id": sl.object_id(binding),
+        "type": "seallink-name-binding/1",
+    }
+    b3_id = sl.object_id(b3)
+    t_rec2 = h32("t2-rec2-0x0c-tx")
+
+    # Build Branch A chain (cancel B2 via owner-authored 0x10 at height 750500 < 750400 + 1008)
+    ch_rec_a_raw = copy.deepcopy(chain_state)
+    ch_rec_a_raw["txs"][h32("t2-recov-seal-tx")]["outputs"]["0"]["spent_by_txid"] = t_rec1
+    ch_rec_a_raw["txs"][t_rec1] = {
+        "confirmed_height": 750400,
+        "opreturn_hex": sl.encode_opreturn(0x0C, b2_id).hex(),
+        "outputs": {"0": {"script_pubkey_hex": spk_hex(recovery_policy)}},
+    }
+    leo_u = ch_rec_a_raw["names"]["id/child-leo"]["updates"]
+    prev_lu = leo_u[-1]
+    leo_spk, _ = sl.compile_script_policy(ward_owner_policy)
+    leo_u.append({
+        "op": "NAME_UPDATE",
+        "txid": h32("t2-leo-0x10-cancel-tx"),
+        "vout": 0,
+        "confirmed_height": 750500,
+        "owner_policy": ward_owner_policy,
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", leo_spk, name=b"id/child-leo", value=sl.jcs_encode({"link": {"origin": origin_id}})).hex(),
+        "prev_input": {"txid": prev_lu["txid"], "vout": prev_lu["vout"], "witness_policy": ward_owner_policy, "sighash_bytes": [0x01]},
+        "opreturn_hex": sl.encode_opreturn(0x10, b2_id).hex(),
+    })
+    ob_rec_a = {**origin_bundle, "recovery_bindings": [b2]}
+    st_a, err_a = v.verify_origin_and_status(ob_rec_a, sv.ChainView(ch_rec_a_raw))
+    assert err_a is None and st_a is not None and sl.object_id(st_a["binding"]) == sl.object_id(binding), (st_a, err_a)
+    assert st_a["active_recovery_seal"]["txid"] == t_rec1 and st_a["active_recovery_seal"]["vout"] == 0
+    _, err_a_b2 = v.verify_origin_and_status(ob_rec_a, sv.ChainView(ch_rec_a_raw), assert_binding_id=b2_id)
+    assert err_a_b2 == "RECOVERY_FORBIDDEN"
+
+    # Build Branch B chain (subsequent 0x0c spends continued (t_rec1, 0) at 751000, tip advances to 752100 >= 751000+1008 -> B3 promoted!)
+    ch_rec_b_raw = copy.deepcopy(ch_rec_a_raw)
+    ch_rec_b_raw["tip_height"] = 752100
+    ch_rec_b_raw["tip_hash"] = h32("t2-tip-752100")
+    ch_rec_b_raw["comparison_peers"] = [{"healthy": True, "height": 752100, "hash_at_tip": h32("t2-tip-752100")}]
+    ch_rec_b_raw["txs"][t_rec1]["outputs"]["0"]["spent_by_txid"] = t_rec2
+    ch_rec_b_raw["txs"][t_rec2] = {
+        "confirmed_height": 751000,
+        "opreturn_hex": sl.encode_opreturn(0x0C, b3_id).hex(),
+        "outputs": {"0": {"script_pubkey_hex": spk_hex(recovery_policy)}},
+    }
+    ob_rec_b = {**origin_bundle, "recovery_bindings": [b2, b3]}
+    st_b, err_b = v.verify_origin_and_status(ob_rec_b, sv.ChainView(ch_rec_b_raw))
+    assert err_b is None and st_b is not None and sl.object_id(st_b["binding"]) == b3_id, (st_b, err_b)
+    assert st_b["active_recovery_seal"]["txid"] == t_rec2 and st_b["active_recovery_seal"]["vout"] == 0
+    _, err_b_old = v.verify_origin_and_status(ob_rec_b, sv.ChainView(ch_rec_b_raw), assert_binding_id=sl.object_id(binding))
+    assert err_b_old == "ORIGIN_BINDING_INVALID"
+
     return {
         "suite": "trace-02-guardian-succession-assent",
         "version": VERSION,
-        "description": "Executable RFC 8448-style trace: private origin/1 + status_seal, initial slot activation (0x12) -> fast halt -> acyclic Stage 1 (0x0d) -> Stage 2 (0x0e) -> roster transition (0x0f), and ward contract assent via guardian_approvals[] (ward alone refused, old guardian refused, active successor admitted).",
+        "description": "Executable RFC 8448-style trace: private origin/1 + status_seal, initial slot activation (0x12) + incoming guardian assent -> fast halt -> acyclic Stage 1 (0x0d) -> Stage 2 (0x0e) -> roster transition (0x0f), ward contract assent via guardian_approvals[] + party_id, co-tenant same-role party_id contract coverage, and both positive name_recovery continuation branches (0x10 cancel restores B1; post-delay promotes B3).",
         "chain_state": chain_state,
         "trusted_origin_issuers": ["id/civil-registry"],
         "origin": envelope_record(origin_env, "schemas/origin.schema.json"),
@@ -1320,6 +1485,28 @@ def build_trace_02_guardian() -> dict[str, Any]:
                 "derived_event_class": "contract_assent",
             },
         ],
+        "co_tenant_same_role_contract": {
+            "contract": unsigned_record(lease_contract, "schemas/contract.schema.json#/$defs/Contract"),
+            "assents": [envelope_record(a, "schemas/contract.schema.json#/$defs/Assent") for a in lease_assents],
+            "expected_verdict": "ADMIT",
+            "expected_covered_party_ids": ["landlord-1", "tenant-1", "tenant-2"],
+        },
+        "name_recovery_positive_traces": {
+            "candidate_b2": unsigned_record(b2, "schemas/guardian.schema.json#/$defs/NameBinding"),
+            "candidate_b3": unsigned_record(b3, "schemas/guardian.schema.json#/$defs/NameBinding"),
+            "branch_a_timely_0x10_cancel_restores_b1": {
+                "chain_state": ch_rec_a_raw,
+                "expected_active_binding_id": sl.object_id(binding),
+                "expected_active_recovery_seal": {"txid": t_rec1, "vout": 0},
+                "expected_cancelled_b2_refusal": "RECOVERY_FORBIDDEN",
+            },
+            "branch_b_post_delay_recovery_promotes_b3": {
+                "chain_state": ch_rec_b_raw,
+                "expected_active_binding_id": b3_id,
+                "expected_active_recovery_seal": {"txid": t_rec2, "vout": 0},
+                "expected_superseded_b1_refusal": "ORIGIN_BINDING_INVALID",
+            },
+        },
     }
 
 
@@ -1341,8 +1528,11 @@ def build_trace_03_delegation() -> dict[str, Any]:
     org_owner_pol = {"kind": "key", "pk": org_owner["compressed_pk"]}
     parent_seal_pol = {"kind": "key", "pk": parent_seal["compressed_pk"]}
     pool_q = {"kind": "seallink/count", "max": "10", "resource": "station:fleet:tools", "unit": "calls", "window": "term"}
+    pool_q_bytes = {"kind": "seallink/bytes", "max": "500000", "resource": "station:fleet:tools", "unit": "bytes", "window": "term"}
     row_q_a = {"kind": "seallink/count", "max": "2", "resource": "station:fleet:tools", "unit": "calls", "window": "term"}
+    row_q_a_bytes = {"kind": "seallink/bytes", "max": "100000", "resource": "station:fleet:tools", "unit": "bytes", "window": "term"}
     row_q_b = {"kind": "seallink/count", "max": "2", "resource": "station:fleet:tools", "unit": "calls", "window": "term"}
+    row_q_b_bytes = {"kind": "seallink/bytes", "max": "100000", "resource": "station:fleet:tools", "unit": "bytes", "window": "term"}
 
     recent_blk = h32("t3-recent-block")
     parent_seal_tx = h32("t3-parent-seal-tx")
@@ -1350,7 +1540,7 @@ def build_trace_03_delegation() -> dict[str, Any]:
     rows_b_tx = h32("t3-rows-b-tx")
 
     parent_payload = {
-        "capabilities": [{"action": "agent/tool", "quotas": [pool_q], "target": "station:fleet:tools"}],
+        "capabilities": [{"action": "agent/tool", "quotas": [pool_q, pool_q_bytes], "target": "station:fleet:tools"}],
         "delegate": {
             "child_seal_key": child_seal_key["compressed_pk"],
             "groups": [
@@ -1360,7 +1550,7 @@ def build_trace_03_delegation() -> dict[str, Any]:
                         "capabilities": [
                             {
                                 "action": "agent/tool",
-                                "quotas": [row_q_a],
+                                "quotas": [row_q_a, row_q_a_bytes],
                                 "target": "station:fleet:tools",
                                 "where": {"tool_name": {"in": ["git-diff", "pytest"]}},
                             }
@@ -1376,7 +1566,7 @@ def build_trace_03_delegation() -> dict[str, Any]:
                         "capabilities": [
                             {
                                 "action": "agent/tool",
-                                "quotas": [row_q_b],
+                                "quotas": [row_q_b, row_q_b_bytes],
                                 "target": "station:fleet:tools",
                                 "where": {"tool_name": {"in": ["lint", "pytest"]}},
                             }
@@ -1388,7 +1578,7 @@ def build_trace_03_delegation() -> dict[str, Any]:
                 },
             ],
             "key": del_key["xonly_pk"],
-            "pools": [pool_q],
+            "pools": [pool_q, pool_q_bytes],
         },
         "executor": {"key": st_a_rcpt["xonly_pk"], "name": "id/station-a"},
         "genesis": GENESIS_MAIN,
@@ -1432,7 +1622,10 @@ def build_trace_03_delegation() -> dict[str, Any]:
         "capabilities": [
             {
                 "action": "agent/tool",
-                "quotas": [{"kind": "seallink/count", "max": "1", "resource": "station:fleet:tools", "unit": "calls", "window": "term"}],
+                "quotas": [
+                    {"kind": "seallink/count", "max": "1", "resource": "station:fleet:tools", "unit": "calls", "window": "term"},
+                    {"kind": "seallink/bytes", "max": "100000", "resource": "station:fleet:tools", "unit": "bytes", "window": "term"},
+                ],
                 "target": "station:fleet:tools",
                 "where": {"tool_name": {"eq": "pytest"}},
             }
@@ -1500,7 +1693,12 @@ def build_trace_03_delegation() -> dict[str, Any]:
             "outcome": "executed",
             "recorded_at": 1795220050,
             "result_sha256": sl.content_addr(tool_result),
-            "settlements": [{"kind": "seallink/count", "released": "0", "reserved": "1", "resource": "station:fleet:tools", "settled": "1", "unit": "calls"}],
+            "settlements": [
+                {"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "station:fleet:tools", "settled": "1", "unit": "calls"},
+                {"account": "row", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "station:fleet:tools", "settled": "1", "unit": "calls"},
+                {"account": "own", "kind": "seallink/bytes", "released": "64296", "reserved": "65536", "resource": "station:fleet:tools", "settled": "1240", "unit": "bytes"},
+                {"account": "row", "kind": "seallink/bytes", "released": "64296", "reserved": "65536", "resource": "station:fleet:tools", "settled": "1240", "unit": "bytes"},
+            ],
             "tip_hash": h32("t3-tip-750110"),
             "tip_height": 750110,
             "type": "seallink-receipt/1",
@@ -1520,7 +1718,10 @@ def build_trace_03_delegation() -> dict[str, Any]:
         "capabilities": [
             {
                 "action": "agent/tool",
-                "quotas": [{"kind": "seallink/count", "max": "1", "resource": "station:fleet:tools", "unit": "calls", "window": "term"}],
+                "quotas": [
+                    {"kind": "seallink/count", "max": "1", "resource": "station:fleet:tools", "unit": "calls", "window": "term"},
+                    {"kind": "seallink/bytes", "max": "100000", "resource": "station:fleet:tools", "unit": "bytes", "window": "term"},
+                ],
                 "target": "station:fleet:tools",
                 "where": {"tool_name": {"eq": "lint"}},
             }
@@ -1570,7 +1771,57 @@ def build_trace_03_delegation() -> dict[str, Any]:
         [w2_req["_sk"]],
     )
 
-    # Full declarative chain states for station-a (Child 1) & station-b (Child 2)
+    # Child 3 (ordinal 2, station-a, revocable) for atomic multi-quota rollback test: calls fits, bytes exceeds 50000!
+    c3_seal_pol = {"kind": "key", "pk": child_seal_key["compressed_pk"]}
+    c3_seal_tx = h32("t3-c3-seal-tx")
+    c3_payload = {
+        "capabilities": [
+            {
+                "action": "agent/tool",
+                "quotas": [
+                    {"kind": "seallink/count", "max": "2", "resource": "station:fleet:tools", "unit": "calls", "window": "term"},
+                    {"kind": "seallink/bytes", "max": "50000", "resource": "station:fleet:tools", "unit": "bytes", "window": "term"},
+                ],
+                "target": "station:fleet:tools",
+                "where": {"tool_name": {"eq": "pytest"}},
+            }
+        ],
+        "executor": {"key": st_a_rcpt["xonly_pk"], "name": "id/station-a"},
+        "genesis": GENESIS_MAIN,
+        "network": "main",
+        "not_after_height": 755000,
+        "not_before_height": 750100,
+        "parent": {"grant_id": parent_id, "ordinal": 2},
+        "recent_block": recent_blk,
+        "recipient": {"key": w1_req["xonly_pk"], "mode": "key"},
+        "revocation": {"construction": "W", "kind": "revocable", "mode": "seal", "seal": {"script_policy": c3_seal_pol, "txid": c3_seal_tx, "vout": 0}},
+        "type": "seallink-grant/1",
+    }
+    c3_env = sl.sign_envelope(c3_payload, [del_key["_sk"]])
+    c3_id = sl.object_id(c3_payload)
+    c3_issuance_txid = h32("t3-c3-issuance-tx")
+    c3_iss_opret = sl.encode_opreturn(
+        0x01,
+        sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(c3_env), "grant_id": c3_id, "type": "seallink-issuance/1"}).hex(),
+    ).hex()
+    inv3_exceed_bytes = sl.sign_envelope(
+        {
+            "action": "agent/tool",
+            "arguments": {"input_sha256": h32("t3-rb-args"), "max_output_bytes": "65536", "tool_name": "pytest"},
+            "executor": {"key": st_a_rcpt["xonly_pk"], "name": "id/station-a"},
+            "exp": 1795221000,
+            "genesis": GENESIS_MAIN,
+            "iat": 1795220000,
+            "network": "main",
+            "nonce": h32("t3-inv3-nonce-rb"),
+            "proof_path": [{"grant_id": parent_id, "issuance_txid": parent_issuance_txid}, {"grant_id": c3_id, "issuance_txid": c3_issuance_txid}],
+            "target": "station:fleet:tools",
+            "type": "seallink-invocation/1",
+        },
+        [w1_req["_sk"]],
+    )
+
+    # Full declarative derived chain state for station-a (Child 1, Child 3) & station-b (Child 2)
     base_chain = {
         "network": "main",
         "genesis": GENESIS_MAIN,
@@ -1582,23 +1833,75 @@ def build_trace_03_delegation() -> dict[str, Any]:
         "comparison_peers": [{"healthy": True, "height": 750110, "hash_at_tip": h32("t3-tip-750110")}],
         "blocks": {recent_blk: 750000},
         "names": {
-            "id/org-treasury": {
-                "registration": {"txid": h32("t3-org-reg"), "vout": 0},
-                "expiry_height": 780000,
-                "owner_policy": org_owner_pol,
-                "value_raw": sl.jcs_encode({"link": {"grant": org_grant["xonly_pk"]}}).decode(),
-                "writer_verified": True,
-                "history_available": True,
-            }
+            "id/org-treasury": sv.make_name_history(
+                "id/org-treasury", {"txid": h32("t3-org-reg"), "vout": 0}, org_owner_pol,
+                {"link": {"grant": org_grant["xonly_pk"]}}, first_height=748000, update_height=749000,
+            )
         },
         "txs": {
-            parent_seal_tx: {"confirmed_height": 750002, "segwit_w": True, "outputs": {"0": {"script_pubkey_hex": spk_hex(parent_seal_pol)}}},
-            parent_issuance_txid: {"confirmed_height": 750005, "segwit_w": True, "opreturn_hex": parent_iss_opret, "outputs": {}},
-            c1_seal_tx: {"confirmed_height": 750101, "segwit_w": True, "outputs": {"0": {"script_pubkey_hex": spk_hex(c1_seal_policy), "spent_by_txid": use_txid, "spend_branch": 0}}},
-            c1_issuance_txid: {"confirmed_height": 750102, "segwit_w": True, "spent_outpoints": [f"{rows_a_tx}:0"], "opreturn_hex": c1_iss_opret, "outputs": {}},
-            use_txid: {"confirmed_height": None, "mempool": True, "segwit_w": True, "opreturn_hex": use_opreturn_hex, "outputs": {}},
-            c2_seal_tx: {"confirmed_height": 750101, "segwit_w": True, "outputs": {"0": {"script_pubkey_hex": spk_hex(c2_seal_policy), "spent_by_txid": c2_revoke_tx, "spend_branch": 1}}},
-            c2_issuance_txid: {"confirmed_height": 750102, "segwit_w": True, "spent_outpoints": [f"{rows_b_tx}:0"], "opreturn_hex": c2_iss_opret, "outputs": {}},
+            parent_seal_tx: {
+                "confirmed_height": 750002,
+                "inputs": [sv.make_segwit_input(h32("t3-org-fund"), 0)],
+                "outputs": {"0": {"script_pubkey_hex": spk_hex(parent_seal_pol)}, "1": {"script_pubkey_hex": spk_hex(org_owner_pol)}},
+            },
+            parent_issuance_txid: {
+                "confirmed_height": 750005,
+                "inputs": [sv.make_segwit_input(parent_seal_tx, 1)],
+                "opreturn_hex": parent_iss_opret,
+                "outputs": {},
+            },
+            c1_seal_tx: {
+                "confirmed_height": 750101,
+                "inputs": [sv.make_segwit_input(h32("t3-c1-fund"), 0)],
+                "outputs": {
+                    "0": {"script_pubkey_hex": spk_hex(c1_seal_policy), "spent_by_txid": use_txid},
+                    "1": {"script_pubkey_hex": spk_hex(org_owner_pol)},
+                },
+            },
+            c1_issuance_txid: {
+                "confirmed_height": 750102,
+                "inputs": [sv.make_segwit_input(rows_a_tx, 0), sv.make_segwit_input(c1_seal_tx, 1)],
+                "opreturn_hex": c1_iss_opret,
+                "outputs": {},
+            },
+            use_txid: {
+                "confirmed_height": None,
+                "mempool": True,
+                "inputs": [sv.make_single_use_spend_input(c1_payload["revocation"]["seal"], branch=0)],
+                "opreturn_hex": use_opreturn_hex,
+                "outputs": {},
+            },
+            c2_seal_tx: {
+                "confirmed_height": 750101,
+                "inputs": [sv.make_segwit_input(h32("t3-c2-fund"), 0)],
+                "outputs": {
+                    "0": {"script_pubkey_hex": spk_hex(c2_seal_policy), "spent_by_txid": c2_revoke_tx},
+                    "1": {"script_pubkey_hex": spk_hex(org_owner_pol)},
+                },
+            },
+            c2_revoke_tx: {
+                "confirmed_height": None,
+                "mempool": True,
+                "inputs": [sv.make_single_use_spend_input(c2_payload["revocation"]["seal"], branch=1)],
+                "outputs": {},
+            },
+            c2_issuance_txid: {
+                "confirmed_height": 750102,
+                "inputs": [sv.make_segwit_input(rows_b_tx, 0), sv.make_segwit_input(c2_seal_tx, 1)],
+                "opreturn_hex": c2_iss_opret,
+                "outputs": {},
+            },
+            c3_seal_tx: {
+                "confirmed_height": 750101,
+                "inputs": [sv.make_segwit_input(h32("t3-c3-fund"), 0)],
+                "outputs": {"0": {"script_pubkey_hex": spk_hex(c3_seal_pol)}, "1": {"script_pubkey_hex": spk_hex(org_owner_pol)}},
+            },
+            c3_issuance_txid: {
+                "confirmed_height": 750102,
+                "inputs": [sv.make_segwit_input(rows_a_tx, 1), sv.make_segwit_input(c3_seal_tx, 1)],
+                "opreturn_hex": c3_iss_opret,
+                "outputs": {},
+            },
         },
     }
     exec_a = {"name": "id/station-a", "key": st_a_rcpt["xonly_pk"], "actions": ["agent/tool"]}
@@ -1606,33 +1909,43 @@ def build_trace_03_delegation() -> dict[str, Any]:
     jid_a = h32("t3-station-a-journal")
     jid_crash = h32("t3-station-a-crash-journal")
     jid_b = h32("t3-station-b-journal")
+    jid_rb = h32("t3-station-a-rollback-journal")
 
     # Live-execute ALL steps through Tier1Verifier!
     v = sv.Tier1Verifier()
     bundle_c1 = {"grants": [parent_env, c1_env]}
     ch_a = sv.ChainView(base_chain)
     jr_a = sv.FencedJournal.from_dict({"journal_id": jid_a})
+    actual_usage_c1 = {"seallink/bytes|station:fleet:tools|bytes|term": 1240}
 
     # Step A: mempool unconfirmed -> CHAIN_DEPTH_INSUFFICIENT
-    ra = v.verify_invocation(inv1_env, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid)
+    ra = v.verify_invocation(inv1_env, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid, actual_quota_usage=actual_usage_c1)
     assert ra.verdict == "REFUSE" and ra.refusal_code == "CHAIN_DEPTH_INSUFFICIENT", ra
 
     # Confirm use_txid at height 750110
     confirm_patch = {"txs": {use_txid: {"confirmed_height": 750110, "mempool": False}}}
     ch_a.apply_patch(confirm_patch)
 
-    # Step B (crash-in-effect-window scenario on isolated crash journal):
-    # 1. Reserves quota and crashes before settlement -> UNCERTAIN
-    # 2. Restart & retry identical authenticated invocation_id -> UNCERTAIN, reservation retained, zero second effect
+    # Step B (crash-in-effect-window with FULL dual-account multi-quota replay from persisted entries!):
+    # 1. Reserves own+row for calls+bytes (4 reservations) and crashes before settlement -> UNCERTAIN
+    # 2. Reconstruct a brand-new FencedJournal strictly from persisted entries and retry -> UNCERTAIN, all 4 reservations retained!
     jr_crash = sv.FencedJournal.from_dict({"journal_id": jid_crash})
-    rb1 = v.verify_invocation(inv1_env, bundle_c1, ch_a, jr_crash, exec_a, use_txid=use_txid, simulate_crash_before_settlement=True)
-    assert rb1.verdict == "UNCERTAIN" and rb1.outcome == "uncertain" and len(rb1.journal_writes) == 1, rb1
-    rb2 = v.verify_invocation(inv1_env, bundle_c1, ch_a, jr_crash, exec_a, use_txid=use_txid)
-    assert rb2.verdict == "UNCERTAIN" and rb2.outcome == "uncertain" and rb2.details.get("reservation_retained") is True and len(rb2.journal_writes) == 0, rb2
+    rb1 = v.verify_invocation(inv1_env, bundle_c1, ch_a, jr_crash, exec_a, use_txid=use_txid, simulate_crash_before_settlement=True, actual_quota_usage=actual_usage_c1)
+    assert rb1.verdict == "UNCERTAIN" and rb1.outcome == "uncertain" and len(rb1.journal_writes) == 4, rb1
+    jr_restarted = sv.FencedJournal.replay_persisted_entries(jid_crash, [w["entry"] for w in rb1.journal_writes])
+    rb2 = v.verify_invocation(inv1_env, bundle_c1, ch_a, jr_restarted, exec_a, use_txid=use_txid, actual_quota_usage=actual_usage_c1)
+    assert rb2.verdict == "UNCERTAIN" and rb2.outcome == "uncertain" and rb2.details.get("unsettled_count") == 4 and len(rb2.journal_writes) == 0, rb2
 
-    # Step C: normal confirmed execute on jr_a -> ADMIT + 4 journal entries
-    rc = v.verify_invocation(inv1_env, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid, receipt_env_for_cache=rcpt1)
-    assert rc.verdict == "ADMIT" and len(rc.journal_writes) == 4, rc
+    # Step C: normal confirmed execute on jr_a -> ADMIT + exact 10-entry dual-account multi-quota journal chain!
+    rc = v.verify_invocation(inv1_env, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid, receipt_env_for_cache=rcpt1, actual_quota_usage=actual_usage_c1)
+    assert rc.verdict == "ADMIT" and len(rc.journal_writes) == 10 and not jr_a.unsettled_reservations, rc
+    # Verify BOTH own(c1_id) and row(parent_id) settled to exact (1 call, 1240 bytes)!
+    q_calls_k = "seallink/count|station:fleet:tools|calls|term"
+    q_bytes_k = "seallink/bytes|station:fleet:tools|bytes|term"
+    assert jr_a.quotas_used[(f"own:{c1_id}", q_calls_k, "term")] == 1
+    assert jr_a.quotas_used[(f"row:{parent_id}", q_calls_k, "term")] == 1
+    assert jr_a.quotas_used[(f"own:{c1_id}", q_bytes_k, "term")] == 1240
+    assert jr_a.quotas_used[(f"row:{parent_id}", q_bytes_k, "term")] == 1240
 
     # Step D: unauthenticated forged replay of same invocation_id -> WIRE_SIGNATURE (Step 3b BEFORE Step 3c!)
     rd = v.verify_invocation(inv1_forged, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid)
@@ -1642,11 +1955,17 @@ def build_trace_03_delegation() -> dict[str, Any]:
     re_res = v.verify_invocation(inv1_env, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid)
     assert re_res.verdict == "ADMIT" and re_res.cached_receipt_content_addr == sl.content_addr(rcpt1) and len(re_res.journal_writes) == 0, re_res
 
-    # Step F: new nonce against already-consumed single-use child (at later now=1795220120) -> INVOKE_REPLAY
+    # Step F: new nonce against already-consumed single-use child -> INVOKE_REPLAY
     step_f_patch = {"now": 1795220120}
     ch_a.apply_patch(step_f_patch)
     rf = v.verify_invocation(inv1_replay_new, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid)
     assert rf.verdict == "REFUSE" and rf.refusal_code == "INVOKE_REPLAY", rf
+
+    # Atomic multi-quota rollback check on Child 3: 1st quota (calls) fits, 2nd quota (bytes) exceeds 50000 -> QUOTA_EXCEEDED + ZERO writes + ZERO balance change!
+    jr_rb = sv.FencedJournal.from_dict({"journal_id": jid_rb})
+    bundle_c3 = {"grants": [parent_env, c3_env]}
+    r_rb = v.verify_invocation(inv3_exceed_bytes, bundle_c3, sv.ChainView(base_chain), jr_rb, exec_a)
+    assert r_rb.verdict == "REFUSE" and r_rb.refusal_code == "QUOTA_EXCEEDED" and not r_rb.journal_writes and not jr_rb.quotas_used, r_rb
 
     # Child 2 issuer branch 1 revocation on station-b
     bundle_c2 = {"grants": [parent_env, c2_env]}
@@ -1660,16 +1979,17 @@ def build_trace_03_delegation() -> dict[str, Any]:
     return {
         "suite": "trace-03-delegation-pool-single-use",
         "version": VERSION,
-        "description": "Executable RFC 8448-style trace: parent delegation with 2 groups sharing 1 pool (R8.5 & R8.6 positive/negative), acyclic single-use branch-0 execution (0x11), crash-in-effect-window uncertain recovery, Step 3b auth-before-cache check, authenticated replay idempotency, new-nonce replay refusal, and issuer branch-1 revocation.",
+        "description": "Executable RFC 8448-style trace: parent delegation with 2 groups sharing 2-unit pools (R8.5 & R8.6 positive/negative), atomic dual-account (own + row) multi-quota reservation/settlement & rollback, acyclic single-use branch-0 execution (0x11), crash-in-effect-window uncertain recovery across journal reconstruction, Step 3b auth-before-cache check, authenticated replay idempotency, new-nonce replay refusal, and issuer branch-1 revocation.",
         "initial_chain_state": base_chain,
         "confirm_use_tx_patch": confirm_patch,
         "station_a_config": exec_a,
         "station_b_config": exec_b,
         "station_a_journal_id": jid_a,
         "station_a_crash_journal_id": jid_crash,
+        "station_a_rollback_journal_id": jid_rb,
         "station_b_journal_id": jid_b,
         "parent_grant": envelope_record(parent_env, "schemas/grant.schema.json"),
-        "r85_aggregate_budget": {"passed": True, "pool_max": 10, "computed_totals": totals_r85},
+        "r85_aggregate_budget": {"passed": True, "pool_max_calls": 10, "pool_max_bytes": 500000, "computed_totals": totals_r85},
         "r85_negative_parent": {"object": sl.sign_envelope(bad_r85, [org_grant["_sk"]]), "expected_refusal": "GRANT_CHILD_WIDER"},
         "r86_negative_parent": {"object": sl.sign_envelope(bad_r86, [org_grant["_sk"]]), "expected_refusal": "GRANT_ROW_INVALID"},
         "child_1_single_use": envelope_record(c1_env, "schemas/grant.schema.json"),
@@ -1678,24 +1998,29 @@ def build_trace_03_delegation() -> dict[str, Any]:
             "profile_args_schema": "schemas/profile-agent.schema.json#/$defs/AgentToolArgs",
             "use_txid_wrapper": use_txid,
             "use_opreturn_0x11_hex": use_opreturn_hex,
+            "actual_quota_usage": actual_usage_c1,
             "step_a_mempool_unconfirmed": {"expected_verdict": "REFUSE", "expected_refusal": "CHAIN_DEPTH_INSUFFICIENT"},
             "step_b_crash_in_effect_window": {
                 "expected_verdict_after_restart": "UNCERTAIN",
                 "expected_outcome": "uncertain",
+                "expected_unsettled_count": 4,
                 "reservation_retained": True,
                 "zero_second_effect": True,
-                "crash_journal_write": {
-                    "entry": unsigned_record(rb1.journal_writes[0]["entry"], "schemas/invocation.schema.json#/$defs/JournalEntry"),
-                    "c_before": rb1.journal_writes[0]["c_before"],
-                    "c_after": rb1.journal_writes[0]["c_after"],
-                },
+                "crash_journal_writes": [
+                    {"entry": unsigned_record(jw["entry"], "schemas/invocation.schema.json#/$defs/JournalEntry"), "c_before": jw["c_before"], "c_after": jw["c_after"]}
+                    for jw in rb1.journal_writes
+                ],
             },
             "step_c_confirmed_execute": {
                 "expected_verdict": "ADMIT",
                 "result_object": unsigned_record(tool_result, "schemas/profile-agent.schema.json#/$defs/AgentToolResult"),
                 "receipt": envelope_record(rcpt1, "schemas/invocation.schema.json#/$defs/Receipt"),
-                "remaining_row_1_calls": 1,
-                "remaining_pool_calls": 9,
+                "expected_settled_balances": {
+                    f"own:{c1_id}|{q_calls_k}": 1,
+                    f"row:{parent_id}|{q_calls_k}": 1,
+                    f"own:{c1_id}|{q_bytes_k}": 1240,
+                    f"row:{parent_id}|{q_bytes_k}": 1240,
+                },
                 "journal_chain": [
                     {"entry": unsigned_record(jw["entry"], "schemas/invocation.schema.json#/$defs/JournalEntry"), "c_before": jw["c_before"], "c_after": jw["c_after"]}
                     for jw in rc.journal_writes
@@ -1718,6 +2043,15 @@ def build_trace_03_delegation() -> dict[str, Any]:
                 "expected_verdict": "REFUSE",
                 "expected_refusal": "INVOKE_REPLAY",
             },
+        },
+        "atomic_quota_rollback": {
+            "grant": envelope_record(c3_env, "schemas/grant.schema.json"),
+            "invocation": envelope_record(inv3_exceed_bytes, "schemas/invocation.schema.json#/$defs/Invocation"),
+            "profile_args_schema": "schemas/profile-agent.schema.json#/$defs/AgentToolArgs",
+            "expected_verdict": "REFUSE",
+            "expected_refusal": "QUOTA_EXCEEDED",
+            "expected_journal_writes": 0,
+            "expected_balances_unchanged": True,
         },
         "child_2_issuer_revocation": {
             "grant": envelope_record(c2_env, "schemas/grant.schema.json"),
@@ -1840,6 +2174,22 @@ def build_trace_04_agent_guardian_intake() -> dict[str, Any]:
             "revision": 1, "slot": 2, "term": {"mode": "indefinite"}, "type": "seallink-guardian/1",
         },
         [reg_cred["_sk"]],
+    )
+    ga_assent = sl.sign_envelope(
+        {
+            "expires_at": 1795400000, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main",
+            "nonce": h32("t4-ga-assent-nonce"), "party_id": "slot-1", "party_name": "id/guardian-a", "party_role": "guardian",
+            "target_id": sl.object_id(ga_rec["payload"]), "target_type": "seallink-guardian/1", "type": "seallink-assent/1",
+        },
+        [ga_gr["_sk"]],
+    )
+    gb_assent = sl.sign_envelope(
+        {
+            "expires_at": 1795400000, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main",
+            "nonce": h32("t4-gb-assent-nonce"), "party_id": "slot-2", "party_name": "id/guardian-b", "party_role": "guardian",
+            "target_id": sl.object_id(gb_rec["payload"]), "target_type": "seallink-guardian/1", "type": "seallink-assent/1",
+        },
+        [gb_gr["_sk"]],
     )
     ga_init_tx = h32("t4-ga-init-0x12")
     gb_init_tx = h32("t4-gb-init-0x12")
@@ -2000,18 +2350,22 @@ def build_trace_04_agent_guardian_intake() -> dict[str, Any]:
         "comparison_peers": [{"healthy": True, "height": 750010, "hash_at_tip": h32("t4-tip-750010")}],
         "blocks": {recent_blk: 749990},
         "names": {
-            "id/agent-nova": {
-                "registration": binding["registration"], "expiry_height": 780000, "owner_policy": ward_owner_pol,
-                "value_raw": sl.jcs_encode({"link": {"origin": origin_id}}).decode(), "writer_verified": True, "history_available": True,
-            },
-            "id/guardian-a": {
-                "registration": ga_pin["registration"], "expiry_height": 780000, "owner_policy": ga_pin["owner_policy"],
-                "value_raw": sl.jcs_encode({"link": {"grant": ga_gr["xonly_pk"]}}).decode(), "writer_verified": True, "history_available": True,
-            },
-            "id/guardian-b": {
-                "registration": gb_pin["registration"], "expiry_height": 780000, "owner_policy": gb_pin["owner_policy"],
-                "value_raw": sl.jcs_encode({"link": {"grant": gb_gr["xonly_pk"]}}).decode(), "writer_verified": True, "history_available": True,
-            },
+            "id/agent-registry": sv.make_name_history(
+                "id/agent-registry", {"txid": h32("t4-reg-op"), "vout": 0}, {"kind": "key", "pk": reg_own["compressed_pk"]},
+                {"link": {"cred": reg_cred["xonly_pk"]}}, first_height=748000, update_height=748500,
+            ),
+            "id/agent-nova": sv.make_name_history(
+                "id/agent-nova", binding["registration"], ward_owner_pol,
+                {"link": {"origin": origin_id}}, first_height=749005, update_height=749015,
+            ),
+            "id/guardian-a": sv.make_name_history(
+                "id/guardian-a", ga_pin["registration"], ga_pin["owner_policy"],
+                {"link": {"grant": ga_gr["xonly_pk"]}}, first_height=748000, update_height=748600,
+            ),
+            "id/guardian-b": sv.make_name_history(
+                "id/guardian-b", gb_pin["registration"], gb_pin["owner_policy"],
+                {"link": {"grant": gb_gr["xonly_pk"]}}, first_height=748000, update_height=748600,
+            ),
         },
         "txs": {
             origin_txid: {"confirmed_height": 749000, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(origin_env)).hex(), "outputs": {}},
@@ -2019,11 +2373,15 @@ def build_trace_04_agent_guardian_intake() -> dict[str, Any]:
             h32("t4-stat-seal"): {"confirmed_height": 749000, "outputs": {"0": {"script_pubkey_hex": spk_hex(stat_pol)}}},
             h32("t4-roster-seal"): {"confirmed_height": 749000, "outputs": {"0": {"script_pubkey_hex": spk_hex(vac_pol)}}},
             h32("t4-s1-vac"): {"confirmed_height": 749000, "outputs": {"0": {"script_pubkey_hex": spk_hex(vac_pol), "spent_by_txid": ga_init_tx}}},
-            h32("t4-s2-vac"): {"confirmed_height": 749000, "outputs": {"0": {"script_pubkey_hex": spk_hex(vac_pol)}}},  # unactivated initially
+            h32("t4-s2-vac"): {"confirmed_height": 749000, "outputs": {"0": {"script_pubkey_hex": spk_hex(vac_pol)}}},
             ga_init_tx: {"confirmed_height": 749020, "opreturn_hex": sl.encode_opreturn(0x12, sl.content_addr(ga_rec)).hex(), "outputs": {"0": {"script_pubkey_hex": spk_hex(act_pol_a)}}},
-            grant_seal_tx: {"confirmed_height": 749995, "segwit_w": True, "outputs": {"0": {"script_pubkey_hex": spk_hex(grant_seal_pol)}}},
-            iss_ok_tx: {"confirmed_height": 749998, "segwit_w": True, "opreturn_hex": iss_ok_opret, "outputs": {}},
-            iss_down_tx: {"confirmed_height": 749998, "segwit_w": True, "opreturn_hex": iss_down_opret, "outputs": {}},
+            grant_seal_tx: {
+                "confirmed_height": 749995,
+                "inputs": [sv.make_segwit_input(h32("t4-gseal-fund"), 0)],
+                "outputs": {"0": {"script_pubkey_hex": spk_hex(grant_seal_pol)}, "1": {"script_pubkey_hex": spk_hex(grant_seal_pol)}},
+            },
+            iss_ok_tx: {"confirmed_height": 749998, "inputs": [sv.make_segwit_input(grant_seal_tx, 1)], "opreturn_hex": iss_ok_opret, "outputs": {}},
+            iss_down_tx: {"confirmed_height": 749998, "inputs": [sv.make_segwit_input(grant_seal_tx, 1)], "opreturn_hex": iss_down_opret, "outputs": {}},
         },
     }
     activate_s2_patch = {
@@ -2044,6 +2402,7 @@ def build_trace_04_agent_guardian_intake() -> dict[str, Any]:
         "name_binding": binding,
         "name_binding_txid": binding_txid,
         "guardian_records": [ga_rec, gb_rec],
+        "guardian_assents": [ga_assent, gb_assent],
         "roster_records": [],
         "initial_guardian_disclosures": {
             "1": {"salt_hex": salt_ga, "name_pin": ga_pin},
@@ -2092,6 +2451,10 @@ def build_trace_04_agent_guardian_intake() -> dict[str, Any]:
         "guardian_records": [
             envelope_record(ga_rec, "schemas/guardian.schema.json#/$defs/GuardianRecord"),
             envelope_record(gb_rec, "schemas/guardian.schema.json#/$defs/GuardianRecord"),
+        ],
+        "guardian_assents": [
+            envelope_record(ga_assent, "schemas/contract.schema.json#/$defs/Assent"),
+            envelope_record(gb_assent, "schemas/contract.schema.json#/$defs/Assent"),
         ],
         "ward_grant_valid": envelope_record(ward_grant_ok, "schemas/grant.schema.json"),
         "ward_grant_downgraded": envelope_record(ward_grant_down, "schemas/grant.schema.json"),
@@ -2159,6 +2522,7 @@ def main() -> int:
         ("trace-03-delegation-pool-single-use.json", build_trace_03_delegation()),
         ("trace-04-agent-guardian-intake.json", build_trace_04_agent_guardian_intake()),
         ("refusal-coverage-matrix.json", rm.build_refusal_coverage_matrix()),
+        ("security-conformance.json", sec.build_security_conformance_suite()),
     ]
     for fname, data in suites:
         out = VECTORS_DIR / fname

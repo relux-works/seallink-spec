@@ -1,6 +1,6 @@
 # SPEC-02: Ledger Interface, Namecoin Binding, ScriptPolicy, Merkle Batching, and UTXO Seals
 
-- **Version:** `1.0.0-draft.2`
+- **Version:** `1.0.0-draft.3`
 - **Status:** `draft` (normative rules `decided` except provisional freshness constants and Tier 2 profile marked `open` in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `vectors` (`vectors/ledger-scripts-and-opreturn.json`, `vectors/refusal-coverage-matrix.json`; two-node P2A regtest proof in `conformance/p2a-regtest/`)
 - **Registries:** `registry/opreturn-actions.json`, `registry/refusal-codes.json`
@@ -92,7 +92,7 @@ Receiving a name output proves neither authorship nor consent. To prove a name v
 Every chain-dependent decision executes inside one **consistent observation** (`SL-LDGR-008`, `decided` algorithm / `open` provisional constants `LAG`, `S`, `K` tracked in `OPEN-QUESTIONS.md`):
 
 1. **Snapshot bracket:** Read tip `(hash_0, height_0)` on the reading node before all queries, and `(hash_1, height_1)` after. If `(hash_0, height_0) != (hash_1, height_1)`, discard the observation with `CHAIN_OBSERVATION_VOID` (no closure written, except any validated seal spend already witnessed).
-2. **Multi-node health & single-node veto:** Reading node MUST be synced (`!IBD`, `txindex=1`, `best_header - tip <= LAG`, provisional `LAG = 1`; else `CHAIN_UNHEALTHY`). Verifier MUST cross-check against `>= 1` independent comparison node (distinct operator source). If *any* healthy comparison node reports a different hash at `height_0` or a higher height than `height_0`, refuse `CHAIN_NODE_DISAGREEMENT` (a single disagreeing healthy peer vetoes).
+2. **Multi-node health & single-node veto:** Reading node MUST be synced (`!IBD`, `txindex=1`, `best_header - tip <= LAG`, provisional `LAG = 1`; else `CHAIN_UNHEALTHY`). Verifier MUST cross-check against `>= 1` independent healthy comparison node (distinct operator source); if zero healthy comparison nodes are configured or reachable, refuse `CHAIN_UNHEALTHY`. If *any* healthy comparison node reports a different hash at `height_0` or a higher height than `height_0`, refuse `CHAIN_NODE_DISAGREEMENT` (a single disagreeing healthy peer vetoes).
 3. **Dual tip-age freshness:** Verifier maintains a durable monotonic UTC clock watermark (clock regression -> `CHAIN_CLOCK_ERROR`) and rejects headers with `header_time - now > S` (provisional `S = 600s`). Verifier durably records `first_sight_time` on first observation of each block hash:
    ```text
    tip_age = max(now - header_time, now - first_sight_time)
@@ -185,7 +185,7 @@ Block and mempool scanners projecting seal candidates MUST index tracked outpoin
 ### 6.3 Pre-Signed Disposable Seals and TRUC/P2A CPFP Anchor Output (`SL-LDGR-013`, `decided` format / `open` production propagation qualification)
 
 Fast-revocation seals for devices, auth keys, and member entries use a **CSPRNG-only private key** (never BIP-39 derived) whose private key is **destroyed immediately** after pre-signing and replicating `tx_revoke`:
-- `tx_revoke` SHOULD use `nVersion = 3` (TRUC topology rules, [BIP-431]) signed with `SIGHASH_ALL` spending the seal UTXO and creating **one standard Pay-to-Anchor (`P2A`) output** ([BIP-433]): 4-byte witness v1 scriptPubKey `OP_1 PUSH2 0x4e73` (`51024e73`, classified as standard type `"anchor"` in Namecoin Core `nc28.0`) alongside its burn/return output. The `P2A` output value MUST meet or exceed Namecoin Core `nc28.0`'s `P2A` dust floor of **`240` base units**. Bare `OP_TRUE` (`nonstandard` in `nc28.0`) MUST NOT be used.
+- A zero-fee pre-signed `tx_revoke` **MUST** use `nVersion = 3` (TRUC topology rules, [BIP-431]) signed with `SIGHASH_ALL` spending the seal UTXO and creating **one standard Pay-to-Anchor (`P2A`) output** ([BIP-433]): 4-byte witness v1 scriptPubKey `OP_1 PUSH2 0x4e73` (`51024e73`, classified as standard type `"anchor"` in Namecoin Core `nc28.0`) alongside its burn/return output. *(An `nVersion = 2` `tx_revoke` is permitted ONLY if pre-funded with a standalone fee `>= minrelaytxfee`, because Namecoin Core `nc28.0` rejects zero-fee v2 parents even inside 1p1c packages.)* The `P2A` output value MUST meet or exceed Namecoin Core `nc28.0`'s `P2A` dust floor of **`240` base units**. Bare `OP_TRUE` (`nonstandard` in `nc28.0`) MUST NOT be used.
 - **Namecoin minimum relay fee note:** Namecoin Core `nc28.0` sets default `minrelaytxfee = 0.001 NMC / 1000 vB` (`100,000` base units per 1000 vB — 100× Bitcoin's default). A zero-fee pre-signed `tx_revoke` parent is therefore rejected standalone (`min relay fee not met`) and is relayed as a 1-parent-1-child (`1p1c`) v3 package with a dynamically signed CPFP child spending the `P2A` output and funding the combined package fee (`>= minrelaytxfee` and current mempool feerate), without ever needing the destroyed seal private key.
 - A reproducible two-node Namecoin Core `nc28.0` regtest positive control proving standalone parent rejection, `submitpackage` acceptance, P2P propagation before mining, and block confirmation is preserved in `conformance/p2a-regtest/` (production propagation and fee-competition qualification remain tracked under `OQ-006`).
 

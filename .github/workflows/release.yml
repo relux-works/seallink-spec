@@ -27,7 +27,7 @@ jobs:
       - name: Run specification consistency, schema, and vector linter
         run: python3 tools/speclint.py --require-jsonschema
 
-      - name: Build single-file specification Markdown bundle
+      - name: Build single-file Markdown and standalone HTML/Print-PDF release bundles
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -35,8 +35,12 @@ jobs:
             --version "${TAG}" \
             --out "dist/seallink-spec-${TAG}.md" \
             --sha256-out "dist/seallink-spec-${TAG}.md.sha256"
+          python3 tools/build_site.py --version "${TAG}" --out site
+          cp "site/releases/${TAG}/seallink-spec-${TAG}.html" "dist/seallink-spec-${TAG}.html"
+          cp "site/releases/${TAG}/seallink-spec-${TAG}.html.sha256" "dist/seallink-spec-${TAG}.html.sha256"
           ls -lh dist/
           cat "dist/seallink-spec-${TAG}.md.sha256"
+          cat "dist/seallink-spec-${TAG}.html.sha256"
 
       - name: Determine prerelease flag
         id: meta
@@ -55,7 +59,8 @@ jobs:
           TAG: ${{ github.ref_name }}
           PRERELEASE: ${{ steps.meta.outputs.prerelease }}
         run: |
-          SHA=$(awk '{print $1}' "dist/seallink-spec-${TAG}.md.sha256")
+          SHA_MD=$(awk '{print $1}' "dist/seallink-spec-${TAG}.md.sha256")
+          SHA_HTML=$(awk '{print $1}' "dist/seallink-spec-${TAG}.html.sha256")
           FLAGS=(--title "SealLink Specification ${TAG}")
           if [[ "${PRERELEASE}" == "true" ]]; then
             FLAGS+=(--prerelease)
@@ -63,19 +68,22 @@ jobs:
           gh release create "${TAG}" \
             "dist/seallink-spec-${TAG}.md" \
             "dist/seallink-spec-${TAG}.md.sha256" \
+            "dist/seallink-spec-${TAG}.html" \
+            "dist/seallink-spec-${TAG}.html.sha256" \
             "${FLAGS[@]}" \
             --notes "$(cat <<EOF
           ## SealLink Protocol Specification \`${TAG}\`
 
-          Single-file compiled specification bundle including:
+          Compiled single-file Markdown and standalone Print-to-PDF HTML editions (also published live with canonical \`\$id\` JSON Schemas at [seallink.org](https://seallink.org/)):
           - Normative Core Specifications (\`SPEC-00\` through \`SPEC-07\`)
           - Standard Profiles (\`PROFILE-mail-v1\`, \`PROFILE-agent-v1\`)
           - Conformance Requirements, Open Questions, and SLIP Template
           - Machine-Readable Registries (\`registry/*.json\`)
-          - Formal Draft 2020-12 Wire JSON Schemas (\`schemas/*.schema.json\`)
-          - Informative Guides, Migration Rule Inventory, and Conformance Vector Manifest (\`vectors/*.json\`, including 4 executable traces and 84/84 refusal-code coverage verified by \`tools/seallink_verifier.py\`)
+          - Formal Draft 2020-12 Wire JSON Schemas (\`schemas/*.schema.json\`) — live at \`https://seallink.org/releases/${TAG}/schemas/\`
+          - Informative Guides (\`GUIDE-01\`), Complete 113-Rule Inventory, and Conformance Vector Manifest (9 executable suites, including 4 full traces, schema-validated 84/84 refusal-code matrix, adversarial security-conformance suite, and verifier-check mutation self-tests executed by \`tools/seallink_verifier.py\`)
           - Two-node Namecoin Core \`nc28.0\` \`P2A\` package-relay regtest proof (\`conformance/p2a-regtest/\`)
 
-          **SHA-256 (\`seallink-spec-${TAG}.md\`):** \`${SHA}\`
+          **SHA-256 (\`seallink-spec-${TAG}.md\`):** \`${SHA_MD}\`  
+          **SHA-256 (\`seallink-spec-${TAG}.html\`):** \`${SHA_HTML}\`
           EOF
           )"

@@ -1,7 +1,149 @@
 {
+  "atomic_quota_rollback": {
+    "expected_balances_unchanged": true,
+    "expected_journal_writes": 0,
+    "expected_refusal": "QUOTA_EXCEEDED",
+    "expected_verdict": "REFUSE",
+    "grant": {
+      "canonical_jcs": "{\"payload\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"2\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},{\"kind\":\"seallink/bytes\",\"max\":\"50000\",\"resource\":\"station:fleet:tools\",\"unit\":\"bytes\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"eq\":\"pytest\"}}}],\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"network\":\"main\",\"not_after_height\":755000,\"not_before_height\":750100,\"parent\":{\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"ordinal\":2},\"recent_block\":\"28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35\",\"recipient\":{\"key\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"mode\":\"key\"},\"revocation\":{\"construction\":\"W\",\"kind\":\"revocable\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"kind\":\"key\",\"pk\":\"0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001\"},\"txid\":\"905a0e6a133dedcf7c4cd0d20d679c4f875ddac2b724025d227115a43aa288d6\",\"vout\":0}},\"type\":\"seallink-grant/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\"]},\"sigs\":[{\"pk\":\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\",\"sig\":\"f3cffa77b1e443429982c348b1191d5301e157f52e6942d8d269653a4a5473fcde507ba225e13c4aa391ba0711102ae6a2353b6c9ac832f09813c2321304de89\"}]}}",
+      "content_addr": "4f885d2b89db4afed2f9233dd7a0e62a70e4bd76da3d8090ad927fca290b631a",
+      "object": {
+        "payload": {
+          "capabilities": [
+            {
+              "action": "agent/tool",
+              "quotas": [
+                {
+                  "kind": "seallink/count",
+                  "max": "2",
+                  "resource": "station:fleet:tools",
+                  "unit": "calls",
+                  "window": "term"
+                },
+                {
+                  "kind": "seallink/bytes",
+                  "max": "50000",
+                  "resource": "station:fleet:tools",
+                  "unit": "bytes",
+                  "window": "term"
+                }
+              ],
+              "target": "station:fleet:tools",
+              "where": {
+                "tool_name": {
+                  "eq": "pytest"
+                }
+              }
+            }
+          ],
+          "executor": {
+            "key": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
+            "name": "id/station-a"
+          },
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "network": "main",
+          "not_after_height": 755000,
+          "not_before_height": 750100,
+          "parent": {
+            "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
+            "ordinal": 2
+          },
+          "recent_block": "28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35",
+          "recipient": {
+            "key": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
+            "mode": "key"
+          },
+          "revocation": {
+            "construction": "W",
+            "kind": "revocable",
+            "mode": "seal",
+            "seal": {
+              "script_policy": {
+                "kind": "key",
+                "pk": "0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001"
+              },
+              "txid": "905a0e6a133dedcf7c4cd0d20d679c4f875ddac2b724025d227115a43aa288d6",
+              "vout": 0
+            }
+          },
+          "type": "seallink-grant/1"
+        },
+        "signatures": {
+          "policy": {
+            "m": 1,
+            "pks": [
+              "e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6",
+              "sig": "f3cffa77b1e443429982c348b1191d5301e157f52e6942d8d269653a4a5473fcde507ba225e13c4aa391ba0711102ae6a2353b6c9ac832f09813c2321304de89"
+            }
+          ]
+        }
+      },
+      "object_id": "2893eb1cc54b66d25a1bfd7c5f09aaa64da8333a5573888a9e2aa9f0e06dc9d7",
+      "schema": "schemas/grant.schema.json",
+      "signing_digest": "2c54d6146aa28ff462b841994ed9859d2ac951007d0d0dde67d46630b53f43b7"
+    },
+    "invocation": {
+      "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"63a7d716d8add50b159c2c132672523d3be03a98a6a94d7d2dfc381526ade712\",\"max_output_bytes\":\"65536\",\"tool_name\":\"pytest\"},\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"network\":\"main\",\"nonce\":\"6e662de5561dd967753a854dd0148c6f5ef2ca549750d41ccb64717edecf556a\",\"proof_path\":[{\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"2893eb1cc54b66d25a1bfd7c5f09aaa64da8333a5573888a9e2aa9f0e06dc9d7\",\"issuance_txid\":\"f95d394d32587c1d8153f8e319ce928f307ffae838de241b5f8fb88ce35eefc9\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\"]},\"sigs\":[{\"pk\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"sig\":\"19e28b4dfd43cafc858a18fd5e3fee18b31543381e087ceb8b5aeadb34712cc32f0293ef13eb5e1a8bebe7eeae24d70430018734573e226d55bd181d278a4057\"}]}}",
+      "content_addr": "d89e72ac16ef453a1348eb6ddfe4126f79e58974293f4c77c3ba289ce80d1bbe",
+      "object": {
+        "payload": {
+          "action": "agent/tool",
+          "arguments": {
+            "input_sha256": "63a7d716d8add50b159c2c132672523d3be03a98a6a94d7d2dfc381526ade712",
+            "max_output_bytes": "65536",
+            "tool_name": "pytest"
+          },
+          "executor": {
+            "key": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
+            "name": "id/station-a"
+          },
+          "exp": 1795221000,
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "iat": 1795220000,
+          "network": "main",
+          "nonce": "6e662de5561dd967753a854dd0148c6f5ef2ca549750d41ccb64717edecf556a",
+          "proof_path": [
+            {
+              "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
+              "issuance_txid": "584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc"
+            },
+            {
+              "grant_id": "2893eb1cc54b66d25a1bfd7c5f09aaa64da8333a5573888a9e2aa9f0e06dc9d7",
+              "issuance_txid": "f95d394d32587c1d8153f8e319ce928f307ffae838de241b5f8fb88ce35eefc9"
+            }
+          ],
+          "target": "station:fleet:tools",
+          "type": "seallink-invocation/1"
+        },
+        "signatures": {
+          "policy": {
+            "m": 1,
+            "pks": [
+              "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
+              "sig": "19e28b4dfd43cafc858a18fd5e3fee18b31543381e087ceb8b5aeadb34712cc32f0293ef13eb5e1a8bebe7eeae24d70430018734573e226d55bd181d278a4057"
+            }
+          ]
+        }
+      },
+      "object_id": "d98ae451dacf3b207b46af83b07ed4a258b9a71e6f9271cfaa71c15d2314c9a9",
+      "schema": "schemas/invocation.schema.json#/$defs/Invocation",
+      "signing_digest": "4af9ab1faaee9a6443bbcb6b8c04948f39002045264db8eb442f1b0ef9f44198"
+    },
+    "profile_args_schema": "schemas/profile-agent.schema.json#/$defs/AgentToolArgs"
+  },
   "child_1_single_use": {
-    "canonical_jcs": "{\"payload\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"1\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"eq\":\"pytest\"}}}],\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"min_depth\":1,\"network\":\"main\",\"not_after_height\":755000,\"not_before_height\":750100,\"parent\":{\"grant_id\":\"7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d\",\"ordinal\":1},\"recent_block\":\"28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35\",\"recipient\":{\"key\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"mode\":\"key\"},\"revocation\":{\"construction\":\"W\",\"kind\":\"single_use\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"keys\":{\"grantee\":\"02e35f172d2e4157cbce9e95188c4c91a867f021dff6c711665b8e79626bad9476\",\"issuer\":\"0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001\"},\"kind\":\"branch\",\"template\":\"single_use_1_of_2\"},\"txid\":\"05f147a75e3010a398dda4ee58621bd7b1e5227765b2c1ac0dd30e8946a91ad6\",\"vout\":0}},\"type\":\"seallink-grant/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\"]},\"sigs\":[{\"pk\":\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\",\"sig\":\"47999c30f0a36f03aa771776c9afcde21b438ea453de4cce19c40856ebf7e7d64e34c11c2d640a0681ad233ce8d552b3ca2ebe2915029f6faf5cae9beac05be8\"}]}}",
-    "content_addr": "203d5ebbb24d38e15d592ef89b2517a60c1835ac146c9b5afd08df2d9f791304",
+    "canonical_jcs": "{\"payload\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"1\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},{\"kind\":\"seallink/bytes\",\"max\":\"100000\",\"resource\":\"station:fleet:tools\",\"unit\":\"bytes\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"eq\":\"pytest\"}}}],\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"min_depth\":1,\"network\":\"main\",\"not_after_height\":755000,\"not_before_height\":750100,\"parent\":{\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"ordinal\":1},\"recent_block\":\"28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35\",\"recipient\":{\"key\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"mode\":\"key\"},\"revocation\":{\"construction\":\"W\",\"kind\":\"single_use\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"keys\":{\"grantee\":\"02e35f172d2e4157cbce9e95188c4c91a867f021dff6c711665b8e79626bad9476\",\"issuer\":\"0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001\"},\"kind\":\"branch\",\"template\":\"single_use_1_of_2\"},\"txid\":\"05f147a75e3010a398dda4ee58621bd7b1e5227765b2c1ac0dd30e8946a91ad6\",\"vout\":0}},\"type\":\"seallink-grant/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\"]},\"sigs\":[{\"pk\":\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\",\"sig\":\"a1ec7dc15e5a73caf1381a9f15511ec06be8c3cabb5b2bd5eb4537ad5d7647f8f5bccd49a2d7f03f99bce51fdc248e7786c29c2d7117a805fbed260a813eca46\"}]}}",
+    "content_addr": "d9f4673f9df1d7ab03c9943158863427c7c2e2c3b17aaabeeae01c3c7e836749",
     "object": {
       "payload": {
         "capabilities": [
@@ -13,6 +155,13 @@
                 "max": "1",
                 "resource": "station:fleet:tools",
                 "unit": "calls",
+                "window": "term"
+              },
+              {
+                "kind": "seallink/bytes",
+                "max": "100000",
+                "resource": "station:fleet:tools",
+                "unit": "bytes",
                 "window": "term"
               }
             ],
@@ -34,7 +183,7 @@
         "not_after_height": 755000,
         "not_before_height": 750100,
         "parent": {
-          "grant_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+          "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
           "ordinal": 1
         },
         "recent_block": "28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35",
@@ -71,19 +220,22 @@
         "sigs": [
           {
             "pk": "e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6",
-            "sig": "47999c30f0a36f03aa771776c9afcde21b438ea453de4cce19c40856ebf7e7d64e34c11c2d640a0681ad233ce8d552b3ca2ebe2915029f6faf5cae9beac05be8"
+            "sig": "a1ec7dc15e5a73caf1381a9f15511ec06be8c3cabb5b2bd5eb4537ad5d7647f8f5bccd49a2d7f03f99bce51fdc248e7786c29c2d7117a805fbed260a813eca46"
           }
         ]
       }
     },
-    "object_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+    "object_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
     "schema": "schemas/grant.schema.json",
-    "signing_digest": "dd9a5fffbdffd7aad7483bf40a7f8bd58eb562852fc49fcde608a0fb9ece5cce"
+    "signing_digest": "1ab9cf2a5d1347891b906f8fa62b237478f4e9cb755aee2cc523a8987b4ab8f5"
   },
   "child_1_trace": {
+    "actual_quota_usage": {
+      "seallink/bytes|station:fleet:tools|bytes|term": 1240
+    },
     "invocation": {
-      "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"bddecd2312ddae203164ca7c3f51766c7eaf5e7ef47d5429d807263ac1d569e6\",\"max_output_bytes\":\"65536\",\"tool_name\":\"pytest\"},\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"network\":\"main\",\"nonce\":\"e30bd0c99a897592eb735ae9b9e2b1a707a9bedabd756a77e1216d51c9770e21\",\"proof_path\":[{\"grant_id\":\"7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"issuance_txid\":\"3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\"]},\"sigs\":[{\"pk\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"sig\":\"2fa765e2fe1ebf102afb12b9615fa57e30d26119cd7c5d3f693232fd3a8d8231888d272aca0283960bb9f3ca1217536182f99245ff29782de552e4170e5b530a\"}]}}",
-      "content_addr": "92f9d2d9dcd6354ce04cea40a79e95666565024d3cde89e80ba3e4ad1315ce1c",
+      "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"bddecd2312ddae203164ca7c3f51766c7eaf5e7ef47d5429d807263ac1d569e6\",\"max_output_bytes\":\"65536\",\"tool_name\":\"pytest\"},\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"network\":\"main\",\"nonce\":\"e30bd0c99a897592eb735ae9b9e2b1a707a9bedabd756a77e1216d51c9770e21\",\"proof_path\":[{\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893\",\"issuance_txid\":\"3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\"]},\"sigs\":[{\"pk\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"sig\":\"69f3b541192a5a4d3d2a484193271dc2b8230f3d1138d8f5c66454d36bb12489351a3237dc717d278635c6a9b2cc18cfe8c960179b55a1d1892f0cbe47e43e5e\"}]}}",
+      "content_addr": "f490d54adaa292a201568c45eafcbf3a1f3e00b53ee51c0714d55a5ac68b4b48",
       "object": {
         "payload": {
           "action": "agent/tool",
@@ -103,11 +255,11 @@
           "nonce": "e30bd0c99a897592eb735ae9b9e2b1a707a9bedabd756a77e1216d51c9770e21",
           "proof_path": [
             {
-              "grant_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+              "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
               "issuance_txid": "584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc"
             },
             {
-              "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+              "grant_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
               "issuance_txid": "3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7"
             }
           ],
@@ -124,14 +276,14 @@
           "sigs": [
             {
               "pk": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
-              "sig": "2fa765e2fe1ebf102afb12b9615fa57e30d26119cd7c5d3f693232fd3a8d8231888d272aca0283960bb9f3ca1217536182f99245ff29782de552e4170e5b530a"
+              "sig": "69f3b541192a5a4d3d2a484193271dc2b8230f3d1138d8f5c66454d36bb12489351a3237dc717d278635c6a9b2cc18cfe8c960179b55a1d1892f0cbe47e43e5e"
             }
           ]
         }
       },
-      "object_id": "c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6",
+      "object_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
       "schema": "schemas/invocation.schema.json#/$defs/Invocation",
-      "signing_digest": "b443e29356fb17b70dabd38106f9b58d3050a029039ae9ff42bcb440ac954a81"
+      "signing_digest": "ce45dc9e2d85f3146d2d53d33cfe073198a6df09709fe2c90f51cd60d1cec3d3"
     },
     "profile_args_schema": "schemas/profile-agent.schema.json#/$defs/AgentToolArgs",
     "step_a_mempool_unconfirmed": {
@@ -139,56 +291,152 @@
       "expected_verdict": "REFUSE"
     },
     "step_b_crash_in_effect_window": {
-      "crash_journal_write": {
-        "c_after": "56dc36d34edf32826bab9f86c1797f28408bbc569bf9ff547bf180ea8bcef5e4",
-        "c_before": "e24baa63b133e7070ea149d51d02ca0dc64f6b5f47fdb832741cff322b1d0d3b",
-        "entry": {
-          "canonical_jcs": "{\"body\":{\"account\":\"row\",\"amount\":\"1\",\"bucket_id\":\"term\",\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"invocation_id\":\"c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6\",\"quota_kind\":\"seallink/count\",\"recorded_at\":1795220050,\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},\"journal_id\":\"58b3dfbbf9431c7117147b09cb4246b9bbbca6e5d3b0bb1057aea9014a967d29\",\"kind\":\"reservation\",\"pos\":1,\"prev_commitment\":\"e24baa63b133e7070ea149d51d02ca0dc64f6b5f47fdb832741cff322b1d0d3b\",\"type\":\"seallink-journal-entry/1\"}",
-          "content_addr": "20c4b79ed0ebb21dbca0cc40b17098c3e74ef476d78324ac6df96238afbdd63b",
-          "object": {
-            "body": {
-              "account": "row",
-              "amount": "1",
-              "bucket_id": "term",
-              "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
-              "invocation_id": "c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6",
-              "quota_kind": "seallink/count",
-              "recorded_at": 1795220050,
-              "resource": "station:fleet:tools",
-              "unit": "calls",
-              "window": "term"
-            },
-            "journal_id": "58b3dfbbf9431c7117147b09cb4246b9bbbca6e5d3b0bb1057aea9014a967d29",
-            "kind": "reservation",
-            "pos": 1,
-            "prev_commitment": "e24baa63b133e7070ea149d51d02ca0dc64f6b5f47fdb832741cff322b1d0d3b",
-            "type": "seallink-journal-entry/1"
-          },
-          "object_id": "20c4b79ed0ebb21dbca0cc40b17098c3e74ef476d78324ac6df96238afbdd63b",
-          "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
-        }
-      },
-      "expected_outcome": "uncertain",
-      "expected_verdict_after_restart": "UNCERTAIN",
-      "reservation_retained": true,
-      "zero_second_effect": true
-    },
-    "step_c_confirmed_execute": {
-      "expected_verdict": "ADMIT",
-      "journal_chain": [
+      "crash_journal_writes": [
         {
-          "c_after": "4e12c268d05cc17d3efda20cf517f2648e534642e81d6b4c87c4d51cd826ab40",
-          "c_before": "c06393b1fce4469ef0560dfedf5fa93272ea251d6847d6d509b05771a6fae034",
+          "c_after": "66d4db70dad9f44a144399a91a64f910d1797342bb06408dd6ac737b43af3892",
+          "c_before": "e24baa63b133e7070ea149d51d02ca0dc64f6b5f47fdb832741cff322b1d0d3b",
           "entry": {
-            "canonical_jcs": "{\"body\":{\"account\":\"row\",\"amount\":\"1\",\"bucket_id\":\"term\",\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"invocation_id\":\"c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6\",\"quota_kind\":\"seallink/count\",\"recorded_at\":1795220050,\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"reservation\",\"pos\":1,\"prev_commitment\":\"c06393b1fce4469ef0560dfedf5fa93272ea251d6847d6d509b05771a6fae034\",\"type\":\"seallink-journal-entry/1\"}",
-            "content_addr": "43fad6b576d7e56a4551a2aa66244b90bad6d2e07d6d0dfcc66ab9f3a186cc1f",
+            "canonical_jcs": "{\"body\":{\"account\":\"own\",\"amount\":\"1\",\"bucket_id\":\"term\",\"grant_id\":\"a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"quota_kind\":\"seallink/count\",\"recorded_at\":1795220050,\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},\"journal_id\":\"58b3dfbbf9431c7117147b09cb4246b9bbbca6e5d3b0bb1057aea9014a967d29\",\"kind\":\"reservation\",\"pos\":1,\"prev_commitment\":\"e24baa63b133e7070ea149d51d02ca0dc64f6b5f47fdb832741cff322b1d0d3b\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "d7b714192ba7ac68ac55778be79629bc1f66ae6ce95a15a3016356f80f5b311d",
+            "object": {
+              "body": {
+                "account": "own",
+                "amount": "1",
+                "bucket_id": "term",
+                "grant_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
+                "quota_kind": "seallink/count",
+                "recorded_at": 1795220050,
+                "resource": "station:fleet:tools",
+                "unit": "calls",
+                "window": "term"
+              },
+              "journal_id": "58b3dfbbf9431c7117147b09cb4246b9bbbca6e5d3b0bb1057aea9014a967d29",
+              "kind": "reservation",
+              "pos": 1,
+              "prev_commitment": "e24baa63b133e7070ea149d51d02ca0dc64f6b5f47fdb832741cff322b1d0d3b",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "d7b714192ba7ac68ac55778be79629bc1f66ae6ce95a15a3016356f80f5b311d",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        },
+        {
+          "c_after": "abce63ac3e8a4285ee288e395ad103e2f331e2446c70abb43fa33e99411511d0",
+          "c_before": "66d4db70dad9f44a144399a91a64f910d1797342bb06408dd6ac737b43af3892",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"account\":\"row\",\"amount\":\"1\",\"bucket_id\":\"term\",\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"quota_kind\":\"seallink/count\",\"recorded_at\":1795220050,\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},\"journal_id\":\"58b3dfbbf9431c7117147b09cb4246b9bbbca6e5d3b0bb1057aea9014a967d29\",\"kind\":\"reservation\",\"pos\":2,\"prev_commitment\":\"66d4db70dad9f44a144399a91a64f910d1797342bb06408dd6ac737b43af3892\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "ea354f8b411d07f8d62a775ea93b22d6b7f558ddd28cfd07aa92c942bbd79ed7",
             "object": {
               "body": {
                 "account": "row",
                 "amount": "1",
                 "bucket_id": "term",
-                "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
-                "invocation_id": "c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6",
+                "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
+                "quota_kind": "seallink/count",
+                "recorded_at": 1795220050,
+                "resource": "station:fleet:tools",
+                "unit": "calls",
+                "window": "term"
+              },
+              "journal_id": "58b3dfbbf9431c7117147b09cb4246b9bbbca6e5d3b0bb1057aea9014a967d29",
+              "kind": "reservation",
+              "pos": 2,
+              "prev_commitment": "66d4db70dad9f44a144399a91a64f910d1797342bb06408dd6ac737b43af3892",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "ea354f8b411d07f8d62a775ea93b22d6b7f558ddd28cfd07aa92c942bbd79ed7",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        },
+        {
+          "c_after": "ae27431654b7e8bdb0306fd0e0d364d9d101cffa1cfbc58657e4ab7b7fdd03ff",
+          "c_before": "abce63ac3e8a4285ee288e395ad103e2f331e2446c70abb43fa33e99411511d0",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"account\":\"own\",\"amount\":\"65536\",\"bucket_id\":\"term\",\"grant_id\":\"a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"quota_kind\":\"seallink/bytes\",\"recorded_at\":1795220050,\"resource\":\"station:fleet:tools\",\"unit\":\"bytes\",\"window\":\"term\"},\"journal_id\":\"58b3dfbbf9431c7117147b09cb4246b9bbbca6e5d3b0bb1057aea9014a967d29\",\"kind\":\"reservation\",\"pos\":3,\"prev_commitment\":\"abce63ac3e8a4285ee288e395ad103e2f331e2446c70abb43fa33e99411511d0\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "be28ccc935004858a5790256caa2c011af452c40b97da45d2e69cc352d148b96",
+            "object": {
+              "body": {
+                "account": "own",
+                "amount": "65536",
+                "bucket_id": "term",
+                "grant_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
+                "quota_kind": "seallink/bytes",
+                "recorded_at": 1795220050,
+                "resource": "station:fleet:tools",
+                "unit": "bytes",
+                "window": "term"
+              },
+              "journal_id": "58b3dfbbf9431c7117147b09cb4246b9bbbca6e5d3b0bb1057aea9014a967d29",
+              "kind": "reservation",
+              "pos": 3,
+              "prev_commitment": "abce63ac3e8a4285ee288e395ad103e2f331e2446c70abb43fa33e99411511d0",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "be28ccc935004858a5790256caa2c011af452c40b97da45d2e69cc352d148b96",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        },
+        {
+          "c_after": "777b3887459761bc7c222ea86f19e35de3ff7b2288e9be7565870cbb39ea63df",
+          "c_before": "ae27431654b7e8bdb0306fd0e0d364d9d101cffa1cfbc58657e4ab7b7fdd03ff",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"account\":\"row\",\"amount\":\"65536\",\"bucket_id\":\"term\",\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"quota_kind\":\"seallink/bytes\",\"recorded_at\":1795220050,\"resource\":\"station:fleet:tools\",\"unit\":\"bytes\",\"window\":\"term\"},\"journal_id\":\"58b3dfbbf9431c7117147b09cb4246b9bbbca6e5d3b0bb1057aea9014a967d29\",\"kind\":\"reservation\",\"pos\":4,\"prev_commitment\":\"ae27431654b7e8bdb0306fd0e0d364d9d101cffa1cfbc58657e4ab7b7fdd03ff\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "71a3bbfe192bcf566f9ac2420449dd634870fb6a062f7358d74f6901dec4b785",
+            "object": {
+              "body": {
+                "account": "row",
+                "amount": "65536",
+                "bucket_id": "term",
+                "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
+                "quota_kind": "seallink/bytes",
+                "recorded_at": 1795220050,
+                "resource": "station:fleet:tools",
+                "unit": "bytes",
+                "window": "term"
+              },
+              "journal_id": "58b3dfbbf9431c7117147b09cb4246b9bbbca6e5d3b0bb1057aea9014a967d29",
+              "kind": "reservation",
+              "pos": 4,
+              "prev_commitment": "ae27431654b7e8bdb0306fd0e0d364d9d101cffa1cfbc58657e4ab7b7fdd03ff",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "71a3bbfe192bcf566f9ac2420449dd634870fb6a062f7358d74f6901dec4b785",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        }
+      ],
+      "expected_outcome": "uncertain",
+      "expected_unsettled_count": 4,
+      "expected_verdict_after_restart": "UNCERTAIN",
+      "reservation_retained": true,
+      "zero_second_effect": true
+    },
+    "step_c_confirmed_execute": {
+      "expected_settled_balances": {
+        "own:a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893|seallink/bytes|station:fleet:tools|bytes|term": 1240,
+        "own:a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893|seallink/count|station:fleet:tools|calls|term": 1,
+        "row:b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3|seallink/bytes|station:fleet:tools|bytes|term": 1240,
+        "row:b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3|seallink/count|station:fleet:tools|calls|term": 1
+      },
+      "expected_verdict": "ADMIT",
+      "journal_chain": [
+        {
+          "c_after": "8c0a04a7c4ca41c2d6fcdf06172a4d6f7440afe4cf711cc08b7520ff4116bbe2",
+          "c_before": "c06393b1fce4469ef0560dfedf5fa93272ea251d6847d6d509b05771a6fae034",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"account\":\"own\",\"amount\":\"1\",\"bucket_id\":\"term\",\"grant_id\":\"a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"quota_kind\":\"seallink/count\",\"recorded_at\":1795220050,\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"reservation\",\"pos\":1,\"prev_commitment\":\"c06393b1fce4469ef0560dfedf5fa93272ea251d6847d6d509b05771a6fae034\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "c00c6163c2f9d35510ea10f9e52860da3e6f8be8b1a08d6328dd3e29315b73b9",
+            "object": {
+              "body": {
+                "account": "own",
+                "amount": "1",
+                "bucket_id": "term",
+                "grant_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
                 "quota_kind": "seallink/count",
                 "recorded_at": 1795220050,
                 "resource": "station:fleet:tools",
@@ -201,108 +449,325 @@
               "prev_commitment": "c06393b1fce4469ef0560dfedf5fa93272ea251d6847d6d509b05771a6fae034",
               "type": "seallink-journal-entry/1"
             },
-            "object_id": "43fad6b576d7e56a4551a2aa66244b90bad6d2e07d6d0dfcc66ab9f3a186cc1f",
+            "object_id": "c00c6163c2f9d35510ea10f9e52860da3e6f8be8b1a08d6328dd3e29315b73b9",
             "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
           }
         },
         {
-          "c_after": "6883688ad7922131d9ce86702adfc3dafce89de6e627cd5b5aff35f2b4ba0d73",
-          "c_before": "4e12c268d05cc17d3efda20cf517f2648e534642e81d6b4c87c4d51cd826ab40",
+          "c_after": "6b6c8eac12c3729537f0a2603a99856fecb26e671cacc93ec91a00a872b336f7",
+          "c_before": "8c0a04a7c4ca41c2d6fcdf06172a4d6f7440afe4cf711cc08b7520ff4116bbe2",
           "entry": {
-            "canonical_jcs": "{\"body\":{\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"invocation_id\":\"c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6\",\"outcome\":\"executed\",\"receipt_sha256\":\"adcec041dd53e837e28ab694c041c14cc0b88d44590cc7c56f3813b079b0f096\",\"recorded_at\":1795220050,\"released\":\"0\",\"settled\":\"1\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"settlement\",\"pos\":2,\"prev_commitment\":\"4e12c268d05cc17d3efda20cf517f2648e534642e81d6b4c87c4d51cd826ab40\",\"type\":\"seallink-journal-entry/1\"}",
-            "content_addr": "0dc36d69fc510fcd0aba0e16ecb79cd4361c64fa7e5640096a9654ad045e1a95",
+            "canonical_jcs": "{\"body\":{\"account\":\"row\",\"amount\":\"1\",\"bucket_id\":\"term\",\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"quota_kind\":\"seallink/count\",\"recorded_at\":1795220050,\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"reservation\",\"pos\":2,\"prev_commitment\":\"8c0a04a7c4ca41c2d6fcdf06172a4d6f7440afe4cf711cc08b7520ff4116bbe2\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "9f2af2391679fbb52e182df150a89a664527ed1936b09a02ca8195709e2af789",
             "object": {
               "body": {
-                "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
-                "invocation_id": "c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6",
+                "account": "row",
+                "amount": "1",
+                "bucket_id": "term",
+                "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
+                "quota_kind": "seallink/count",
+                "recorded_at": 1795220050,
+                "resource": "station:fleet:tools",
+                "unit": "calls",
+                "window": "term"
+              },
+              "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
+              "kind": "reservation",
+              "pos": 2,
+              "prev_commitment": "8c0a04a7c4ca41c2d6fcdf06172a4d6f7440afe4cf711cc08b7520ff4116bbe2",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "9f2af2391679fbb52e182df150a89a664527ed1936b09a02ca8195709e2af789",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        },
+        {
+          "c_after": "46952a0ac07e7c087824c3e91a50e065eaef5830c120359786f0a71a67a0a131",
+          "c_before": "6b6c8eac12c3729537f0a2603a99856fecb26e671cacc93ec91a00a872b336f7",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"account\":\"own\",\"amount\":\"65536\",\"bucket_id\":\"term\",\"grant_id\":\"a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"quota_kind\":\"seallink/bytes\",\"recorded_at\":1795220050,\"resource\":\"station:fleet:tools\",\"unit\":\"bytes\",\"window\":\"term\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"reservation\",\"pos\":3,\"prev_commitment\":\"6b6c8eac12c3729537f0a2603a99856fecb26e671cacc93ec91a00a872b336f7\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "b0bf9a4eb13eaa08c37671bdc95a145454dedcc502cb8034b8647b88f7e2a6bd",
+            "object": {
+              "body": {
+                "account": "own",
+                "amount": "65536",
+                "bucket_id": "term",
+                "grant_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
+                "quota_kind": "seallink/bytes",
+                "recorded_at": 1795220050,
+                "resource": "station:fleet:tools",
+                "unit": "bytes",
+                "window": "term"
+              },
+              "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
+              "kind": "reservation",
+              "pos": 3,
+              "prev_commitment": "6b6c8eac12c3729537f0a2603a99856fecb26e671cacc93ec91a00a872b336f7",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "b0bf9a4eb13eaa08c37671bdc95a145454dedcc502cb8034b8647b88f7e2a6bd",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        },
+        {
+          "c_after": "4c0795719df62644e6be0a98b93f10ccec542d1b165119240066e645c5d0d18b",
+          "c_before": "46952a0ac07e7c087824c3e91a50e065eaef5830c120359786f0a71a67a0a131",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"account\":\"row\",\"amount\":\"65536\",\"bucket_id\":\"term\",\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"quota_kind\":\"seallink/bytes\",\"recorded_at\":1795220050,\"resource\":\"station:fleet:tools\",\"unit\":\"bytes\",\"window\":\"term\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"reservation\",\"pos\":4,\"prev_commitment\":\"46952a0ac07e7c087824c3e91a50e065eaef5830c120359786f0a71a67a0a131\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "c3ec61c6487558d9d6d2dad5152f24b2c61f0a60d6c368c6cbcd27246bd9638c",
+            "object": {
+              "body": {
+                "account": "row",
+                "amount": "65536",
+                "bucket_id": "term",
+                "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
+                "quota_kind": "seallink/bytes",
+                "recorded_at": 1795220050,
+                "resource": "station:fleet:tools",
+                "unit": "bytes",
+                "window": "term"
+              },
+              "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
+              "kind": "reservation",
+              "pos": 4,
+              "prev_commitment": "46952a0ac07e7c087824c3e91a50e065eaef5830c120359786f0a71a67a0a131",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "c3ec61c6487558d9d6d2dad5152f24b2c61f0a60d6c368c6cbcd27246bd9638c",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        },
+        {
+          "c_after": "48a001631da4cfff4ed6e68a7e0d6e557f35e236531317e0c327173dbfc27d54",
+          "c_before": "4c0795719df62644e6be0a98b93f10ccec542d1b165119240066e645c5d0d18b",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"account\":\"own\",\"bucket_id\":\"term\",\"grant_id\":\"a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"outcome\":\"executed\",\"quota_kind\":\"seallink/count\",\"receipt_sha256\":\"836ce971beed97be745c4ab53e1f397e097983285a70faad58638af791ee0c39\",\"recorded_at\":1795220050,\"released\":\"0\",\"resource\":\"station:fleet:tools\",\"settled\":\"1\",\"unit\":\"calls\",\"window\":\"term\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"settlement\",\"pos\":5,\"prev_commitment\":\"4c0795719df62644e6be0a98b93f10ccec542d1b165119240066e645c5d0d18b\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "fa0bc65bf180a409bc2e5eb57a0c635717c4ef4d93fd299ee6071257ecf9e96d",
+            "object": {
+              "body": {
+                "account": "own",
+                "bucket_id": "term",
+                "grant_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
                 "outcome": "executed",
-                "receipt_sha256": "adcec041dd53e837e28ab694c041c14cc0b88d44590cc7c56f3813b079b0f096",
+                "quota_kind": "seallink/count",
+                "receipt_sha256": "836ce971beed97be745c4ab53e1f397e097983285a70faad58638af791ee0c39",
                 "recorded_at": 1795220050,
                 "released": "0",
-                "settled": "1"
+                "resource": "station:fleet:tools",
+                "settled": "1",
+                "unit": "calls",
+                "window": "term"
               },
               "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
               "kind": "settlement",
-              "pos": 2,
-              "prev_commitment": "4e12c268d05cc17d3efda20cf517f2648e534642e81d6b4c87c4d51cd826ab40",
+              "pos": 5,
+              "prev_commitment": "4c0795719df62644e6be0a98b93f10ccec542d1b165119240066e645c5d0d18b",
               "type": "seallink-journal-entry/1"
             },
-            "object_id": "0dc36d69fc510fcd0aba0e16ecb79cd4361c64fa7e5640096a9654ad045e1a95",
+            "object_id": "fa0bc65bf180a409bc2e5eb57a0c635717c4ef4d93fd299ee6071257ecf9e96d",
             "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
           }
         },
         {
-          "c_after": "404f5d2f682f6cbdf656f019c686bdcf88a6aa822ab70c2259810c0ce5482e3c",
-          "c_before": "6883688ad7922131d9ce86702adfc3dafce89de6e627cd5b5aff35f2b4ba0d73",
+          "c_after": "b7d2d501d45a1d340d733ee63534a665d0de424c645e9a587b935f3d6153b273",
+          "c_before": "48a001631da4cfff4ed6e68a7e0d6e557f35e236531317e0c327173dbfc27d54",
           "entry": {
-            "canonical_jcs": "{\"body\":{\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"invocation_id\":\"c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6\",\"receipt_sha256\":\"adcec041dd53e837e28ab694c041c14cc0b88d44590cc7c56f3813b079b0f096\",\"recorded_at\":1795220050,\"use_txid\":\"f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"single-use-consumed\",\"pos\":3,\"prev_commitment\":\"6883688ad7922131d9ce86702adfc3dafce89de6e627cd5b5aff35f2b4ba0d73\",\"type\":\"seallink-journal-entry/1\"}",
-            "content_addr": "44ee05ce689a47d02630aca7c06f231450f2ac9f0bbf37808ac1754f0627b9d7",
+            "canonical_jcs": "{\"body\":{\"account\":\"row\",\"bucket_id\":\"term\",\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"outcome\":\"executed\",\"quota_kind\":\"seallink/count\",\"receipt_sha256\":\"836ce971beed97be745c4ab53e1f397e097983285a70faad58638af791ee0c39\",\"recorded_at\":1795220050,\"released\":\"0\",\"resource\":\"station:fleet:tools\",\"settled\":\"1\",\"unit\":\"calls\",\"window\":\"term\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"settlement\",\"pos\":6,\"prev_commitment\":\"48a001631da4cfff4ed6e68a7e0d6e557f35e236531317e0c327173dbfc27d54\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "f0b104b7cb42b302e8c8c55456d463fb0b869c9dcec68fb7f344fb5dd62ee2a8",
             "object": {
               "body": {
-                "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
-                "invocation_id": "c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6",
-                "receipt_sha256": "adcec041dd53e837e28ab694c041c14cc0b88d44590cc7c56f3813b079b0f096",
+                "account": "row",
+                "bucket_id": "term",
+                "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
+                "outcome": "executed",
+                "quota_kind": "seallink/count",
+                "receipt_sha256": "836ce971beed97be745c4ab53e1f397e097983285a70faad58638af791ee0c39",
+                "recorded_at": 1795220050,
+                "released": "0",
+                "resource": "station:fleet:tools",
+                "settled": "1",
+                "unit": "calls",
+                "window": "term"
+              },
+              "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
+              "kind": "settlement",
+              "pos": 6,
+              "prev_commitment": "48a001631da4cfff4ed6e68a7e0d6e557f35e236531317e0c327173dbfc27d54",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "f0b104b7cb42b302e8c8c55456d463fb0b869c9dcec68fb7f344fb5dd62ee2a8",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        },
+        {
+          "c_after": "a467fa45034373d003c50e4ddc65b9606cdbc132a60bab532a6ac8d46754bf70",
+          "c_before": "b7d2d501d45a1d340d733ee63534a665d0de424c645e9a587b935f3d6153b273",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"account\":\"own\",\"bucket_id\":\"term\",\"grant_id\":\"a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"outcome\":\"executed\",\"quota_kind\":\"seallink/bytes\",\"receipt_sha256\":\"836ce971beed97be745c4ab53e1f397e097983285a70faad58638af791ee0c39\",\"recorded_at\":1795220050,\"released\":\"64296\",\"resource\":\"station:fleet:tools\",\"settled\":\"1240\",\"unit\":\"bytes\",\"window\":\"term\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"settlement\",\"pos\":7,\"prev_commitment\":\"b7d2d501d45a1d340d733ee63534a665d0de424c645e9a587b935f3d6153b273\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "f96837ab3c3bb38968bedd7b435115a9fcd5743d199ae747b4852f2dbd13e45a",
+            "object": {
+              "body": {
+                "account": "own",
+                "bucket_id": "term",
+                "grant_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
+                "outcome": "executed",
+                "quota_kind": "seallink/bytes",
+                "receipt_sha256": "836ce971beed97be745c4ab53e1f397e097983285a70faad58638af791ee0c39",
+                "recorded_at": 1795220050,
+                "released": "64296",
+                "resource": "station:fleet:tools",
+                "settled": "1240",
+                "unit": "bytes",
+                "window": "term"
+              },
+              "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
+              "kind": "settlement",
+              "pos": 7,
+              "prev_commitment": "b7d2d501d45a1d340d733ee63534a665d0de424c645e9a587b935f3d6153b273",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "f96837ab3c3bb38968bedd7b435115a9fcd5743d199ae747b4852f2dbd13e45a",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        },
+        {
+          "c_after": "cdd2e67979ef9a47d69f75467f4aba411cbd14329414a1b4ad4e173fc1dee904",
+          "c_before": "a467fa45034373d003c50e4ddc65b9606cdbc132a60bab532a6ac8d46754bf70",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"account\":\"row\",\"bucket_id\":\"term\",\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"outcome\":\"executed\",\"quota_kind\":\"seallink/bytes\",\"receipt_sha256\":\"836ce971beed97be745c4ab53e1f397e097983285a70faad58638af791ee0c39\",\"recorded_at\":1795220050,\"released\":\"64296\",\"resource\":\"station:fleet:tools\",\"settled\":\"1240\",\"unit\":\"bytes\",\"window\":\"term\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"settlement\",\"pos\":8,\"prev_commitment\":\"a467fa45034373d003c50e4ddc65b9606cdbc132a60bab532a6ac8d46754bf70\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "5ceb9695e459e885f15c7c6567e2c8475f9893bd30f93fd854566e93ffa85a67",
+            "object": {
+              "body": {
+                "account": "row",
+                "bucket_id": "term",
+                "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
+                "outcome": "executed",
+                "quota_kind": "seallink/bytes",
+                "receipt_sha256": "836ce971beed97be745c4ab53e1f397e097983285a70faad58638af791ee0c39",
+                "recorded_at": 1795220050,
+                "released": "64296",
+                "resource": "station:fleet:tools",
+                "settled": "1240",
+                "unit": "bytes",
+                "window": "term"
+              },
+              "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
+              "kind": "settlement",
+              "pos": 8,
+              "prev_commitment": "a467fa45034373d003c50e4ddc65b9606cdbc132a60bab532a6ac8d46754bf70",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "5ceb9695e459e885f15c7c6567e2c8475f9893bd30f93fd854566e93ffa85a67",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        },
+        {
+          "c_after": "93214ebedd751ef0c70563f9d95eee9e68654452cf65e80d9ba8d18508d66ef6",
+          "c_before": "cdd2e67979ef9a47d69f75467f4aba411cbd14329414a1b4ad4e173fc1dee904",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"grant_id\":\"a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"receipt_sha256\":\"836ce971beed97be745c4ab53e1f397e097983285a70faad58638af791ee0c39\",\"recorded_at\":1795220050,\"use_txid\":\"f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"single-use-consumed\",\"pos\":9,\"prev_commitment\":\"cdd2e67979ef9a47d69f75467f4aba411cbd14329414a1b4ad4e173fc1dee904\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "a7dd9b017420807ca1973987edf1db421c8609466c5ade11716335e61156e806",
+            "object": {
+              "body": {
+                "grant_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
+                "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
+                "receipt_sha256": "836ce971beed97be745c4ab53e1f397e097983285a70faad58638af791ee0c39",
                 "recorded_at": 1795220050,
                 "use_txid": "f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb"
               },
               "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
               "kind": "single-use-consumed",
-              "pos": 3,
-              "prev_commitment": "6883688ad7922131d9ce86702adfc3dafce89de6e627cd5b5aff35f2b4ba0d73",
+              "pos": 9,
+              "prev_commitment": "cdd2e67979ef9a47d69f75467f4aba411cbd14329414a1b4ad4e173fc1dee904",
               "type": "seallink-journal-entry/1"
             },
-            "object_id": "44ee05ce689a47d02630aca7c06f231450f2ac9f0bbf37808ac1754f0627b9d7",
+            "object_id": "a7dd9b017420807ca1973987edf1db421c8609466c5ade11716335e61156e806",
             "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
           }
         },
         {
-          "c_after": "cd9067a9f3e58d762386b9add068b2fe65aa3d8f1d8fdfacf4cc68c55e16fa08",
-          "c_before": "404f5d2f682f6cbdf656f019c686bdcf88a6aa822ab70c2259810c0ce5482e3c",
+          "c_after": "f374f7e7ed3f9c9940e13b54e67b67cda081fc3908361aa6d695644677f10fca",
+          "c_before": "93214ebedd751ef0c70563f9d95eee9e68654452cf65e80d9ba8d18508d66ef6",
           "entry": {
-            "canonical_jcs": "{\"body\":{\"cause\":\"SINGLE_USE_CONSUMED\",\"observed_at\":1795220050,\"observed_height\":750110,\"spend_txid\":\"f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb\",\"subject_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"subject_kind\":\"grant\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"closure\",\"pos\":4,\"prev_commitment\":\"404f5d2f682f6cbdf656f019c686bdcf88a6aa822ab70c2259810c0ce5482e3c\",\"type\":\"seallink-journal-entry/1\"}",
-            "content_addr": "70e765af548b53824873b6727b17d0c1767b3df07bccc762d008bbc3f4776611",
+            "canonical_jcs": "{\"body\":{\"cause\":\"SINGLE_USE_CONSUMED\",\"observed_at\":1795220050,\"observed_height\":750110,\"spend_txid\":\"f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb\",\"subject_id\":\"a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893\",\"subject_kind\":\"grant\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"closure\",\"pos\":10,\"prev_commitment\":\"93214ebedd751ef0c70563f9d95eee9e68654452cf65e80d9ba8d18508d66ef6\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "b2fcff48f624026b8b817a93f24506e0989f803bd8cf058fec45672a8e7d986f",
             "object": {
               "body": {
                 "cause": "SINGLE_USE_CONSUMED",
                 "observed_at": 1795220050,
                 "observed_height": 750110,
                 "spend_txid": "f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb",
-                "subject_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+                "subject_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
                 "subject_kind": "grant"
               },
               "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
               "kind": "closure",
-              "pos": 4,
-              "prev_commitment": "404f5d2f682f6cbdf656f019c686bdcf88a6aa822ab70c2259810c0ce5482e3c",
+              "pos": 10,
+              "prev_commitment": "93214ebedd751ef0c70563f9d95eee9e68654452cf65e80d9ba8d18508d66ef6",
               "type": "seallink-journal-entry/1"
             },
-            "object_id": "70e765af548b53824873b6727b17d0c1767b3df07bccc762d008bbc3f4776611",
+            "object_id": "b2fcff48f624026b8b817a93f24506e0989f803bd8cf058fec45672a8e7d986f",
             "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
           }
         }
       ],
       "receipt": {
-        "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"executor_name\":\"id/station-a\",\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"invocation_id\":\"c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6\",\"network\":\"main\",\"outcome\":\"executed\",\"recorded_at\":1795220050,\"result_sha256\":\"7975eebac87e84bd0713f353e98dc46481932d01be5925b10b91c103239c8fc3\",\"settlements\":[{\"kind\":\"seallink/count\",\"released\":\"0\",\"reserved\":\"1\",\"resource\":\"station:fleet:tools\",\"settled\":\"1\",\"unit\":\"calls\"}],\"tip_hash\":\"a47486b303d37ef3b3e4ca1e8bc11be19885e04181379bd8f614866c6c526c4e\",\"tip_height\":750110,\"type\":\"seallink-receipt/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\"]},\"sigs\":[{\"pk\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"sig\":\"65533cc080d399eb34b4b802735a21fe595bbe62467dfd399e33a687e5deb67fd2c879d25da8248fdabec43d0a92238350063db379cff8ed1332683a5030e740\"}]}}",
-        "content_addr": "adcec041dd53e837e28ab694c041c14cc0b88d44590cc7c56f3813b079b0f096",
+        "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"executor_name\":\"id/station-a\",\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"grant_id\":\"a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893\",\"invocation_id\":\"9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410\",\"network\":\"main\",\"outcome\":\"executed\",\"recorded_at\":1795220050,\"result_sha256\":\"7975eebac87e84bd0713f353e98dc46481932d01be5925b10b91c103239c8fc3\",\"settlements\":[{\"account\":\"own\",\"kind\":\"seallink/count\",\"released\":\"0\",\"reserved\":\"1\",\"resource\":\"station:fleet:tools\",\"settled\":\"1\",\"unit\":\"calls\"},{\"account\":\"row\",\"kind\":\"seallink/count\",\"released\":\"0\",\"reserved\":\"1\",\"resource\":\"station:fleet:tools\",\"settled\":\"1\",\"unit\":\"calls\"},{\"account\":\"own\",\"kind\":\"seallink/bytes\",\"released\":\"64296\",\"reserved\":\"65536\",\"resource\":\"station:fleet:tools\",\"settled\":\"1240\",\"unit\":\"bytes\"},{\"account\":\"row\",\"kind\":\"seallink/bytes\",\"released\":\"64296\",\"reserved\":\"65536\",\"resource\":\"station:fleet:tools\",\"settled\":\"1240\",\"unit\":\"bytes\"}],\"tip_hash\":\"a47486b303d37ef3b3e4ca1e8bc11be19885e04181379bd8f614866c6c526c4e\",\"tip_height\":750110,\"type\":\"seallink-receipt/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\"]},\"sigs\":[{\"pk\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"sig\":\"160eef31c57a35c920ccd10f232737be0b22be4e1b38d9322537a3dc5ae4cb82bbb27074981b6e2b0e90a09dd5391eec2140a2db4d1d32dbda398e51b1c23027\"}]}}",
+        "content_addr": "836ce971beed97be745c4ab53e1f397e097983285a70faad58638af791ee0c39",
         "object": {
           "payload": {
             "action": "agent/tool",
             "executor_name": "id/station-a",
             "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
-            "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
-            "invocation_id": "c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6",
+            "grant_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
+            "invocation_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
             "network": "main",
             "outcome": "executed",
             "recorded_at": 1795220050,
             "result_sha256": "7975eebac87e84bd0713f353e98dc46481932d01be5925b10b91c103239c8fc3",
             "settlements": [
               {
+                "account": "own",
                 "kind": "seallink/count",
                 "released": "0",
                 "reserved": "1",
                 "resource": "station:fleet:tools",
                 "settled": "1",
                 "unit": "calls"
+              },
+              {
+                "account": "row",
+                "kind": "seallink/count",
+                "released": "0",
+                "reserved": "1",
+                "resource": "station:fleet:tools",
+                "settled": "1",
+                "unit": "calls"
+              },
+              {
+                "account": "own",
+                "kind": "seallink/bytes",
+                "released": "64296",
+                "reserved": "65536",
+                "resource": "station:fleet:tools",
+                "settled": "1240",
+                "unit": "bytes"
+              },
+              {
+                "account": "row",
+                "kind": "seallink/bytes",
+                "released": "64296",
+                "reserved": "65536",
+                "resource": "station:fleet:tools",
+                "settled": "1240",
+                "unit": "bytes"
               }
             ],
             "tip_hash": "a47486b303d37ef3b3e4ca1e8bc11be19885e04181379bd8f614866c6c526c4e",
@@ -319,17 +784,15 @@
             "sigs": [
               {
                 "pk": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
-                "sig": "65533cc080d399eb34b4b802735a21fe595bbe62467dfd399e33a687e5deb67fd2c879d25da8248fdabec43d0a92238350063db379cff8ed1332683a5030e740"
+                "sig": "160eef31c57a35c920ccd10f232737be0b22be4e1b38d9322537a3dc5ae4cb82bbb27074981b6e2b0e90a09dd5391eec2140a2db4d1d32dbda398e51b1c23027"
               }
             ]
           }
         },
-        "object_id": "a8498cb90f782603bb73404a980fe0cb5e9e8594c2171d54673841d2b2d78c85",
+        "object_id": "5a350cea4a2bed63b9a9d95868c2bf83faaded565dd0e3dadbdc7b0eeb28757e",
         "schema": "schemas/invocation.schema.json#/$defs/Receipt",
-        "signing_digest": "bc336a91bbdab263b6667eb12417ab054b61ca9c0e7da2d488fa9d02550df287"
+        "signing_digest": "6af66598f545da8b41d4e2ed90db135da72f6a248b37e6d20b0532771a6270cd"
       },
-      "remaining_pool_calls": 9,
-      "remaining_row_1_calls": 1,
       "result_object": {
         "canonical_jcs": "{\"exit_code\":0,\"output_bytes\":\"1240\",\"output_sha256\":\"ebb3cc77aa854c74035a918d6b8a012e2e8ea78037f8de783ede81bc16f04567\",\"tool_name\":\"pytest\"}",
         "content_addr": "7975eebac87e84bd0713f353e98dc46481932d01be5925b10b91c103239c8fc3",
@@ -347,8 +810,8 @@
       "expected_refusal": "WIRE_SIGNATURE",
       "expected_verdict": "REFUSE",
       "invocation": {
-        "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"bddecd2312ddae203164ca7c3f51766c7eaf5e7ef47d5429d807263ac1d569e6\",\"max_output_bytes\":\"65536\",\"tool_name\":\"pytest\"},\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"network\":\"main\",\"nonce\":\"e30bd0c99a897592eb735ae9b9e2b1a707a9bedabd756a77e1216d51c9770e21\",\"proof_path\":[{\"grant_id\":\"7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"issuance_txid\":\"3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"06ddcafb315ec001d25c5671b546466d655196ee844b980125ad0fd8c7148fc8\"]},\"sigs\":[{\"pk\":\"06ddcafb315ec001d25c5671b546466d655196ee844b980125ad0fd8c7148fc8\",\"sig\":\"f21bc23673ab88a1fdc064a291dba76476657ad7e9bb0930090df1d149edda0fbdb652a779479e6e7b489a00b6547d62ae071a6357801c4d86fe04e3128167e4\"}]}}",
-        "content_addr": "fd8b3705a819bfa3f05f0c2603b403cfc93a4359d368fd35eab69d84ebdb111a",
+        "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"bddecd2312ddae203164ca7c3f51766c7eaf5e7ef47d5429d807263ac1d569e6\",\"max_output_bytes\":\"65536\",\"tool_name\":\"pytest\"},\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"network\":\"main\",\"nonce\":\"e30bd0c99a897592eb735ae9b9e2b1a707a9bedabd756a77e1216d51c9770e21\",\"proof_path\":[{\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893\",\"issuance_txid\":\"3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"06ddcafb315ec001d25c5671b546466d655196ee844b980125ad0fd8c7148fc8\"]},\"sigs\":[{\"pk\":\"06ddcafb315ec001d25c5671b546466d655196ee844b980125ad0fd8c7148fc8\",\"sig\":\"c05a25cc543abf3083a1b28e29dfb677edf1752e3ae5de913e1f0caed73c609bee5d51f5da41113e0aee87dd1d6b78fac0b1a1a32c271b57c8a4bddb28e39fc8\"}]}}",
+        "content_addr": "95d31b4741e7cd13372af1b00d6e449b0f2ae683928ce0f6fa8d49d4f046af43",
         "object": {
           "payload": {
             "action": "agent/tool",
@@ -368,11 +831,11 @@
             "nonce": "e30bd0c99a897592eb735ae9b9e2b1a707a9bedabd756a77e1216d51c9770e21",
             "proof_path": [
               {
-                "grant_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+                "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
                 "issuance_txid": "584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc"
               },
               {
-                "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+                "grant_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
                 "issuance_txid": "3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7"
               }
             ],
@@ -389,19 +852,19 @@
             "sigs": [
               {
                 "pk": "06ddcafb315ec001d25c5671b546466d655196ee844b980125ad0fd8c7148fc8",
-                "sig": "f21bc23673ab88a1fdc064a291dba76476657ad7e9bb0930090df1d149edda0fbdb652a779479e6e7b489a00b6547d62ae071a6357801c4d86fe04e3128167e4"
+                "sig": "c05a25cc543abf3083a1b28e29dfb677edf1752e3ae5de913e1f0caed73c609bee5d51f5da41113e0aee87dd1d6b78fac0b1a1a32c271b57c8a4bddb28e39fc8"
               }
             ]
           }
         },
-        "object_id": "c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6",
+        "object_id": "9bbebe139ff00b48eeca5a3b67bcd9e0b34e496c4f6a136751f389348fc45410",
         "schema": "schemas/invocation.schema.json#/$defs/Invocation",
-        "signing_digest": "b443e29356fb17b70dabd38106f9b58d3050a029039ae9ff42bcb440ac954a81"
+        "signing_digest": "ce45dc9e2d85f3146d2d53d33cfe073198a6df09709fe2c90f51cd60d1cec3d3"
       },
       "note": "Proves SPEC-06 §4 Step 3b recipient authentication executes BEFORE Step 3c cached-receipt lookup."
     },
     "step_e_authenticated_replay_same_invocation_id": {
-      "cached_receipt_content_addr": "adcec041dd53e837e28ab694c041c14cc0b88d44590cc7c56f3813b079b0f096",
+      "cached_receipt_content_addr": "836ce971beed97be745c4ab53e1f397e097983285a70faad58638af791ee0c39",
       "expected_behavior": "RETURN_CACHED_RECEIPT_ZERO_SECOND_EFFECT",
       "expected_verdict": "ADMIT"
     },
@@ -412,8 +875,8 @@
       "expected_refusal": "INVOKE_REPLAY",
       "expected_verdict": "REFUSE",
       "invocation": {
-        "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"bddecd2312ddae203164ca7c3f51766c7eaf5e7ef47d5429d807263ac1d569e6\",\"max_output_bytes\":\"65536\",\"tool_name\":\"pytest\"},\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220100,\"network\":\"main\",\"nonce\":\"61be149a5a816042666ef77a452f632fdda320aeca5e156c32e9a424dcd7a83d\",\"proof_path\":[{\"grant_id\":\"7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"issuance_txid\":\"3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\"]},\"sigs\":[{\"pk\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"sig\":\"391b2114263349fcc30dbe2e430b083371f369062746dec360ffb5531a26d5a0cca8ea76d50f3655931f9ee904430d732f17689fdf6d9640be3f4816dc5a9a5e\"}]}}",
-        "content_addr": "fce873a45d8311778612faa54a692388038c8a4e30caa98ba302a63e9e519da2",
+        "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"bddecd2312ddae203164ca7c3f51766c7eaf5e7ef47d5429d807263ac1d569e6\",\"max_output_bytes\":\"65536\",\"tool_name\":\"pytest\"},\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220100,\"network\":\"main\",\"nonce\":\"61be149a5a816042666ef77a452f632fdda320aeca5e156c32e9a424dcd7a83d\",\"proof_path\":[{\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893\",\"issuance_txid\":\"3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\"]},\"sigs\":[{\"pk\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"sig\":\"b265ac20e62d3c2dd353b48f2ae087761fdb2f7461e7d885bb486b9ccf030863c5fd1e18bd9eecea0228520c87d9dd20f41c16c94037d0643b1167da0f18aa04\"}]}}",
+        "content_addr": "1ea116224ad3b22b12b32f7cae759fd5fb85554a8f5c5eb2cd960396dc6e29a1",
         "object": {
           "payload": {
             "action": "agent/tool",
@@ -433,11 +896,11 @@
             "nonce": "61be149a5a816042666ef77a452f632fdda320aeca5e156c32e9a424dcd7a83d",
             "proof_path": [
               {
-                "grant_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+                "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
                 "issuance_txid": "584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc"
               },
               {
-                "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+                "grant_id": "a4d715f4e67ef77d3c91e20f387367eb90cd74169b0c46890d3e9b0b8b938893",
                 "issuance_txid": "3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7"
               }
             ],
@@ -454,33 +917,33 @@
             "sigs": [
               {
                 "pk": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
-                "sig": "391b2114263349fcc30dbe2e430b083371f369062746dec360ffb5531a26d5a0cca8ea76d50f3655931f9ee904430d732f17689fdf6d9640be3f4816dc5a9a5e"
+                "sig": "b265ac20e62d3c2dd353b48f2ae087761fdb2f7461e7d885bb486b9ccf030863c5fd1e18bd9eecea0228520c87d9dd20f41c16c94037d0643b1167da0f18aa04"
               }
             ]
           }
         },
-        "object_id": "5fe0e115b9c38ec757ce6ddbb09b68ebbda3044b9f6d7fabe8d16ac83e5613ba",
+        "object_id": "da5d6bf7cf9eea750734215d7396d38f42e0bde2d6543a3d254b83de5042c0b0",
         "schema": "schemas/invocation.schema.json#/$defs/Invocation",
-        "signing_digest": "1625ec43766f3d4aa2869f84618943ec3e6b3fbe46e3f46c225e52041700015e"
+        "signing_digest": "2c90a09e5217af665179b4c6ebaf55d0894bc18565449b90de30e2e21426244a"
       }
     },
-    "use_opreturn_0x11_hex": "6a05534c4e4b11220192f9d2d9dcd6354ce04cea40a79e95666565024d3cde89e80ba3e4ad1315ce1c00",
+    "use_opreturn_0x11_hex": "6a05534c4e4b112201f490d54adaa292a201568c45eafcbf3a1f3e00b53ee51c0714d55a5ac68b4b4800",
     "use_txid_wrapper": "f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb"
   },
   "child_2_issuer_revocation": {
     "closure_journal_write": {
-      "c_after": "77b6a144ba7d0822fea6dfaba6dc5ce999ba17c2116fae9de53532b3848fe2c4",
+      "c_after": "ea0862c1b4733a0457880f17187f8a92710da8238c7166687f49cb0ccf1e2159",
       "c_before": "4e816aadea07bd72574c7052bac8204fb3b1f8fca9ccd1ae2290723bf48e9a73",
       "entry": {
-        "canonical_jcs": "{\"body\":{\"cause\":\"SEAL_SPENT\",\"observed_at\":1795220050,\"observed_height\":750110,\"spend_txid\":\"3be06158c89e034a609651d496ab202ca4c87af1ac5563769a81fcdd54f39508\",\"subject_id\":\"c492013fba4c18bca14c5931571b90e60fc00bdcd9f6121ce7f8972123b15aaf\",\"subject_kind\":\"grant\"},\"journal_id\":\"fa4c01896fbd3c1d2ccfab1bcc59ec91fb417320f260718ada19b6c2706185bc\",\"kind\":\"closure\",\"pos\":1,\"prev_commitment\":\"4e816aadea07bd72574c7052bac8204fb3b1f8fca9ccd1ae2290723bf48e9a73\",\"type\":\"seallink-journal-entry/1\"}",
-        "content_addr": "8d8245ac1aca9ae42809e467eb77dad93b168daf21a22577ca051d2f563b3720",
+        "canonical_jcs": "{\"body\":{\"cause\":\"SEAL_SPENT\",\"observed_at\":1795220050,\"observed_height\":750110,\"spend_txid\":\"3be06158c89e034a609651d496ab202ca4c87af1ac5563769a81fcdd54f39508\",\"subject_id\":\"5b40ba7e9a6f7e3a585646d44d54592a021ec64041a63ab8c27c1ae83fb27081\",\"subject_kind\":\"grant\"},\"journal_id\":\"fa4c01896fbd3c1d2ccfab1bcc59ec91fb417320f260718ada19b6c2706185bc\",\"kind\":\"closure\",\"pos\":1,\"prev_commitment\":\"4e816aadea07bd72574c7052bac8204fb3b1f8fca9ccd1ae2290723bf48e9a73\",\"type\":\"seallink-journal-entry/1\"}",
+        "content_addr": "d1dcb6bb4207c748c501aa59594e264e04862f288a756c207bfdf8b0ca64db30",
         "object": {
           "body": {
             "cause": "SEAL_SPENT",
             "observed_at": 1795220050,
             "observed_height": 750110,
             "spend_txid": "3be06158c89e034a609651d496ab202ca4c87af1ac5563769a81fcdd54f39508",
-            "subject_id": "c492013fba4c18bca14c5931571b90e60fc00bdcd9f6121ce7f8972123b15aaf",
+            "subject_id": "5b40ba7e9a6f7e3a585646d44d54592a021ec64041a63ab8c27c1ae83fb27081",
             "subject_kind": "grant"
           },
           "journal_id": "fa4c01896fbd3c1d2ccfab1bcc59ec91fb417320f260718ada19b6c2706185bc",
@@ -489,13 +952,13 @@
           "prev_commitment": "4e816aadea07bd72574c7052bac8204fb3b1f8fca9ccd1ae2290723bf48e9a73",
           "type": "seallink-journal-entry/1"
         },
-        "object_id": "8d8245ac1aca9ae42809e467eb77dad93b168daf21a22577ca051d2f563b3720",
+        "object_id": "d1dcb6bb4207c748c501aa59594e264e04862f288a756c207bfdf8b0ca64db30",
         "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
       }
     },
     "first_invocation": {
-      "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"367ad8651642313ceb7fd7cbc3f23b3585ee212b99937ccb37a45f9138c96155\",\"max_output_bytes\":\"4096\",\"tool_name\":\"lint\"},\"executor\":{\"key\":\"91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21\",\"name\":\"id/station-b\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"network\":\"main\",\"nonce\":\"ccf5441873bb7ad71305122f47dfe693d451815e8146d4c84c4bd22e9112a068\",\"proof_path\":[{\"grant_id\":\"7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"c492013fba4c18bca14c5931571b90e60fc00bdcd9f6121ce7f8972123b15aaf\",\"issuance_txid\":\"167673cf4290e6424c9c4fd7eb049e8fd39ac22478a58b66dd9eab17fb003e72\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\"]},\"sigs\":[{\"pk\":\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\",\"sig\":\"ea9ffca8ed8f1ed7dc87f7f2ccbcdad9f41b940b86022bfa7c10af25e781aabb0317c4bb73ff16befc8ce1380fd4cbee0239fdf0e60f4cb24ed64fab6a8bffff\"}]}}",
-      "content_addr": "1b14162a69494586d134f27892653134d3c26a2488b54fa2dc1b844c588e90eb",
+      "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"367ad8651642313ceb7fd7cbc3f23b3585ee212b99937ccb37a45f9138c96155\",\"max_output_bytes\":\"4096\",\"tool_name\":\"lint\"},\"executor\":{\"key\":\"91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21\",\"name\":\"id/station-b\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"network\":\"main\",\"nonce\":\"ccf5441873bb7ad71305122f47dfe693d451815e8146d4c84c4bd22e9112a068\",\"proof_path\":[{\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"5b40ba7e9a6f7e3a585646d44d54592a021ec64041a63ab8c27c1ae83fb27081\",\"issuance_txid\":\"167673cf4290e6424c9c4fd7eb049e8fd39ac22478a58b66dd9eab17fb003e72\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\"]},\"sigs\":[{\"pk\":\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\",\"sig\":\"b2427a899f713ee02586749378661519000021bdcd97ac778e3ee2f12b1acb189bf8c1baf735e523ef56081d0ddf18a8c6ef4a28ef621ee488b1bd1f0cfa3cff\"}]}}",
+      "content_addr": "1584b0c9ef5a2c3298f1f6ee40597faefecea19895d3d74f04c73b8bd0fd8cc1",
       "object": {
         "payload": {
           "action": "agent/tool",
@@ -515,11 +978,11 @@
           "nonce": "ccf5441873bb7ad71305122f47dfe693d451815e8146d4c84c4bd22e9112a068",
           "proof_path": [
             {
-              "grant_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+              "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
               "issuance_txid": "584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc"
             },
             {
-              "grant_id": "c492013fba4c18bca14c5931571b90e60fc00bdcd9f6121ce7f8972123b15aaf",
+              "grant_id": "5b40ba7e9a6f7e3a585646d44d54592a021ec64041a63ab8c27c1ae83fb27081",
               "issuance_txid": "167673cf4290e6424c9c4fd7eb049e8fd39ac22478a58b66dd9eab17fb003e72"
             }
           ],
@@ -536,19 +999,19 @@
           "sigs": [
             {
               "pk": "e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9",
-              "sig": "ea9ffca8ed8f1ed7dc87f7f2ccbcdad9f41b940b86022bfa7c10af25e781aabb0317c4bb73ff16befc8ce1380fd4cbee0239fdf0e60f4cb24ed64fab6a8bffff"
+              "sig": "b2427a899f713ee02586749378661519000021bdcd97ac778e3ee2f12b1acb189bf8c1baf735e523ef56081d0ddf18a8c6ef4a28ef621ee488b1bd1f0cfa3cff"
             }
           ]
         }
       },
-      "object_id": "19b259550cbf36e4ee3fb65c1e15ddc81e6226ffc5b6a0deefc79c1c77aaee94",
+      "object_id": "7a1e300580a6c0467ed5c697c3f9da0ca90b0adfcb63d0a0a022b44f45dfc0f3",
       "schema": "schemas/invocation.schema.json#/$defs/Invocation",
-      "signing_digest": "b02ffcc40fdda5b47acdbb9973a04cd4a8347bb6711ca548ef011b3ee52ae9a5"
+      "signing_digest": "c4d16a1f0542b9c2ed4ccdb32d3bc4bcf1bbb84b9c990954cb41dc0c4932a906"
     },
     "first_observation_refusal": "SEAL_SPENT",
     "grant": {
-      "canonical_jcs": "{\"payload\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"1\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"eq\":\"lint\"}}}],\"executor\":{\"key\":\"91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21\",\"name\":\"id/station-b\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"network\":\"main\",\"not_after_height\":755000,\"not_before_height\":750100,\"parent\":{\"grant_id\":\"7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d\",\"ordinal\":4},\"recent_block\":\"28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35\",\"recipient\":{\"key\":\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\",\"mode\":\"key\"},\"revocation\":{\"construction\":\"W\",\"kind\":\"single_use\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"keys\":{\"grantee\":\"0231de5154396580bb2d064f6a38b2db30c6bfb828236b5bc2aa9798133eab7b79\",\"issuer\":\"0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001\"},\"kind\":\"branch\",\"template\":\"single_use_1_of_2\"},\"txid\":\"3b278d33edc40823e29765a2bb58e477a287e728de657a79ee45950edee661a8\",\"vout\":0}},\"type\":\"seallink-grant/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\"]},\"sigs\":[{\"pk\":\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\",\"sig\":\"a7ce46e6654157fd18d38c83b56a007389caa5f234f3cc6a35547ecff55e6c6a5eb893f85269eee62402991978ecee119a76bc165a70cadacfd5144dd1f03801\"}]}}",
-      "content_addr": "8d90eb68ac1a5e233a5bac4ecfcf2ac6ce950711c8f3b9b2c0a42253917c8b9e",
+      "canonical_jcs": "{\"payload\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"1\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},{\"kind\":\"seallink/bytes\",\"max\":\"100000\",\"resource\":\"station:fleet:tools\",\"unit\":\"bytes\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"eq\":\"lint\"}}}],\"executor\":{\"key\":\"91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21\",\"name\":\"id/station-b\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"network\":\"main\",\"not_after_height\":755000,\"not_before_height\":750100,\"parent\":{\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"ordinal\":4},\"recent_block\":\"28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35\",\"recipient\":{\"key\":\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\",\"mode\":\"key\"},\"revocation\":{\"construction\":\"W\",\"kind\":\"single_use\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"keys\":{\"grantee\":\"0231de5154396580bb2d064f6a38b2db30c6bfb828236b5bc2aa9798133eab7b79\",\"issuer\":\"0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001\"},\"kind\":\"branch\",\"template\":\"single_use_1_of_2\"},\"txid\":\"3b278d33edc40823e29765a2bb58e477a287e728de657a79ee45950edee661a8\",\"vout\":0}},\"type\":\"seallink-grant/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\"]},\"sigs\":[{\"pk\":\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\",\"sig\":\"5bffed4629e44fcd70d4ea75c9c8a6e555d6d008776162408765df5eb561eb5992196ed6ac84b27c0992966fc7454bad86b2fe100dd220481ac0b137bdca8aff\"}]}}",
+      "content_addr": "3697d5de90114e08c217da8a4b80ed96b213278fa9f042ec258bc2aee512cad6",
       "object": {
         "payload": {
           "capabilities": [
@@ -560,6 +1023,13 @@
                   "max": "1",
                   "resource": "station:fleet:tools",
                   "unit": "calls",
+                  "window": "term"
+                },
+                {
+                  "kind": "seallink/bytes",
+                  "max": "100000",
+                  "resource": "station:fleet:tools",
+                  "unit": "bytes",
                   "window": "term"
                 }
               ],
@@ -580,7 +1050,7 @@
           "not_after_height": 755000,
           "not_before_height": 750100,
           "parent": {
-            "grant_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+            "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
             "ordinal": 4
           },
           "recent_block": "28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35",
@@ -617,19 +1087,19 @@
           "sigs": [
             {
               "pk": "e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6",
-              "sig": "a7ce46e6654157fd18d38c83b56a007389caa5f234f3cc6a35547ecff55e6c6a5eb893f85269eee62402991978ecee119a76bc165a70cadacfd5144dd1f03801"
+              "sig": "5bffed4629e44fcd70d4ea75c9c8a6e555d6d008776162408765df5eb561eb5992196ed6ac84b27c0992966fc7454bad86b2fe100dd220481ac0b137bdca8aff"
             }
           ]
         }
       },
-      "object_id": "c492013fba4c18bca14c5931571b90e60fc00bdcd9f6121ce7f8972123b15aaf",
+      "object_id": "5b40ba7e9a6f7e3a585646d44d54592a021ec64041a63ab8c27c1ae83fb27081",
       "schema": "schemas/grant.schema.json",
-      "signing_digest": "02d27e4e54eca5031e8cd5ebbc141ebb777c54212437d0d15550fac9eb18bc00"
+      "signing_digest": "9d3abaae85326b0f09624edf50304740a03ec730b7a42f095bbf92335c6d4bad"
     },
     "issuer_branch_1_spend_txid": "3be06158c89e034a609651d496ab202ca4c87af1ac5563769a81fcdd54f39508",
     "subsequent_invocation": {
-      "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"367ad8651642313ceb7fd7cbc3f23b3585ee212b99937ccb37a45f9138c96155\",\"max_output_bytes\":\"4096\",\"tool_name\":\"lint\"},\"executor\":{\"key\":\"91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21\",\"name\":\"id/station-b\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"network\":\"main\",\"nonce\":\"d10a2017c9e12d2a407083a5678a9ea2f62f54b1447a887e25609d709196dbe8\",\"proof_path\":[{\"grant_id\":\"7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"c492013fba4c18bca14c5931571b90e60fc00bdcd9f6121ce7f8972123b15aaf\",\"issuance_txid\":\"167673cf4290e6424c9c4fd7eb049e8fd39ac22478a58b66dd9eab17fb003e72\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\"]},\"sigs\":[{\"pk\":\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\",\"sig\":\"aa0a6abd11e20e0df26cfb66e54f8ece0aa562677c7ddee65189239c173abb795369cc43180431779f0639ada13b667c326442ff41c5cb4962326f83c9e490f1\"}]}}",
-      "content_addr": "d7d49bf4d4a2bfb258e16919e5a99679ca1675216b2c23f55f7e6fe39ead09a9",
+      "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"367ad8651642313ceb7fd7cbc3f23b3585ee212b99937ccb37a45f9138c96155\",\"max_output_bytes\":\"4096\",\"tool_name\":\"lint\"},\"executor\":{\"key\":\"91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21\",\"name\":\"id/station-b\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"network\":\"main\",\"nonce\":\"d10a2017c9e12d2a407083a5678a9ea2f62f54b1447a887e25609d709196dbe8\",\"proof_path\":[{\"grant_id\":\"b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"5b40ba7e9a6f7e3a585646d44d54592a021ec64041a63ab8c27c1ae83fb27081\",\"issuance_txid\":\"167673cf4290e6424c9c4fd7eb049e8fd39ac22478a58b66dd9eab17fb003e72\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\"]},\"sigs\":[{\"pk\":\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\",\"sig\":\"4d019eab74aec76c4b9487a18e509fecf4e2b356e4f34c40d4c11c393cfdff003bda691e450aa3ab275f5196180008a94cd26ad9e1e7a34a90df5de367f4aac8\"}]}}",
+      "content_addr": "1a171a02a1c0732ba16821988b12dbe42045ecd896c7ae3737bd779e8597f9a4",
       "object": {
         "payload": {
           "action": "agent/tool",
@@ -649,11 +1119,11 @@
           "nonce": "d10a2017c9e12d2a407083a5678a9ea2f62f54b1447a887e25609d709196dbe8",
           "proof_path": [
             {
-              "grant_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+              "grant_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
               "issuance_txid": "584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc"
             },
             {
-              "grant_id": "c492013fba4c18bca14c5931571b90e60fc00bdcd9f6121ce7f8972123b15aaf",
+              "grant_id": "5b40ba7e9a6f7e3a585646d44d54592a021ec64041a63ab8c27c1ae83fb27081",
               "issuance_txid": "167673cf4290e6424c9c4fd7eb049e8fd39ac22478a58b66dd9eab17fb003e72"
             }
           ],
@@ -670,14 +1140,14 @@
           "sigs": [
             {
               "pk": "e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9",
-              "sig": "aa0a6abd11e20e0df26cfb66e54f8ece0aa562677c7ddee65189239c173abb795369cc43180431779f0639ada13b667c326442ff41c5cb4962326f83c9e490f1"
+              "sig": "4d019eab74aec76c4b9487a18e509fecf4e2b356e4f34c40d4c11c393cfdff003bda691e450aa3ab275f5196180008a94cd26ad9e1e7a34a90df5de367f4aac8"
             }
           ]
         }
       },
-      "object_id": "a10583b005a4a2ff768ff9060136e2f490b7bbc2a87a2dd1ce5688d049ade830",
+      "object_id": "d4afaf7009e431c364179127157964011fbe12c0815333a8b277ee4dc847e8b9",
       "schema": "schemas/invocation.schema.json#/$defs/Invocation",
-      "signing_digest": "c7672d6cced124f9cc4e11dc48404a359b94c89ea1b767124151ca6dc6654208"
+      "signing_digest": "214b8a5d371ab44cc79dcb2e9c419234ebe1eb763636ac247f0f802f051b4ada"
     },
     "subsequent_request_refusal": "GRANT_CLOSED"
   },
@@ -689,7 +1159,7 @@
       }
     }
   },
-  "description": "Executable RFC 8448-style trace: parent delegation with 2 groups sharing 1 pool (R8.5 & R8.6 positive/negative), acyclic single-use branch-0 execution (0x11), crash-in-effect-window uncertain recovery, Step 3b auth-before-cache check, authenticated replay idempotency, new-nonce replay refusal, and issuer branch-1 revocation.",
+  "description": "Executable RFC 8448-style trace: parent delegation with 2 groups sharing 2-unit pools (R8.5 & R8.6 positive/negative), atomic dual-account (own + row) multi-quota reservation/settlement & rollback, acyclic single-use branch-0 execution (0x11), crash-in-effect-window uncertain recovery across journal reconstruction, Step 3b auth-before-cache check, authenticated replay idempotency, new-nonce replay refusal, and issuer branch-1 revocation.",
   "initial_chain_state": {
     "blocks": {
       "28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35": 750000
@@ -704,18 +1174,46 @@
     "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
     "names": {
       "id/org-treasury": {
-        "expiry_height": 780000,
-        "history_available": true,
-        "owner_policy": {
-          "kind": "key",
-          "pk": "0213b86cf475c9aa5c926358d51ac9b60161bd0726faf62de016da591da76bd0f2"
-        },
         "registration": {
           "txid": "285be97a9064e873cf5bcde9e51cb48fd85ba24b8db77183c08995d9662f60ed",
           "vout": 0
         },
-        "value_raw": "{\"link\":{\"grant\":\"e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833\"}}",
-        "writer_verified": true
+        "updates": [
+          {
+            "confirmed_height": 748000,
+            "op": "NAME_FIRSTUPDATE",
+            "output_script_hex": "520f69642f6f72672d74726561737572791480b2adfd2b1922cf60fd443cee838f25743f40eb4c557b226c696e6b223a7b226772616e74223a2265346364666539613866393963343436383130366330373065613634613561373864353361346235316632376231366565323334313434646466333337383333227d7d6d6d0014b8b5ecf9a8ed0966c37475cde69a9d3ba49cfda8",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0213b86cf475c9aa5c926358d51ac9b60161bd0726faf62de016da591da76bd0f2"
+            },
+            "prev_input": null,
+            "txid": "285be97a9064e873cf5bcde9e51cb48fd85ba24b8db77183c08995d9662f60ed",
+            "vout": 0
+          },
+          {
+            "confirmed_height": 749000,
+            "op": "NAME_UPDATE",
+            "output_script_hex": "530f69642f6f72672d74726561737572794c557b226c696e6b223a7b226772616e74223a2265346364666539613866393963343436383130366330373065613634613561373864353361346235316632376231366565323334313434646466333337383333227d7d6d750014b8b5ecf9a8ed0966c37475cde69a9d3ba49cfda8",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0213b86cf475c9aa5c926358d51ac9b60161bd0726faf62de016da591da76bd0f2"
+            },
+            "prev_input": {
+              "sighash_bytes": [
+                1
+              ],
+              "txid": "285be97a9064e873cf5bcde9e51cb48fd85ba24b8db77183c08995d9662f60ed",
+              "vout": 0,
+              "witness_policy": {
+                "kind": "key",
+                "pk": "0213b86cf475c9aa5c926358d51ac9b60161bd0726faf62de016da591da76bd0f2"
+              }
+            },
+            "txid": "88589a79cc27ef918456ba313d187992a86237902c08e79c6720d1bbe01ef76e",
+            "vout": 0
+          }
+        ]
       }
     },
     "network": "main",
@@ -727,71 +1225,225 @@
     "txs": {
       "05f147a75e3010a398dda4ee58621bd7b1e5227765b2c1ac0dd30e8946a91ad6": {
         "confirmed_height": 750101,
+        "inputs": [
+          {
+            "prev_txid": "8c10bcf60fa48bba614b26e6e42f7bfd850c62568a06ee79bc9f0a7f9f7bc1de",
+            "prev_vout": 0,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          }
+        ],
         "outputs": {
           "0": {
             "script_pubkey_hex": "0020c4c8f8090de84b19deef915970ea5d87a57b69dfd809ffd5a9964b63b96eee2d",
-            "spend_branch": 0,
             "spent_by_txid": "f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb"
+          },
+          "1": {
+            "script_pubkey_hex": "0014b8b5ecf9a8ed0966c37475cde69a9d3ba49cfda8"
           }
-        },
-        "segwit_w": true
+        }
       },
       "167673cf4290e6424c9c4fd7eb049e8fd39ac22478a58b66dd9eab17fb003e72": {
         "confirmed_height": 750102,
-        "opreturn_hex": "6a05534c4e4b012201a7a812e1e3bba3649127d8bf60896f14ecaf6c27a4fa8106600de12f0208c50600",
-        "outputs": {},
-        "segwit_w": true,
-        "spent_outpoints": [
-          "3b280b9cbb38bfb86844302c4290c8da512b960ba162932e9bb114661f77ef84:0"
-        ]
+        "inputs": [
+          {
+            "prev_txid": "3b280b9cbb38bfb86844302c4290c8da512b960ba162932e9bb114661f77ef84",
+            "prev_vout": 0,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          },
+          {
+            "prev_txid": "3b278d33edc40823e29765a2bb58e477a287e728de657a79ee45950edee661a8",
+            "prev_vout": 1,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          }
+        ],
+        "opreturn_hex": "6a05534c4e4b01220108dedb9b6a6053dd0cd01bb8e3870a3673192e63a350869fc0bf406da8ad6aa200",
+        "outputs": {}
       },
       "3b278d33edc40823e29765a2bb58e477a287e728de657a79ee45950edee661a8": {
         "confirmed_height": 750101,
+        "inputs": [
+          {
+            "prev_txid": "02bf0b05ae39694bc4d3fab28ea8eba58dd3bfb170a2ffea686e26dbed341e73",
+            "prev_vout": 0,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          }
+        ],
         "outputs": {
           "0": {
             "script_pubkey_hex": "00200460af9b882a79211f654979ef088401f82b05872290be1de396f6761901622a",
-            "spend_branch": 1,
             "spent_by_txid": "3be06158c89e034a609651d496ab202ca4c87af1ac5563769a81fcdd54f39508"
+          },
+          "1": {
+            "script_pubkey_hex": "0014b8b5ecf9a8ed0966c37475cde69a9d3ba49cfda8"
           }
-        },
-        "segwit_w": true
+        }
+      },
+      "3be06158c89e034a609651d496ab202ca4c87af1ac5563769a81fcdd54f39508": {
+        "confirmed_height": null,
+        "inputs": [
+          {
+            "prev_txid": "3b278d33edc40823e29765a2bb58e477a287e728de657a79ee45950edee661a8",
+            "prev_vout": 0,
+            "script_sig_hex": "",
+            "witness": [
+              "3044111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111101",
+              "01",
+              "63210333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001ac67210231de5154396580bb2d064f6a38b2db30c6bfb828236b5bc2aa9798133eab7b79ac68"
+            ]
+          }
+        ],
+        "mempool": true,
+        "outputs": {}
       },
       "3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7": {
         "confirmed_height": 750102,
-        "opreturn_hex": "6a05534c4e4b0122016df31f0453cc6665362d1e047daa825a4090f0fb13c0ba222065fc896daefbcb00",
-        "outputs": {},
-        "segwit_w": true,
-        "spent_outpoints": [
-          "fd4d9417f34d3f8eaaf12c57f9ccf6b8903c076265a5782b9e54939cd82c1732:0"
-        ]
+        "inputs": [
+          {
+            "prev_txid": "fd4d9417f34d3f8eaaf12c57f9ccf6b8903c076265a5782b9e54939cd82c1732",
+            "prev_vout": 0,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          },
+          {
+            "prev_txid": "05f147a75e3010a398dda4ee58621bd7b1e5227765b2c1ac0dd30e8946a91ad6",
+            "prev_vout": 1,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          }
+        ],
+        "opreturn_hex": "6a05534c4e4b01220124715726e0b58c3c2185b02d8bfea1ba1fbfb6607b0788cb8e29948020256d6100",
+        "outputs": {}
       },
       "584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc": {
         "confirmed_height": 750005,
-        "opreturn_hex": "6a05534c4e4b0122011981f66c568ce0c81e3c55b4bc42e5afc7357b89e5866f8c149ee36ca69a657c00",
-        "outputs": {},
-        "segwit_w": true
+        "inputs": [
+          {
+            "prev_txid": "ff896927135a71a35976598a111e02964dfc7798a6cdf352d78a38debeb36aac",
+            "prev_vout": 1,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          }
+        ],
+        "opreturn_hex": "6a05534c4e4b012201805897eb5f94612e77d9a0dac1d3d6980d22b584cf09b3b7d4d4dd6ab43d377d00",
+        "outputs": {}
+      },
+      "905a0e6a133dedcf7c4cd0d20d679c4f875ddac2b724025d227115a43aa288d6": {
+        "confirmed_height": 750101,
+        "inputs": [
+          {
+            "prev_txid": "688b22a2c13fef0ba638200311cea536aee1e9656119a76a97b6f690df132910",
+            "prev_vout": 0,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          }
+        ],
+        "outputs": {
+          "0": {
+            "script_pubkey_hex": "0014401c61df8f4759fbb875701712eacb66f5ebf69b"
+          },
+          "1": {
+            "script_pubkey_hex": "0014b8b5ecf9a8ed0966c37475cde69a9d3ba49cfda8"
+          }
+        }
       },
       "f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb": {
         "confirmed_height": null,
+        "inputs": [
+          {
+            "prev_txid": "05f147a75e3010a398dda4ee58621bd7b1e5227765b2c1ac0dd30e8946a91ad6",
+            "prev_vout": 0,
+            "script_sig_hex": "",
+            "witness": [
+              "3044222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222201",
+              "",
+              "63210333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001ac672102e35f172d2e4157cbce9e95188c4c91a867f021dff6c711665b8e79626bad9476ac68"
+            ]
+          }
+        ],
         "mempool": true,
-        "opreturn_hex": "6a05534c4e4b11220192f9d2d9dcd6354ce04cea40a79e95666565024d3cde89e80ba3e4ad1315ce1c00",
-        "outputs": {},
-        "segwit_w": true
+        "opreturn_hex": "6a05534c4e4b112201f490d54adaa292a201568c45eafcbf3a1f3e00b53ee51c0714d55a5ac68b4b4800",
+        "outputs": {}
+      },
+      "f95d394d32587c1d8153f8e319ce928f307ffae838de241b5f8fb88ce35eefc9": {
+        "confirmed_height": 750102,
+        "inputs": [
+          {
+            "prev_txid": "fd4d9417f34d3f8eaaf12c57f9ccf6b8903c076265a5782b9e54939cd82c1732",
+            "prev_vout": 1,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          },
+          {
+            "prev_txid": "905a0e6a133dedcf7c4cd0d20d679c4f875ddac2b724025d227115a43aa288d6",
+            "prev_vout": 1,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          }
+        ],
+        "opreturn_hex": "6a05534c4e4b0122015b54771c4f4d46f365cc664bc18b3d70a4cc686011f1c6161e6656d0d71f0d8200",
+        "outputs": {}
       },
       "ff896927135a71a35976598a111e02964dfc7798a6cdf352d78a38debeb36aac": {
         "confirmed_height": 750002,
+        "inputs": [
+          {
+            "prev_txid": "a0995807774894fd86b9322804217c5cef9a43d9cef3e53f6e24921d6b25bcb6",
+            "prev_vout": 0,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          }
+        ],
         "outputs": {
           "0": {
             "script_pubkey_hex": "0014797844c05370f28eff26ba1f5e5baadbad165680"
+          },
+          "1": {
+            "script_pubkey_hex": "0014b8b5ecf9a8ed0966c37475cde69a9d3ba49cfda8"
           }
-        },
-        "segwit_w": true
+        }
       }
     }
   },
   "parent_grant": {
-    "canonical_jcs": "{\"payload\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"10\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\"}],\"delegate\":{\"child_seal_key\":\"0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001\",\"groups\":[{\"ranges\":[{\"count\":3,\"first\":0,\"script_policy\":{\"kind\":\"key\",\"pk\":\"03508e3f4ba5c6203c9b1caba5216fd9eaa68fd8fc59eade22655020bffba57e90\"},\"txid\":\"fd4d9417f34d3f8eaaf12c57f9ccf6b8903c076265a5782b9e54939cd82c1732\"}],\"template\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"2\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"in\":[\"git-diff\",\"pytest\"]}}}],\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"notary_mode\":\"none\",\"recipient_rule\":{\"key\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"mode\":\"exact_key\"}}},{\"ranges\":[{\"count\":2,\"first\":0,\"script_policy\":{\"kind\":\"key\",\"pk\":\"03508e3f4ba5c6203c9b1caba5216fd9eaa68fd8fc59eade22655020bffba57e90\"},\"txid\":\"3b280b9cbb38bfb86844302c4290c8da512b960ba162932e9bb114661f77ef84\"}],\"template\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"2\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"in\":[\"lint\",\"pytest\"]}}}],\"executor\":{\"key\":\"91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21\",\"name\":\"id/station-b\"},\"notary_mode\":\"none\",\"recipient_rule\":{\"key\":\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\",\"mode\":\"exact_key\"}}}],\"key\":\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\",\"pools\":[{\"kind\":\"seallink/count\",\"max\":\"10\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"}]},\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"issuer\":{\"name\":\"id/org-treasury\",\"owner_policy\":{\"kind\":\"key\",\"pk\":\"0213b86cf475c9aa5c926358d51ac9b60161bd0726faf62de016da591da76bd0f2\"},\"registration\":{\"txid\":\"285be97a9064e873cf5bcde9e51cb48fd85ba24b8db77183c08995d9662f60ed\",\"vout\":0},\"role_policy\":{\"m\":1,\"pks\":[\"e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833\"]}},\"network\":\"main\",\"not_after_height\":760000,\"not_before_height\":750000,\"recent_block\":\"28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35\",\"recipient\":{\"key\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"mode\":\"key\"},\"revocation\":{\"construction\":\"W\",\"kind\":\"revocable\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"kind\":\"key\",\"pk\":\"03487b5fc657c9e4dbaa62e7730ba2c14e664dbd8b3e0e475d893b338f707ca240\"},\"txid\":\"ff896927135a71a35976598a111e02964dfc7798a6cdf352d78a38debeb36aac\",\"vout\":0}},\"type\":\"seallink-grant/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833\"]},\"sigs\":[{\"pk\":\"e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833\",\"sig\":\"26c31560301cc46e04cce73b0d3e47f504144e399841c784244dd373c52e46080a238e51149333c8763636e07cc2b515467e45b937fd80aa3226181a2582bbd8\"}]}}",
-    "content_addr": "727fd1b45990924c530bba99e99a98ce03291ecaacb4c4b47a25fdee56f2ad99",
+    "canonical_jcs": "{\"payload\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"10\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},{\"kind\":\"seallink/bytes\",\"max\":\"500000\",\"resource\":\"station:fleet:tools\",\"unit\":\"bytes\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\"}],\"delegate\":{\"child_seal_key\":\"0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001\",\"groups\":[{\"ranges\":[{\"count\":3,\"first\":0,\"script_policy\":{\"kind\":\"key\",\"pk\":\"03508e3f4ba5c6203c9b1caba5216fd9eaa68fd8fc59eade22655020bffba57e90\"},\"txid\":\"fd4d9417f34d3f8eaaf12c57f9ccf6b8903c076265a5782b9e54939cd82c1732\"}],\"template\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"2\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},{\"kind\":\"seallink/bytes\",\"max\":\"100000\",\"resource\":\"station:fleet:tools\",\"unit\":\"bytes\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"in\":[\"git-diff\",\"pytest\"]}}}],\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"notary_mode\":\"none\",\"recipient_rule\":{\"key\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"mode\":\"exact_key\"}}},{\"ranges\":[{\"count\":2,\"first\":0,\"script_policy\":{\"kind\":\"key\",\"pk\":\"03508e3f4ba5c6203c9b1caba5216fd9eaa68fd8fc59eade22655020bffba57e90\"},\"txid\":\"3b280b9cbb38bfb86844302c4290c8da512b960ba162932e9bb114661f77ef84\"}],\"template\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"2\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},{\"kind\":\"seallink/bytes\",\"max\":\"100000\",\"resource\":\"station:fleet:tools\",\"unit\":\"bytes\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"in\":[\"lint\",\"pytest\"]}}}],\"executor\":{\"key\":\"91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21\",\"name\":\"id/station-b\"},\"notary_mode\":\"none\",\"recipient_rule\":{\"key\":\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\",\"mode\":\"exact_key\"}}}],\"key\":\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\",\"pools\":[{\"kind\":\"seallink/count\",\"max\":\"10\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},{\"kind\":\"seallink/bytes\",\"max\":\"500000\",\"resource\":\"station:fleet:tools\",\"unit\":\"bytes\",\"window\":\"term\"}]},\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"issuer\":{\"name\":\"id/org-treasury\",\"owner_policy\":{\"kind\":\"key\",\"pk\":\"0213b86cf475c9aa5c926358d51ac9b60161bd0726faf62de016da591da76bd0f2\"},\"registration\":{\"txid\":\"285be97a9064e873cf5bcde9e51cb48fd85ba24b8db77183c08995d9662f60ed\",\"vout\":0},\"role_policy\":{\"m\":1,\"pks\":[\"e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833\"]}},\"network\":\"main\",\"not_after_height\":760000,\"not_before_height\":750000,\"recent_block\":\"28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35\",\"recipient\":{\"key\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"mode\":\"key\"},\"revocation\":{\"construction\":\"W\",\"kind\":\"revocable\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"kind\":\"key\",\"pk\":\"03487b5fc657c9e4dbaa62e7730ba2c14e664dbd8b3e0e475d893b338f707ca240\"},\"txid\":\"ff896927135a71a35976598a111e02964dfc7798a6cdf352d78a38debeb36aac\",\"vout\":0}},\"type\":\"seallink-grant/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833\"]},\"sigs\":[{\"pk\":\"e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833\",\"sig\":\"d98f998d4bac06ce5e56905d131efffa40205925688d42d55c0bfa8b2f147f073e8d9ee5e5a93feef2a2cc432cf1985f97997ab77485f6ef50223f41f430ecdf\"}]}}",
+    "content_addr": "8a9418cdb94aed060feaf8ccf6ffed8d95adf355d56dbb0a4d8920664603e6fc",
     "object": {
       "payload": {
         "capabilities": [
@@ -803,6 +1455,13 @@
                 "max": "10",
                 "resource": "station:fleet:tools",
                 "unit": "calls",
+                "window": "term"
+              },
+              {
+                "kind": "seallink/bytes",
+                "max": "500000",
+                "resource": "station:fleet:tools",
+                "unit": "bytes",
                 "window": "term"
               }
             ],
@@ -834,6 +1493,13 @@
                         "max": "2",
                         "resource": "station:fleet:tools",
                         "unit": "calls",
+                        "window": "term"
+                      },
+                      {
+                        "kind": "seallink/bytes",
+                        "max": "100000",
+                        "resource": "station:fleet:tools",
+                        "unit": "bytes",
                         "window": "term"
                       }
                     ],
@@ -882,6 +1548,13 @@
                         "resource": "station:fleet:tools",
                         "unit": "calls",
                         "window": "term"
+                      },
+                      {
+                        "kind": "seallink/bytes",
+                        "max": "100000",
+                        "resource": "station:fleet:tools",
+                        "unit": "bytes",
+                        "window": "term"
                       }
                     ],
                     "target": "station:fleet:tools",
@@ -914,6 +1587,13 @@
               "max": "10",
               "resource": "station:fleet:tools",
               "unit": "calls",
+              "window": "term"
+            },
+            {
+              "kind": "seallink/bytes",
+              "max": "500000",
+              "resource": "station:fleet:tools",
+              "unit": "bytes",
               "window": "term"
             }
           ]
@@ -973,21 +1653,23 @@
         "sigs": [
           {
             "pk": "e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833",
-            "sig": "26c31560301cc46e04cce73b0d3e47f504144e399841c784244dd373c52e46080a238e51149333c8763636e07cc2b515467e45b937fd80aa3226181a2582bbd8"
+            "sig": "d98f998d4bac06ce5e56905d131efffa40205925688d42d55c0bfa8b2f147f073e8d9ee5e5a93feef2a2cc432cf1985f97997ab77485f6ef50223f41f430ecdf"
           }
         ]
       }
     },
-    "object_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+    "object_id": "b0225c16ec09535365867e387568effe12033422b9551ffcdb733304dc18a6c3",
     "schema": "schemas/grant.schema.json",
-    "signing_digest": "447f038c965e7bcf705ca62d1b5a1ccea71f6ce2e760203037e74066e701f2c3"
+    "signing_digest": "ad04e61b1725594392bc69902a1dbf73d5cea5c48540c186fc81d7929da1c2ea"
   },
   "r85_aggregate_budget": {
     "computed_totals": {
+      "seallink/bytes|station:fleet:tools|bytes|term": 500000,
       "seallink/count|station:fleet:tools|calls|term": 10
     },
     "passed": true,
-    "pool_max": 10
+    "pool_max_bytes": 500000,
+    "pool_max_calls": 10
   },
   "r85_negative_parent": {
     "expected_refusal": "GRANT_CHILD_WIDER",
@@ -1002,6 +1684,13 @@
                 "max": "10",
                 "resource": "station:fleet:tools",
                 "unit": "calls",
+                "window": "term"
+              },
+              {
+                "kind": "seallink/bytes",
+                "max": "500000",
+                "resource": "station:fleet:tools",
+                "unit": "bytes",
                 "window": "term"
               }
             ],
@@ -1034,6 +1723,13 @@
                         "resource": "station:fleet:tools",
                         "unit": "calls",
                         "window": "term"
+                      },
+                      {
+                        "kind": "seallink/bytes",
+                        "max": "100000",
+                        "resource": "station:fleet:tools",
+                        "unit": "bytes",
+                        "window": "term"
                       }
                     ],
                     "target": "station:fleet:tools",
@@ -1081,6 +1777,13 @@
                         "resource": "station:fleet:tools",
                         "unit": "calls",
                         "window": "term"
+                      },
+                      {
+                        "kind": "seallink/bytes",
+                        "max": "100000",
+                        "resource": "station:fleet:tools",
+                        "unit": "bytes",
+                        "window": "term"
                       }
                     ],
                     "target": "station:fleet:tools",
@@ -1113,6 +1816,13 @@
               "max": "10",
               "resource": "station:fleet:tools",
               "unit": "calls",
+              "window": "term"
+            },
+            {
+              "kind": "seallink/bytes",
+              "max": "500000",
+              "resource": "station:fleet:tools",
+              "unit": "bytes",
               "window": "term"
             }
           ]
@@ -1172,7 +1882,7 @@
         "sigs": [
           {
             "pk": "e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833",
-            "sig": "2533d7e3ec13279438d265891c76ccf9c27897c13dc04b0d0f3f22d8e21eef7e0fcb9580a2809b4cbe3e132500b6103026ba5ca83e3771c43313354bb1468515"
+            "sig": "badd2011cddd9d331f84448e0cce6b2db2e71acbb7914b48ad86199d8042de514d558b10ee643ea6d4fc0c22ed1f861961da9f3895df091da67417efda27b395"
           }
         ]
       }
@@ -1191,6 +1901,13 @@
                 "max": "10",
                 "resource": "station:fleet:tools",
                 "unit": "calls",
+                "window": "term"
+              },
+              {
+                "kind": "seallink/bytes",
+                "max": "500000",
+                "resource": "station:fleet:tools",
+                "unit": "bytes",
                 "window": "term"
               }
             ],
@@ -1222,6 +1939,13 @@
                         "max": "2",
                         "resource": "station:fleet:tools",
                         "unit": "calls",
+                        "window": "term"
+                      },
+                      {
+                        "kind": "seallink/bytes",
+                        "max": "100000",
+                        "resource": "station:fleet:tools",
+                        "unit": "bytes",
                         "window": "term"
                       }
                     ],
@@ -1270,6 +1994,13 @@
                         "resource": "station:fleet:tools",
                         "unit": "calls",
                         "window": "term"
+                      },
+                      {
+                        "kind": "seallink/bytes",
+                        "max": "100000",
+                        "resource": "station:fleet:tools",
+                        "unit": "bytes",
+                        "window": "term"
                       }
                     ],
                     "target": "station:fleet:tools",
@@ -1302,6 +2033,13 @@
               "max": "10",
               "resource": "station:fleet:tools",
               "unit": "calls",
+              "window": "term"
+            },
+            {
+              "kind": "seallink/bytes",
+              "max": "500000",
+              "resource": "station:fleet:tools",
+              "unit": "bytes",
               "window": "term"
             }
           ]
@@ -1361,7 +2099,7 @@
         "sigs": [
           {
             "pk": "e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833",
-            "sig": "76a857f4aa18d5ed1235d843d07c26134bfcef0ecfb3435af9f6aa44be1d590062fb4a7230897726e1ab8f913d1ce883f7111c9e1a49b07ab27342b8a063fce9"
+            "sig": "b9a87ea3c497ebc26ae1a08d6d4146c91bf917c6361569e98f9eba97245719a2c37b1fc97232d25e1e40cc20d660d36c83643045408e2003af81603256dad91e"
           }
         ]
       }
@@ -1376,6 +2114,7 @@
   },
   "station_a_crash_journal_id": "58b3dfbbf9431c7117147b09cb4246b9bbbca6e5d3b0bb1057aea9014a967d29",
   "station_a_journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
+  "station_a_rollback_journal_id": "a1c49545f6e2e4f9004cb599b20bc15480cf5796d8eec30552f6be08982f06c8",
   "station_b_config": {
     "actions": [
       "agent/tool"
@@ -1385,5 +2124,5 @@
   },
   "station_b_journal_id": "fa4c01896fbd3c1d2ccfab1bcc59ec91fb417320f260718ada19b6c2706185bc",
   "suite": "trace-03-delegation-pool-single-use",
-  "version": "1.0.0-draft.2"
+  "version": "1.0.0-draft.3"
 }

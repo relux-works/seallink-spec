@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.2/schemas/invocation.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.3/schemas/invocation.schema.json",
   "title": "SealLink v1.0 Invocation, Receipt, Sessions, Auth, Owner Control, Journal & Migration",
   "$defs": {
     "Invocation": {
@@ -74,6 +74,7 @@
                 "additionalProperties": false,
                 "required": ["kind", "resource", "unit", "reserved", "settled", "released"],
                 "properties": {
+                  "account": { "type": "string", "enum": ["own", "row", "session"] },
                   "kind": { "type": "string", "minLength": 1, "maxLength": 128 },
                   "resource": { "type": "string", "minLength": 1, "maxLength": 256 },
                   "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
@@ -368,6 +369,12 @@
               "properties": {
                 "invocation_id": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "grant_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "account": { "type": "string", "enum": ["own", "row", "session"] },
+                "quota_kind": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "resource": { "type": "string", "minLength": 1, "maxLength": 256 },
+                "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "window": { "type": "string", "pattern": "^(term|blocks:[1-9][0-9]{0,8}|seconds:[1-9][0-9]{0,9})$" },
+                "bucket_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "outcome": { "type": "string", "enum": ["executed", "refused", "uncertain"] },
                 "settled": { "$ref": "common.schema.json#/$defs/Uint64Str" },
                 "released": { "$ref": "common.schema.json#/$defs/Uint64Str" },

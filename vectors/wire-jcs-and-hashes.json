@@ -8,7 +8,88 @@
     "rule": "SL-WIRE-014",
     "salt_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
   },
-  "description": "Restricted RFC 8785 JCS positive/negative vectors, 3 hashes, clause_commit, and BIP-340 SignatureSet checks.",
+  "description": "Restricted RFC 8785 JCS positive/negative vectors, 3 hashes, clause_commit, BIP-340 SignatureSet, and RFC 8032 Ed25519 + low-S NIST P-256 device-key signature checks.",
+  "device_signature_algorithms": {
+    "owner_command_ed25519": {
+      "canonical_jcs": "{\"payload\":{\"arguments\":{\"scope\":\"all\"},\"command\":\"keyholder-halt\",\"exp\":1795220300,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"level\":2,\"network\":\"main\",\"nonce\":\"13e0c7c552fadd06585ca03df1fd32b7b7fc1c7e31aa6cdac933df62a26577a0\",\"owner\":\"id/alice\",\"target_executor\":\"id/station-a\",\"type\":\"seallink-owner-command/1\"},\"signatures\":{\"policy\":{\"alg\":\"ed25519\",\"m\":1,\"pks\":[\"b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187\"]},\"sigs\":[{\"pk\":\"b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187\",\"sig\":\"2d792757fe20901d074810a2d0955e972bc8401fbddab38ad0b929843965d040685a6aaae5d69390df792e6c226452fa2c5b8a18d6680f31387cb831da6fe106\"}]}}",
+      "content_addr": "992bdf39b9a205e77a4848109cc509b2fc769f7e4e57a597ba5aa54be3218e5d",
+      "object": {
+        "payload": {
+          "arguments": {
+            "scope": "all"
+          },
+          "command": "keyholder-halt",
+          "exp": 1795220300,
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "iat": 1795220000,
+          "level": 2,
+          "network": "main",
+          "nonce": "13e0c7c552fadd06585ca03df1fd32b7b7fc1c7e31aa6cdac933df62a26577a0",
+          "owner": "id/alice",
+          "target_executor": "id/station-a",
+          "type": "seallink-owner-command/1"
+        },
+        "signatures": {
+          "policy": {
+            "alg": "ed25519",
+            "m": 1,
+            "pks": [
+              "b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187",
+              "sig": "2d792757fe20901d074810a2d0955e972bc8401fbddab38ad0b929843965d040685a6aaae5d69390df792e6c226452fa2c5b8a18d6680f31387cb831da6fe106"
+            }
+          ]
+        }
+      },
+      "object_id": "72fe504c449ef340faf6d85cb19a416c664ce5c0c6666a75dc5609b273a329a0",
+      "schema": "schemas/invocation.schema.json#/$defs/OwnerCommand",
+      "signing_digest": "325a1f40fab87d4d46814677c50d9be221b25b943a70d065b9405eea0620992a"
+    },
+    "owner_command_p256_low_s": {
+      "canonical_jcs": "{\"payload\":{\"arguments\":{\"scope\":\"all\"},\"command\":\"keyholder-halt\",\"exp\":1795220300,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"level\":2,\"network\":\"main\",\"nonce\":\"0d220e68d9460699bcd997a17c7a8aa0c0535ae2c39b7950e1b8dd39668fa699\",\"owner\":\"id/alice\",\"target_executor\":\"id/station-a\",\"type\":\"seallink-owner-command/1\"},\"signatures\":{\"policy\":{\"alg\":\"p256\",\"m\":1,\"pks\":[\"02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba\"]},\"sigs\":[{\"pk\":\"02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba\",\"sig\":\"87d98ba50ae94b13720500b3e64c5a8fcc183c8ab234fe3051fd294a560e87da030932c37d3e803983b153a8be8a09e056a5b6270102287eaace2d04e0e5b5a6\"}]}}",
+      "content_addr": "3c32bcddae10af34b9d79148bb476c5dcbfee81387ff7e581224b8faf4c45d1a",
+      "object": {
+        "payload": {
+          "arguments": {
+            "scope": "all"
+          },
+          "command": "keyholder-halt",
+          "exp": 1795220300,
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "iat": 1795220000,
+          "level": 2,
+          "network": "main",
+          "nonce": "0d220e68d9460699bcd997a17c7a8aa0c0535ae2c39b7950e1b8dd39668fa699",
+          "owner": "id/alice",
+          "target_executor": "id/station-a",
+          "type": "seallink-owner-command/1"
+        },
+        "signatures": {
+          "policy": {
+            "alg": "p256",
+            "m": 1,
+            "pks": [
+              "02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba",
+              "sig": "87d98ba50ae94b13720500b3e64c5a8fcc183c8ab234fe3051fd294a560e87da030932c37d3e803983b153a8be8a09e056a5b6270102287eaace2d04e0e5b5a6"
+            }
+          ]
+        }
+      },
+      "object_id": "d6c7f491bf3fae97ead2e8c5d2ce289b6a314877b3088d19c79bd55632a1cf91",
+      "schema": "schemas/invocation.schema.json#/$defs/OwnerCommand",
+      "signing_digest": "b5f87e28509ca5434631b32d4b3a4a507d85d65e63472c3966f198420be8aa7a"
+    },
+    "rule": "SL-WIRE-012"
+  },
   "jcs_negative": [
     {
       "expected_refusal": "WIRE_SIZE",
@@ -549,9 +630,205 @@
             ]
           }
         }
+      },
+      {
+        "expected_refusal": "WIRE_SIGNATURE",
+        "id": "sigset-p256-high-s",
+        "object": {
+          "payload": {
+            "arguments": {
+              "scope": "all"
+            },
+            "command": "keyholder-halt",
+            "exp": 1795220300,
+            "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+            "iat": 1795220000,
+            "level": 2,
+            "network": "main",
+            "nonce": "0d220e68d9460699bcd997a17c7a8aa0c0535ae2c39b7950e1b8dd39668fa699",
+            "owner": "id/alice",
+            "target_executor": "id/station-a",
+            "type": "seallink-owner-command/1"
+          },
+          "signatures": {
+            "policy": {
+              "alg": "p256",
+              "m": 1,
+              "pks": [
+                "02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba"
+              ]
+            },
+            "sigs": [
+              {
+                "pk": "02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba",
+                "sig": "87d98ba50ae94b13720500b3e64c5a8fcc183c8ab234fe3051fd294a560e87dafcf6cd3b82c17fc77c4eac574175f61f66414486a615760648eb9dbe1b7d6fab"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "expected_refusal": "WIRE_SIGNATURE",
+        "id": "sigset-ed25519-forbidden-on-grant",
+        "object": {
+          "payload": {
+            "capabilities": [
+              {
+                "action": "mail/read",
+                "target": "mailbox:id/alice:work",
+                "where": {
+                  "folder": {
+                    "eq": "Invoices"
+                  }
+                }
+              }
+            ],
+            "executor": {
+              "key": "0974e980ddff90668b3fcb9e4708a9efae5c7f7a6f33b17223037d0d0d840c45",
+              "name": "id/mail-host-a"
+            },
+            "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+            "issuer": {
+              "name": "id/alice",
+              "owner_policy": {
+                "kind": "key",
+                "pk": "0250d30a0794796d2b697a08831549c8c9c567e9b7266f3ddb339dcf7b08ef8891"
+              },
+              "registration": {
+                "txid": "b9d9a42ba6934839d9ed8ed10ae949a35ecae861cbe401c6a8e64d412cd08016",
+                "vout": 0
+              },
+              "role_policy": {
+                "m": 2,
+                "pks": [
+                  "66e1b5c21aab5da7453ddd32c33ecefaf1dd3441a20c55e05d8ca8264faa20e0",
+                  "9fc04f5ef61d6b7c83f6b2f560f142b34f626087aed3545a1a5e106ce3f484c6",
+                  "a16d893ed9aa6a90149848013e4655a59b3e1f781140ff0feada02719a43489b"
+                ]
+              }
+            },
+            "network": "main",
+            "not_after_height": 750100,
+            "not_before_height": 750000,
+            "recent_block": "fc62118d3fc8fa42aeabc74bbbd3ab12c42100d493ced115aec97172a31309cd",
+            "recipient": {
+              "key": "8dd4912518d3febca13c83e7ba26e27a758304ee15d98f369f200d8df8137d0d",
+              "mode": "key"
+            },
+            "revocation": {
+              "construction": "W",
+              "kind": "revocable",
+              "mode": "seal",
+              "seal": {
+                "script_policy": {
+                  "kind": "key",
+                  "pk": "024fbb4c9d5a7abb2f043ec24f47365dcf55e868ecd95f368f9d0aa8305ce430a7"
+                },
+                "txid": "e1219149e79647c9460537f139e016d53f386e47b2ad2fa610f80d06a7694be1",
+                "vout": 0
+              }
+            },
+            "type": "seallink-grant/1"
+          },
+          "signatures": {
+            "policy": {
+              "alg": "ed25519",
+              "m": 1,
+              "pks": [
+                "b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187"
+              ]
+            },
+            "sigs": [
+              {
+                "pk": "b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187",
+                "sig": "e50a113b660968fd4c452d0ba07f51cf27374449cfa34fa1f4ae65039fa34bcf428b39c2cb6642d01eaf9166cb370f778efc9f282e11e941c7cc6d54f4d6a403"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "expected_refusal": "WIRE_SIGNATURE",
+        "id": "sigset-p256-forbidden-on-grant",
+        "object": {
+          "payload": {
+            "capabilities": [
+              {
+                "action": "mail/read",
+                "target": "mailbox:id/alice:work",
+                "where": {
+                  "folder": {
+                    "eq": "Invoices"
+                  }
+                }
+              }
+            ],
+            "executor": {
+              "key": "0974e980ddff90668b3fcb9e4708a9efae5c7f7a6f33b17223037d0d0d840c45",
+              "name": "id/mail-host-a"
+            },
+            "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+            "issuer": {
+              "name": "id/alice",
+              "owner_policy": {
+                "kind": "key",
+                "pk": "0250d30a0794796d2b697a08831549c8c9c567e9b7266f3ddb339dcf7b08ef8891"
+              },
+              "registration": {
+                "txid": "b9d9a42ba6934839d9ed8ed10ae949a35ecae861cbe401c6a8e64d412cd08016",
+                "vout": 0
+              },
+              "role_policy": {
+                "m": 2,
+                "pks": [
+                  "66e1b5c21aab5da7453ddd32c33ecefaf1dd3441a20c55e05d8ca8264faa20e0",
+                  "9fc04f5ef61d6b7c83f6b2f560f142b34f626087aed3545a1a5e106ce3f484c6",
+                  "a16d893ed9aa6a90149848013e4655a59b3e1f781140ff0feada02719a43489b"
+                ]
+              }
+            },
+            "network": "main",
+            "not_after_height": 750100,
+            "not_before_height": 750000,
+            "recent_block": "fc62118d3fc8fa42aeabc74bbbd3ab12c42100d493ced115aec97172a31309cd",
+            "recipient": {
+              "key": "8dd4912518d3febca13c83e7ba26e27a758304ee15d98f369f200d8df8137d0d",
+              "mode": "key"
+            },
+            "revocation": {
+              "construction": "W",
+              "kind": "revocable",
+              "mode": "seal",
+              "seal": {
+                "script_policy": {
+                  "kind": "key",
+                  "pk": "024fbb4c9d5a7abb2f043ec24f47365dcf55e868ecd95f368f9d0aa8305ce430a7"
+                },
+                "txid": "e1219149e79647c9460537f139e016d53f386e47b2ad2fa610f80d06a7694be1",
+                "vout": 0
+              }
+            },
+            "type": "seallink-grant/1"
+          },
+          "signatures": {
+            "policy": {
+              "alg": "p256",
+              "m": 1,
+              "pks": [
+                "02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba"
+              ]
+            },
+            "sigs": [
+              {
+                "pk": "02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba",
+                "sig": "1696881c2570f1b95f2fd5310a52cee95fc522b112c3ca5370671784ab3ffc1125e9b512a382802dee8a4151ac140f8ab6dc943b49e536233edf9e1127af6d18"
+              }
+            ]
+          }
+        }
       }
     ],
     "rule": "SL-WIRE-011"
   },
-  "version": "1.0.0-draft.2"
+  "version": "1.0.0-draft.3"
 }

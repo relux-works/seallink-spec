@@ -32,6 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build_refusal_matrix as rm
+import build_security_suite as sec
 import seallink_ref as sl
 import seallink_verifier as sv
 
@@ -215,16 +216,19 @@ def _assert_journal_write(got_jw: dict[str, Any], exp_jw: dict[str, Any], label:
 def execute_traces_and_matrix(
     vectors: dict[str, dict[str, Any]],
     registered_codes: set[str],
+    require_jsonschema: bool,
     errors: list[str],
-) -> tuple[int, int]:
-    """Execute ALL traces (trace-01..04) and ALL 84/84 refusal-coverage-matrix cases live via Tier1Verifier."""
+) -> tuple[int, int, int]:
+    """Execute ALL traces (trace-01..04), ALL 84/84 refusal-coverage-matrix cases,
+    ALL security-conformance cases, and 10 live verifier-mutation tests via Tier1Verifier.
+    """
     exec_checks = 0
     covered_refusals: set[str] = set()
 
     # --- Execute trace-01-mail-offline-revoke.json ---
     if "trace-01-mail-offline-revoke.json" in vectors:
         t1 = vectors["trace-01-mail-offline-revoke.json"]
-        v = sv.Tier1Verifier()
+        v = sv.Tier1Verifier(require_jsonschema=require_jsonschema)
         ch = sv.ChainView(t1["initial_chain_state"])
         jr = sv.FencedJournal.from_dict(t1["initial_journal_state"])
         exec_cfg = t1["executor_config"]
@@ -234,7 +238,6 @@ def execute_traces_and_matrix(
             "grants": [t1["grant"]["object"]],
             "manifests": {sl.content_addr(alice_man): alice_man, sl.content_addr(host_man): host_man},
         }
-        # Also verify derived MIME size_bytes == len(mime_bytes)
         mime_b = bytes.fromhex(t1["ledger_state"]["mime_bytes_hex"])
         s1_res_obj = t1["steps"][0]["result_object"]["object"]
         if s1_res_obj["size_bytes"] != str(len(mime_b)) or s1_res_obj["mime_sha256"] != sl.sha256(mime_b).hex():
@@ -260,7 +263,6 @@ def execute_traces_and_matrix(
                         _assert_journal_write(res.journal_writes[0], st["journal_write"], f"trace-01/step-{st['step']}", errors)
                 exec_checks += 1
             else:
-                # Step 3: seal spend observation
                 _, serr, jw = v.evaluate_seal(
                     t1["grant"]["object"]["payload"]["revocation"]["seal"],
                     ch,
@@ -279,7 +281,7 @@ def execute_traces_and_matrix(
     # --- Execute trace-02-guardian-succession-assent.json ---
     if "trace-02-guardian-succession-assent.json" in vectors:
         t2 = vectors["trace-02-guardian-succession-assent.json"]
-        v = sv.Tier1Verifier(trusted_origin_issuers=set(t2["trusted_origin_issuers"]))
+        v = sv.Tier1Verifier(trusted_origin_issuers=set(t2["trusted_origin_issuers"]), require_jsonschema=require_jsonschema)
         ch = sv.ChainView(t2["chain_state"])
         origin_bundle = {
             "origin": t2["origin"]["object"],
@@ -289,6 +291,10 @@ def execute_traces_and_matrix(
             "guardian_records": [
                 t2["stage_0_initial_activation"]["guardian_record"]["object"],
                 t2["stage_1_appointment"]["guardian_record"]["object"],
+            ],
+            "guardian_assents": [
+                t2["stage_0_initial_activation"]["guardian_assent"]["object"],
+                t2["stage_1_appointment"]["guardian_assent"]["object"],
             ],
             "roster_records": [t2["roster_transition"]["roster_record"]["object"]],
             "initial_guardian_disclosures": {"1": t2["initial_guardian_1_disclosure"]},
@@ -307,10 +313,50 @@ def execute_traces_and_matrix(
                 covered_refusals.add(res.refusal_code)
             exec_checks += 1
 
+        # Execute co-tenant same-role party_id contract coverage check
+        ct = t2["co_tenant_same_role_contract"]
+        res_ct = v.verify_contract_assents(
+            ct["contract"]["object"],
+            [a["object"] for a in ct["assents"]],
+            None,
+            ch,
+        )
+        if res_ct.verdict != ct["expected_verdict"] or res_ct.details.get("covered_party_ids") != ct["expected_covered_party_ids"]:
+            errors.append(f"trace-02 co_tenant_same_role_contract failed: got {(res_ct.verdict, res_ct.refusal_code, res_ct.details)}")
+        exec_checks += 1
+
+        # Execute BOTH positive name_recovery continuation branches!
+        nr = t2["name_recovery_positive_traces"]
+        b2_obj = nr["candidate_b2"]["object"]
+        b3_obj = nr["candidate_b3"]["object"]
+        ba = nr["branch_a_timely_0x10_cancel_restores_b1"]
+        ob_a = {**origin_bundle, "recovery_bindings": [b2_obj]}
+        st_a, err_a = v.verify_origin_and_status(ob_a, sv.ChainView(ba["chain_state"]))
+        if err_a is not None or st_a is None or sl.object_id(st_a["binding"]) != ba["expected_active_binding_id"]:
+            errors.append(f"trace-02 recovery branch A restore B1 failed: got {(st_a, err_a)}")
+        elif st_a["active_recovery_seal"]["txid"] != ba["expected_active_recovery_seal"]["txid"] or st_a["active_recovery_seal"]["vout"] != ba["expected_active_recovery_seal"]["vout"]:
+            errors.append(f"trace-02 recovery branch A next_recovery_seal mismatch: {st_a['active_recovery_seal']}")
+        _, err_a_b2 = v.verify_origin_and_status(ob_a, sv.ChainView(ba["chain_state"]), assert_binding_id=sl.object_id(b2_obj))
+        if err_a_b2 != ba["expected_cancelled_b2_refusal"]:
+            errors.append(f"trace-02 recovery branch A cancelled B2 check failed: got {err_a_b2}")
+        exec_checks += 2
+
+        bb = nr["branch_b_post_delay_recovery_promotes_b3"]
+        ob_b = {**origin_bundle, "recovery_bindings": [b2_obj, b3_obj]}
+        st_b, err_b = v.verify_origin_and_status(ob_b, sv.ChainView(bb["chain_state"]))
+        if err_b is not None or st_b is None or sl.object_id(st_b["binding"]) != bb["expected_active_binding_id"]:
+            errors.append(f"trace-02 recovery branch B promote B3 failed: got {(st_b, err_b)}")
+        elif st_b["active_recovery_seal"]["txid"] != bb["expected_active_recovery_seal"]["txid"] or st_b["active_recovery_seal"]["vout"] != bb["expected_active_recovery_seal"]["vout"]:
+            errors.append(f"trace-02 recovery branch B next_recovery_seal mismatch: {st_b['active_recovery_seal']}")
+        _, err_b_old = v.verify_origin_and_status(ob_b, sv.ChainView(bb["chain_state"]), assert_binding_id=sl.object_id(t2["name_binding"]["object"]))
+        if err_b_old != bb["expected_superseded_b1_refusal"]:
+            errors.append(f"trace-02 recovery branch B superseded B1 check failed: got {err_b_old}")
+        exec_checks += 2
+
     # --- Execute trace-03-delegation-pool-single-use.json ---
     if "trace-03-delegation-pool-single-use.json" in vectors:
         t3 = vectors["trace-03-delegation-pool-single-use.json"]
-        v = sv.Tier1Verifier()
+        v = sv.Tier1Verifier(require_jsonschema=require_jsonschema)
         ch_a = sv.ChainView(t3["initial_chain_state"])
         jr_a = sv.FencedJournal.from_dict({"journal_id": t3["station_a_journal_id"]})
         exec_a = t3["station_a_config"]
@@ -318,38 +364,52 @@ def execute_traces_and_matrix(
         bundle_c1 = {"grants": [t3["parent_grant"]["object"], t3["child_1_single_use"]["object"]]}
         use_txid = c1t["use_txid_wrapper"]
         inv1 = c1t["invocation"]["object"]
+        actual_usage = c1t.get("actual_quota_usage")
 
         # Step A: mempool unconfirmed
-        ra = v.verify_invocation(inv1, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid)
+        ra = v.verify_invocation(inv1, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid, actual_quota_usage=actual_usage)
         if ra.verdict != c1t["step_a_mempool_unconfirmed"]["expected_verdict"] or ra.refusal_code != c1t["step_a_mempool_unconfirmed"]["expected_refusal"]:
             errors.append(f"trace-03 step_a failed: got {(ra.verdict, ra.refusal_code)}")
         exec_checks += 1
 
-        # Confirm use_txid
         ch_a.apply_patch(t3["confirm_use_tx_patch"])
 
-        # Step B: crash-in-effect-window -> UNCERTAIN + restart retry -> UNCERTAIN (reservation retained)
+        # Step B: crash-in-effect-window (4 dual-account reservations) + replay_persisted_entries restart!
         jr_crash = sv.FencedJournal.from_dict({"journal_id": t3["station_a_crash_journal_id"]})
-        rb1 = v.verify_invocation(inv1, bundle_c1, ch_a, jr_crash, exec_a, use_txid=use_txid, simulate_crash_before_settlement=True)
-        rb2 = v.verify_invocation(inv1, bundle_c1, ch_a, jr_crash, exec_a, use_txid=use_txid)
+        rb1 = v.verify_invocation(inv1, bundle_c1, ch_a, jr_crash, exec_a, use_txid=use_txid, simulate_crash_before_settlement=True, actual_quota_usage=actual_usage)
+        jr_restarted = sv.FencedJournal.replay_persisted_entries(t3["station_a_crash_journal_id"], [w["entry"] for w in rb1.journal_writes])
+        rb2 = v.verify_invocation(inv1, bundle_c1, ch_a, jr_restarted, exec_a, use_txid=use_txid, actual_quota_usage=actual_usage)
         exp_b = c1t["step_b_crash_in_effect_window"]
-        if rb1.verdict != "UNCERTAIN" or rb2.verdict != exp_b["expected_verdict_after_restart"] or rb2.outcome != exp_b["expected_outcome"] or rb2.journal_writes:
-            errors.append(f"trace-03 step_b crash recovery failed: rb1={(rb1.verdict, rb1.outcome)} rb2={(rb2.verdict, rb2.outcome)}")
+        if (
+            rb1.verdict != "UNCERTAIN"
+            or len(rb1.journal_writes) != len(exp_b["crash_journal_writes"])
+            or rb2.verdict != exp_b["expected_verdict_after_restart"]
+            or rb2.outcome != exp_b["expected_outcome"]
+            or rb2.details.get("unsettled_count") != exp_b["expected_unsettled_count"]
+            or rb2.journal_writes
+        ):
+            errors.append(f"trace-03 step_b crash recovery failed: rb1={(rb1.verdict, len(rb1.journal_writes))} rb2={(rb2.verdict, rb2.outcome, rb2.details)}")
         else:
-            _assert_journal_write(rb1.journal_writes[0], exp_b["crash_journal_write"], "trace-03/step_b", errors)
+            for idx, (got_jw, exp_jw) in enumerate(zip(rb1.journal_writes, exp_b["crash_journal_writes"])):
+                _assert_journal_write(got_jw, exp_jw, f"trace-03/step_b[{idx}]", errors)
         exec_checks += 2
 
-        # Step C: normal confirmed execution -> ADMIT + exact 4-entry journal chain
+        # Step C: confirmed execution -> ADMIT + exact 10-entry dual-account multi-quota journal chain + exact settled balances!
         exp_c = c1t["step_c_confirmed_execute"]
-        rc = v.verify_invocation(inv1, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid, receipt_env_for_cache=exp_c["receipt"]["object"])
-        if rc.verdict != exp_c["expected_verdict"] or len(rc.journal_writes) != len(exp_c["journal_chain"]):
-            errors.append(f"trace-03 step_c failed: got {(rc.verdict, rc.refusal_code, len(rc.journal_writes))}")
+        rc = v.verify_invocation(inv1, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid, receipt_env_for_cache=exp_c["receipt"]["object"], actual_quota_usage=actual_usage)
+        if rc.verdict != exp_c["expected_verdict"] or len(rc.journal_writes) != len(exp_c["journal_chain"]) or jr_a.unsettled_reservations:
+            errors.append(f"trace-03 step_c failed: got {(rc.verdict, rc.refusal_code, len(rc.journal_writes), len(jr_a.unsettled_reservations))}")
         else:
             for idx, (got_jw, exp_jw) in enumerate(zip(rc.journal_writes, exp_c["journal_chain"])):
                 _assert_journal_write(got_jw, exp_jw, f"trace-03/step_c[{idx}]", errors)
+            for bal_k, exp_bal in exp_c["expected_settled_balances"].items():
+                sc, qk = bal_k.split("|", 1)
+                got_bal = jr_a.quotas_used.get((sc, qk, "term"))
+                if got_bal != exp_bal:
+                    errors.append(f"trace-03 step_c balance {bal_k}: expected {exp_bal}, got {got_bal}")
         exec_checks += 1
 
-        # Step D: unauthenticated forged replay -> WIRE_SIGNATURE (Step 3b BEFORE Step 3c)
+        # Step D: unauthenticated forged replay -> WIRE_SIGNATURE
         exp_d = c1t["step_d_unauthenticated_replay_rejected"]
         rd = v.verify_invocation(exp_d["invocation"]["object"], bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid)
         if rd.verdict != exp_d["expected_verdict"] or rd.refusal_code != exp_d["expected_refusal"]:
@@ -372,6 +432,25 @@ def execute_traces_and_matrix(
             errors.append(f"trace-03 step_f new nonce replay failed: got {(rf.verdict, rf.refusal_code)}")
         exec_checks += 1
 
+        # Atomic multi-quota rollback check
+        rb_case = t3["atomic_quota_rollback"]
+        jr_rb = sv.FencedJournal.from_dict({"journal_id": t3["station_a_rollback_journal_id"]})
+        r_rb = v.verify_invocation(
+            rb_case["invocation"]["object"],
+            {"grants": [t3["parent_grant"]["object"], rb_case["grant"]["object"]]},
+            sv.ChainView(t3["initial_chain_state"]),
+            jr_rb,
+            exec_a,
+        )
+        if (
+            r_rb.verdict != rb_case["expected_verdict"]
+            or r_rb.refusal_code != rb_case["expected_refusal"]
+            or len(r_rb.journal_writes) != rb_case["expected_journal_writes"]
+            or bool(jr_rb.quotas_used)
+        ):
+            errors.append(f"trace-03 atomic_quota_rollback failed: got {(r_rb.verdict, r_rb.refusal_code, len(r_rb.journal_writes), jr_rb.quotas_used)}")
+        exec_checks += 1
+
         # Child 2 issuer branch-1 revocation -> SEAL_SPENT then GRANT_CLOSED
         c2 = t3["child_2_issuer_revocation"]
         ch_b = sv.ChainView(t3["initial_chain_state"])
@@ -388,7 +467,7 @@ def execute_traces_and_matrix(
     # --- Execute trace-04-agent-guardian-intake.json ---
     if "trace-04-agent-guardian-intake.json" in vectors:
         t4 = vectors["trace-04-agent-guardian-intake.json"]
-        v = sv.Tier1Verifier(trusted_origin_issuers=set(t4["trusted_origin_issuers"]))
+        v = sv.Tier1Verifier(trusted_origin_issuers=set(t4["trusted_origin_issuers"]), require_jsonschema=require_jsonschema)
         ch = sv.ChainView(t4["initial_chain_state"])
         jr = sv.FencedJournal.from_dict(t4["initial_journal_state"])
         exec_cfg = t4["executor_config"]
@@ -399,6 +478,7 @@ def execute_traces_and_matrix(
             "name_binding": t4["name_binding"]["object"],
             "name_binding_txid": t4["name_binding_txid"],
             "guardian_records": [g["object"] for g in t4["guardian_records"]],
+            "guardian_assents": [ga["object"] for ga in t4["guardian_assents"]],
             "roster_records": [],
             "initial_guardian_disclosures": t4["initial_guardian_disclosures"],
         }
@@ -424,25 +504,43 @@ def execute_traces_and_matrix(
     else:
         mat = vectors["refusal-coverage-matrix.json"]
         for case in mat.get("cases", []):
-            got = rm.execute_matrix_case(case)
+            got = rm.execute_matrix_case(case, require_jsonschema=require_jsonschema)
             if got != case["expected_refusal"]:
                 errors.append(f"refusal-coverage-matrix '{case['code']}': expected {case['expected_refusal']}, verifier computed {got!r}")
             else:
                 covered_refusals.add(got)
             exec_checks += 1
 
+    # --- Execute security-conformance.json (all adversarial false-admit & interop cases!) ---
+    mutations_killed = 0
+    if "security-conformance.json" not in vectors:
+        errors.append("Missing vectors/security-conformance.json")
+    else:
+        ss = vectors["security-conformance.json"]
+        for case in ss.get("cases", []):
+            got_v, got_c = sec.execute_security_case(case, require_jsonschema=require_jsonschema)
+            if (got_v, got_c) != (case["expected_verdict"], case.get("expected_refusal")):
+                errors.append(f"security-conformance '{case['id']}': expected {(case['expected_verdict'], case.get('expected_refusal'))}, got {(got_v, got_c)}")
+            exec_checks += 1
+        if "refusal-coverage-matrix.json" in vectors:
+            mutations_killed, mut_errs = sec.run_verifier_mutation_tests(
+                ss, vectors["refusal-coverage-matrix.json"], require_jsonschema=require_jsonschema
+            )
+            errors.extend(mut_errs)
+
     missing_exec = sorted(registered_codes - covered_refusals)
     if missing_exec:
         errors.append(f"Incomplete executable refusal coverage ({len(covered_refusals)}/{len(registered_codes)}): missing {', '.join(missing_exec)}")
 
-    return exec_checks, len(covered_refusals)
+    return exec_checks, len(covered_refusals), mutations_killed
 
 
 def verify_all_vectors(
     vectors: dict[str, dict[str, Any]],
     registered_codes: set[str],
+    require_jsonschema: bool,
     errors: list[str],
-) -> tuple[int, int, int]:
+) -> tuple[int, int, int, int]:
     checked = 0
     # 1. wire-jcs-and-hashes.json
     if "wire-jcs-and-hashes.json" in vectors:
@@ -472,6 +570,11 @@ def verify_all_vectors(
             if ok or code != neg["expected_refusal"]:
                 errors.append(f"wire negative sigset '{neg['id']}' expected {neg['expected_refusal']}, got {(ok, code)}")
             checked += 1
+        if "device_signature_algorithms" in v:
+            dsa = v["device_signature_algorithms"]
+            verify_envelope_record(dsa["owner_command_ed25519"], "wire/ed25519", errors)
+            verify_envelope_record(dsa["owner_command_p256_low_s"], "wire/p256_low_s", errors)
+            checked += 2
 
     # 2. ledger-scripts-and-opreturn.json
     if "ledger-scripts-and-opreturn.json" in vectors:
@@ -542,7 +645,7 @@ def verify_all_vectors(
                     errors.append(f"semantic fixture '{neg['id']}' expected {neg['expected_refusal']}, got {(ok_w, code_w)}")
             checked += 1
         for gc in v.get("negative_guardian_consistency_fixtures", []):
-            ok_gc, code_gc = sl.check_guardian_policy_consistency(gc["guardian_policy"])
+            ok_gc, code_gc = sl.check_guardian_policy_consistency(gc["guardian_policy"], prev_roster=gc.get("prev_roster"))
             if ok_gc or code_gc != gc["expected_refusal"]:
                 errors.append(f"guardian consistency fixture '{gc['id']}' expected {gc['expected_refusal']}, got {(ok_gc, code_gc)}")
             checked += 1
@@ -597,9 +700,31 @@ def verify_all_vectors(
             errors.append("trace-03 negative R8.6 unexpectedly passed")
         checked += 4
 
-    # 5. Live executable Tier 1 verifier replay of trace-01..04 + 84/84 refusal matrix!
-    exec_checks, covered_cnt = execute_traces_and_matrix(vectors, registered_codes, errors)
-    return checked, exec_checks, covered_cnt
+    # 5. Live executable Reference Verifier Core replay + security conformance + verifier mutations!
+    exec_checks, covered_cnt, mutations_killed = execute_traces_and_matrix(
+        vectors, registered_codes, require_jsonschema, errors
+    )
+    return checked, exec_checks, covered_cnt, mutations_killed
+
+
+def _collect_typed_objects(node: Any, reg_types: dict[str, dict[str, Any]], out: list[tuple[str, dict[str, Any], str]], path: str) -> None:
+    """Recursively collect every recognizable SealLink typed object inside semantic matrix/security inputs."""
+    if isinstance(node, dict):
+        obj_type = node["payload"].get("type") if isinstance(node.get("payload"), dict) else node.get("type")
+        if isinstance(obj_type, str) and obj_type in reg_types:
+            out.append((reg_types[obj_type]["schema"], node, f"{path}({obj_type})"))
+            # Also validate invocation profile arguments!
+            if obj_type == "seallink-invocation/1":
+                act = node["payload"].get("action")
+                aprof = sv.ACTION_PROFILES.get(act)
+                if aprof and "args_schema" in aprof:
+                    out.append((aprof["args_schema"], node["payload"]["arguments"], f"{path}.arguments({act})"))
+            return  # Don't recurse inside a validated object's payload
+        for k, v in node.items():
+            _collect_typed_objects(v, reg_types, out, f"{path}.{k}")
+    elif isinstance(node, list):
+        for idx, item in enumerate(node):
+            _collect_typed_objects(item, reg_types, out, f"{path}[{idx}]")
 
 
 def verify_jsonschema(
@@ -644,6 +769,7 @@ def verify_jsonschema(
         return Draft202012Validator(sub, registry=registry)
 
     validated = 0
+    reg_types = sv.registered_types()
     for vname, vdoc in vectors.items():
         pos_instances: list[tuple[str, dict[str, Any], str]] = []
         collect_schema_instances(vdoc, pos_instances)
@@ -659,6 +785,32 @@ def verify_jsonschema(
             if not errs:
                 errors.append(f"Negative schema fixture '{neg['id']}' in {vname} unexpectedly PASSED {neg['schema']}")
             validated += 1
+        # Validate EVERY recognizable typed object inside non-WIRE_* refusal-coverage-matrix cases!
+        if vname == "refusal-coverage-matrix.json":
+            for case in vdoc.get("cases", []):
+                if case["code"].startswith("WIRE_"):
+                    continue
+                typed_objs: list[tuple[str, dict[str, Any], str]] = []
+                _collect_typed_objects(case["inputs"], reg_types, typed_objs, f"matrix[{case['code']}]")
+                for sref, inst, hint in typed_objs:
+                    val = get_validator(sref)
+                    errs = list(val.iter_errors(inst))
+                    if errs:
+                        errors.append(f"Semantic refusal case {hint} FAILED Draft 2020-12 schema {sref}: {errs[0].message}")
+                    validated += 1
+        # Validate EVERY recognizable typed object inside non-WIRE_MEMBER security-conformance cases!
+        if vname == "security-conformance.json":
+            for case in vdoc.get("cases", []):
+                if case.get("expected_refusal") in ("WIRE_MEMBER", "WIRE_TYPE", "WIRE_SIZE"):
+                    continue
+                typed_objs = []
+                _collect_typed_objects(case["inputs"], reg_types, typed_objs, f"security[{case['id']}]")
+                for sref, inst, hint in typed_objs:
+                    val = get_validator(sref)
+                    errs = list(val.iter_errors(inst))
+                    if errs:
+                        errors.append(f"Security conformance case {hint} FAILED Draft 2020-12 schema {sref}: {errs[0].message}")
+                    validated += 1
     return True, validated
 
 
@@ -802,6 +954,21 @@ def main() -> int:
         if rid not in rule_locations:
             errors.append(f"Undeclared Rule ID referenced: {rid} at {loc}")
 
+    # 5b. Check archive/rule-inventory.md Section 1 indexes 100% of declared SL-* rule IDs
+    inv_path = ROOT / "archive" / "rule-inventory.md"
+    if inv_path.exists():
+        inv_indexed: set[str] = set()
+        for line in inv_path.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"^\|\s*`(SL-[A-Z]+-\d{3})`\s*\|", line)
+            if m:
+                inv_indexed.add(m.group(1))
+        missing_inv = sorted(set(rule_locations.keys()) - inv_indexed)
+        extra_inv = sorted(inv_indexed - set(rule_locations.keys()))
+        if missing_inv:
+            errors.append(f"archive/rule-inventory.md missing per-rule rows for {len(missing_inv)} rule(s): {', '.join(missing_inv)}")
+        if extra_inv:
+            errors.append(f"archive/rule-inventory.md lists undeclared rule(s): {', '.join(extra_inv)}")
+
     # 6. Check all registry files share the same protocol version string
     reg_versions = {name: data.get("version") for name, data in registries.items() if "version" in data}
     if len(set(reg_versions.values())) > 1:
@@ -815,9 +982,11 @@ def main() -> int:
             vectors[p.name] = data
     if not vectors:
         errors.append("No conformance vector files found under vectors/")
-    vector_checks, exec_checks, covered_cnt = verify_all_vectors(vectors, registered_codes, errors)
+    vector_checks, exec_checks, covered_cnt, mutations_killed = verify_all_vectors(
+        vectors, registered_codes, args.require_jsonschema, errors
+    )
 
-    # 8. Draft 2020-12 metaschema & instance validation
+    # 8. Draft 2020-12 metaschema & instance validation (including all semantic matrix/security fixtures!)
     js_ok, schema_checks = verify_jsonschema(schemas, vectors, args.require_jsonschema, errors, warnings)
 
     unused_codes = sorted(registered_codes - used_codes)
@@ -833,7 +1002,8 @@ def main() -> int:
         f"{len(registered_types)} object types | "
         f"{len(registered_codes)} refusal codes ({covered_cnt}/{len(registered_codes)} executed) | "
         f"{len(schemas)} schemas | "
-        f"{len(vectors)} vector suites ({vector_checks} crypto/logic checks, {exec_checks} live Tier 1 verifier checks"
+        f"{len(vectors)} vector suites ({vector_checks} crypto/logic checks, {exec_checks} live verifier checks, "
+        f"{mutations_killed}/10 verifier mutations killed"
         + (f", {schema_checks} Draft 2020-12 schema checks)" if js_ok else ")")
     )
     for w in warnings:

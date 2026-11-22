@@ -1,6 +1,6 @@
 # SPEC-05: Contracts, Symmetric Assent, Verifiable Credentials, and General Notary Acts
 
-- **Version:** `1.0.0-draft.2`
+- **Version:** `1.0.0-draft.3`
 - **Status:** `draft` (normative rules `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/trace-02-guardian-succession-assent.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/opreturn-actions.json`, `registry/refusal-codes.json`
@@ -23,7 +23,7 @@ In SealLink v1.0, a **unilateral grant (`SPEC-06`) is the base authorization pri
 
 A `seallink-contract/1` object (`<= 65536` bytes, `schemas/contract.schema.json`) binds `N >= 2` parties (any combination of people, organizations, agents, or unverified actors):
 
-1. **Header fields:** `type`, `network`, `genesis`, `profile`, `contract_salt` (32 CSPRNG bytes, preventing offline guessing of short contracts), `parties[2..32]` — where each entry is either an **autonomous party** `{role, name_pin?, signing_policy: ThresholdPolicy}` or a **ward party** `{role, ward_origin_id, name_pin}` (omitting static `signing_policy` so guardian succession never invalidates a live contract) — `window` (`not_before_height`, optional `not_after_height`, optional calendar `not_after_unix`), optional `machine_clause_indices`, optional `framework_id`, optional/required `seal`, optional `assent_output`, optional `config_sha256`, and optional `moderation`.
+1. **Header fields:** `type`, `network`, `genesis`, `profile`, `contract_salt` (32 CSPRNG bytes, preventing offline guessing of short contracts), `parties[2..32]` — where each entry carries a mandatory unique-within-contract **`party_id`** (`^[a-z0-9][a-z0-9._-]{0,63}$`, allowing multiple parties to share a legal `role` such as co-tenants `"tenant"` with `"tenant-1"` and `"tenant-2"`; duplicate `party_id` refuses `WIRE_MEMBER`) and is either an **autonomous party** `{party_id, role, name_pin?, signing_policy: ThresholdPolicy}` or a **ward party** `{party_id, role, ward_origin_id, name_pin}` (omitting static `signing_policy` so guardian succession never invalidates a live contract) — `window` (`not_before_height`, optional `not_after_height`, optional calendar `not_after_unix`), optional `machine_clause_indices`, optional `framework_id`, optional/required `seal`, optional `assent_output`, optional `config_sha256`, and optional `moderation`.
 2. **Clauses & Selective Disclosure:** Each clause `i` is a canonical JCS object containing free-text prose (`text`, where `\n` is allowed per `SL-WIRE-005`), typed machine terms (mirroring any bound grant capabilities/quotas), or both. The contract stores ONLY the ordered array `clause_commitments[]` where:
    ```text
    clause_commitments[i] = H_tag("seallink-clause/1", salt_i || canonical_JCS(clause_i))
@@ -35,7 +35,7 @@ A `seallink-contract/1` object (`<= 65536` bytes, `schemas/contract.schema.json`
 
 ### 2.2 Symmetric Native Assent (`seallink-assent/1`) and Anchoring (`SL-CONT-004`, `decided`)
 
-1. **Symmetric off-chain assent:** A contract is concluded when EVERY party in `parties[]` has signed an identical-format `seallink-assent/1` (`<= 32768` bytes, accommodating multi-guardian `guardian_approvals[]` and up to 32-of-32 `SignatureSet`, `target_type = "seallink-contract/1"`, `target_id = contract_id`):
+1. **Symmetric off-chain assent:** A contract is concluded when EVERY distinct `party_id` in `parties[]` is covered 1-to-1 by a valid identical-format `seallink-assent/1` (`<= 32768` bytes, accommodating multi-guardian `guardian_approvals[]` and up to 32-of-32 `SignatureSet`, `target_type = "seallink-contract/1"`, `target_id = contract_id`, matching `party_id` and `party_role == party.role`; duplicate or missing `party_id` assents refuse `CONTRACT_ASSENT_INVALID`):
    - Permitted signer roles for `seallink-assent/1` are strictly `grant` and `guardian_quorum` (`registry/object-types.json`, coherent with `registry/key-roles.json`); `auth` and `device` keys MUST NEVER sign `seallink-assent/1` (`WIRE_SIGNATURE`).
    - For an **autonomous party** (`signing_policy` present), `seallink-assent/1` uses the ordinary `{"payload","signatures"}` envelope whose `signatures.policy` MUST strictly equal `party.signing_policy` (`SL-WIRE-013`).
    - For a **ward party** (`ward_origin_id` present, `SPEC-04`), `seallink-assent/1` MUST carry `payload.guardian_context` (`origin_id == party.ward_origin_id`, `ward_name == party.name_pin.name`, `event_class = "contract_assent"`, `revision` matching the ward's active roster revision) and top-level `guardian_approvals[]` satisfying `required("contract_assent")` across distinct active guardian slots (`SL-ORIG-006` refusal precedence: `WARD_AUTONOMOUS_FORBIDDEN`, then `GUARDIAN_INACTIVE`, then `WIRE_SIGNATURE`, then `GUARDIAN_QUORUM_UNMET`).

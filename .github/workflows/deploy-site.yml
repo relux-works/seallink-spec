@@ -40,7 +40,7 @@ jobs:
           else
             LATEST_TAG=$(git tag --sort=-creatordate | grep '^v' | head -n 1 || true)
             if [[ -z "${LATEST_TAG}" ]]; then
-              LATEST_TAG="v1.0.0-draft.2"
+              LATEST_TAG="v1.0.0-draft.3"
             fi
             echo "version=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
           fi
