@@ -1,0 +1,80 @@
+{
+  "$comment": "SealLink v1.0 Service Types Registry (SPEC-03, SPEC-07). Standard lowercase types are reserved and updated via SLIPs. Permissionless custom types use reverse-domain namespace (e.g., com.example/car-lock).",
+  "protocol": "SealLink",
+  "version": "1.0.0-draft.1",
+  "custom_namespace_regex": "^[a-z0-9-]+(\\.[a-z0-9-]+)+/[a-z0-9][a-z0-9._-]{0,63}$",
+  "standard_types": [
+    {
+      "service_type": "mail",
+      "profile": "profiles/PROFILE-mail-v1.md",
+      "status": "decided",
+      "default_require_seal": true,
+      "default_requires_contract": false,
+      "supports_executor_ref": true,
+      "description": "Sovereign email hosting and delegated mailbox access (read, list, send) decoupled from identity."
+    },
+    {
+      "service_type": "agent-session",
+      "profile": "profiles/PROFILE-agent-v1.md",
+      "status": "decided",
+      "default_require_seal": true,
+      "default_requires_contract": false,
+      "supports_executor_ref": false,
+      "description": "Bounded autonomous agent task briefs, tool execution, contract-bound isolated sessions, and guardian-verified instruction intake."
+    },
+    {
+      "service_type": "xmpp",
+      "profile": null,
+      "status": "open",
+      "default_require_seal": true,
+      "default_requires_contract": false,
+      "supports_executor_ref": true,
+      "description": "Sovereign XMPP instant messaging hosting where the actor's manifest declares the active server."
+    },
+    {
+      "service_type": "blob",
+      "profile": null,
+      "status": "open",
+      "default_require_seal": true,
+      "default_requires_contract": false,
+      "supports_executor_ref": true,
+      "description": "Replaceable content-addressed blob storage (e.g., Blossom BUD-01/02/04 grant-aware profile)."
+    },
+    {
+      "service_type": "wallet",
+      "profile": null,
+      "status": "open",
+      "default_require_seal": true,
+      "default_requires_contract": false,
+      "supports_executor_ref": false,
+      "description": "Grant-gated cryptocurrency/payment execution service (strictly concrete executor and UTXO seal)."
+    },
+    {
+      "service_type": "names",
+      "profile": null,
+      "status": "open",
+      "default_require_seal": true,
+      "default_requires_contract": false,
+      "supports_executor_ref": false,
+      "description": "Delegated ledger name-update service (update-only; registration and transfers require separate custody)."
+    },
+    {
+      "service_type": "compute",
+      "profile": null,
+      "status": "open",
+      "default_require_seal": false,
+      "default_requires_contract": false,
+      "supports_executor_ref": false,
+      "description": "Model inference proxy / metered compute service (supports window_only ephemeral grants and bearer sessions)."
+    },
+    {
+      "service_type": "rental",
+      "profile": null,
+      "status": "open",
+      "default_require_seal": true,
+      "default_requires_contract": true,
+      "supports_executor_ref": false,
+      "description": "Physical or digital asset rental / lease control (vehicles, apartments, hardware); requires bilateral contract."
+    }
+  ]
+}

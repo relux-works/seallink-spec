@@ -1,0 +1,806 @@
+{
+  "description": "All 7 Constraint Algebra predicates (match + conservative narrowing) and negative schema/semantic fixtures.",
+  "negative_schema_fixtures": [
+    {
+      "expected_refusal": "WIRE_MEMBER",
+      "id": "grant-neither-issuer-nor-parent",
+      "object": {
+        "payload": {
+          "capabilities": [
+            {
+              "action": "mail/read",
+              "target": "mailbox:id/alice:work"
+            }
+          ],
+          "executor": {
+            "key": "876f46e951009c53777e34efdc76810abc9cdbc5dcc47fccba3fce8a81231eef",
+            "name": "id/mail-host-a"
+          },
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "network": "main",
+          "not_after_height": 750010,
+          "not_before_height": 750000,
+          "recent_block": "91c797a833c4fe9c626ff235e0c8eb684d697ba497421ef411a45fb28fb95c65",
+          "recipient": {
+            "key": "637360530751a2bb3bbe966da4e58ed99c3caf1f53f5ef5b7e44c0a68049acb7",
+            "mode": "key"
+          },
+          "revocation": {
+            "construction": "W",
+            "kind": "revocable",
+            "mode": "seal",
+            "seal": {
+              "script_policy": {
+                "kind": "key",
+                "pk": "02403957e79254a41db90c358b150b84f75590d993a2b4f6b25f66c152275c388e"
+              },
+              "txid": "85c17bb552b2aa90191e36fa996265c0ef02aa720d3ae1e5c0216670de1b2b07",
+              "vout": 0
+            }
+          },
+          "type": "seallink-grant/1"
+        },
+        "signatures": {
+          "policy": {
+            "m": 1,
+            "pks": [
+              "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248",
+              "sig": "fb209b484e5e276bdff5cc6b7471b69328532746510d038377a747e58176d3c8031658bd1ecd02e99711635659f903bc734432413946350178a971194a2759b2"
+            }
+          ]
+        }
+      },
+      "schema": "schemas/grant.schema.json"
+    },
+    {
+      "expected_refusal": "WIRE_MEMBER",
+      "id": "grant-both-issuer-and-parent",
+      "object": {
+        "payload": {
+          "capabilities": [
+            {
+              "action": "mail/read",
+              "target": "mailbox:id/alice:work"
+            }
+          ],
+          "executor": {
+            "key": "876f46e951009c53777e34efdc76810abc9cdbc5dcc47fccba3fce8a81231eef",
+            "name": "id/mail-host-a"
+          },
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "issuer": {
+            "name": "id/alice",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0373f19ec1dfff674a2bf39a8c279d71719b11d29980a10fb77589323cec9ef6bc"
+            },
+            "registration": {
+              "txid": "bd6322bfdf9acacac4037ae7a115e902b43a37eff7b449400484822bb01fd88f",
+              "vout": 0
+            },
+            "role_policy": {
+              "m": 1,
+              "pks": [
+                "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+              ]
+            }
+          },
+          "network": "main",
+          "not_after_height": 750010,
+          "not_before_height": 750000,
+          "parent": {
+            "grant_id": "013aa62f591e23915e985b68e13a79992280c309ea591adb77ea3d93d794f11d",
+            "ordinal": 1
+          },
+          "recent_block": "91c797a833c4fe9c626ff235e0c8eb684d697ba497421ef411a45fb28fb95c65",
+          "recipient": {
+            "key": "637360530751a2bb3bbe966da4e58ed99c3caf1f53f5ef5b7e44c0a68049acb7",
+            "mode": "key"
+          },
+          "revocation": {
+            "construction": "W",
+            "kind": "revocable",
+            "mode": "seal",
+            "seal": {
+              "script_policy": {
+                "kind": "key",
+                "pk": "02403957e79254a41db90c358b150b84f75590d993a2b4f6b25f66c152275c388e"
+              },
+              "txid": "85c17bb552b2aa90191e36fa996265c0ef02aa720d3ae1e5c0216670de1b2b07",
+              "vout": 0
+            }
+          },
+          "type": "seallink-grant/1"
+        },
+        "signatures": {
+          "policy": {
+            "m": 1,
+            "pks": [
+              "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248",
+              "sig": "1e866af80d1c07868c8568fe968eed9a0cbd6f73b1e2ef245d258c2273d242ff3bdf87cc27f423f0a0631ebc23a5252f2cc6d5eb1465d1c1dfddf4865f0250b2"
+            }
+          ]
+        }
+      },
+      "schema": "schemas/grant.schema.json"
+    },
+    {
+      "expected_refusal": "GRANT_EXECUTOR_REF_FORBIDDEN",
+      "id": "grant-executor-ref-with-quota",
+      "object": {
+        "payload": {
+          "capabilities": [
+            {
+              "action": "mail/read",
+              "quotas": [
+                {
+                  "kind": "seallink/count",
+                  "max": "5",
+                  "resource": "mailbox:id/alice:work",
+                  "unit": "requests",
+                  "window": "term"
+                }
+              ],
+              "target": "mailbox:id/alice:work"
+            }
+          ],
+          "executor_ref": {
+            "label": "work",
+            "provider_of": "id/alice",
+            "service_type": "mail"
+          },
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "issuer": {
+            "name": "id/alice",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0373f19ec1dfff674a2bf39a8c279d71719b11d29980a10fb77589323cec9ef6bc"
+            },
+            "registration": {
+              "txid": "bd6322bfdf9acacac4037ae7a115e902b43a37eff7b449400484822bb01fd88f",
+              "vout": 0
+            },
+            "role_policy": {
+              "m": 1,
+              "pks": [
+                "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+              ]
+            }
+          },
+          "network": "main",
+          "not_after_height": 750010,
+          "not_before_height": 750000,
+          "recent_block": "91c797a833c4fe9c626ff235e0c8eb684d697ba497421ef411a45fb28fb95c65",
+          "recipient": {
+            "key": "637360530751a2bb3bbe966da4e58ed99c3caf1f53f5ef5b7e44c0a68049acb7",
+            "mode": "key"
+          },
+          "revocation": {
+            "construction": "W",
+            "kind": "revocable",
+            "mode": "seal",
+            "seal": {
+              "script_policy": {
+                "kind": "key",
+                "pk": "02403957e79254a41db90c358b150b84f75590d993a2b4f6b25f66c152275c388e"
+              },
+              "txid": "85c17bb552b2aa90191e36fa996265c0ef02aa720d3ae1e5c0216670de1b2b07",
+              "vout": 0
+            }
+          },
+          "type": "seallink-grant/1"
+        },
+        "signatures": {
+          "policy": {
+            "m": 1,
+            "pks": [
+              "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248",
+              "sig": "5f30e4ae6b18027a8ff46c5fc66c150fbd2c4607ce3616c00a8bfbb0c33ee338105f88264d78720c8ca40d2f549b881dcc071d25d3ae12eb42c2c51024a17c4a"
+            }
+          ]
+        }
+      },
+      "schema": "schemas/grant.schema.json"
+    },
+    {
+      "expected_refusal": "WIRE_CONSTRAINT",
+      "id": "grant-populated-extensions",
+      "object": {
+        "payload": {
+          "capabilities": [
+            {
+              "action": "mail/read",
+              "extensions": {
+                "future": true
+              },
+              "target": "mailbox:id/alice:work"
+            }
+          ],
+          "executor": {
+            "key": "876f46e951009c53777e34efdc76810abc9cdbc5dcc47fccba3fce8a81231eef",
+            "name": "id/mail-host-a"
+          },
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "issuer": {
+            "name": "id/alice",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0373f19ec1dfff674a2bf39a8c279d71719b11d29980a10fb77589323cec9ef6bc"
+            },
+            "registration": {
+              "txid": "bd6322bfdf9acacac4037ae7a115e902b43a37eff7b449400484822bb01fd88f",
+              "vout": 0
+            },
+            "role_policy": {
+              "m": 1,
+              "pks": [
+                "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+              ]
+            }
+          },
+          "network": "main",
+          "not_after_height": 750010,
+          "not_before_height": 750000,
+          "recent_block": "91c797a833c4fe9c626ff235e0c8eb684d697ba497421ef411a45fb28fb95c65",
+          "recipient": {
+            "key": "637360530751a2bb3bbe966da4e58ed99c3caf1f53f5ef5b7e44c0a68049acb7",
+            "mode": "key"
+          },
+          "revocation": {
+            "construction": "W",
+            "kind": "revocable",
+            "mode": "seal",
+            "seal": {
+              "script_policy": {
+                "kind": "key",
+                "pk": "02403957e79254a41db90c358b150b84f75590d993a2b4f6b25f66c152275c388e"
+              },
+              "txid": "85c17bb552b2aa90191e36fa996265c0ef02aa720d3ae1e5c0216670de1b2b07",
+              "vout": 0
+            }
+          },
+          "type": "seallink-grant/1"
+        },
+        "signatures": {
+          "policy": {
+            "m": 1,
+            "pks": [
+              "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248",
+              "sig": "fe66a2bcd1f04b0cf818650df102c83e1c19d05d2693c6b3f543837aa966442d4525b7958bc9da2f414c07d958a979d0cf3cefb197dc731ba29c79d1ddd1f583"
+            }
+          ]
+        }
+      },
+      "schema": "schemas/grant.schema.json"
+    }
+  ],
+  "negative_semantic_fixtures": [
+    {
+      "expected_refusal": "WIRE_INTEGER",
+      "id": "grant-window-only-exceeds-12-blocks",
+      "object": {
+        "payload": {
+          "capabilities": [
+            {
+              "action": "mail/read",
+              "target": "mailbox:id/alice:work"
+            }
+          ],
+          "executor": {
+            "key": "876f46e951009c53777e34efdc76810abc9cdbc5dcc47fccba3fce8a81231eef",
+            "name": "id/mail-host-a"
+          },
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "issuer": {
+            "name": "id/alice",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0373f19ec1dfff674a2bf39a8c279d71719b11d29980a10fb77589323cec9ef6bc"
+            },
+            "registration": {
+              "txid": "bd6322bfdf9acacac4037ae7a115e902b43a37eff7b449400484822bb01fd88f",
+              "vout": 0
+            },
+            "role_policy": {
+              "m": 1,
+              "pks": [
+                "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+              ]
+            }
+          },
+          "network": "main",
+          "not_after_height": 1750000,
+          "not_before_height": 750000,
+          "recent_block": "91c797a833c4fe9c626ff235e0c8eb684d697ba497421ef411a45fb28fb95c65",
+          "recipient": {
+            "key": "637360530751a2bb3bbe966da4e58ed99c3caf1f53f5ef5b7e44c0a68049acb7",
+            "mode": "key"
+          },
+          "revocation": {
+            "mode": "window_only"
+          },
+          "type": "seallink-grant/1"
+        },
+        "signatures": {
+          "policy": {
+            "m": 1,
+            "pks": [
+              "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248",
+              "sig": "dd09c43739a1e5988a7028f8c073bc66f174b5192e0177626524b26d4eb7f59ed9f30633d30f15fce619db59602268e9e5ade636281b2ce3e739dd44376cabdd"
+            }
+          ]
+        }
+      },
+      "schema": "schemas/grant.schema.json"
+    },
+    {
+      "expected_refusal": "WIRE_CONSTRAINT",
+      "id": "grant-unsorted-in-predicate",
+      "object": {
+        "payload": {
+          "capabilities": [
+            {
+              "action": "mail/read",
+              "target": "mailbox:id/alice:work",
+              "where": {
+                "folder": {
+                  "in": [
+                    "Zeta",
+                    "Alpha"
+                  ]
+                }
+              }
+            }
+          ],
+          "executor": {
+            "key": "876f46e951009c53777e34efdc76810abc9cdbc5dcc47fccba3fce8a81231eef",
+            "name": "id/mail-host-a"
+          },
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "issuer": {
+            "name": "id/alice",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0373f19ec1dfff674a2bf39a8c279d71719b11d29980a10fb77589323cec9ef6bc"
+            },
+            "registration": {
+              "txid": "bd6322bfdf9acacac4037ae7a115e902b43a37eff7b449400484822bb01fd88f",
+              "vout": 0
+            },
+            "role_policy": {
+              "m": 1,
+              "pks": [
+                "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+              ]
+            }
+          },
+          "network": "main",
+          "not_after_height": 750010,
+          "not_before_height": 750000,
+          "recent_block": "91c797a833c4fe9c626ff235e0c8eb684d697ba497421ef411a45fb28fb95c65",
+          "recipient": {
+            "key": "637360530751a2bb3bbe966da4e58ed99c3caf1f53f5ef5b7e44c0a68049acb7",
+            "mode": "key"
+          },
+          "revocation": {
+            "construction": "W",
+            "kind": "revocable",
+            "mode": "seal",
+            "seal": {
+              "script_policy": {
+                "kind": "key",
+                "pk": "02403957e79254a41db90c358b150b84f75590d993a2b4f6b25f66c152275c388e"
+              },
+              "txid": "85c17bb552b2aa90191e36fa996265c0ef02aa720d3ae1e5c0216670de1b2b07",
+              "vout": 0
+            }
+          },
+          "type": "seallink-grant/1"
+        },
+        "signatures": {
+          "policy": {
+            "m": 1,
+            "pks": [
+              "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248",
+              "sig": "112e2010614fc74df6856161f9587701eb649813ddf2bf2ea2ad90e2f524bece3980f07f13a9567e0bb0dad28fa5dfe225d6501565e94b3c645b6c27bc540a40"
+            }
+          ]
+        }
+      },
+      "schema": "schemas/grant.schema.json"
+    },
+    {
+      "expected_refusal": "GRANT_TEXT_FORBIDDEN",
+      "id": "grant-terms-text-on-mechanical-mail",
+      "object": {
+        "payload": {
+          "capabilities": [
+            {
+              "action": "mail/read",
+              "target": "mailbox:id/alice:work"
+            }
+          ],
+          "executor": {
+            "key": "876f46e951009c53777e34efdc76810abc9cdbc5dcc47fccba3fce8a81231eef",
+            "name": "id/mail-host-a"
+          },
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "issuer": {
+            "name": "id/alice",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0373f19ec1dfff674a2bf39a8c279d71719b11d29980a10fb77589323cec9ef6bc"
+            },
+            "registration": {
+              "txid": "bd6322bfdf9acacac4037ae7a115e902b43a37eff7b449400484822bb01fd88f",
+              "vout": 0
+            },
+            "role_policy": {
+              "m": 1,
+              "pks": [
+                "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+              ]
+            }
+          },
+          "network": "main",
+          "not_after_height": 750010,
+          "not_before_height": 750000,
+          "recent_block": "91c797a833c4fe9c626ff235e0c8eb684d697ba497421ef411a45fb28fb95c65",
+          "recipient": {
+            "key": "637360530751a2bb3bbe966da4e58ed99c3caf1f53f5ef5b7e44c0a68049acb7",
+            "mode": "key"
+          },
+          "revocation": {
+            "construction": "W",
+            "kind": "revocable",
+            "mode": "seal",
+            "seal": {
+              "script_policy": {
+                "kind": "key",
+                "pk": "02403957e79254a41db90c358b150b84f75590d993a2b4f6b25f66c152275c388e"
+              },
+              "txid": "85c17bb552b2aa90191e36fa996265c0ef02aa720d3ae1e5c0216670de1b2b07",
+              "vout": 0
+            }
+          },
+          "terms_text": "Only read polite invoices.",
+          "type": "seallink-grant/1"
+        },
+        "signatures": {
+          "policy": {
+            "m": 1,
+            "pks": [
+              "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "683119b8c36eb4881cfa633fbcb0aa6de43ee9a7cd8e5233855b95b255540248",
+              "sig": "773f86f3f9775c05b3c7562e9203c51a58e7bd033cf1dd068f74071c02db073550cf13a1ebed9bf95b6e48ffe1a37b528cfacc07985024f4aaf5397df16e2f62"
+            }
+          ]
+        }
+      },
+      "schema": "schemas/grant.schema.json"
+    }
+  ],
+  "predicate_matches": [
+    {
+      "arg": "Invoices",
+      "expected": true,
+      "id": "eq-str-ok",
+      "pred": {
+        "eq": "Invoices"
+      }
+    },
+    {
+      "arg": "Personal",
+      "expected": false,
+      "id": "eq-str-fail",
+      "pred": {
+        "eq": "Invoices"
+      }
+    },
+    {
+      "arg": "Invoices",
+      "expected": true,
+      "id": "in-ok",
+      "pred": {
+        "in": [
+          "Archive",
+          "Invoices"
+        ]
+      }
+    },
+    {
+      "arg": "Inbox",
+      "expected": false,
+      "id": "in-fail",
+      "pred": {
+        "in": [
+          "Archive",
+          "Invoices"
+        ]
+      }
+    },
+    {
+      "arg": "Invoices",
+      "expected": true,
+      "id": "not-in-ok",
+      "pred": {
+        "not_in": [
+          "Private",
+          "Trash"
+        ]
+      }
+    },
+    {
+      "arg": "Private",
+      "expected": false,
+      "id": "not-in-fail",
+      "pred": {
+        "not_in": [
+          "Private",
+          "Trash"
+        ]
+      }
+    },
+    {
+      "arg": "Work/2026",
+      "expected": true,
+      "id": "prefix-ok",
+      "pred": {
+        "prefix": "Work/"
+      }
+    },
+    {
+      "arg": "Home/2026",
+      "expected": false,
+      "id": "prefix-fail",
+      "pred": {
+        "prefix": "Work/"
+      }
+    },
+    {
+      "arg": "ivan@relux.works",
+      "expected": true,
+      "id": "suffix-ok",
+      "pred": {
+        "suffix": "@relux.works"
+      }
+    },
+    {
+      "arg": "ivan@evil.example",
+      "expected": false,
+      "id": "suffix-fail",
+      "pred": {
+        "suffix": "@relux.works"
+      }
+    },
+    {
+      "arg": "5000",
+      "expected": true,
+      "id": "range-ok",
+      "pred": {
+        "range": [
+          "100",
+          "5000"
+        ]
+      }
+    },
+    {
+      "arg": "5001",
+      "expected": false,
+      "id": "range-fail",
+      "pred": {
+        "range": [
+          "100",
+          "5000"
+        ]
+      }
+    },
+    {
+      "arg": "4db5e11ff127d0d353d51dca9614024486cbb658cc1a38774640bd8bf4f77f1f",
+      "expected": true,
+      "id": "hash-eq-ok",
+      "pred": {
+        "hash_eq": "4db5e11ff127d0d353d51dca9614024486cbb658cc1a38774640bd8bf4f77f1f"
+      }
+    },
+    {
+      "arg": "c5297e72855f39479fe5f15af4f00c6d2b0734e738a6b901a1577355be0b431f",
+      "expected": false,
+      "id": "hash-eq-fail",
+      "pred": {
+        "hash_eq": "4db5e11ff127d0d353d51dca9614024486cbb658cc1a38774640bd8bf4f77f1f"
+      }
+    }
+  ],
+  "predicate_narrowing": [
+    {
+      "child": {
+        "eq": "Invoices"
+      },
+      "expected": true,
+      "id": "in-to-eq-ok",
+      "parent": {
+        "in": [
+          "Archive",
+          "Invoices"
+        ]
+      }
+    },
+    {
+      "child": {
+        "in": [
+          "Invoices"
+        ]
+      },
+      "expected": false,
+      "id": "eq-to-singleton-in-conservative-fail",
+      "note": "Conservative pairwise rule (SPEC-01 §6.2).",
+      "parent": {
+        "eq": "Invoices"
+      }
+    },
+    {
+      "child": {
+        "not_in": [
+          "Private",
+          "Trash"
+        ]
+      },
+      "expected": true,
+      "id": "not-in-to-superset-ok",
+      "parent": {
+        "not_in": [
+          "Private"
+        ]
+      }
+    },
+    {
+      "child": {
+        "in": [
+          "Archive",
+          "Invoices"
+        ]
+      },
+      "expected": true,
+      "id": "not-in-to-disjoint-in-ok",
+      "parent": {
+        "not_in": [
+          "Private"
+        ]
+      }
+    },
+    {
+      "child": {
+        "in": [
+          "Invoices",
+          "Private"
+        ]
+      },
+      "expected": false,
+      "id": "not-in-to-overlapping-in-fail",
+      "parent": {
+        "not_in": [
+          "Private"
+        ]
+      }
+    },
+    {
+      "child": {
+        "prefix": "Work/2026/"
+      },
+      "expected": true,
+      "id": "prefix-narrow-ok",
+      "parent": {
+        "prefix": "Work/"
+      }
+    },
+    {
+      "child": {
+        "prefix": "Work/"
+      },
+      "expected": false,
+      "id": "prefix-widen-fail",
+      "parent": {
+        "prefix": "Work/2026/"
+      }
+    },
+    {
+      "child": {
+        "eq": "mail.relux.works"
+      },
+      "expected": true,
+      "id": "suffix-narrow-ok",
+      "parent": {
+        "suffix": ".relux.works"
+      }
+    },
+    {
+      "child": {
+        "range": [
+          "100",
+          "5000"
+        ]
+      },
+      "expected": true,
+      "id": "range-narrow-ok",
+      "parent": {
+        "range": [
+          "0",
+          "10000"
+        ]
+      }
+    },
+    {
+      "child": {
+        "range": [
+          "50",
+          "5000"
+        ]
+      },
+      "expected": false,
+      "id": "range-widen-fail",
+      "parent": {
+        "range": [
+          "100",
+          "5000"
+        ]
+      }
+    },
+    {
+      "child": {
+        "hash_eq": "b25ca59e1f9fe09e2494ebd0ca4b811caccc7b65aee7ace34fd3b57314806bdc"
+      },
+      "expected": true,
+      "id": "hash-eq-same-ok",
+      "parent": {
+        "hash_eq": "b25ca59e1f9fe09e2494ebd0ca4b811caccc7b65aee7ace34fd3b57314806bdc"
+      }
+    },
+    {
+      "child": {
+        "hash_eq": "b39558fab943de1a679bda7d5c9a638d4e3dbe66debaebd5ee0a04e0c2f73812"
+      },
+      "expected": false,
+      "id": "hash-eq-diff-fail",
+      "parent": {
+        "hash_eq": "b25ca59e1f9fe09e2494ebd0ca4b811caccc7b65aee7ace34fd3b57314806bdc"
+      }
+    }
+  ],
+  "suite": "constraints-and-schemas",
+  "version": "1.0.0-draft.1"
+}

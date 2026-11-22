@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seallink.org/schemas/v1/name-value.schema.json",
+  "title": "SealLink v1.0 Ledger Name Value (520-Byte Budget)",
+  "description": "Formal schema for SealLink-recognized top-level members in a Namecoin name value. Unknown owner-defined top-level members are permitted and ignored by SealLink readers (SL-IDEN-002).",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "grant": { "$ref": "#/$defs/RoleKeyOrPolicyPin" },
+        "cred": { "$ref": "#/$defs/RoleKeyOrPolicyPin" },
+        "notary": { "$ref": "#/$defs/RoleKeyOrPolicyPin" },
+        "origin": { "$ref": "common.schema.json#/$defs/Hex64" }
+      }
+    },
+    "m": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["h", "s"],
+      "properties": {
+        "h": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "s": { "$ref": "common.schema.json#/$defs/PositiveUint53" }
+      }
+    },
+    "nostr": {
+      "oneOf": [
+        { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["names"],
+          "properties": {
+            "names": {
+              "type": "object",
+              "required": ["_"],
+              "properties": {
+                "_": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" }
+              },
+              "additionalProperties": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" }
+            },
+            "relays": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "maxItems": 16,
+                "items": { "type": "string", "pattern": "^wss?://.+$", "maxLength": 256 }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "RoleKeyOrPolicyPin": {
+      "oneOf": [
+        { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["p"],
+          "properties": {
+            "p": {
+              "$ref": "common.schema.json#/$defs/Hex64",
+              "description": "SHA-256 of canonical JCS ThresholdPolicy (m-of-n BIP-340 keys). Any change to the role policy requires an owner-authored ledger update."
+            }
+          }
+        }
+      ]
+    }
+  }
+}

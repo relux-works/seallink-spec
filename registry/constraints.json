@@ -1,0 +1,70 @@
+{
+  "$comment": "SealLink v1.0 Structured Capability & Constraint Algebra Registry (SPEC-01, SPEC-06). All 7 predicates have linear-time decidable conservative subsumption (child <= parent) with zero Turing-completeness.",
+  "protocol": "SealLink",
+  "version": "1.0.0-draft.1",
+  "comparison_semantics": "conservative_pairwise",
+  "predicates": [
+    {
+      "op": "eq",
+      "operand_types": ["string", "uint64_str", "boolean"],
+      "match_rule": "arg == operand",
+      "narrowing_rule": "child.op == 'eq' and child.operand == parent.operand",
+      "description": "Exact equality against a scalar argument value."
+    },
+    {
+      "op": "in",
+      "operand_types": ["array<string | uint64_str> (nonempty, sorted, distinct, max 256)"],
+      "match_rule": "arg in operand",
+      "narrowing_rule": "(child.op == 'in' and set(child.operand) <= set(parent.operand)) or (child.op == 'eq' and child.operand in set(parent.operand))",
+      "description": "Finite allowlist of exact permitted values."
+    },
+    {
+      "op": "not_in",
+      "operand_types": ["array<string | uint64_str> (nonempty, sorted, distinct, max 256)"],
+      "match_rule": "arg not in operand",
+      "narrowing_rule": "(child.op == 'not_in' and set(parent.operand) <= set(child.operand)) or (child.op == 'in' and set(child.operand).isdisjoint(set(parent.operand))) or (child.op == 'eq' and child.operand not in set(parent.operand))",
+      "description": "Finite denylist of forbidden values."
+    },
+    {
+      "op": "prefix",
+      "operand_types": ["string (nonempty)"],
+      "match_rule": "arg.startswith(operand)",
+      "narrowing_rule": "(child.op == 'prefix' and child.operand.startswith(parent.operand)) or (child.op == 'eq' and child.operand.startswith(parent.operand)) or (child.op == 'in' and all(v.startswith(parent.operand) for v in child.operand))",
+      "description": "Exact code-point prefix match (paths, git refs, URI hierarchies)."
+    },
+    {
+      "op": "suffix",
+      "operand_types": ["string (nonempty)"],
+      "match_rule": "arg.endswith(operand)",
+      "narrowing_rule": "(child.op == 'suffix' and child.operand.endswith(parent.operand)) or (child.op == 'eq' and child.operand.endswith(parent.operand)) or (child.op == 'in' and all(v.endswith(parent.operand) for v in child.operand))",
+      "description": "Exact code-point suffix match (DNS domains, email/XMPP addresses)."
+    },
+    {
+      "op": "range",
+      "operand_types": ["[uint64_str min, uint64_str max] with min <= max"],
+      "match_rule": "min <= int(arg) <= max",
+      "narrowing_rule": "(child.op == 'range' and parent.min <= child.min <= child.max <= parent.max) or (child.op == 'eq' and parent.min <= int(child.operand) <= parent.max) or (child.op == 'in' and all(parent.min <= int(v) <= parent.max for v in child.operand))",
+      "description": "Closed unsigned 64-bit integer interval [min, max] (per-request amounts, sizes, hours, depths)."
+    },
+    {
+      "op": "hash_eq",
+      "operand_types": ["hex64 (lowercase SHA-256)"],
+      "match_rule": "SHA256(arg_bytes) == operand or arg == operand",
+      "narrowing_rule": "child.op == 'hash_eq' and child.operand == parent.operand",
+      "description": "Exact 32-byte SHA-256 commitment match (config manifests, document payloads, templates)."
+    }
+  ],
+  "reserved_extension_field": "extensions",
+  "reserved_extension_policy": "fail_closed_WIRE_CONSTRAINT",
+  "quota_windows": [
+    {"pattern": "^term$", "description": "Cumulative ceiling across the entire grant validity window."},
+    {"pattern": "^blocks:[1-9][0-9]{0,8}$", "description": "Half-open block windows anchored at grant not_before_height."},
+    {"pattern": "^seconds:[1-9][0-9]{0,9}$", "description": "UTC epoch-aligned fixed clock windows with durable regression watermark."}
+  ],
+  "standard_quota_kinds": [
+    {"kind": "seallink/coins", "unit": "atomic", "settlement": "actual_release_remainder"},
+    {"kind": "seallink/cost", "unit": "<currency>/<scale>", "settlement": "actual_release_remainder"},
+    {"kind": "seallink/tokens", "unit": "input-token | output-token", "settlement": "actual_release_remainder"},
+    {"kind": "seallink/count", "unit": "requests | messages | bytes | operations | starts | calls", "settlement": "actual_release_remainder"}
+  ]
+}

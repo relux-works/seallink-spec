@@ -1,0 +1,1040 @@
+{
+  "child_1_single_use": {
+    "canonical_jcs": "{\"payload\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"1\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"eq\":\"pytest\"}}}],\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"min_depth\":1,\"network\":\"main\",\"not_after_height\":755000,\"not_before_height\":750100,\"parent\":{\"grant_id\":\"7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d\",\"ordinal\":1},\"recent_block\":\"28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35\",\"recipient\":{\"key\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"mode\":\"key\"},\"revocation\":{\"construction\":\"W\",\"kind\":\"single_use\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"keys\":{\"grantee\":\"02e35f172d2e4157cbce9e95188c4c91a867f021dff6c711665b8e79626bad9476\",\"issuer\":\"0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001\"},\"kind\":\"branch\",\"template\":\"single_use_1_of_2\"},\"txid\":\"05f147a75e3010a398dda4ee58621bd7b1e5227765b2c1ac0dd30e8946a91ad6\",\"vout\":0}},\"type\":\"seallink-grant/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\"]},\"sigs\":[{\"pk\":\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\",\"sig\":\"47999c30f0a36f03aa771776c9afcde21b438ea453de4cce19c40856ebf7e7d64e34c11c2d640a0681ad233ce8d552b3ca2ebe2915029f6faf5cae9beac05be8\"}]}}",
+    "content_addr": "203d5ebbb24d38e15d592ef89b2517a60c1835ac146c9b5afd08df2d9f791304",
+    "object": {
+      "payload": {
+        "capabilities": [
+          {
+            "action": "agent/tool",
+            "quotas": [
+              {
+                "kind": "seallink/count",
+                "max": "1",
+                "resource": "station:fleet:tools",
+                "unit": "calls",
+                "window": "term"
+              }
+            ],
+            "target": "station:fleet:tools",
+            "where": {
+              "tool_name": {
+                "eq": "pytest"
+              }
+            }
+          }
+        ],
+        "executor": {
+          "key": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
+          "name": "id/station-a"
+        },
+        "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+        "min_depth": 1,
+        "network": "main",
+        "not_after_height": 755000,
+        "not_before_height": 750100,
+        "parent": {
+          "grant_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+          "ordinal": 1
+        },
+        "recent_block": "28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35",
+        "recipient": {
+          "key": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
+          "mode": "key"
+        },
+        "revocation": {
+          "construction": "W",
+          "kind": "single_use",
+          "mode": "seal",
+          "seal": {
+            "script_policy": {
+              "keys": {
+                "grantee": "02e35f172d2e4157cbce9e95188c4c91a867f021dff6c711665b8e79626bad9476",
+                "issuer": "0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001"
+              },
+              "kind": "branch",
+              "template": "single_use_1_of_2"
+            },
+            "txid": "05f147a75e3010a398dda4ee58621bd7b1e5227765b2c1ac0dd30e8946a91ad6",
+            "vout": 0
+          }
+        },
+        "type": "seallink-grant/1"
+      },
+      "signatures": {
+        "policy": {
+          "m": 1,
+          "pks": [
+            "e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6"
+          ]
+        },
+        "sigs": [
+          {
+            "pk": "e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6",
+            "sig": "47999c30f0a36f03aa771776c9afcde21b438ea453de4cce19c40856ebf7e7d64e34c11c2d640a0681ad233ce8d552b3ca2ebe2915029f6faf5cae9beac05be8"
+          }
+        ]
+      }
+    },
+    "object_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+    "schema": "schemas/grant.schema.json",
+    "signing_digest": "dd9a5fffbdffd7aad7483bf40a7f8bd58eb562852fc49fcde608a0fb9ece5cce"
+  },
+  "child_1_trace": {
+    "invocation": {
+      "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"bddecd2312ddae203164ca7c3f51766c7eaf5e7ef47d5429d807263ac1d569e6\",\"max_output_bytes\":\"65536\",\"tool_name\":\"pytest\"},\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"network\":\"main\",\"nonce\":\"e30bd0c99a897592eb735ae9b9e2b1a707a9bedabd756a77e1216d51c9770e21\",\"proof_path\":[{\"grant_id\":\"7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"issuance_txid\":\"3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\"]},\"sigs\":[{\"pk\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"sig\":\"2fa765e2fe1ebf102afb12b9615fa57e30d26119cd7c5d3f693232fd3a8d8231888d272aca0283960bb9f3ca1217536182f99245ff29782de552e4170e5b530a\"}]}}",
+      "content_addr": "92f9d2d9dcd6354ce04cea40a79e95666565024d3cde89e80ba3e4ad1315ce1c",
+      "object": {
+        "payload": {
+          "action": "agent/tool",
+          "arguments": {
+            "input_sha256": "bddecd2312ddae203164ca7c3f51766c7eaf5e7ef47d5429d807263ac1d569e6",
+            "max_output_bytes": "65536",
+            "tool_name": "pytest"
+          },
+          "executor": {
+            "key": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
+            "name": "id/station-a"
+          },
+          "exp": 1795221000,
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "iat": 1795220000,
+          "network": "main",
+          "nonce": "e30bd0c99a897592eb735ae9b9e2b1a707a9bedabd756a77e1216d51c9770e21",
+          "proof_path": [
+            {
+              "grant_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+              "issuance_txid": "584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc"
+            },
+            {
+              "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+              "issuance_txid": "3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7"
+            }
+          ],
+          "target": "station:fleet:tools",
+          "type": "seallink-invocation/1"
+        },
+        "signatures": {
+          "policy": {
+            "m": 1,
+            "pks": [
+              "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
+              "sig": "2fa765e2fe1ebf102afb12b9615fa57e30d26119cd7c5d3f693232fd3a8d8231888d272aca0283960bb9f3ca1217536182f99245ff29782de552e4170e5b530a"
+            }
+          ]
+        }
+      },
+      "object_id": "c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6",
+      "schema": "schemas/invocation.schema.json#/$defs/Invocation",
+      "signing_digest": "b443e29356fb17b70dabd38106f9b58d3050a029039ae9ff42bcb440ac954a81"
+    },
+    "profile_args_schema": "schemas/profile-agent.schema.json#/$defs/AgentToolArgs",
+    "step_a_mempool_unconfirmed": {
+      "expected_refusal": "CHAIN_DEPTH_INSUFFICIENT",
+      "expected_verdict": "REFUSE"
+    },
+    "step_b_confirmed_execute": {
+      "expected_verdict": "ADMIT",
+      "journal_chain": [
+        {
+          "c_after": "44c2ff18ad09a4d304673a7632a329afe8c9fd6d120a2b1459e75ee645f1d360",
+          "c_before": "c06393b1fce4469ef0560dfedf5fa93272ea251d6847d6d509b05771a6fae034",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"account\":\"row\",\"amount\":\"1\",\"bucket_id\":\"term\",\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"invocation_id\":\"c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6\",\"quota_kind\":\"seallink/count\",\"recorded_at\":1795220045,\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"reservation\",\"pos\":1,\"prev_commitment\":\"c06393b1fce4469ef0560dfedf5fa93272ea251d6847d6d509b05771a6fae034\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "f02717301c1eca6906399f011d69ce5f19c9519ad730e91065c67da940dec83f",
+            "object": {
+              "body": {
+                "account": "row",
+                "amount": "1",
+                "bucket_id": "term",
+                "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+                "invocation_id": "c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6",
+                "quota_kind": "seallink/count",
+                "recorded_at": 1795220045,
+                "resource": "station:fleet:tools",
+                "unit": "calls",
+                "window": "term"
+              },
+              "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
+              "kind": "reservation",
+              "pos": 1,
+              "prev_commitment": "c06393b1fce4469ef0560dfedf5fa93272ea251d6847d6d509b05771a6fae034",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "f02717301c1eca6906399f011d69ce5f19c9519ad730e91065c67da940dec83f",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        },
+        {
+          "c_after": "28e7b0288ee9b10f7519508f580bfbc5eeb33d0398591a70e41ba704cd93c89d",
+          "c_before": "44c2ff18ad09a4d304673a7632a329afe8c9fd6d120a2b1459e75ee645f1d360",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"invocation_id\":\"c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6\",\"outcome\":\"executed\",\"receipt_sha256\":\"adcec041dd53e837e28ab694c041c14cc0b88d44590cc7c56f3813b079b0f096\",\"recorded_at\":1795220050,\"released\":\"0\",\"settled\":\"1\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"settlement\",\"pos\":2,\"prev_commitment\":\"44c2ff18ad09a4d304673a7632a329afe8c9fd6d120a2b1459e75ee645f1d360\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "c8bf68f35b0a0fec1f879685e33fe0ec2c3b28850b0e760ef265b1dd1b6d3d42",
+            "object": {
+              "body": {
+                "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+                "invocation_id": "c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6",
+                "outcome": "executed",
+                "receipt_sha256": "adcec041dd53e837e28ab694c041c14cc0b88d44590cc7c56f3813b079b0f096",
+                "recorded_at": 1795220050,
+                "released": "0",
+                "settled": "1"
+              },
+              "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
+              "kind": "settlement",
+              "pos": 2,
+              "prev_commitment": "44c2ff18ad09a4d304673a7632a329afe8c9fd6d120a2b1459e75ee645f1d360",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "c8bf68f35b0a0fec1f879685e33fe0ec2c3b28850b0e760ef265b1dd1b6d3d42",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        },
+        {
+          "c_after": "841d776d4a74455305934120144faf68a3614defc1897951b205521d465c3134",
+          "c_before": "28e7b0288ee9b10f7519508f580bfbc5eeb33d0398591a70e41ba704cd93c89d",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"invocation_id\":\"c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6\",\"receipt_sha256\":\"adcec041dd53e837e28ab694c041c14cc0b88d44590cc7c56f3813b079b0f096\",\"recorded_at\":1795220050,\"use_txid\":\"f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"single-use-consumed\",\"pos\":3,\"prev_commitment\":\"28e7b0288ee9b10f7519508f580bfbc5eeb33d0398591a70e41ba704cd93c89d\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "07591cbbbc92fed7c7a4f303224b5ef2334b89411116ff3458ebc80840e423c3",
+            "object": {
+              "body": {
+                "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+                "invocation_id": "c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6",
+                "receipt_sha256": "adcec041dd53e837e28ab694c041c14cc0b88d44590cc7c56f3813b079b0f096",
+                "recorded_at": 1795220050,
+                "use_txid": "f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb"
+              },
+              "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
+              "kind": "single-use-consumed",
+              "pos": 3,
+              "prev_commitment": "28e7b0288ee9b10f7519508f580bfbc5eeb33d0398591a70e41ba704cd93c89d",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "07591cbbbc92fed7c7a4f303224b5ef2334b89411116ff3458ebc80840e423c3",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        },
+        {
+          "c_after": "cc79b88d05fe2650c0689510cefcd96745367a5071d0346fdfbfd1b3149c5107",
+          "c_before": "841d776d4a74455305934120144faf68a3614defc1897951b205521d465c3134",
+          "entry": {
+            "canonical_jcs": "{\"body\":{\"cause\":\"SINGLE_USE_CONSUMED\",\"observed_at\":1795220050,\"observed_height\":750110,\"spend_txid\":\"f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb\",\"subject_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"subject_kind\":\"grant\"},\"journal_id\":\"07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2\",\"kind\":\"closure\",\"pos\":4,\"prev_commitment\":\"841d776d4a74455305934120144faf68a3614defc1897951b205521d465c3134\",\"type\":\"seallink-journal-entry/1\"}",
+            "content_addr": "c6967f8454778fa3e1bca40b96315bfbea414a89bfdccf4f7c21e643757a3e0b",
+            "object": {
+              "body": {
+                "cause": "SINGLE_USE_CONSUMED",
+                "observed_at": 1795220050,
+                "observed_height": 750110,
+                "spend_txid": "f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb",
+                "subject_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+                "subject_kind": "grant"
+              },
+              "journal_id": "07e55cc10a2033a978ed13f2b2ba6ee3201ae397615a78ce3b7a7088dd7f6ca2",
+              "kind": "closure",
+              "pos": 4,
+              "prev_commitment": "841d776d4a74455305934120144faf68a3614defc1897951b205521d465c3134",
+              "type": "seallink-journal-entry/1"
+            },
+            "object_id": "c6967f8454778fa3e1bca40b96315bfbea414a89bfdccf4f7c21e643757a3e0b",
+            "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+          }
+        }
+      ],
+      "receipt": {
+        "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"executor_name\":\"id/station-a\",\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"invocation_id\":\"c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6\",\"network\":\"main\",\"outcome\":\"executed\",\"recorded_at\":1795220050,\"result_sha256\":\"7975eebac87e84bd0713f353e98dc46481932d01be5925b10b91c103239c8fc3\",\"settlements\":[{\"kind\":\"seallink/count\",\"released\":\"0\",\"reserved\":\"1\",\"resource\":\"station:fleet:tools\",\"settled\":\"1\",\"unit\":\"calls\"}],\"tip_hash\":\"a47486b303d37ef3b3e4ca1e8bc11be19885e04181379bd8f614866c6c526c4e\",\"tip_height\":750110,\"type\":\"seallink-receipt/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\"]},\"sigs\":[{\"pk\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"sig\":\"65533cc080d399eb34b4b802735a21fe595bbe62467dfd399e33a687e5deb67fd2c879d25da8248fdabec43d0a92238350063db379cff8ed1332683a5030e740\"}]}}",
+        "content_addr": "adcec041dd53e837e28ab694c041c14cc0b88d44590cc7c56f3813b079b0f096",
+        "object": {
+          "payload": {
+            "action": "agent/tool",
+            "executor_name": "id/station-a",
+            "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+            "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+            "invocation_id": "c1dcd20a91433bda93d7499fd4c3f67491865873c9c5a6a03dc2ceaaa2c1fdf6",
+            "network": "main",
+            "outcome": "executed",
+            "recorded_at": 1795220050,
+            "result_sha256": "7975eebac87e84bd0713f353e98dc46481932d01be5925b10b91c103239c8fc3",
+            "settlements": [
+              {
+                "kind": "seallink/count",
+                "released": "0",
+                "reserved": "1",
+                "resource": "station:fleet:tools",
+                "settled": "1",
+                "unit": "calls"
+              }
+            ],
+            "tip_hash": "a47486b303d37ef3b3e4ca1e8bc11be19885e04181379bd8f614866c6c526c4e",
+            "tip_height": 750110,
+            "type": "seallink-receipt/1"
+          },
+          "signatures": {
+            "policy": {
+              "m": 1,
+              "pks": [
+                "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188"
+              ]
+            },
+            "sigs": [
+              {
+                "pk": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
+                "sig": "65533cc080d399eb34b4b802735a21fe595bbe62467dfd399e33a687e5deb67fd2c879d25da8248fdabec43d0a92238350063db379cff8ed1332683a5030e740"
+              }
+            ]
+          }
+        },
+        "object_id": "a8498cb90f782603bb73404a980fe0cb5e9e8594c2171d54673841d2b2d78c85",
+        "schema": "schemas/invocation.schema.json#/$defs/Receipt",
+        "signing_digest": "bc336a91bbdab263b6667eb12417ab054b61ca9c0e7da2d488fa9d02550df287"
+      },
+      "remaining_pool_calls": 9,
+      "remaining_row_1_calls": 1,
+      "result_object": {
+        "canonical_jcs": "{\"exit_code\":0,\"output_bytes\":\"1240\",\"output_sha256\":\"ebb3cc77aa854c74035a918d6b8a012e2e8ea78037f8de783ede81bc16f04567\",\"tool_name\":\"pytest\"}",
+        "content_addr": "7975eebac87e84bd0713f353e98dc46481932d01be5925b10b91c103239c8fc3",
+        "object": {
+          "exit_code": 0,
+          "output_bytes": "1240",
+          "output_sha256": "ebb3cc77aa854c74035a918d6b8a012e2e8ea78037f8de783ede81bc16f04567",
+          "tool_name": "pytest"
+        },
+        "object_id": "7975eebac87e84bd0713f353e98dc46481932d01be5925b10b91c103239c8fc3",
+        "schema": "schemas/profile-agent.schema.json#/$defs/AgentToolResult"
+      }
+    },
+    "step_c_crash_replay_same_invocation_id": {
+      "cached_receipt_content_addr": "adcec041dd53e837e28ab694c041c14cc0b88d44590cc7c56f3813b079b0f096",
+      "expected_behavior": "RETURN_CACHED_RECEIPT_ZERO_SECOND_EFFECT"
+    },
+    "step_d_new_nonce_replay": {
+      "expected_refusal": "INVOKE_REPLAY",
+      "expected_verdict": "REFUSE",
+      "invocation": {
+        "canonical_jcs": "{\"payload\":{\"action\":\"agent/tool\",\"arguments\":{\"input_sha256\":\"bddecd2312ddae203164ca7c3f51766c7eaf5e7ef47d5429d807263ac1d569e6\",\"max_output_bytes\":\"65536\",\"tool_name\":\"pytest\"},\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"exp\":1795221000,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220100,\"network\":\"main\",\"nonce\":\"61be149a5a816042666ef77a452f632fdda320aeca5e156c32e9a424dcd7a83d\",\"proof_path\":[{\"grant_id\":\"7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d\",\"issuance_txid\":\"584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc\"},{\"grant_id\":\"877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477\",\"issuance_txid\":\"3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7\"}],\"target\":\"station:fleet:tools\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\"]},\"sigs\":[{\"pk\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"sig\":\"391b2114263349fcc30dbe2e430b083371f369062746dec360ffb5531a26d5a0cca8ea76d50f3655931f9ee904430d732f17689fdf6d9640be3f4816dc5a9a5e\"}]}}",
+        "content_addr": "fce873a45d8311778612faa54a692388038c8a4e30caa98ba302a63e9e519da2",
+        "object": {
+          "payload": {
+            "action": "agent/tool",
+            "arguments": {
+              "input_sha256": "bddecd2312ddae203164ca7c3f51766c7eaf5e7ef47d5429d807263ac1d569e6",
+              "max_output_bytes": "65536",
+              "tool_name": "pytest"
+            },
+            "executor": {
+              "key": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
+              "name": "id/station-a"
+            },
+            "exp": 1795221000,
+            "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+            "iat": 1795220100,
+            "network": "main",
+            "nonce": "61be149a5a816042666ef77a452f632fdda320aeca5e156c32e9a424dcd7a83d",
+            "proof_path": [
+              {
+                "grant_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+                "issuance_txid": "584193128f390f6ccf4288beb9fa3a57dab2751d58472fe5d85d3a000cb7fedc"
+              },
+              {
+                "grant_id": "877849bd3bef9987e8a2e15a65cc5b4fda5d6b416c51b99228cd897502a17477",
+                "issuance_txid": "3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7"
+              }
+            ],
+            "target": "station:fleet:tools",
+            "type": "seallink-invocation/1"
+          },
+          "signatures": {
+            "policy": {
+              "m": 1,
+              "pks": [
+                "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6"
+              ]
+            },
+            "sigs": [
+              {
+                "pk": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
+                "sig": "391b2114263349fcc30dbe2e430b083371f369062746dec360ffb5531a26d5a0cca8ea76d50f3655931f9ee904430d732f17689fdf6d9640be3f4816dc5a9a5e"
+              }
+            ]
+          }
+        },
+        "object_id": "5fe0e115b9c38ec757ce6ddbb09b68ebbda3044b9f6d7fabe8d16ac83e5613ba",
+        "schema": "schemas/invocation.schema.json#/$defs/Invocation",
+        "signing_digest": "1625ec43766f3d4aa2869f84618943ec3e6b3fbe46e3f46c225e52041700015e"
+      }
+    },
+    "use_opreturn_0x11_hex": "6a05534c4e4b11220192f9d2d9dcd6354ce04cea40a79e95666565024d3cde89e80ba3e4ad1315ce1c00",
+    "use_txid_wrapper": "f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb"
+  },
+  "child_2_issuer_revocation": {
+    "first_observation_refusal": "SEAL_SPENT",
+    "grant": {
+      "canonical_jcs": "{\"payload\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"1\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"eq\":\"lint\"}}}],\"executor\":{\"key\":\"91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21\",\"name\":\"id/station-b\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"network\":\"main\",\"not_after_height\":755000,\"not_before_height\":750100,\"parent\":{\"grant_id\":\"7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d\",\"ordinal\":4},\"recent_block\":\"28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35\",\"recipient\":{\"key\":\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\",\"mode\":\"key\"},\"revocation\":{\"construction\":\"W\",\"kind\":\"single_use\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"keys\":{\"grantee\":\"0231de5154396580bb2d064f6a38b2db30c6bfb828236b5bc2aa9798133eab7b79\",\"issuer\":\"0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001\"},\"kind\":\"branch\",\"template\":\"single_use_1_of_2\"},\"txid\":\"3b278d33edc40823e29765a2bb58e477a287e728de657a79ee45950edee661a8\",\"vout\":0}},\"type\":\"seallink-grant/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\"]},\"sigs\":[{\"pk\":\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\",\"sig\":\"a7ce46e6654157fd18d38c83b56a007389caa5f234f3cc6a35547ecff55e6c6a5eb893f85269eee62402991978ecee119a76bc165a70cadacfd5144dd1f03801\"}]}}",
+      "content_addr": "8d90eb68ac1a5e233a5bac4ecfcf2ac6ce950711c8f3b9b2c0a42253917c8b9e",
+      "object": {
+        "payload": {
+          "capabilities": [
+            {
+              "action": "agent/tool",
+              "quotas": [
+                {
+                  "kind": "seallink/count",
+                  "max": "1",
+                  "resource": "station:fleet:tools",
+                  "unit": "calls",
+                  "window": "term"
+                }
+              ],
+              "target": "station:fleet:tools",
+              "where": {
+                "tool_name": {
+                  "eq": "lint"
+                }
+              }
+            }
+          ],
+          "executor": {
+            "key": "91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21",
+            "name": "id/station-b"
+          },
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "network": "main",
+          "not_after_height": 755000,
+          "not_before_height": 750100,
+          "parent": {
+            "grant_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+            "ordinal": 4
+          },
+          "recent_block": "28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35",
+          "recipient": {
+            "key": "e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9",
+            "mode": "key"
+          },
+          "revocation": {
+            "construction": "W",
+            "kind": "single_use",
+            "mode": "seal",
+            "seal": {
+              "script_policy": {
+                "keys": {
+                  "grantee": "0231de5154396580bb2d064f6a38b2db30c6bfb828236b5bc2aa9798133eab7b79",
+                  "issuer": "0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001"
+                },
+                "kind": "branch",
+                "template": "single_use_1_of_2"
+              },
+              "txid": "3b278d33edc40823e29765a2bb58e477a287e728de657a79ee45950edee661a8",
+              "vout": 0
+            }
+          },
+          "type": "seallink-grant/1"
+        },
+        "signatures": {
+          "policy": {
+            "m": 1,
+            "pks": [
+              "e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6",
+              "sig": "a7ce46e6654157fd18d38c83b56a007389caa5f234f3cc6a35547ecff55e6c6a5eb893f85269eee62402991978ecee119a76bc165a70cadacfd5144dd1f03801"
+            }
+          ]
+        }
+      },
+      "object_id": "c492013fba4c18bca14c5931571b90e60fc00bdcd9f6121ce7f8972123b15aaf",
+      "schema": "schemas/grant.schema.json",
+      "signing_digest": "02d27e4e54eca5031e8cd5ebbc141ebb777c54212437d0d15550fac9eb18bc00"
+    },
+    "issuer_branch_1_spend_txid": "3be06158c89e034a609651d496ab202ca4c87af1ac5563769a81fcdd54f39508",
+    "subsequent_request_refusal": "GRANT_CLOSED"
+  },
+  "description": "RFC 8448-style trace: parent delegation with 2 groups sharing 1 pool (R8.5 & R8.6 positive/negative), acyclic single-use branch-0 execution (0x11), crash replay idempotency, new-nonce replay refusal, and issuer branch-1 revocation.",
+  "parent_grant": {
+    "canonical_jcs": "{\"payload\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"10\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\"}],\"delegate\":{\"child_seal_key\":\"0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001\",\"groups\":[{\"ranges\":[{\"count\":3,\"first\":0,\"script_policy\":{\"kind\":\"key\",\"pk\":\"03508e3f4ba5c6203c9b1caba5216fd9eaa68fd8fc59eade22655020bffba57e90\"},\"txid\":\"fd4d9417f34d3f8eaaf12c57f9ccf6b8903c076265a5782b9e54939cd82c1732\"}],\"template\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"2\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"in\":[\"git-diff\",\"pytest\"]}}}],\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"notary_mode\":\"none\",\"recipient_rule\":{\"key\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"mode\":\"exact_key\"}}},{\"ranges\":[{\"count\":2,\"first\":0,\"script_policy\":{\"kind\":\"key\",\"pk\":\"03508e3f4ba5c6203c9b1caba5216fd9eaa68fd8fc59eade22655020bffba57e90\"},\"txid\":\"3b280b9cbb38bfb86844302c4290c8da512b960ba162932e9bb114661f77ef84\"}],\"template\":{\"capabilities\":[{\"action\":\"agent/tool\",\"quotas\":[{\"kind\":\"seallink/count\",\"max\":\"2\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"}],\"target\":\"station:fleet:tools\",\"where\":{\"tool_name\":{\"in\":[\"lint\",\"pytest\"]}}}],\"executor\":{\"key\":\"91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21\",\"name\":\"id/station-b\"},\"notary_mode\":\"none\",\"recipient_rule\":{\"key\":\"e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9\",\"mode\":\"exact_key\"}}}],\"key\":\"e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6\",\"pools\":[{\"kind\":\"seallink/count\",\"max\":\"10\",\"resource\":\"station:fleet:tools\",\"unit\":\"calls\",\"window\":\"term\"}]},\"executor\":{\"key\":\"4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188\",\"name\":\"id/station-a\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"issuer\":{\"name\":\"id/org-treasury\",\"owner_policy\":{\"kind\":\"key\",\"pk\":\"0213b86cf475c9aa5c926358d51ac9b60161bd0726faf62de016da591da76bd0f2\"},\"registration\":{\"txid\":\"285be97a9064e873cf5bcde9e51cb48fd85ba24b8db77183c08995d9662f60ed\",\"vout\":0},\"role_policy\":{\"m\":1,\"pks\":[\"e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833\"]}},\"network\":\"main\",\"not_after_height\":760000,\"not_before_height\":750000,\"recent_block\":\"28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35\",\"recipient\":{\"key\":\"1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6\",\"mode\":\"key\"},\"revocation\":{\"construction\":\"W\",\"kind\":\"revocable\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"kind\":\"key\",\"pk\":\"03487b5fc657c9e4dbaa62e7730ba2c14e664dbd8b3e0e475d893b338f707ca240\"},\"txid\":\"ff896927135a71a35976598a111e02964dfc7798a6cdf352d78a38debeb36aac\",\"vout\":0}},\"type\":\"seallink-grant/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833\"]},\"sigs\":[{\"pk\":\"e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833\",\"sig\":\"26c31560301cc46e04cce73b0d3e47f504144e399841c784244dd373c52e46080a238e51149333c8763636e07cc2b515467e45b937fd80aa3226181a2582bbd8\"}]}}",
+    "content_addr": "727fd1b45990924c530bba99e99a98ce03291ecaacb4c4b47a25fdee56f2ad99",
+    "object": {
+      "payload": {
+        "capabilities": [
+          {
+            "action": "agent/tool",
+            "quotas": [
+              {
+                "kind": "seallink/count",
+                "max": "10",
+                "resource": "station:fleet:tools",
+                "unit": "calls",
+                "window": "term"
+              }
+            ],
+            "target": "station:fleet:tools"
+          }
+        ],
+        "delegate": {
+          "child_seal_key": "0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001",
+          "groups": [
+            {
+              "ranges": [
+                {
+                  "count": 3,
+                  "first": 0,
+                  "script_policy": {
+                    "kind": "key",
+                    "pk": "03508e3f4ba5c6203c9b1caba5216fd9eaa68fd8fc59eade22655020bffba57e90"
+                  },
+                  "txid": "fd4d9417f34d3f8eaaf12c57f9ccf6b8903c076265a5782b9e54939cd82c1732"
+                }
+              ],
+              "template": {
+                "capabilities": [
+                  {
+                    "action": "agent/tool",
+                    "quotas": [
+                      {
+                        "kind": "seallink/count",
+                        "max": "2",
+                        "resource": "station:fleet:tools",
+                        "unit": "calls",
+                        "window": "term"
+                      }
+                    ],
+                    "target": "station:fleet:tools",
+                    "where": {
+                      "tool_name": {
+                        "in": [
+                          "git-diff",
+                          "pytest"
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "executor": {
+                  "key": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
+                  "name": "id/station-a"
+                },
+                "notary_mode": "none",
+                "recipient_rule": {
+                  "key": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
+                  "mode": "exact_key"
+                }
+              }
+            },
+            {
+              "ranges": [
+                {
+                  "count": 2,
+                  "first": 0,
+                  "script_policy": {
+                    "kind": "key",
+                    "pk": "03508e3f4ba5c6203c9b1caba5216fd9eaa68fd8fc59eade22655020bffba57e90"
+                  },
+                  "txid": "3b280b9cbb38bfb86844302c4290c8da512b960ba162932e9bb114661f77ef84"
+                }
+              ],
+              "template": {
+                "capabilities": [
+                  {
+                    "action": "agent/tool",
+                    "quotas": [
+                      {
+                        "kind": "seallink/count",
+                        "max": "2",
+                        "resource": "station:fleet:tools",
+                        "unit": "calls",
+                        "window": "term"
+                      }
+                    ],
+                    "target": "station:fleet:tools",
+                    "where": {
+                      "tool_name": {
+                        "in": [
+                          "lint",
+                          "pytest"
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "executor": {
+                  "key": "91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21",
+                  "name": "id/station-b"
+                },
+                "notary_mode": "none",
+                "recipient_rule": {
+                  "key": "e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9",
+                  "mode": "exact_key"
+                }
+              }
+            }
+          ],
+          "key": "e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6",
+          "pools": [
+            {
+              "kind": "seallink/count",
+              "max": "10",
+              "resource": "station:fleet:tools",
+              "unit": "calls",
+              "window": "term"
+            }
+          ]
+        },
+        "executor": {
+          "key": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
+          "name": "id/station-a"
+        },
+        "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+        "issuer": {
+          "name": "id/org-treasury",
+          "owner_policy": {
+            "kind": "key",
+            "pk": "0213b86cf475c9aa5c926358d51ac9b60161bd0726faf62de016da591da76bd0f2"
+          },
+          "registration": {
+            "txid": "285be97a9064e873cf5bcde9e51cb48fd85ba24b8db77183c08995d9662f60ed",
+            "vout": 0
+          },
+          "role_policy": {
+            "m": 1,
+            "pks": [
+              "e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833"
+            ]
+          }
+        },
+        "network": "main",
+        "not_after_height": 760000,
+        "not_before_height": 750000,
+        "recent_block": "28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35",
+        "recipient": {
+          "key": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
+          "mode": "key"
+        },
+        "revocation": {
+          "construction": "W",
+          "kind": "revocable",
+          "mode": "seal",
+          "seal": {
+            "script_policy": {
+              "kind": "key",
+              "pk": "03487b5fc657c9e4dbaa62e7730ba2c14e664dbd8b3e0e475d893b338f707ca240"
+            },
+            "txid": "ff896927135a71a35976598a111e02964dfc7798a6cdf352d78a38debeb36aac",
+            "vout": 0
+          }
+        },
+        "type": "seallink-grant/1"
+      },
+      "signatures": {
+        "policy": {
+          "m": 1,
+          "pks": [
+            "e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833"
+          ]
+        },
+        "sigs": [
+          {
+            "pk": "e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833",
+            "sig": "26c31560301cc46e04cce73b0d3e47f504144e399841c784244dd373c52e46080a238e51149333c8763636e07cc2b515467e45b937fd80aa3226181a2582bbd8"
+          }
+        ]
+      }
+    },
+    "object_id": "7b1dcfa74922c963d303942721484a5bb5470233a2c5b1d7f786adc61927f25d",
+    "schema": "schemas/grant.schema.json",
+    "signing_digest": "447f038c965e7bcf705ca62d1b5a1ccea71f6ce2e760203037e74066e701f2c3"
+  },
+  "r85_aggregate_budget": {
+    "computed_totals": {
+      "seallink/count|station:fleet:tools|calls|term": 10
+    },
+    "passed": true,
+    "pool_max": 10
+  },
+  "r85_negative_parent": {
+    "expected_refusal": "GRANT_CHILD_WIDER",
+    "object": {
+      "payload": {
+        "capabilities": [
+          {
+            "action": "agent/tool",
+            "quotas": [
+              {
+                "kind": "seallink/count",
+                "max": "10",
+                "resource": "station:fleet:tools",
+                "unit": "calls",
+                "window": "term"
+              }
+            ],
+            "target": "station:fleet:tools"
+          }
+        ],
+        "delegate": {
+          "child_seal_key": "0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001",
+          "groups": [
+            {
+              "ranges": [
+                {
+                  "count": 3,
+                  "first": 0,
+                  "script_policy": {
+                    "kind": "key",
+                    "pk": "03508e3f4ba5c6203c9b1caba5216fd9eaa68fd8fc59eade22655020bffba57e90"
+                  },
+                  "txid": "fd4d9417f34d3f8eaaf12c57f9ccf6b8903c076265a5782b9e54939cd82c1732"
+                }
+              ],
+              "template": {
+                "capabilities": [
+                  {
+                    "action": "agent/tool",
+                    "quotas": [
+                      {
+                        "kind": "seallink/count",
+                        "max": "3",
+                        "resource": "station:fleet:tools",
+                        "unit": "calls",
+                        "window": "term"
+                      }
+                    ],
+                    "target": "station:fleet:tools",
+                    "where": {
+                      "tool_name": {
+                        "in": [
+                          "git-diff",
+                          "pytest"
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "executor": {
+                  "key": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
+                  "name": "id/station-a"
+                },
+                "notary_mode": "none",
+                "recipient_rule": {
+                  "key": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
+                  "mode": "exact_key"
+                }
+              }
+            },
+            {
+              "ranges": [
+                {
+                  "count": 2,
+                  "first": 0,
+                  "script_policy": {
+                    "kind": "key",
+                    "pk": "03508e3f4ba5c6203c9b1caba5216fd9eaa68fd8fc59eade22655020bffba57e90"
+                  },
+                  "txid": "3b280b9cbb38bfb86844302c4290c8da512b960ba162932e9bb114661f77ef84"
+                }
+              ],
+              "template": {
+                "capabilities": [
+                  {
+                    "action": "agent/tool",
+                    "quotas": [
+                      {
+                        "kind": "seallink/count",
+                        "max": "2",
+                        "resource": "station:fleet:tools",
+                        "unit": "calls",
+                        "window": "term"
+                      }
+                    ],
+                    "target": "station:fleet:tools",
+                    "where": {
+                      "tool_name": {
+                        "in": [
+                          "lint",
+                          "pytest"
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "executor": {
+                  "key": "91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21",
+                  "name": "id/station-b"
+                },
+                "notary_mode": "none",
+                "recipient_rule": {
+                  "key": "e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9",
+                  "mode": "exact_key"
+                }
+              }
+            }
+          ],
+          "key": "e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6",
+          "pools": [
+            {
+              "kind": "seallink/count",
+              "max": "10",
+              "resource": "station:fleet:tools",
+              "unit": "calls",
+              "window": "term"
+            }
+          ]
+        },
+        "executor": {
+          "key": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
+          "name": "id/station-a"
+        },
+        "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+        "issuer": {
+          "name": "id/org-treasury",
+          "owner_policy": {
+            "kind": "key",
+            "pk": "0213b86cf475c9aa5c926358d51ac9b60161bd0726faf62de016da591da76bd0f2"
+          },
+          "registration": {
+            "txid": "285be97a9064e873cf5bcde9e51cb48fd85ba24b8db77183c08995d9662f60ed",
+            "vout": 0
+          },
+          "role_policy": {
+            "m": 1,
+            "pks": [
+              "e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833"
+            ]
+          }
+        },
+        "network": "main",
+        "not_after_height": 760000,
+        "not_before_height": 750000,
+        "recent_block": "28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35",
+        "recipient": {
+          "key": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
+          "mode": "key"
+        },
+        "revocation": {
+          "construction": "W",
+          "kind": "revocable",
+          "mode": "seal",
+          "seal": {
+            "script_policy": {
+              "kind": "key",
+              "pk": "03487b5fc657c9e4dbaa62e7730ba2c14e664dbd8b3e0e475d893b338f707ca240"
+            },
+            "txid": "ff896927135a71a35976598a111e02964dfc7798a6cdf352d78a38debeb36aac",
+            "vout": 0
+          }
+        },
+        "type": "seallink-grant/1"
+      },
+      "signatures": {
+        "policy": {
+          "m": 1,
+          "pks": [
+            "e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833"
+          ]
+        },
+        "sigs": [
+          {
+            "pk": "e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833",
+            "sig": "2533d7e3ec13279438d265891c76ccf9c27897c13dc04b0d0f3f22d8e21eef7e0fcb9580a2809b4cbe3e132500b6103026ba5ca83e3771c43313354bb1468515"
+          }
+        ]
+      }
+    }
+  },
+  "r86_negative_parent": {
+    "expected_refusal": "GRANT_ROW_INVALID",
+    "object": {
+      "payload": {
+        "capabilities": [
+          {
+            "action": "agent/tool",
+            "quotas": [
+              {
+                "kind": "seallink/count",
+                "max": "10",
+                "resource": "station:fleet:tools",
+                "unit": "calls",
+                "window": "term"
+              }
+            ],
+            "target": "station:fleet:tools"
+          }
+        ],
+        "delegate": {
+          "child_seal_key": "0333d5fff027d4097c1cd2246185e40d642e4489139e83ea78d90eac70969fe001",
+          "groups": [
+            {
+              "ranges": [
+                {
+                  "count": 3,
+                  "first": 0,
+                  "script_policy": {
+                    "kind": "key",
+                    "pk": "03508e3f4ba5c6203c9b1caba5216fd9eaa68fd8fc59eade22655020bffba57e90"
+                  },
+                  "txid": "fd4d9417f34d3f8eaaf12c57f9ccf6b8903c076265a5782b9e54939cd82c1732"
+                }
+              ],
+              "template": {
+                "capabilities": [
+                  {
+                    "action": "agent/tool",
+                    "quotas": [
+                      {
+                        "kind": "seallink/count",
+                        "max": "2",
+                        "resource": "station:fleet:tools",
+                        "unit": "calls",
+                        "window": "term"
+                      }
+                    ],
+                    "target": "station:fleet:tools",
+                    "where": {
+                      "tool_name": {
+                        "in": [
+                          "git-diff",
+                          "pytest"
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "executor": {
+                  "key": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
+                  "name": "id/station-a"
+                },
+                "notary_mode": "none",
+                "recipient_rule": {
+                  "key": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
+                  "mode": "exact_key"
+                }
+              }
+            },
+            {
+              "ranges": [
+                {
+                  "count": 2,
+                  "first": 2,
+                  "script_policy": {
+                    "kind": "key",
+                    "pk": "03508e3f4ba5c6203c9b1caba5216fd9eaa68fd8fc59eade22655020bffba57e90"
+                  },
+                  "txid": "fd4d9417f34d3f8eaaf12c57f9ccf6b8903c076265a5782b9e54939cd82c1732"
+                }
+              ],
+              "template": {
+                "capabilities": [
+                  {
+                    "action": "agent/tool",
+                    "quotas": [
+                      {
+                        "kind": "seallink/count",
+                        "max": "2",
+                        "resource": "station:fleet:tools",
+                        "unit": "calls",
+                        "window": "term"
+                      }
+                    ],
+                    "target": "station:fleet:tools",
+                    "where": {
+                      "tool_name": {
+                        "in": [
+                          "lint",
+                          "pytest"
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "executor": {
+                  "key": "91606b8cf66b570152624d16edf90a19d609c4fc37233302455e6797bfe50e21",
+                  "name": "id/station-b"
+                },
+                "notary_mode": "none",
+                "recipient_rule": {
+                  "key": "e497b30334ab451ccb80e3ba1aaa84bd1dab148ad51acdda60f5e5945783c6d9",
+                  "mode": "exact_key"
+                }
+              }
+            }
+          ],
+          "key": "e38e9c7d8563b277026470f918a7b5a0359e4402685c8b5383451ca4750414b6",
+          "pools": [
+            {
+              "kind": "seallink/count",
+              "max": "10",
+              "resource": "station:fleet:tools",
+              "unit": "calls",
+              "window": "term"
+            }
+          ]
+        },
+        "executor": {
+          "key": "4e8816a05d7cb39e0a339f1f564f211653704b48d4e031cc0f401725e0fda188",
+          "name": "id/station-a"
+        },
+        "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+        "issuer": {
+          "name": "id/org-treasury",
+          "owner_policy": {
+            "kind": "key",
+            "pk": "0213b86cf475c9aa5c926358d51ac9b60161bd0726faf62de016da591da76bd0f2"
+          },
+          "registration": {
+            "txid": "285be97a9064e873cf5bcde9e51cb48fd85ba24b8db77183c08995d9662f60ed",
+            "vout": 0
+          },
+          "role_policy": {
+            "m": 1,
+            "pks": [
+              "e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833"
+            ]
+          }
+        },
+        "network": "main",
+        "not_after_height": 760000,
+        "not_before_height": 750000,
+        "recent_block": "28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35",
+        "recipient": {
+          "key": "1e3a7f8b9e5e69fdbe69407170322060367970916231ee37e3b41bdb438e0af6",
+          "mode": "key"
+        },
+        "revocation": {
+          "construction": "W",
+          "kind": "revocable",
+          "mode": "seal",
+          "seal": {
+            "script_policy": {
+              "kind": "key",
+              "pk": "03487b5fc657c9e4dbaa62e7730ba2c14e664dbd8b3e0e475d893b338f707ca240"
+            },
+            "txid": "ff896927135a71a35976598a111e02964dfc7798a6cdf352d78a38debeb36aac",
+            "vout": 0
+          }
+        },
+        "type": "seallink-grant/1"
+      },
+      "signatures": {
+        "policy": {
+          "m": 1,
+          "pks": [
+            "e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833"
+          ]
+        },
+        "sigs": [
+          {
+            "pk": "e4cdfe9a8f99c4468106c070ea64a5a78d53a4b51f27b16ee234144ddf337833",
+            "sig": "76a857f4aa18d5ed1235d843d07c26134bfcef0ecfb3435af9f6aa44be1d590062fb4a7230897726e1ab8f913d1ce883f7111c9e1a49b07ab27342b8a063fce9"
+          }
+        ]
+      }
+    }
+  },
+  "suite": "trace-03-delegation-pool-single-use",
+  "version": "1.0.0-draft.1"
+}

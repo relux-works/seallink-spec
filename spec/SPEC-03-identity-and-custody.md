@@ -1,0 +1,155 @@
+# SPEC-03: Identity, Name Value, Manifest, Key Taxonomy, Authentication, and Owner Control
+
+- **Version:** `1.0.0-draft.1`
+- **Status:** `draft` (normative rules `decided`; domain-binding verification and FIDO2/SSH device extensions tracked `open` in `OPEN-QUESTIONS.md`)
+- **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`)
+- **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/service-types.json`, `registry/refusal-codes.json`
+- **Schemas:** `schemas/name-value.schema.json`, `schemas/manifest.schema.json`, `schemas/card.schema.json`, `schemas/invocation.schema.json`
+
+---
+
+## 1. Name Value Format (520-Byte Protocol Budget)
+
+An actor's ledger name (conventionally `id/<label>`, which MAY be a human-readable handle or an opaque pseudonymous identifier such as `id/u-8f3a91c4e2`) carries a compact Restricted JCS JSON object (`SPEC-01`, `schemas/name-value.schema.json`) of **at most `520` bytes** (`SL-IDEN-001`, `decided`).
+
+### 1.1 Top-Level Members (`SL-IDEN-002`, `decided`)
+
+A SealLink reader MUST match top-level keys `link`, `m`, and `nostr` strictly (refusing duplicates or Unicode simple case-fold aliases with `WIRE_DUPLICATE`), and MUST ignore unknown owner-defined top-level members.
+
+| Top-Level Key | Optional | Structure & Purpose | Closes Grants on Edit? |
+| --- | :-: | --- | :-: |
+| `link` | Yes | Authority & origin root object: closed subset of `{cred, grant, notary, origin}`. Each of `cred`, `grant`, `notary` is either a single `xonly_64hex` key or an on-chain threshold pin `{"p":"<sha256_of_JCS(ThresholdPolicy)>"}`. | **Per-role only (`SL-IDEN-003`)** |
+| `m` | Yes | Single manifest head: `{"h":"<64hex>","s":<PositiveUint53>}` pinning `seallink-manifest/1` (JCS sorted keys `h`, `s`). Zero URLs or `loc` allowed. | **Never** |
+| `nostr` | Yes | Optional transport messaging key: `"<64hex>"` OR NIP-05 object `{"names":{"_":"<64hex>"},"relays":{...}}`. Only `"_"` is read. Zero authority. | **Never** |
+
+### 1.2 Multi-Role Keys, On-Chain Role Policies, and Uniform `origin` Pin (`SL-IDEN-003`, `decided`)
+
+One `id/` name MAY publish distinct, strictly isolated role keys or threshold role-policy pins simultaneously inside `link`:
+
+```json
+{"link":{"cred":"<64hex>","grant":{"p":"<64hex>"},"notary":"<64hex>","origin":"<64hex>"},"m":{"h":"<64hex>","s":1}}
+```
+
+- **On-chain role threshold integrity:** Every role policy (`1-of-1` direct key OR `m-of-n` `ThresholdPolicy` pinned as `{"p":"<sha256>"}`) is anchored **directly inside `link.<role>` on the ledger** — never governed solely by an off-chain manifest update.
+  - When `link.<role>` is a 64-hex string `k`, the resolved role policy is `{"m":1,"pks":[k]}`.
+  - When `link.<role>` is `{"p":h}`, the presenter supplies the full `ThresholdPolicy` (inside the signed object's `issuer.role_policy` and/or `manifest.role_policies.<role>`), and the verifier MUST confirm `SHA256(canonical_JCS(role_policy)) == h` (`WIRE_SIGNATURE` on mismatch).
+  - Rotating any key or threshold inside a role policy changes `link.<role>` via an owner-authored (`SIGHASH_ALL`) ledger update, triggering the exact per-role closure rule below.
+- **Byte budget:** With three roles (even with `{"p":...}` pins) + `origin` + `m`, the value is ~405 bytes — well within the 520-byte protocol limit.
+- **Per-role history isolation:** Rotating or removing `link.notary` or `link.cred` MUST NOT close live grants bound to `link.grant`. Rotating or removing `link.grant` closes active grants (`NAME_ROLE_CHANGED`), while leaving eternal credentials and notary acts intact unless closed by `0x0b` (`h_c`).
+- **Privacy-preserving `origin` pin:** Every origin-certified actor (child, adult, organization, or materialized agent) writes the identical field name `link.origin = "<origin_id_64hex>"`. Public chain observers cannot distinguish subject class or capacity from the name value alone (`SL-ARCH-012`).
+- **Role key disjointness:** Within one name, every key appearing in `link.grant`, `link.cred`, `link.notary`, `nostr`, and `manifest.auth_key` MUST be disjoint (`NAME_VALUE_INVALID` if reused).
+- **Name history walk (`SL-IDEN-004`, `decided`):** To verify an issuer's `grant` role policy for an active grant, the verifier resolves the name (refusing `NAME_NOT_FOUND` if absent on the active chain) and walks the name's confirmed update chain back to `issuer.registration`: `owner_policy` and `link.grant` MUST be unchanged from the grant's `recent_block` through the tip (renewals, `m` updates, `nostr` updates, and unrelated role changes close nothing). An owner-signed (`SIGHASH_ALL`) change or removal of `link.grant` (in mempool or block) writes a durable `NAME_ROLE_CHANGED` closure.
+
+---
+
+## 2. Key Taxonomy and Cold Custody Rules
+
+All 22 key roles, curves, derivation accounts, and permitted signing domains are authoritatively fixed in `registry/key-roles.json` (`SL-IDEN-005`, `decided`):
+
+1. **Cold isolation:** `name_owner` (separate cold seed `m/84'/7'/0'`) and `emergency_fee_reserve` (cold seed `m/84'/7'/3'`, strictly isolated from all hot signers so a hot compromise cannot drain emergency update/CPFP fees) MUST NEVER reside on an agent host or ordinary hot wallet.
+2. **Authority separation:** `grant`, `cred`, and `notary` keys sign ONLY their registered BIP-340 domains (`registry/object-types.json`) and NEVER sign ledger transactions or spend seals.
+3. **Auth vs Device vs Messaging:**
+   - `auth` (`m/84'/7'/2'/0/i`) authenticates to foreign services ONLY (`seallink-auth-challenge/1`, `seallink-auth-upgrade/1`) and confers zero grant, contract assent, or effect authority.
+   - `device` keys control the owner's own executors and agent key holders ONLY (`seallink-owner-command/1`, `seallink-statement/1`) and MUST NEVER sign foreign login challenges, assents, or grants (`DEVICE_UNAUTHORIZED`).
+   - `messaging_or_request` keys carry messages and invoke grants only where explicitly named as recipient; they NEVER issue grants or child grants.
+4. **Dynamic seal/row/stop pool (`>= 10'`):** Per-seal keys (`grant_seal`, `child_seal`, `row_coin`, `stop_coin`, `contract_seal`, `guardian_seal`) live in independent hardened accounts `>= 10'` with operator-secret xpubs.
+5. **Disposable fast-revocation seals:** `auth_seal`, device seals, and member-entry seals MUST be generated from a CSPRNG (NEVER BIP-39), pre-signed with a `P2A` CPFP anchor output (`SL-LDGR-013`), and destroyed immediately after recording `tx_revoke`.
+
+*(Concrete custody deployments — hardware enclaves, HSMs, Keyholder daemons — are informative and documented in `guides/GUIDE-01-custody-and-signers.md`.)*
+
+---
+
+## 3. Unified Manifest (`seallink-manifest/1`) and Off-Chain Sets
+
+The single `m` pin in the name value authenticates one canonical JCS `seallink-manifest/1` object (`<= 16384` bytes, `schemas/manifest.schema.json`) (`SL-IDEN-006`, `decided`).
+
+### 3.1 Manifest Members
+
+1. **`sets`** *(optional)*: Hash + monotonic `seq` pins for up to four off-chain JCS sets:
+   - `card` (`seallink-card/1`): Public entity metadata card (`person | agent | organization | service`, display name, transports, relays, role, contact). Self-declared `kind` carries zero authority; if an `origin/1` is verified, `card.kind` MUST match `origin_class`.
+   - `devices` (`seallink-device-list/1`): Owner control-plane devices (`label, alg ∈ {bip340, p256, ed25519}, key, presence, ceiling ∈ {0,1,2}, seal`).
+   - `members` (`seallink-members-list/1`): Up to 1,024 managed/member actor pins `(name, owner_policy, seal)`. Verifiers MUST bound per-issuer journaled entries to prevent unbounded state growth.
+   - `certs` (`seallink-certset-head/1`): Head committing to an actor's self-signed `seallink-statement/1` records (`config-section`, `transport-binding`, `root-rotate`, `root-cancel`, each with a closed `subject` schema).
+2. **`service`** *(optional)*: Self-declaration when this actor operates a service (`service_type, actions, receipt_key, endpoint`, optional `tls_spki_sha256` pin). Discovery only; never substitutes for a pinned grant executor key.
+3. **`providers`** *(optional, `SL-IDEN-007`, `decided`)*: Labeled bindings declaring which external service actors host this actor's resources. Each entry binds `(service_type, label)` to a full **`provider: NamePin`** (`{name, registration, owner_policy}`) plus optional `transport_key`:
+   ```json
+   "providers": [
+     {
+       "label": "work",
+       "provider": {
+         "name": "id/mail-host-a",
+         "owner_policy": {"kind": "key", "pk": "02..."},
+         "registration": {"txid": "...", "vout": 0}
+       },
+       "service_type": "mail"
+     }
+   ]
+   ```
+   - Each `(service_type, label)` pair MUST be unique within `providers`.
+   - **Provider continuity:** Because `provider` pins `(name, registration, owner_policy)`, an attacker who re-registers an expired provider name string cannot hijack dynamic `executor_ref` delegations (`SERVICE_PROVIDER_UNBOUND` / `NAME_OWNER_MISMATCH`). Switching providers requires an explicit owner-authored manifest update.
+4. **`auth_key` + `auth_seal`** *(paired optional)*: Dedicated BIP-340 foreign-service login key and its disposable fast-revocation seal.
+5. **`role_policies`** *(optional availability hint ONLY)*: Carries full `ThresholdPolicy` preimages for on-chain `link.<role>.p` pins. A `role_policies` entry has ZERO authority unless `SHA256(canonical_JCS(policy))` equals the confirmed on-chain `link.<role>.p` hash (`SL-IDEN-003`).
+
+### 3.2 Monotonicity, Removal, and Reorg Rules (`SL-IDEN-008`, `decided`)
+
+Verifiers journal `(seq, manifest_sha256, anchoring_txid)` for the manifest and `(seq, sha256)` plus removal marks for each set, keyed by `(name, registration)`:
+- On confirmed updates while `anchoring_txid` remains on the active chain: `manifest.seq` MUST strictly increase (`new > old`), and every retained set's `seq` MUST NOT decrease (`new >= old`; equal `seq` with different `sha256` refuses `MANIFEST_ROLLBACK`).
+- Omitting a previously present set in a valid newer manifest records a durable removal mark at its highest seen `seq`; reintroducing the set requires a strictly higher `seq`.
+- If `anchoring_txid` is orphaned by a chain reorg, the verifier adopts the highest confirmed manifest on the new active chain while retaining all recorded removal marks and seal closures.
+- **Revocation independence:** Validated seal spends MUST be processed and journaled even if `seallink-manifest/1` is unavailable.
+
+---
+
+## 4. Non-Exclusive Four-Channel Distribution Cascade
+
+Verifiers resolve `seallink-manifest/1` and pinned off-chain sets using a strictly non-exclusive cascade (`SL-IDEN-009`, `decided` cascade / `open` domain-binding verification profile in `OPEN-QUESTIONS.md`):
+
+| Priority | Channel | Availability & Policy |
+| :-: | --- | --- |
+| **0** | **Inline** | Supplied directly by the presenter/peer alongside the request. Always works, including for opaque names with zero domain and zero Nostr key. |
+| **1** | **Local Cache / Configured Stores** | Verifier's local hash cache or operator-configured Blossom (`GET /<sha256>`) / HTTP mirrors. |
+| **2** | **HTTPS `.well-known`** | Optional; used ONLY if the name explicitly declares a verified domain -> `https://<domain>/.well-known/seallink/<object>/<sha256>`, under strict SSRF/redirect-denial policy. |
+| **3** | **Nostr Relay (`kind 30079`)** | Optional; used ONLY if the name publishes a `nostr` pubkey -> query verifier-configured relays for addressable event `kind 30079` authored by that key with tag `["d", "seallink-manifest"]` (or `seallink-card`, etc.). |
+
+Bytes from ANY channel are accepted **if and only if** `SHA256(bytes)` equals the confirmed ledger/manifest pin and full JCS/schema validation passes (`MANIFEST_MISMATCH` otherwise). Missing bytes refuse `MANIFEST_UNAVAILABLE` without silent unconfigured outbound fetches.
+
+---
+
+## 5. Provisional Onboarding and Foreign-Service Authentication
+
+A foreign replaceable service authenticates actors using `seallink-auth-challenge/1` and `seallink-auth-upgrade/1` (`SL-IDEN-010`, `decided`):
+
+1. **Challenge lifecycle:** Service generates a 32-byte CSPRNG `nonce`, records `issued_at` and `expires_at` (`issued_at < expires_at <= issued_at + 120`), pins its own `service_id`, and records the challenge durably. Client signs with `auth_key` (never `device`, `grant`, or `name_owner`). Service verifies `SPEC-01 §7`, checks `issued_at <= now < expires_at` (`AUTH_CHALLENGE_EXPIRED`), checks audience/nonce (`AUTH_CHALLENGE_INVALID`), and **atomically consumes the nonce** before creating any session.
+2. **Named mode:** Service resolves `name`, walks owner history, verifies `manifest/1`, confirms `manifest.auth_key == auth_pubkey` (`AUTH_KEY_UNPINNED`), and confirms `manifest.auth_seal` is unspent (`SEAL_SPENT` / `SEAL_UNAVAILABLE`). Existing service accounts MUST retain their original `(name, registration, owner_policy)` binding; a re-registered name string MUST NOT take over an old account.
+3. **Provisional key-only onboarding:** A service MAY admit a challenge without `name` into a strictly rate- and storage-capped local cell (zero effect, PII-release, or federation rights).
+4. **Sponsored client-owned registration & atomic upgrade:** A sponsor MAY fund UTXOs controlled exclusively by the client so the client broadcasts `OP_NAME_NEW` and (`>= 12` blocks later) `OP_NAME_FIRSTUPDATE` (sponsor never owns the name). Once confirmed at required depth, client signs `seallink-auth-upgrade/1` under the same `auth_key` to atomically bind the confirmed registration to the provisional cell.
+5. **Authentication is NOT authorization:** A successful login session confers zero authority to spend funds, disclose data to third parties, or bypass grant checks.
+
+---
+
+## 6. Owner Control Plane (Own Executors and Trust-Root Pin)
+
+For commanding an actor's **own** hosts, executors, and managed agent key holders (`SL-IDEN-011`, `decided`):
+
+1. **Device levels and closed command set:** `seallink-owner-command/1` carries a closed command enum (`agent-dispatch`, `session-terminate`, `policy-apply`, `keyholder-halt`) with typed `arguments` schemas (`schemas/invocation.schema.json`):
+   - **L0:** Cognitive work / read-only dispatch (`agent-dispatch` with `level = 0`); zero effects.
+   - **L1:** Policy-bounded operational control (`agent-dispatch`, `session-terminate` within local executor caps).
+   - **L2:** High-assurance presence-verified device (`presence = true`, `ceiling = 2`): may issue `policy-apply` (paired with an L2-signed `seallink-statement/1`), `keyholder-halt`, and fast device revocation (`tx_revoke`).
+   - **Level inheritance:** Any agent run launched by an `seallink-owner-command/1` inherits its `level` ceiling; the run's key holder MUST NOT sign effects above that level.
+2. **Foreign boundary:** Device keys MUST NEVER be accepted by foreign services (`DEVICE_UNAUTHORIZED`).
+3. **Host Trust-Root Pin and Delayed Admin Override (`SL-IDEN-012`, `decided`):** An isolated host/runtime pins `(network, genesis, root_name, registration, owner_policy, pinned_grant_policy)` in admin-owned read-only storage outside agent write reach. Routine rotation uses a `root-rotate` statement signed by the old policy. Unassisted administrator overwrite enters a mandatory pending delay `D` (default `1008` blocks) with out-of-band owner alerts on every load; the old policy OR the name's cold `owner_policy` MAY cancel before `effective_height` via `root-cancel`.
+
+---
+
+## 7. Security Considerations
+
+- **No silent downgrade of manifest:** Once a verifier observes a confirmed manifest for `(name, registration)`, missing or malformed manifests refuse without falling back to stale caches.
+- **Bidi spoofing in Entity Cards:** Clients rendering `card.display` or `card.role` SHOULD isolate untrusted text and flag Unicode bidirectional controls (`U+202A..202E`, `U+2066..2069`).
+- **Key compromise blast radius:** Separating `auth`, `grant`, `cred`, `notary`, `device`, and `name_owner` ensures a leaked mobile login key cannot forge contracts, grants, origin certificates, or hijack the ledger name.
+
+---
+
+## 8. References
+
+- **Normative:** [RFC8785], [BIP-340], [RFC8032], [SEC1], [JSON-SCHEMA-2020-12].
+- **Informative:** [NC28].

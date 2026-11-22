@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seallink.org/schemas/v1/manifest.schema.json",
+  "title": "SealLink v1.0 Manifest, Sets & Statements",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "network", "owner", "seq"],
+  "properties": {
+    "type": { "const": "seallink-manifest/1" },
+    "network": { "$ref": "common.schema.json#/$defs/Network" },
+    "owner": { "$ref": "common.schema.json#/$defs/NameStr" },
+    "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+    "sets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "card": { "$ref": "common.schema.json#/$defs/SetPin" },
+        "certs": { "$ref": "common.schema.json#/$defs/SetPin" },
+        "devices": { "$ref": "common.schema.json#/$defs/SetPin" },
+        "members": { "$ref": "common.schema.json#/$defs/SetPin" }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_type", "actions", "receipt_key", "endpoint"],
+      "properties": {
+        "service_type": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "receipt_key": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" },
+        "endpoint": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "tls_spki_sha256": { "$ref": "common.schema.json#/$defs/Hex64" }
+      }
+    },
+    "providers": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["service_type", "label", "provider"],
+        "properties": {
+          "service_type": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "label": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+          "provider": { "$ref": "common.schema.json#/$defs/NamePin" },
+          "transport_key": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" }
+        }
+      }
+    },
+    "auth_key": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" },
+    "auth_seal": { "$ref": "common.schema.json#/$defs/Seal" },
+    "role_policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional preimages for on-chain link.<role>.p threshold pins. Zero authority unless SHA256(JCS(policy)) equals the confirmed on-chain link.<role>.p hash.",
+      "properties": {
+        "grant": { "$ref": "common.schema.json#/$defs/ThresholdPolicy" },
+        "cred": { "$ref": "common.schema.json#/$defs/ThresholdPolicy" },
+        "notary": { "$ref": "common.schema.json#/$defs/ThresholdPolicy" }
+      }
+    }
+  },
+  "dependentRequired": {
+    "auth_key": ["auth_seal"],
+    "auth_seal": ["auth_key"]
+  },
+  "$defs": {
+    "DeviceList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "network", "owner", "seq", "devices"],
+      "properties": {
+        "type": { "const": "seallink-device-list/1" },
+        "network": { "$ref": "common.schema.json#/$defs/Network" },
+        "owner": { "$ref": "common.schema.json#/$defs/NameStr" },
+        "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+        "devices": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "alg", "key", "presence", "ceiling", "seal"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "alg": { "type": "string", "enum": ["bip340", "p256", "ed25519"] },
+              "key": { "type": "string", "pattern": "^([0-9a-f]{64}|0[23][0-9a-f]{64})$" },
+              "presence": { "type": "boolean" },
+              "ceiling": { "type": "integer", "enum": [0, 1, 2] },
+              "seal": { "$ref": "common.schema.json#/$defs/Seal" }
+            }
+          }
+        }
+      }
+    },
+    "MembersList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "network", "owner", "seq", "entries"],
+      "properties": {
+        "type": { "const": "seallink-members-list/1" },
+        "network": { "$ref": "common.schema.json#/$defs/Network" },
+        "owner": { "$ref": "common.schema.json#/$defs/NameStr" },
+        "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+        "entries": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "owner_policy", "seal"],
+            "properties": {
+              "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+              "owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+              "seal": { "$ref": "common.schema.json#/$defs/Seal" }
+            }
+          }
+        }
+      }
+    },
+    "CertSetHead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "network", "issuer_name", "seq", "count", "set_sha256"],
+      "properties": {
+        "type": { "const": "seallink-certset-head/1" },
+        "network": { "$ref": "common.schema.json#/$defs/Network" },
+        "issuer_name": { "$ref": "common.schema.json#/$defs/NameStr" },
+        "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+        "count": { "$ref": "common.schema.json#/$defs/Uint53" },
+        "set_sha256": { "$ref": "common.schema.json#/$defs/Hex64" }
+      }
+    },
+    "Statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "issuer", "statement_kind", "subject", "seq", "not_before", "not_after", "body_sha256"],
+              "properties": {
+                "type": { "const": "seallink-statement/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issuer": { "$ref": "common.schema.json#/$defs/NamePin" },
+                "statement_kind": { "const": "config-section" },
+                "subject": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["host_id", "section"],
+                  "properties": {
+                    "host_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                    "section": { "type": "string", "minLength": 1, "maxLength": 128 }
+                  }
+                },
+                "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                "not_before": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "not_after": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "body_sha256": { "$ref": "common.schema.json#/$defs/Hex64" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "issuer", "statement_kind", "subject", "seq", "not_before", "not_after"],
+              "properties": {
+                "type": { "const": "seallink-statement/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issuer": { "$ref": "common.schema.json#/$defs/NamePin" },
+                "statement_kind": { "const": "transport-binding" },
+                "subject": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["transport", "endpoint", "key_alg", "key_hex"],
+                  "properties": {
+                    "transport": { "type": "string", "enum": ["https-tls-spki", "nostr", "matrix", "xmpp", "ssh"] },
+                    "endpoint": { "type": "string", "minLength": 1, "maxLength": 512 },
+                    "key_alg": { "type": "string", "enum": ["sha256-spki", "bip340", "ed25519", "p256"] },
+                    "key_hex": { "type": "string", "pattern": "^[0-9a-f]{64,130}$" }
+                  }
+                },
+                "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                "not_before": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "not_after": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "issuer", "statement_kind", "subject", "seq", "not_before", "not_after"],
+              "properties": {
+                "type": { "const": "seallink-statement/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issuer": { "$ref": "common.schema.json#/$defs/NamePin" },
+                "statement_kind": { "const": "root-rotate" },
+                "subject": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["host_id", "new_role_policy"],
+                  "properties": {
+                    "host_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                    "new_role_policy": { "$ref": "common.schema.json#/$defs/ThresholdPolicy" }
+                  }
+                },
+                "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                "not_before": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "not_after": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "issuer", "statement_kind", "subject", "seq", "not_before", "not_after"],
+              "properties": {
+                "type": { "const": "seallink-statement/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issuer": { "$ref": "common.schema.json#/$defs/NamePin" },
+                "statement_kind": { "const": "root-cancel" },
+                "subject": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["host_id", "override_id"],
+                  "properties": {
+                    "host_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                    "override_id": { "$ref": "common.schema.json#/$defs/Hex64" }
+                  }
+                },
+                "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                "not_before": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "not_after": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            }
+          ]
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    }
+  }
+}

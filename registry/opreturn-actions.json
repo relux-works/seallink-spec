@@ -1,0 +1,214 @@
+{
+  "$comment": "SealLink v1.0 OP_RETURN Commitment Framing Registry (SPEC-02). All standard frames fit strictly within Bitcoin/Namecoin MAX_OP_RETURN_RELAY = 83 bytes.",
+  "protocol": "SealLink",
+  "version": "1.0.0-draft.1",
+  "magic_ascii": "SLNK",
+  "magic_hex": "534c4e4b",
+  "max_relay_script_bytes": 83,
+  "header_format": "OP_RETURN(0x6a) PUSH5(0x05) magic(4B='SLNK') action(1B) PUSH_N(1B) payload(N bytes)",
+  "standard_payload_format": "version(1B=0x01) || commitment(32B) || loc_type(1B) || pointer(0B | 32B)",
+  "locator_types": [
+    {
+      "code": "0x00",
+      "name": "none",
+      "pointer_bytes": 0,
+      "standard_script_bytes": 42,
+      "description": "No public locator on chain. Default for private documents delivered inline or via E2EE transport."
+    },
+    {
+      "code": "0x01",
+      "name": "content_sha256",
+      "pointer_bytes": 32,
+      "standard_script_bytes": 74,
+      "description": "Content-addressed SHA-256 pointer (e.g., Blossom BUD-01 / HTTP content store)."
+    },
+    {
+      "code": "0x02",
+      "name": "bt_v2",
+      "pointer_bytes": 32,
+      "standard_script_bytes": 74,
+      "description": "BitTorrent v2 (BEP 52) SHA-256 infohash."
+    },
+    {
+      "code": "0x05",
+      "name": "nostr_event_id",
+      "pointer_bytes": 32,
+      "standard_script_bytes": 74,
+      "description": "Raw 32-byte NIP-01 Nostr event ID (e.g., kind 30079 addressable mirror)."
+    }
+  ],
+  "actions": [
+    {
+      "code": "0x01",
+      "name": "GRANT_ISSUANCE",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "typed_digest(seallink-issuance/1)",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
+      "owning_spec": "SPEC-06",
+      "description": "Anchors a root or child grant issuance (unilateral or contract-bound)."
+    },
+    {
+      "code": "0x02",
+      "name": "BATCH_ANCHOR",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "seallink_merkle_root_sha256",
+      "allowed_locators": ["0x00", "0x01", "0x02", "0x05"],
+      "owning_spec": "SPEC-02",
+      "description": "Anchors a domain-separated SHA-256 Merkle root (SPEC-02 §5.3: sorted unique 32B digests, tagged leaves/nodes, odd-node promotion without duplication)."
+    },
+    {
+      "code": "0x03",
+      "name": "GRANT_VIOLATION_TERMINATION",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "typed_digest(seallink-verdict/1)",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
+      "owning_spec": "SPEC-05",
+      "description": "Optional evidence inside a grant-seal spend referencing a signed moderation/violation verdict."
+    },
+    {
+      "code": "0x04",
+      "name": "NOTARY_ACT",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "content_addr(seallink-notary/1)",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
+      "owning_spec": "SPEC-05",
+      "description": "Anchors the signed form of a general notary act (contract notarization, copy, fact, or child attestation)."
+    },
+    {
+      "code": "0x05",
+      "name": "NOTARY_WITHDRAWAL_FOR_CAUSE",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "sha256_cause_commitment",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
+      "owning_spec": "SPEC-05",
+      "description": "Authenticated by spending the notary seal or row stop coin; records withdrawal for cause."
+    },
+    {
+      "code": "0x06",
+      "name": "RESERVED",
+      "status": "reserved",
+      "version": "0x01",
+      "commitment": "none",
+      "allowed_locators": [],
+      "owning_spec": "SPEC-02",
+      "description": "Reserved unused action byte; readers encountering 0x06 MUST refuse with CHAIN_FRAME_INVALID."
+    },
+    {
+      "code": "0x07",
+      "name": "CONTRACT_ANCHOR",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "contract_id",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
+      "owning_spec": "SPEC-05",
+      "description": "Anchors an N-party contract (and optional on-chain assent spend)."
+    },
+    {
+      "code": "0x08",
+      "name": "CONTRACT_TERMINATION",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "typed_digest(seallink-termination/1)",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
+      "owning_spec": "SPEC-05",
+      "description": "Optional signed termination statement inside a contract-seal spend."
+    },
+    {
+      "code": "0x09",
+      "name": "CREDENTIAL_OR_ORIGIN_ANCHOR",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "content_addr(signed_form)",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
+      "owning_spec": "SPEC-04",
+      "description": "Anchors the complete signed form of seallink-origin/1, seallink-credential/1, seallink-capacity/1 (spending status_seal), or seallink-end/1 (terminally spending status_seal)."
+    },
+    {
+      "code": "0x0a",
+      "name": "CREDENTIAL_WITHDRAWAL_FOR_CAUSE",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "typed_digest(seallink-credential-withdrawal/1)",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
+      "owning_spec": "SPEC-05",
+      "description": "Authenticated by spending a revocable credential or guardianship seal; binds cause hash."
+    },
+    {
+      "code": "0x0b",
+      "name": "KEY_COMPROMISE_BREAK",
+      "status": "decided",
+      "version": "0x01",
+      "custom_payload_format": "version(1B=0x01) || typed_digest(32B) || h_c_le64(8B) || loc_type(1B=0x00)",
+      "script_bytes": 50,
+      "commitment": "typed_digest(seallink-credential-break/1)",
+      "allowed_locators": ["0x00"],
+      "owning_spec": "SPEC-05",
+      "description": "OwnerPolicy-authenticated compromise height h_c for a credential or notary role key; anchors < h_c survive, >= h_c refuse."
+    },
+    {
+      "code": "0x0c",
+      "name": "NAME_BINDING",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "id(seallink-name-binding/1)",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
+      "owning_spec": "SPEC-04",
+      "description": "Committed when spending an origin's single-use binding_seal (or governed dual-party recovery_seal) to bind origin_id to a name registration."
+    },
+    {
+      "code": "0x0d",
+      "name": "GUARDIAN_APPOINTMENT",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "content_addr(seallink-guardian/1)",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
+      "owning_spec": "SPEC-04",
+      "description": "Stage 1 appointment: committed when spending a vacant guardianship slot UTXO (disposer + arbiter 2-of-2 P2WSH) to create the CSV-delayed pending slot output."
+    },
+    {
+      "code": "0x0e",
+      "name": "GUARDIAN_ACTIVATION",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "id(seallink-guardian/1)",
+      "allowed_locators": ["0x00"],
+      "owning_spec": "SPEC-04",
+      "description": "Stage 2 activation: committed when the appointed guardian spends the CSV-unlocked pending slot output to create the active either_of_2(guardian, disposer) slot seal at vout 0."
+    },
+    {
+      "code": "0x0f",
+      "name": "GUARDIAN_ROSTER_TRANSITION",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "content_addr(seallink-guardian-roster/1)",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
+      "owning_spec": "SPEC-04",
+      "description": "Committed when spending roster_seal (disposer + arbiter 2-of-2 P2WSH) to advance guardianship revision, resize approved revision_size, or re-anchor a burned slot."
+    },
+    {
+      "code": "0x10",
+      "name": "RECOVERY_CANCEL",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "id(seallink-name-binding/1)",
+      "allowed_locators": ["0x00"],
+      "owning_spec": "SPEC-04",
+      "description": "Committed inside an owner-authored (SIGHASH_ALL) OP_NAME_UPDATE of the live existing name prior to h_rec + delay_blocks to abort a pending dual-party recovery."
+    },
+    {
+      "code": "0x11",
+      "name": "SINGLE_USE_CONSUMPTION",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "content_addr(seallink-invocation/1)",
+      "allowed_locators": ["0x00"],
+      "owning_spec": "SPEC-06",
+      "description": "Committed when the grantee spends a single_use_1_of_2 grant seal via branch 0 (grantee) with SIGHASH_ALL to authorize at-most-once execution of the referenced invocation."
+    }
+  ]
+}

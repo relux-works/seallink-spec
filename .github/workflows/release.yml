@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Validate, Bundle & Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install JSON Schema validator
+        run: python3 -m pip install --quiet "jsonschema>=4.23"
+
+      - name: Run specification consistency, schema, and vector linter
+        run: python3 tools/speclint.py --require-jsonschema
+
+      - name: Build single-file specification Markdown bundle
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python3 tools/build_bundle.py \
+            --version "${TAG}" \
+            --out "dist/seallink-spec-${TAG}.md" \
+            --sha256-out "dist/seallink-spec-${TAG}.md.sha256"
+          ls -lh dist/
+          cat "dist/seallink-spec-${TAG}.md.sha256"
+
+      - name: Determine prerelease flag
+        id: meta
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "${TAG}" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        run: |
+          SHA=$(awk '{print $1}' "dist/seallink-spec-${TAG}.md.sha256")
+          FLAGS=(--title "SealLink Specification ${TAG}")
+          if [[ "${PRERELEASE}" == "true" ]]; then
+            FLAGS+=(--prerelease)
+          fi
+          gh release create "${TAG}" \
+            "dist/seallink-spec-${TAG}.md" \
+            "dist/seallink-spec-${TAG}.md.sha256" \
+            "${FLAGS[@]}" \
+            --notes "$(cat <<EOF
+          ## SealLink Protocol Specification \`${TAG}\`
+
+          Single-file compiled specification bundle including:
+          - Normative Core Specifications (\`SPEC-00\` through \`SPEC-07\`)
+          - Standard Profiles (\`PROFILE-mail-v1\`, \`PROFILE-agent-v1\`)
+          - Conformance Requirements, Open Questions, and SLIP Template
+          - Machine-Readable Registries (\`registry/*.json\`)
+          - Formal Draft 2020-12 Wire JSON Schemas (\`schemas/*.schema.json\`)
+          - Informative Guides, Migration Rule Inventory, and Conformance Vector Manifest (\`vectors/*.json\`)
+
+          **SHA-256 (\`seallink-spec-${TAG}.md\`):** \`${SHA}\`
+          EOF
+          )"

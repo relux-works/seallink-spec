@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seallink.org/schemas/v1/guardian.schema.json",
+  "title": "SealLink v1.0 Name Binding, Guardianship, Roster Transition, Capacity & Subject End",
+  "$defs": {
+    "NameBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "network", "genesis", "origin_id", "seq", "name", "registration", "owner_policy"],
+      "properties": {
+        "type": { "const": "seallink-name-binding/1" },
+        "network": { "$ref": "common.schema.json#/$defs/Network" },
+        "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+        "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+        "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
+        "owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+        "supersedes_binding_id": { "$ref": "common.schema.json#/$defs/Hex64" }
+      }
+    },
+    "GuardianRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type", "network", "genesis", "origin_id", "issuer", "slot", "revision",
+            "guardian", "prev_outpoint", "pending_vout", "pending_policy", "active_policy",
+            "term", "effective_delay_blocks"
+          ],
+          "properties": {
+            "type": { "const": "seallink-guardian/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
+            "slot": { "type": "integer", "minimum": 1, "maximum": 32 },
+            "revision": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "guardian": { "$ref": "common.schema.json#/$defs/NamePin" },
+            "prev_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
+            "pending_vout": {
+              "$ref": "common.schema.json#/$defs/Vout",
+              "description": "Output index in the 0x0d appointment transaction holding pending_policy; pending outpoint derives acyclically as (anchor_txid, pending_vout)."
+            },
+            "pending_policy": {
+              "$ref": "common.schema.json#/$defs/ScriptPolicy",
+              "description": "MUST be guardian_slot_pending with delay_blocks == effective_delay_blocks."
+            },
+            "active_policy": {
+              "$ref": "common.schema.json#/$defs/ScriptPolicy",
+              "description": "MUST be either_of_2(guardian_seal_pk, disposer_seal_pk) created at vout 0 by Stage 2 activation (0x0e)."
+            },
+            "term": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["mode"],
+                  "properties": { "mode": { "const": "indefinite" } }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["mode", "not_after_unix", "ceiling_height"],
+                  "properties": {
+                    "mode": { "const": "calendar" },
+                    "not_after_unix": { "$ref": "common.schema.json#/$defs/Uint53" },
+                    "ceiling_height": { "$ref": "common.schema.json#/$defs/PositiveUint53" }
+                  }
+                }
+              ]
+            },
+            "effective_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560 }
+          }
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "GuardianRoster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type", "network", "genesis", "origin_id", "issuer", "prev_revision",
+            "revision", "revision_size", "prev_roster_outpoint", "next_roster_vout",
+            "next_roster_policy", "effective_delay_blocks", "quorums", "slots"
+          ],
+          "properties": {
+            "type": { "const": "seallink-guardian-roster/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
+            "prev_revision": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "revision": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "revision_size": { "type": "integer", "minimum": 1, "maximum": 32 },
+            "prev_roster_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
+            "next_roster_vout": { "$ref": "common.schema.json#/$defs/Vout" },
+            "next_roster_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+            "effective_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560 },
+            "quorums": { "$ref": "common.schema.json#/$defs/QuorumMap" },
+            "slots": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["slot", "action", "active_outpoint", "guardian_id"],
+                    "properties": {
+                      "slot": { "type": "integer", "minimum": 1, "maximum": 32 },
+                      "action": { "const": "retain_active" },
+                      "active_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
+                      "guardian_id": { "$ref": "common.schema.json#/$defs/Hex64" }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["slot", "action", "vacant_outpoint"],
+                    "properties": {
+                      "slot": { "type": "integer", "minimum": 1, "maximum": 32 },
+                      "action": { "const": "retain_vacant" },
+                      "vacant_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["slot", "action", "new_vacant_vout", "new_vacant_policy"],
+                    "properties": {
+                      "slot": { "type": "integer", "minimum": 1, "maximum": 32 },
+                      "action": { "const": "new_vacant" },
+                      "new_vacant_vout": { "$ref": "common.schema.json#/$defs/Vout" },
+                      "new_vacant_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "CapacityRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type", "network", "genesis", "origin_id", "issuer", "status_prev_outpoint",
+            "next_status_vout", "next_status_policy", "subject_new_owner_policy",
+            "basis_sha256", "issued_at"
+          ],
+          "properties": {
+            "type": { "const": "seallink-capacity/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
+            "status_prev_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
+            "next_status_vout": { "$ref": "common.schema.json#/$defs/Vout" },
+            "next_status_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+            "subject_new_owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+            "basis_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+          }
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "EndRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type", "network", "genesis", "origin_id", "issuer",
+            "status_prev_outpoint", "reason", "basis_sha256", "issued_at"
+          ],
+          "properties": {
+            "type": { "const": "seallink-end/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
+            "status_prev_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
+            "reason": { "type": "string", "enum": ["death", "dematerialization", "dissolution"] },
+            "basis_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+          }
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    }
+  }
+}

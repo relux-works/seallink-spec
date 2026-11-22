@@ -1,0 +1,526 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seallink.org/schemas/v1/invocation.schema.json",
+  "title": "SealLink v1.0 Invocation, Receipt, Sessions, Auth, Owner Control, Journal & Migration",
+  "$defs": {
+    "Invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "executor", "action", "target", "arguments", "proof_path", "nonce", "iat", "exp"],
+          "properties": {
+            "type": { "const": "seallink-invocation/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "executor": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "key"],
+              "properties": {
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "key": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" }
+              }
+            },
+            "action": { "type": "string", "pattern": "^[a-z0-9._-]+(/[a-z0-9._-]+)+$", "maxLength": 128 },
+            "target": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "arguments": {
+              "type": "object",
+              "maxProperties": 64,
+              "description": "Closed per-action arguments object validated against the owning action profile schema (e.g. profile-mail.schema.json, profile-agent.schema.json)."
+            },
+            "content_salt": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "proof_path": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 2,
+              "items": { "$ref": "common.schema.json#/$defs/ProofPathEntry" }
+            },
+            "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "iat": { "$ref": "common.schema.json#/$defs/Uint53" },
+            "exp": { "$ref": "common.schema.json#/$defs/Uint53" }
+          }
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "Receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "executor_name", "invocation_id", "grant_id", "action", "outcome", "tip_height", "tip_hash", "recorded_at"],
+          "properties": {
+            "type": { "const": "seallink-receipt/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "executor_name": { "$ref": "common.schema.json#/$defs/NameStr" },
+            "invocation_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "grant_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "action": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "outcome": { "type": "string", "enum": ["executed", "refused", "uncertain"] },
+            "refusal_code": { "type": "string", "minLength": 1, "maxLength": 64 },
+            "settlements": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "resource", "unit", "reserved", "settled", "released"],
+                "properties": {
+                  "kind": { "type": "string", "minLength": 1, "maxLength": 128 },
+                  "resource": { "type": "string", "minLength": 1, "maxLength": 256 },
+                  "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
+                  "reserved": { "$ref": "common.schema.json#/$defs/Uint64Str" },
+                  "settled": { "$ref": "common.schema.json#/$defs/Uint64Str" },
+                  "released": { "$ref": "common.schema.json#/$defs/Uint64Str" }
+                }
+              }
+            },
+            "result_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "tip_height": { "$ref": "common.schema.json#/$defs/Uint53" },
+            "tip_hash": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "recorded_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+          }
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "SessionOpen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "executor", "proof_path", "op", "slot_binding", "quotas", "nonce", "iat", "exp"],
+          "properties": {
+            "type": { "const": "seallink-session-open/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "executor": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "key"],
+              "properties": {
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "key": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" }
+              }
+            },
+            "proof_path": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 2,
+              "items": { "$ref": "common.schema.json#/$defs/ProofPathEntry" }
+            },
+            "op": { "type": "string", "enum": ["open", "extend", "close"] },
+            "session_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "slot_binding": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "quotas": { "type": "array", "maxItems": 32, "items": { "$ref": "common.schema.json#/$defs/Quota" } },
+            "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "iat": { "$ref": "common.schema.json#/$defs/Uint53" },
+            "exp": { "$ref": "common.schema.json#/$defs/Uint53" }
+          }
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "AuthChallenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "service_id", "nonce", "issued_at", "expires_at", "auth_pubkey"],
+          "properties": {
+            "type": { "const": "seallink-auth-challenge/1" },
+            "service_id": { "type": "string", "minLength": 1, "maxLength": 255 },
+            "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+            "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+            "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+            "auth_pubkey": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" }
+          }
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "AuthUpgrade": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "service_id", "account_id", "name", "auth_pubkey", "firstupdate_txid", "nonce", "issued_at", "expires_at"],
+          "properties": {
+            "type": { "const": "seallink-auth-upgrade/1" },
+            "service_id": { "type": "string", "minLength": 1, "maxLength": 255 },
+            "account_id": { "type": "string", "minLength": 1, "maxLength": 255 },
+            "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+            "auth_pubkey": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" },
+            "firstupdate_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+            "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+          }
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "OwnerCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "owner", "target_executor", "level", "command", "arguments", "nonce", "iat", "exp"],
+              "properties": {
+                "type": { "const": "seallink-owner-command/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "owner": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "target_executor": { "type": "string", "minLength": 1, "maxLength": 255 },
+                "level": { "type": "integer", "enum": [0, 1, 2] },
+                "command": { "const": "agent-dispatch" },
+                "arguments": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["run_id", "brief_sha256"],
+                  "properties": {
+                    "run_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                    "brief_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+                    "grant_id": { "$ref": "common.schema.json#/$defs/Hex64" }
+                  }
+                },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "iat": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "exp": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "owner", "target_executor", "level", "command", "arguments", "nonce", "iat", "exp"],
+              "properties": {
+                "type": { "const": "seallink-owner-command/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "owner": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "target_executor": { "type": "string", "minLength": 1, "maxLength": 255 },
+                "level": { "type": "integer", "enum": [1, 2] },
+                "command": { "const": "session-terminate" },
+                "arguments": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["session_id", "reason"],
+                  "properties": {
+                    "session_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                    "reason": { "type": "string", "minLength": 1, "maxLength": 256 }
+                  }
+                },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "iat": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "exp": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "owner", "target_executor", "level", "command", "arguments", "nonce", "iat", "exp"],
+              "properties": {
+                "type": { "const": "seallink-owner-command/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "owner": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "target_executor": { "type": "string", "minLength": 1, "maxLength": 255 },
+                "level": { "const": 2 },
+                "command": { "const": "policy-apply" },
+                "arguments": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["statement_id", "config_sha256"],
+                  "properties": {
+                    "statement_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                    "config_sha256": { "$ref": "common.schema.json#/$defs/Hex64" }
+                  }
+                },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "iat": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "exp": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "owner", "target_executor", "level", "command", "arguments", "nonce", "iat", "exp"],
+              "properties": {
+                "type": { "const": "seallink-owner-command/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "owner": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "target_executor": { "type": "string", "minLength": 1, "maxLength": 255 },
+                "level": { "const": 2 },
+                "command": { "const": "keyholder-halt" },
+                "arguments": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["scope"],
+                  "properties": {
+                    "scope": { "type": "string", "enum": ["all", "run", "device"] },
+                    "target_id": { "type": "string", "minLength": 1, "maxLength": 128 }
+                  }
+                },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "iat": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "exp": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            }
+          ]
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "JournalEntry": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "journal_id", "pos", "prev_commitment", "kind", "body"],
+          "properties": {
+            "type": { "const": "seallink-journal-entry/1" },
+            "journal_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "pos": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "prev_commitment": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "kind": { "const": "closure" },
+            "body": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["subject_kind", "subject_id", "cause", "observed_at"],
+              "properties": {
+                "subject_kind": { "type": "string", "enum": ["grant", "contract", "credential", "seal", "role", "row", "guardian_slot", "origin"] },
+                "subject_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "cause": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "spend_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "observed_height": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "observed_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "journal_id", "pos", "prev_commitment", "kind", "body"],
+          "properties": {
+            "type": { "const": "seallink-journal-entry/1" },
+            "journal_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "pos": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "prev_commitment": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "kind": { "const": "reservation" },
+            "body": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["invocation_id", "grant_id", "account", "quota_kind", "resource", "unit", "window", "bucket_id", "amount", "recorded_at"],
+              "properties": {
+                "invocation_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "grant_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "account": { "type": "string", "enum": ["own", "row", "session"] },
+                "quota_kind": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "resource": { "type": "string", "minLength": 1, "maxLength": 256 },
+                "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "window": { "type": "string", "pattern": "^(term|blocks:[1-9][0-9]{0,8}|seconds:[1-9][0-9]{0,9})$" },
+                "bucket_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "amount": { "$ref": "common.schema.json#/$defs/Uint64Str" },
+                "recorded_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "journal_id", "pos", "prev_commitment", "kind", "body"],
+          "properties": {
+            "type": { "const": "seallink-journal-entry/1" },
+            "journal_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "pos": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "prev_commitment": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "kind": { "const": "settlement" },
+            "body": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["invocation_id", "grant_id", "outcome", "settled", "released", "receipt_sha256", "recorded_at"],
+              "properties": {
+                "invocation_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "grant_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "outcome": { "type": "string", "enum": ["executed", "refused", "uncertain"] },
+                "settled": { "$ref": "common.schema.json#/$defs/Uint64Str" },
+                "released": { "$ref": "common.schema.json#/$defs/Uint64Str" },
+                "receipt_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "recorded_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "journal_id", "pos", "prev_commitment", "kind", "body"],
+          "properties": {
+            "type": { "const": "seallink-journal-entry/1" },
+            "journal_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "pos": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "prev_commitment": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "kind": { "const": "single-use-consumed" },
+            "body": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["grant_id", "invocation_id", "use_txid", "receipt_sha256", "recorded_at"],
+              "properties": {
+                "grant_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "invocation_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "use_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "receipt_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "recorded_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "journal_id", "pos", "prev_commitment", "kind", "body"],
+          "properties": {
+            "type": { "const": "seallink-journal-entry/1" },
+            "journal_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "pos": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "prev_commitment": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "kind": { "const": "nonce" },
+            "body": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["scope", "nonce", "invocation_id", "expires_at"],
+              "properties": {
+                "scope": { "type": "string", "enum": ["invocation", "auth", "assent", "owner-command"] },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "invocation_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "journal_id", "pos", "prev_commitment", "kind", "body"],
+          "properties": {
+            "type": { "const": "seallink-journal-entry/1" },
+            "journal_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "pos": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "prev_commitment": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "kind": { "const": "manifest-head" },
+            "body": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "registration", "seq", "manifest_sha256", "anchoring_txid"],
+              "properties": {
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
+                "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                "manifest_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "anchoring_txid": { "$ref": "common.schema.json#/$defs/Hex64" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "journal_id", "pos", "prev_commitment", "kind", "body"],
+          "properties": {
+            "type": { "const": "seallink-journal-entry/1" },
+            "journal_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "pos": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "prev_commitment": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "kind": { "const": "recovery" },
+            "body": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["fenced_at", "prev_write_token", "new_write_token"],
+              "properties": {
+                "fenced_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "prev_write_token": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "new_write_token": { "$ref": "common.schema.json#/$defs/PositiveUint53" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "journal_id", "pos", "prev_commitment", "kind", "body"],
+          "properties": {
+            "type": { "const": "seallink-journal-entry/1" },
+            "journal_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "pos": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "prev_commitment": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "kind": { "const": "boundary" },
+            "body": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["block_height", "block_hash", "header_time"],
+              "properties": {
+                "block_height": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                "block_hash": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "header_time": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "MigrationManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "migration_id", "holder", "service_type", "source_executor", "dest_executor", "journal_pos", "journal_commitment", "inventory_sha256", "outstanding_exposure", "issued_at"],
+          "properties": {
+            "type": { "const": "seallink-migration/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "migration_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "holder": { "$ref": "common.schema.json#/$defs/NamePin" },
+            "service_type": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "source_executor": { "$ref": "common.schema.json#/$defs/NamePin" },
+            "dest_executor": { "$ref": "common.schema.json#/$defs/NamePin" },
+            "journal_pos": { "$ref": "common.schema.json#/$defs/Uint53" },
+            "journal_commitment": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "inventory_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "outstanding_exposure": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/Quota" } },
+            "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+          }
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    }
+  }
+}

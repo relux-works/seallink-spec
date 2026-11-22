@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seallink.org/schemas/v1/profile-mail.schema.json",
+  "title": "SealLink PROFILE-mail-v1 Action Arguments and Result Schemas",
+  "$defs": {
+    "MailListArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["folder", "page"],
+      "properties": {
+        "folder": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "sender_domain": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "max_bytes": { "$ref": "common.schema.json#/$defs/Uint64Str" },
+        "snapshot_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "page": { "$ref": "common.schema.json#/$defs/Uint53" }
+      }
+    },
+    "MailListResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot_id", "page", "has_more", "messages"],
+      "properties": {
+        "snapshot_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "page": { "$ref": "common.schema.json#/$defs/Uint53" },
+        "has_more": { "type": "boolean" },
+        "messages": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["message_id", "folder", "sender_domain", "size_bytes", "received_at"],
+            "properties": {
+              "message_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+              "folder": { "type": "string", "minLength": 1, "maxLength": 256 },
+              "sender_domain": { "type": "string", "minLength": 1, "maxLength": 255 },
+              "size_bytes": { "$ref": "common.schema.json#/$defs/Uint64Str" },
+              "received_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+            }
+          }
+        }
+      }
+    },
+    "MailReadArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["folder", "message_id"],
+      "properties": {
+        "folder": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "message_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "sender_domain": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "max_bytes": { "$ref": "common.schema.json#/$defs/Uint64Str" }
+      }
+    },
+    "MailReadResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "folder", "sender_domain", "size_bytes", "mime_sha256", "received_at"],
+      "properties": {
+        "message_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "folder": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "sender_domain": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "size_bytes": { "$ref": "common.schema.json#/$defs/Uint64Str" },
+        "mime_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "received_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+      }
+    },
+    "MailSendArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["to", "subject", "body_sha256", "size_bytes"],
+      "properties": {
+        "to": { "type": "string", "minLength": 3, "maxLength": 320 },
+        "subject": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "body_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "size_bytes": { "$ref": "common.schema.json#/$defs/Uint64Str" }
+      }
+    },
+    "MailSendResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "body_sha256", "queued_at"],
+      "properties": {
+        "message_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "body_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "queued_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+      }
+    }
+  }
+}

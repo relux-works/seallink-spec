@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seallink.org/schemas/v1/card.schema.json",
+  "title": "SealLink v1.0 Public Entity Card",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "network", "name", "seq", "kind", "display", "transports", "relays", "role", "contact", "replaces"],
+  "properties": {
+    "type": { "const": "seallink-card/1" },
+    "network": { "$ref": "common.schema.json#/$defs/Network" },
+    "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+    "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+    "kind": { "type": "string", "enum": ["person", "agent", "organization", "service"] },
+    "display": { "type": "string", "maxLength": 256 },
+    "operator": { "$ref": "common.schema.json#/$defs/NameStr" },
+    "transports": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["transport", "address"],
+        "properties": {
+          "transport": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "address": { "type": "string", "minLength": 1, "maxLength": 512 }
+        }
+      }
+    },
+    "relays": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "type": "string", "pattern": "^wss?://.+$", "maxLength": 512 }
+    },
+    "role": { "type": "string", "maxLength": 512 },
+    "contact": { "type": "string", "maxLength": 256 },
+    "replaces": { "$ref": "common.schema.json#/$defs/Uint53" }
+  }
+}

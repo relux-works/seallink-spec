@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Spec Lint, Draft 2020-12 Schemas, Vectors & Bundle Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install JSON Schema validator
+        run: python3 -m pip install --quiet "jsonschema>=4.23"
+
+      - name: Run specification consistency, schema, and vector linter
+        run: python3 tools/speclint.py --require-jsonschema
+
+      - name: Verify single-file Markdown bundle build
+        run: python3 tools/build_bundle.py --version "${GITHUB_SHA::7}" --check

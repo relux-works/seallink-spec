@@ -1,0 +1,250 @@
+{
+  "$comment": "SealLink v1.0 Key Role & Custody Registry (SPEC-03). Coherent with registry/object-types.json (verified by tools/speclint.py).",
+  "protocol": "SealLink",
+  "version": "1.0.0-draft.1",
+  "namecoin_coin_type": 7,
+  "roles": [
+    {
+      "role": "name_owner",
+      "curve": "secp256k1",
+      "scheme": "ECDSA (P2WPKH / P2WSH SIGHASH_ALL)",
+      "pubkey_encoding": "compressed_66hex",
+      "custody_tier": "cold",
+      "derivation_recommendation": "Separate cold seed, m/84'/7'/0'/0/i (fresh key per name or per multisig participant)",
+      "published_in": "Namecoin name UTXO ScriptPolicy",
+      "allowed_operations": ["OP_NAME_NEW", "OP_NAME_FIRSTUPDATE", "OP_NAME_UPDATE", "KEY_COMPROMISE_BREAK (0x0b)", "RECOVERY_CANCEL (0x10)"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-auth-challenge/1", "messaging", "ordinary_fee_funding"]
+    },
+    {
+      "role": "emergency_fee_reserve",
+      "curve": "secp256k1",
+      "scheme": "ECDSA (P2WPKH SIGHASH_ALL)",
+      "pubkey_encoding": "compressed_66hex",
+      "custody_tier": "cold",
+      "derivation_recommendation": "Cold seed isolated from ALL hot signers, m/84'/7'/3'/0/i",
+      "published_in": "Not published (pre-funded cold UTXO)",
+      "allowed_operations": ["Emergency name update fee funding", "CPFP P2A fee-bumping for pre-signed revocations"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-auth-challenge/1", "hot_signer_access"]
+    },
+    {
+      "role": "grant",
+      "curve": "secp256k1",
+      "scheme": "BIP-340 Schnorr",
+      "pubkey_encoding": "xonly_64hex",
+      "custody_tier": "isolated_signer_with_presence",
+      "derivation_recommendation": "Outside wallet accounts (e.g. BIP-85 m/83696968'/2'/7' or hardware/keyvault item); never shares UTXO funding seed",
+      "published_in": "Name value link.grant (direct x-only pubkey or ThresholdPolicy SHA-256 pin)",
+      "allowed_operations": ["seallink-grant/1", "seallink-assent/1", "seallink-termination/1", "seallink-statement/1", "seallink-migration/1"],
+      "forbidden_operations": ["chain_transactions", "seal_spends", "seallink-auth-challenge/1", "messaging"]
+    },
+    {
+      "role": "guardian_quorum",
+      "curve": "secp256k1",
+      "scheme": "BIP-340 Schnorr (distinct active guardian slot keys)",
+      "pubkey_encoding": "xonly_64hex",
+      "custody_tier": "isolated_signer_with_presence",
+      "derivation_recommendation": "Each guardian signs with its own link.grant role key across distinct active slots matching guardian_context.revision",
+      "published_in": "Each active guardian's Name value link.grant",
+      "allowed_operations": ["seallink-grant/1", "seallink-assent/1"],
+      "forbidden_operations": ["chain_transactions", "seallink-origin/1", "seallink-credential/1"]
+    },
+    {
+      "role": "cred",
+      "curve": "secp256k1",
+      "scheme": "BIP-340 Schnorr",
+      "pubkey_encoding": "xonly_64hex",
+      "custody_tier": "isolated_signer_with_presence",
+      "derivation_recommendation": "Dedicated isolated key outside wallet accounts",
+      "published_in": "Name value link.cred (direct x-only pubkey or ThresholdPolicy SHA-256 pin)",
+      "allowed_operations": ["seallink-origin/1", "seallink-guardian/1", "seallink-guardian-roster/1", "seallink-capacity/1", "seallink-end/1", "seallink-credential/1"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-notary/1", "chain_transactions", "seallink-auth-challenge/1"]
+    },
+    {
+      "role": "notary",
+      "curve": "secp256k1",
+      "scheme": "BIP-340 Schnorr",
+      "pubkey_encoding": "xonly_64hex",
+      "custody_tier": "isolated_signer_with_presence",
+      "derivation_recommendation": "Dedicated isolated key outside wallet accounts",
+      "published_in": "Name value link.notary (direct x-only pubkey or ThresholdPolicy SHA-256 pin)",
+      "allowed_operations": ["seallink-notary/1"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-credential/1", "chain_transactions", "seallink-auth-challenge/1"]
+    },
+    {
+      "role": "auth",
+      "curve": "secp256k1",
+      "scheme": "BIP-340 Schnorr",
+      "pubkey_encoding": "xonly_64hex",
+      "custody_tier": "isolated_signer",
+      "derivation_recommendation": "Hot signer seed m/84'/7'/2'/0/i (isolated from funding 0' and dynamic pool 10+)",
+      "published_in": "seallink-manifest/1 auth_key (paired with auth_seal)",
+      "allowed_operations": ["seallink-auth-challenge/1", "seallink-auth-upgrade/1"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-assent/1", "seallink-owner-command/1", "chain_transactions"]
+    },
+    {
+      "role": "recipient",
+      "curve": "secp256k1",
+      "scheme": "BIP-340 Schnorr",
+      "pubkey_encoding": "xonly_64hex",
+      "custody_tier": "hot_service_or_keyholder",
+      "derivation_recommendation": "Per-task ephemeral key or dedicated request key pinned in grant.recipient",
+      "published_in": "seallink-grant/1 recipient (key, name's nostr/request key, or group threshold)",
+      "allowed_operations": ["seallink-invocation/1", "seallink-session-open/1"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-origin/1", "seallink-credential/1"]
+    },
+    {
+      "role": "messaging_or_request",
+      "curve": "secp256k1",
+      "scheme": "BIP-340 Schnorr",
+      "pubkey_encoding": "xonly_64hex",
+      "custody_tier": "hot_service_or_keyholder",
+      "derivation_recommendation": "Generated on host/keyholder (or m/44'/1237'/0'/0/i for personal Nostr)",
+      "published_in": "Name value nostr (or directly in grant recipient.key for key-only actors)",
+      "allowed_operations": ["Transport messaging (e.g. Nostr)", "seallink-invocation/1", "seallink-session-open/1"],
+      "forbidden_operations": ["seallink-grant/1", "child_grant_signing"]
+    },
+    {
+      "role": "delegation",
+      "curve": "secp256k1",
+      "scheme": "BIP-340 Schnorr",
+      "pubkey_encoding": "xonly_64hex",
+      "custody_tier": "isolated_signer",
+      "derivation_recommendation": "Per-parent derived key inside dedicated delegation signing service with 1-sig-per-row reservation ledger",
+      "published_in": "Parent seallink-grant/1 delegate.key (never in name value)",
+      "allowed_operations": ["seallink-grant/1"],
+      "forbidden_operations": ["root_grant_signing", "seal_spends", "messaging", "name_updates"]
+    },
+    {
+      "role": "moderator",
+      "curve": "secp256k1",
+      "scheme": "BIP-340 Schnorr",
+      "pubkey_encoding": "xonly_64hex",
+      "custody_tier": "isolated_signer",
+      "derivation_recommendation": "Dedicated moderation verdict signing key pinned in contract.moderation.moderator_key",
+      "published_in": "seallink-contract/1 moderation.moderator_key",
+      "allowed_operations": ["seallink-verdict/1"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-assent/1", "chain_transactions"]
+    },
+    {
+      "role": "grant_seal",
+      "curve": "secp256k1",
+      "scheme": "ECDSA (P2WPKH / P2WSH SIGHASH_ALL)",
+      "pubkey_encoding": "compressed_66hex",
+      "custody_tier": "isolated_signer",
+      "derivation_recommendation": "Dynamic account pool m/84'/7'/<acct>=10+'/0/i (xpub kept secret)",
+      "published_in": "seallink-grant/1 revocation.seal.script_policy",
+      "allowed_operations": ["Revocation spend of its own grant seal UTXO"],
+      "forbidden_operations": ["seallink-grant/1", "ordinary_fee_funding"]
+    },
+    {
+      "role": "child_seal",
+      "curve": "secp256k1",
+      "scheme": "ECDSA (P2WPKH / P2WSH SIGHASH_ALL)",
+      "pubkey_encoding": "compressed_66hex",
+      "custody_tier": "isolated_signer",
+      "derivation_recommendation": "Separate dynamic account outside delegation signer",
+      "published_in": "Parent seallink-grant/1 delegate.child_seal_key",
+      "allowed_operations": ["Revocation spend of child grant seals"],
+      "forbidden_operations": ["seallink-grant/1", "delegation_signer_access"]
+    },
+    {
+      "role": "row_coin",
+      "curve": "secp256k1",
+      "scheme": "ECDSA (P2WPKH SIGHASH_ALL)",
+      "pubkey_encoding": "compressed_66hex",
+      "custody_tier": "isolated_signer",
+      "derivation_recommendation": "Separate dynamic account >= 10'",
+      "published_in": "Parent seallink-grant/1 delegate.groups[].ranges[]",
+      "allowed_operations": ["Single-use anchor spend enforcing <= 1 child per row"],
+      "forbidden_operations": ["seallink-grant/1", "seal_spends"]
+    },
+    {
+      "role": "stop_coin",
+      "curve": "secp256k1",
+      "scheme": "ECDSA (P2WPKH SIGHASH_ALL)",
+      "pubkey_encoding": "compressed_66hex",
+      "custody_tier": "isolated_signer",
+      "derivation_recommendation": "Notary-owned dynamic account >= 10'",
+      "published_in": "Parent seallink-grant/1 delegate.groups[].ranges[].stop_script_policy",
+      "allowed_operations": ["Notary per-row termination for cause"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-notary/1"]
+    },
+    {
+      "role": "contract_seal",
+      "curve": "secp256k1",
+      "scheme": "ECDSA (P2WPKH / P2WSH SIGHASH_ALL)",
+      "pubkey_encoding": "compressed_66hex",
+      "custody_tier": "isolated_signer_with_presence",
+      "derivation_recommendation": "Dedicated contract seal account >= 10'",
+      "published_in": "seallink-contract/1 seal.script_policy",
+      "allowed_operations": ["Contract termination spend (action 0x08)"],
+      "forbidden_operations": ["seallink-grant/1", "ordinary_fee_funding"]
+    },
+    {
+      "role": "guardian_seal",
+      "curve": "secp256k1",
+      "scheme": "ECDSA (P2WPKH / P2WSH SIGHASH_ALL)",
+      "pubkey_encoding": "compressed_66hex",
+      "custody_tier": "isolated_signer_with_presence",
+      "derivation_recommendation": "Dedicated guardianship seal account >= 10'",
+      "published_in": "seallink-origin/1, seallink-guardian/1, seallink-guardian-roster/1",
+      "allowed_operations": ["Slot halt, successor transition (0x0d), slot activation (0x0e), roster transition (0x0f), name binding (0x0c)"],
+      "forbidden_operations": ["seallink-grant/1", "ordinary_fee_funding"]
+    },
+    {
+      "role": "disposable_revoke_seal",
+      "curve": "secp256k1",
+      "scheme": "ECDSA (P2WPKH SIGHASH_ALL + P2A CPFP anchor output)",
+      "pubkey_encoding": "compressed_66hex",
+      "custody_tier": "ephemeral_csprng_destroyed_after_presign",
+      "derivation_recommendation": "CSPRNG ONLY — NEVER BIP-39 derived; destroy private key immediately after recording pre-signed tx_revoke",
+      "published_in": "manifest auth_seal, device-list seal, members-list entry seal",
+      "allowed_operations": ["One pre-signed fast-revocation transaction with P2A CPFP anchor output"],
+      "forbidden_operations": ["seed_derivation", "key_retention_after_presign"]
+    },
+    {
+      "role": "device",
+      "curve": "P-256 | Ed25519 | secp256k1",
+      "scheme": "ECDSA-P256 (low-S) | Ed25519 | BIP-340",
+      "pubkey_encoding": "alg_tagged_hex",
+      "custody_tier": "hardware_device",
+      "derivation_recommendation": "Generated inside hardware enclave or device keystore (non-exportable for L2)",
+      "published_in": "seallink-device-list/1 (pinned in manifest)",
+      "allowed_operations": ["seallink-owner-command/1", "seallink-statement/1"],
+      "forbidden_operations": ["seallink-auth-challenge/1", "seallink-grant/1", "seallink-assent/1", "chain_transactions"]
+    },
+    {
+      "role": "receipt",
+      "curve": "secp256k1",
+      "scheme": "BIP-340 Schnorr",
+      "pubkey_encoding": "xonly_64hex",
+      "custody_tier": "hot_service",
+      "derivation_recommendation": "Dedicated service receipt key (distinct from funding/wallet keys)",
+      "published_in": "Service's seallink-manifest/1 service.receipt_key and grant.executor.key",
+      "allowed_operations": ["seallink-receipt/1", "seallink-migration/1"],
+      "forbidden_operations": ["seallink-grant/1", "wallet_spends"]
+    },
+    {
+      "role": "arbiter",
+      "curve": "secp256k1",
+      "scheme": "BIP-340 Schnorr (off-chain) / ECDSA P2WSH (on-chain)",
+      "pubkey_encoding": "xonly_64hex_or_compressed_66hex",
+      "custody_tier": "isolated_signer_with_presence",
+      "derivation_recommendation": "Independent institution/court custody (never co-located with disposer)",
+      "published_in": "seallink-origin/1, seallink-contract/1",
+      "allowed_operations": ["seallink-guardian/1", "seallink-guardian-roster/1", "seallink-termination/1", "2-of-2 guardian appointment (0x0d)", "2-of-2 roster transition (0x0f)", "2-of-2 name recovery (0x0c)", "arbiter contract termination (0x08)"],
+      "forbidden_operations": ["unilateral_guardian_appointment", "grant_widening", "seallink-grant/1"]
+    },
+    {
+      "role": "funding",
+      "curve": "secp256k1",
+      "scheme": "ECDSA (P2WPKH SIGHASH_ALL)",
+      "pubkey_encoding": "compressed_66hex",
+      "custody_tier": "hot_service",
+      "derivation_recommendation": "Hot signer seed m/84'/7'/0'/0/i",
+      "published_in": "Not published",
+      "allowed_operations": ["Ordinary tx fees, seal pool funding, sponsored client-owned registration funding"],
+      "forbidden_operations": ["name_owner_control", "seallink-grant/1", "emergency_fee_reserve"]
+    }
+  ]
+}
