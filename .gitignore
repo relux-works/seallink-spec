@@ -3,5 +3,7 @@ __pycache__/
 *.pyc
 build/
 dist/
+site/
+.wrangler/
 *.pdf
 *.html

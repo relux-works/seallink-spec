@@ -1,0 +1,56 @@
+name: Deploy seallink.org
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    name: Build & Deploy seallink.org to Cloudflare Pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install JSON Schema validator
+        run: python3 -m pip install --quiet "jsonschema>=4.23"
+
+      - name: Validate specification before deploy
+        run: python3 tools/speclint.py --require-jsonschema
+
+      - name: Determine release version label
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            LATEST_TAG=$(git tag --sort=-creatordate | grep '^v' | head -n 1 || true)
+            if [[ -z "${LATEST_TAG}" ]]; then
+              LATEST_TAG="v1.0.0-draft.2"
+            fi
+            echo "version=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build static site & live schema endpoints
+        run: python3 tools/build_site.py --version "${{ steps.ver.outputs.version }}" --out site
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=seallink-org --branch=main
