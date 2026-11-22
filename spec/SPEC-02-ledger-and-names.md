@@ -1,8 +1,8 @@
 # SPEC-02: Ledger Interface, Namecoin Binding, ScriptPolicy, Merkle Batching, and UTXO Seals
 
-- **Version:** `1.0.0-draft.1`
+- **Version:** `1.0.0-draft.2`
 - **Status:** `draft` (normative rules `decided` except provisional freshness constants and Tier 2 profile marked `open` in `OPEN-QUESTIONS.md`)
-- **Evidence / Maturity:** `vectors` (`vectors/ledger-scripts-and-opreturn.json`)
+- **Evidence / Maturity:** `vectors` (`vectors/ledger-scripts-and-opreturn.json`, `vectors/refusal-coverage-matrix.json`; two-node P2A regtest proof in `conformance/p2a-regtest/`)
 - **Registries:** `registry/opreturn-actions.json`, `registry/refusal-codes.json`
 - **Schemas:** `schemas/common.schema.json`
 
@@ -36,8 +36,8 @@ Core SealLink semantics (`SPEC-03` through `SPEC-07`) depend solely on an abstra
 
 - **Networks:**
   - `main`: genesis `000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770`, name expiry `D = 36000` blocks, SegWit ([BIP-141]) and CSV ([BIP-112]) activated at height `475000`, Taproot inactive.
-  - `regtest`: verifier-configured genesis hash, name expiry `D = 30` blocks, SegWit and CSV active from genesis.
-- A verifier MUST explicitly pin `network` and `genesis` in local configuration and refuse any node reporting a mismatch (`CHAIN_MISMATCH`).
+  - `regtest`: verifier-configured genesis hash, name expiry `D = 30` blocks, SegWit active from genesis and CSV ([BIP-112]) active from height `1` (matching Namecoin Core `nc28.0` consensus parameters).
+- No other network identifier is valid in SealLink v1.0 (`schemas/common.schema.json#/$defs/Network` closes `network` to `"main" | "regtest"`). A verifier MUST explicitly pin `network` and `genesis` in local configuration and refuse any node reporting a mismatch (`CHAIN_MISMATCH`).
 - **Name value byte limit:** Namecoin consensus (`nc28.0` `MAX_VALUE_LENGTH`) allows `1023` bytes, while Namecoin Core wallet UI enforces `MAX_VALUE_LENGTH_UI = 520` bytes. SealLink fixes **`520` bytes** as its protocol limit (`SPEC-03`) for universal wallet compatibility.
 - **Name registration:** Two-step flow (`OP_NAME_NEW` committing salted `HASH160(rand || name)`, followed `>= 12` blocks later by `OP_NAME_FIRSTUPDATE` revealing name and initial value, locking `0.01 NMC`). A name is live at tip height `H` iff its latest name operation confirmed at height `h` satisfies `H < h + D` (`NAME_EXPIRED` otherwise).
 - **Read-only node route:** Verifier node credentials MUST NOT expose wallet or transaction-submission RPCs (e.g., restricted via `rpcwhitelist`).
@@ -139,7 +139,7 @@ Example hex (`action = 0x01`, `loc_type = 0x00`, 42 bytes):
 6a 05 534c4e4b 01 22 01 <commitment:32B> 00
 ```
 
-All action codes (`0x01`–`0x11`, with `0x06` reserved) and locator types (`0x00`, `0x01`, `0x02`, `0x05`) are registered in `registry/opreturn-actions.json`. Locators are strictly non-exclusive hints: an unavailable locator NEVER invalidates a document whose exact bytes match `commitment` when supplied inline or via any other channel.
+All action codes (`0x01`–`0x12`, with `0x06` reserved) and locator types (`0x00`, `0x01`, `0x02`, `0x05`) are registered in `registry/opreturn-actions.json`. Locators are strictly non-exclusive hints: an unavailable locator NEVER invalidates a document whose exact bytes match `commitment` when supplied inline or via any other channel.
 
 ### 5.3 Merkle Batch Anchor Construction (`0x02`) (`SL-LDGR-014`, `decided`)
 
@@ -182,11 +182,12 @@ For `single_use_1_of_2` grant seals, a spend has **two distinct branches** and M
 
 Block and mempool scanners projecting seal candidates MUST index tracked outpoints first and parse only transactions spending tracked seals.
 
-### 6.3 Pre-Signed Disposable Seals and P2A CPFP Anchor Output (`SL-LDGR-013`, `decided` format / `open` regtest package-relay qualification)
+### 6.3 Pre-Signed Disposable Seals and TRUC/P2A CPFP Anchor Output (`SL-LDGR-013`, `decided` format / `open` production propagation qualification)
 
 Fast-revocation seals for devices, auth keys, and member entries use a **CSPRNG-only private key** (never BIP-39 derived) whose private key is **destroyed immediately** after pre-signing and replicating `tx_revoke`:
-- `tx_revoke` MUST be signed with `SIGHASH_ALL` spending the seal UTXO and creating **one standard Pay-to-Anchor (`P2A`) output** ([BIP-431]): 4-byte witness v1 scriptPubKey `OP_1 PUSH2 0x4e73` (`51024e73`, classified as standard type `"anchor"` in Namecoin Core `nc28.0`) alongside its burn/return output. Bare `OP_TRUE` (`nonstandard` in `nc28.0`) MUST NOT be used.
-- Any holder of `tx_revoke` (peer L2 device, co-guardian, cold emergency reserve) MAY broadcast `tx_revoke` together with a dynamically signed CPFP child transaction spending the `P2A` output with current market fees, without ever needing the destroyed seal private key.
+- `tx_revoke` SHOULD use `nVersion = 3` (TRUC topology rules, [BIP-431]) signed with `SIGHASH_ALL` spending the seal UTXO and creating **one standard Pay-to-Anchor (`P2A`) output** ([BIP-433]): 4-byte witness v1 scriptPubKey `OP_1 PUSH2 0x4e73` (`51024e73`, classified as standard type `"anchor"` in Namecoin Core `nc28.0`) alongside its burn/return output. The `P2A` output value MUST meet or exceed Namecoin Core `nc28.0`'s `P2A` dust floor of **`240` base units**. Bare `OP_TRUE` (`nonstandard` in `nc28.0`) MUST NOT be used.
+- **Namecoin minimum relay fee note:** Namecoin Core `nc28.0` sets default `minrelaytxfee = 0.001 NMC / 1000 vB` (`100,000` base units per 1000 vB — 100× Bitcoin's default). A zero-fee pre-signed `tx_revoke` parent is therefore rejected standalone (`min relay fee not met`) and is relayed as a 1-parent-1-child (`1p1c`) v3 package with a dynamically signed CPFP child spending the `P2A` output and funding the combined package fee (`>= minrelaytxfee` and current mempool feerate), without ever needing the destroyed seal private key.
+- A reproducible two-node Namecoin Core `nc28.0` regtest positive control proving standalone parent rejection, `submitpackage` acceptance, P2P propagation before mining, and block confirmation is preserved in `conformance/p2a-regtest/` (production propagation and fee-competition qualification remain tracked under `OQ-006`).
 
 ---
 
@@ -201,4 +202,4 @@ Fast-revocation seals for devices, auth keys, and member entries use a **CSPRNG-
 ## 8. References
 
 - **Normative:** [BIP-112], [BIP-141], [BIP-143], [BIP-174], [BIP-340].
-- **Informative:** [BIP-431], [NC28].
+- **Informative:** [BIP-431], [BIP-433], [NC28].

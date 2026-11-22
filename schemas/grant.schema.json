@@ -1,12 +1,55 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/schemas/v1/grant.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.2/schemas/grant.schema.json",
   "title": "SealLink v1.0 Universal Grant & Issuance Preparation",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["payload", "signatures"],
-  "properties": {
-    "payload": {
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "allOf": [
+            { "$ref": "#/$defs/GrantPayload" },
+            { "not": { "required": ["guardian_context"] } },
+            {
+              "if": { "required": ["issuer"] },
+              "then": { "properties": { "issuer": { "required": ["role_policy"] } } }
+            }
+          ]
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "guardian_approvals"],
+      "properties": {
+        "payload": {
+          "allOf": [
+            { "$ref": "#/$defs/GrantPayload" },
+            { "required": ["issuer", "guardian_context"] },
+            { "not": { "required": ["parent"] } }
+          ]
+        },
+        "guardian_approvals": { "$ref": "common.schema.json#/$defs/GuardianApprovals" }
+      }
+    }
+  ],
+  "$defs": {
+    "GrantIssuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "registration", "owner_policy"],
+      "properties": {
+        "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+        "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
+        "owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+        "role_policy": { "$ref": "common.schema.json#/$defs/ThresholdPolicy" }
+      }
+    },
+    "GrantPayload": {
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "network", "genesis", "recipient", "capabilities", "not_before_height", "not_after_height", "recent_block", "revocation"],
@@ -14,7 +57,7 @@
         "type": { "const": "seallink-grant/1" },
         "network": { "$ref": "common.schema.json#/$defs/Network" },
         "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
-        "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
+        "issuer": { "$ref": "#/$defs/GrantIssuer" },
         "parent": {
           "type": "object",
           "additionalProperties": false,
@@ -244,9 +287,6 @@
         }
       ]
     },
-    "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
-  },
-  "$defs": {
     "RecipientRule": {
       "oneOf": [
         {

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/schemas/v1/contract.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.2/schemas/contract.schema.json",
   "title": "SealLink v1.0 Contracts, Assent, Termination & Violation Verdicts",
   "$defs": {
     "Contract": {
@@ -18,14 +18,28 @@
           "minItems": 2,
           "maxItems": 32,
           "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["role", "signing_policy"],
-            "properties": {
-              "role": { "type": "string", "minLength": 1, "maxLength": 64 },
-              "name_pin": { "$ref": "common.schema.json#/$defs/NamePin" },
-              "signing_policy": { "$ref": "common.schema.json#/$defs/ThresholdPolicy" }
-            }
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["role", "signing_policy"],
+                "properties": {
+                  "role": { "type": "string", "minLength": 1, "maxLength": 64 },
+                  "name_pin": { "$ref": "common.schema.json#/$defs/NamePin" },
+                  "signing_policy": { "$ref": "common.schema.json#/$defs/ThresholdPolicy" }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["role", "ward_origin_id", "name_pin"],
+                "properties": {
+                  "role": { "type": "string", "minLength": 1, "maxLength": 64 },
+                  "ward_origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                  "name_pin": { "$ref": "common.schema.json#/$defs/NamePin" }
+                }
+              }
+            ]
           }
         },
         "window": {
@@ -43,14 +57,14 @@
           "minItems": 1,
           "maxItems": 256,
           "items": { "$ref": "common.schema.json#/$defs/Hex64" },
-          "description": "Ordered H_tag('seallink-clause/1', salt_32B || canonical_JCS(clause_obj)) per SPEC-01 §5 enabling single-clause selective disclosure."
+          "description": "Ordered H_tag('seallink-clause/1', salt_32B || canonical_JCS(clause_obj)) per SPEC-01 §5 using independent 32-byte CSPRNG salts."
         },
         "machine_clause_indices": {
           "type": "array",
           "maxItems": 64,
           "uniqueItems": true,
           "items": { "$ref": "common.schema.json#/$defs/Uint53" },
-          "description": "Strictly sorted zero-based indices into clause_commitments[] that carry machine-enforced terms; executors MUST require disclosure of every listed index."
+          "description": "Strictly sorted zero-based indices into clause_commitments[] carrying machine-enforced terms; executors MUST require disclosure of every listed index."
         },
         "framework_id": { "$ref": "common.schema.json#/$defs/Hex64" },
         "seal": { "$ref": "common.schema.json#/$defs/Seal" },
@@ -68,34 +82,58 @@
         }
       }
     },
-    "Assent": {
+    "AssentPayload": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["payload", "signatures"],
+      "required": ["type", "network", "genesis", "target_type", "target_id", "party_role", "issued_at", "expires_at", "nonce"],
       "properties": {
-        "payload": {
+        "type": { "const": "seallink-assent/1" },
+        "network": { "$ref": "common.schema.json#/$defs/Network" },
+        "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "target_type": {
+          "type": "string",
+          "enum": ["seallink-contract/1", "seallink-guardian/1", "seallink-guardian-roster/1", "seallink-migration/1"]
+        },
+        "target_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "party_role": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "party_name": { "$ref": "common.schema.json#/$defs/NameStr" },
+        "guardian_context": { "$ref": "common.schema.json#/$defs/GuardianContext" },
+        "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+        "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+        "nonce": { "$ref": "common.schema.json#/$defs/Hex64" }
+      }
+    },
+    "Assent": {
+      "oneOf": [
+        {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type", "network", "genesis", "target_type", "target_id", "party_role", "issued_at", "expires_at", "nonce"],
+          "required": ["payload", "signatures"],
           "properties": {
-            "type": { "const": "seallink-assent/1" },
-            "network": { "$ref": "common.schema.json#/$defs/Network" },
-            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
-            "target_type": {
-              "type": "string",
-              "enum": ["seallink-contract/1", "seallink-guardian/1", "seallink-guardian-roster/1", "seallink-migration/1"]
+            "payload": {
+              "allOf": [
+                { "$ref": "#/$defs/AssentPayload" },
+                { "not": { "required": ["guardian_context"] } }
+              ]
             },
-            "target_id": { "$ref": "common.schema.json#/$defs/Hex64" },
-            "party_role": { "type": "string", "minLength": 1, "maxLength": 64 },
-            "party_name": { "$ref": "common.schema.json#/$defs/NameStr" },
-            "guardian_context": { "$ref": "common.schema.json#/$defs/GuardianContext" },
-            "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
-            "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
-            "nonce": { "$ref": "common.schema.json#/$defs/Hex64" }
+            "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
           }
         },
-        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
-      }
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["payload", "guardian_approvals"],
+          "properties": {
+            "payload": {
+              "allOf": [
+                { "$ref": "#/$defs/AssentPayload" },
+                { "required": ["guardian_context"] }
+              ]
+            },
+            "guardian_approvals": { "$ref": "common.schema.json#/$defs/GuardianApprovals" }
+          }
+        }
+      ]
     },
     "TerminationStatement": {
       "type": "object",

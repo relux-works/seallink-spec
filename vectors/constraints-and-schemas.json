@@ -1,5 +1,324 @@
 {
-  "description": "All 7 Constraint Algebra predicates (match + conservative narrowing) and negative schema/semantic fixtures.",
+  "description": "All 7 Constraint Algebra predicates (match + conservative narrowing), negative schema/semantic fixtures, and SL-ORIG-016 guardianship consistency fixtures.",
+  "negative_guardian_consistency_fixtures": [
+    {
+      "expected_refusal": "WIRE_INTEGER",
+      "guardian_policy": {
+        "appointment_delay_blocks": 144,
+        "arbiter_pk": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597",
+        "challenger_pk": "035ea1bbe2cfaa7e5d9e973927014035b501dae2ea76f21c45e30c725e632c59e9",
+        "disposer_pk": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+        "quorums": {
+          "contract_assent": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "custody_change": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "effect_grant": {
+            "den": 2,
+            "min": 1,
+            "num": 3
+          },
+          "routine_read": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          }
+        },
+        "revision": 1,
+        "revision_size": 2,
+        "roster_seal": {
+          "script_policy": {
+            "keys": {
+              "a": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+              "b": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597"
+            },
+            "kind": "branch",
+            "template": "both_of_2"
+          },
+          "txid": "ba87b4f42ef827694b961b6cf795a6ce16c5dd722276acc13803e14e8e6c763a",
+          "vout": 0
+        },
+        "slots": [
+          {
+            "initial_guardian_commitment": "036581e9c2c41f212fb06fc85a5da032e17c59ef3c33df6bebde36bb6810b5dc",
+            "slot": 1,
+            "vacant_utxo": {
+              "txid": "d794932ce865c2bfb6ba84be9d970b4cfc41f2ea8214b4c354170fabe86f1eff",
+              "vout": 0
+            }
+          },
+          {
+            "initial_guardian_commitment": "94a46147f404b4a34e628a8957545494dad4d6272bfc220fb4f539bf35747958",
+            "slot": 2,
+            "vacant_utxo": {
+              "txid": "42b27c27f992703a8b76976fffef21c54be3701ec25a393538be5da467bfa44a",
+              "vout": 0
+            }
+          }
+        ]
+      },
+      "id": "orig-quorum-num-gt-den",
+      "rule": "SL-ORIG-016"
+    },
+    {
+      "expected_refusal": "WIRE_INTEGER",
+      "guardian_policy": {
+        "appointment_delay_blocks": 144,
+        "arbiter_pk": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597",
+        "challenger_pk": "035ea1bbe2cfaa7e5d9e973927014035b501dae2ea76f21c45e30c725e632c59e9",
+        "disposer_pk": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+        "quorums": {
+          "contract_assent": {
+            "den": 2,
+            "min": 3,
+            "num": 2
+          },
+          "custody_change": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "effect_grant": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          },
+          "routine_read": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          }
+        },
+        "revision": 1,
+        "revision_size": 2,
+        "roster_seal": {
+          "script_policy": {
+            "keys": {
+              "a": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+              "b": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597"
+            },
+            "kind": "branch",
+            "template": "both_of_2"
+          },
+          "txid": "ba87b4f42ef827694b961b6cf795a6ce16c5dd722276acc13803e14e8e6c763a",
+          "vout": 0
+        },
+        "slots": [
+          {
+            "initial_guardian_commitment": "036581e9c2c41f212fb06fc85a5da032e17c59ef3c33df6bebde36bb6810b5dc",
+            "slot": 1,
+            "vacant_utxo": {
+              "txid": "d794932ce865c2bfb6ba84be9d970b4cfc41f2ea8214b4c354170fabe86f1eff",
+              "vout": 0
+            }
+          },
+          {
+            "initial_guardian_commitment": "94a46147f404b4a34e628a8957545494dad4d6272bfc220fb4f539bf35747958",
+            "slot": 2,
+            "vacant_utxo": {
+              "txid": "42b27c27f992703a8b76976fffef21c54be3701ec25a393538be5da467bfa44a",
+              "vout": 0
+            }
+          }
+        ]
+      },
+      "id": "orig-quorum-min-gt-revision-size",
+      "rule": "SL-ORIG-016"
+    },
+    {
+      "expected_refusal": "WIRE_INTEGER",
+      "guardian_policy": {
+        "appointment_delay_blocks": 144,
+        "arbiter_pk": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597",
+        "challenger_pk": "035ea1bbe2cfaa7e5d9e973927014035b501dae2ea76f21c45e30c725e632c59e9",
+        "disposer_pk": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+        "quorums": {
+          "contract_assent": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "custody_change": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "effect_grant": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          },
+          "routine_read": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          }
+        },
+        "revision": 1,
+        "revision_size": 2,
+        "roster_seal": {
+          "script_policy": {
+            "keys": {
+              "a": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+              "b": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597"
+            },
+            "kind": "branch",
+            "template": "both_of_2"
+          },
+          "txid": "ba87b4f42ef827694b961b6cf795a6ce16c5dd722276acc13803e14e8e6c763a",
+          "vout": 0
+        },
+        "slots": [
+          {
+            "initial_guardian_commitment": "036581e9c2c41f212fb06fc85a5da032e17c59ef3c33df6bebde36bb6810b5dc",
+            "slot": 1,
+            "vacant_utxo": {
+              "txid": "d794932ce865c2bfb6ba84be9d970b4cfc41f2ea8214b4c354170fabe86f1eff",
+              "vout": 0
+            }
+          },
+          {
+            "initial_guardian_commitment": "94a46147f404b4a34e628a8957545494dad4d6272bfc220fb4f539bf35747958",
+            "slot": 1,
+            "vacant_utxo": {
+              "txid": "42b27c27f992703a8b76976fffef21c54be3701ec25a393538be5da467bfa44a",
+              "vout": 0
+            }
+          }
+        ]
+      },
+      "id": "orig-duplicate-slot-number",
+      "rule": "SL-ORIG-016"
+    },
+    {
+      "expected_refusal": "WIRE_INTEGER",
+      "guardian_policy": {
+        "appointment_delay_blocks": 144,
+        "arbiter_pk": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597",
+        "challenger_pk": "035ea1bbe2cfaa7e5d9e973927014035b501dae2ea76f21c45e30c725e632c59e9",
+        "disposer_pk": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+        "quorums": {
+          "contract_assent": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "custody_change": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "effect_grant": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          },
+          "routine_read": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          }
+        },
+        "revision": 1,
+        "revision_size": 2,
+        "roster_seal": {
+          "script_policy": {
+            "keys": {
+              "a": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+              "b": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597"
+            },
+            "kind": "branch",
+            "template": "both_of_2"
+          },
+          "txid": "ba87b4f42ef827694b961b6cf795a6ce16c5dd722276acc13803e14e8e6c763a",
+          "vout": 0
+        },
+        "slots": [
+          {
+            "initial_guardian_commitment": "036581e9c2c41f212fb06fc85a5da032e17c59ef3c33df6bebde36bb6810b5dc",
+            "slot": 1,
+            "vacant_utxo": {
+              "txid": "d794932ce865c2bfb6ba84be9d970b4cfc41f2ea8214b4c354170fabe86f1eff",
+              "vout": 0
+            }
+          }
+        ]
+      },
+      "id": "orig-slots-length-mismatch",
+      "rule": "SL-ORIG-016"
+    },
+    {
+      "expected_refusal": "ORIGIN_UNVERIFIED",
+      "guardian_policy": {
+        "appointment_delay_blocks": 144,
+        "arbiter_pk": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+        "challenger_pk": "035ea1bbe2cfaa7e5d9e973927014035b501dae2ea76f21c45e30c725e632c59e9",
+        "disposer_pk": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+        "quorums": {
+          "contract_assent": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "custody_change": {
+            "den": 2,
+            "min": 2,
+            "num": 2
+          },
+          "effect_grant": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          },
+          "routine_read": {
+            "den": 2,
+            "min": 1,
+            "num": 1
+          }
+        },
+        "revision": 1,
+        "revision_size": 2,
+        "roster_seal": {
+          "script_policy": {
+            "keys": {
+              "a": "022431aa875a7c953cc87537f61fd97c9cd517c56d33d8c74d382646e4f4fc268e",
+              "b": "0266ae6f03601efa29ad892484709c902cb4f4c47cbb4256edecf928104889d597"
+            },
+            "kind": "branch",
+            "template": "both_of_2"
+          },
+          "txid": "ba87b4f42ef827694b961b6cf795a6ce16c5dd722276acc13803e14e8e6c763a",
+          "vout": 0
+        },
+        "slots": [
+          {
+            "initial_guardian_commitment": "036581e9c2c41f212fb06fc85a5da032e17c59ef3c33df6bebde36bb6810b5dc",
+            "slot": 1,
+            "vacant_utxo": {
+              "txid": "d794932ce865c2bfb6ba84be9d970b4cfc41f2ea8214b4c354170fabe86f1eff",
+              "vout": 0
+            }
+          },
+          {
+            "initial_guardian_commitment": "94a46147f404b4a34e628a8957545494dad4d6272bfc220fb4f539bf35747958",
+            "slot": 2,
+            "vacant_utxo": {
+              "txid": "42b27c27f992703a8b76976fffef21c54be3701ec25a393538be5da467bfa44a",
+              "vout": 0
+            }
+          }
+        ]
+      },
+      "id": "orig-disposer-equals-arbiter",
+      "rule": "SL-ORIG-016"
+    }
+  ],
   "negative_schema_fixtures": [
     {
       "expected_refusal": "WIRE_MEMBER",
@@ -802,5 +1121,5 @@
     }
   ],
   "suite": "constraints-and-schemas",
-  "version": "1.0.0-draft.1"
+  "version": "1.0.0-draft.2"
 }

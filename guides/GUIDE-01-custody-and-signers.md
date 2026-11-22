@@ -1,6 +1,6 @@
 # GUIDE-01: Custody, Signers, Namecoin PSBT, and Agent Runtime Integration
 
-- **Version:** `1.0.0-draft.1`
+- **Version:** `1.0.0-draft.2`
 - **Status:** Informative Implementation Guide (non-normative)
 - **Purpose:** Collects unobservable local operator duties, hardware custody guidance, Namecoin `namepsbt` workflows, and Agent Isolation Runtime integration patterns that intentionally remain outside the normative wire specification (`spec/SPEC-00`…`SPEC-07`).
 
@@ -29,7 +29,7 @@ Verified against Namecoin Core `nc28.0` (`src/script/solver.cpp:146-148`, `IsWit
   1. Coordinator constructs the unsigned `OP_NAME_UPDATE` PSBT spending the current `P2WSH` name UTXO and locking `0.01 NMC` to the target `ScriptPolicy`, supplying `witnessScript` in the PSBT input metadata.
   2. Each of `k` custodians independently verifies the decoded name, 520-byte JCS value, destination `ScriptPolicy`, and fee outputs, then signs with strict **`SIGHASH_ALL` (`0x01`)**.
   3. Coordinator finalizes and broadcasts the combined witness transaction.
-- **Pre-signed disposable revocations (`SL-LDGR-013`):** Use the standard 4-byte `P2A` witness v1 anchor output `51024e73` (`OP_1 PUSH2 0x4e73`) for CPFP fee bumping. Do not use bare `OP_TRUE`, which is `nonstandard` in `nc28.0`.
+- **Pre-signed disposable revocations (`SL-LDGR-013`):** Construct `tx_revoke` as a TRUC v3 transaction ([BIP-431]) carrying one standard 4-byte `P2A` witness v1 anchor output `51024e73` (`OP_1 PUSH2 0x4e73`, [BIP-433]) valued at `>= 240` base units (the `P2A` dust floor). Because Namecoin Core `nc28.0` sets default `minrelaytxfee = 0.001 NMC / 1000 vB`, broadcast a zero-fee `tx_revoke` together with a v3 CPFP child via 1p1c package relay (`submitpackage`) funding the combined package fee (`conformance/p2a-regtest/`). Do not use bare `OP_TRUE`, which is `nonstandard` in `nc28.0`.
 
 ---
 

@@ -73,7 +73,8 @@ jobs:
           - Conformance Requirements, Open Questions, and SLIP Template
           - Machine-Readable Registries (\`registry/*.json\`)
           - Formal Draft 2020-12 Wire JSON Schemas (\`schemas/*.schema.json\`)
-          - Informative Guides, Migration Rule Inventory, and Conformance Vector Manifest (\`vectors/*.json\`)
+          - Informative Guides, Migration Rule Inventory, and Conformance Vector Manifest (\`vectors/*.json\`, including 4 executable traces and 84/84 refusal-code coverage verified by \`tools/seallink_verifier.py\`)
+          - Two-node Namecoin Core \`nc28.0\` \`P2A\` package-relay regtest proof (\`conformance/p2a-regtest/\`)
 
           **SHA-256 (\`seallink-spec-${TAG}.md\`):** \`${SHA}\`
           EOF

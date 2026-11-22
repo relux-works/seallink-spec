@@ -1,9 +1,9 @@
 # PROFILE-mail-v1: Sovereign Email Hosting and Delegated Mailbox Access
 
-- **Version:** `1.0.0-draft.1`
+- **Version:** `1.0.0-draft.2`
 - **Service Type:** `mail` (`registry/service-types.json`)
 - **Status:** `draft` (normative profile rules `decided`)
-- **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`)
+- **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/refusal-coverage-matrix.json`)
 - **Requires:** `SPEC-01`, `SPEC-02`, `SPEC-03`, `SPEC-06`, `SPEC-07`
 - **Schemas:** `schemas/profile-mail.schema.json`
 
@@ -99,10 +99,10 @@ All three actions are mechanical effects and MUST refuse grants carrying `terms_
 The complete byte-level trace (signed JCS objects, BIP-340 signatures, `OP_RETURN` hex, `result_sha256`, journal hash chain, and exact refusal codes) is published in `vectors/trace-01-mail-offline-revoke.json`:
 
 1. `id/alice` binds `id/mail-host-a` (by full `NamePin`) for `("mail", "work")` in her `seallink-manifest/1`.
-2. `id/alice` signs a unilateral `seallink-grant/1` to `id/alice-acct-agent` using `executor_ref: {"provider_of":"id/alice","service_type":"mail","label":"work"}` (valid because `mail/read` has `external_mutation = false`, `quota_consuming = false`, `allows_executor_ref = true`, and no `quotas`) with `where: {"folder": {"in": ["Invoices"]}}` and confirmed UTXO `seal` anchored by `0x01`.
+2. `id/alice` signs a unilateral `seallink-grant/1` to `id/alice-acct-agent` (`recipient.mode = "name"`, pinning `id/alice-acct-agent` and its `owner_policy`) using `executor_ref: {"provider_of":"id/alice","service_type":"mail","label":"work"}` (valid because `mail/read` has `external_mutation = false`, `quota_consuming = false`, `allows_executor_ref = true`, and no `quotas`) with `where: {"folder": {"in": ["Invoices"]}}` and confirmed UTXO `seal` anchored by `0x01`.
 3. `id/alice` takes all her devices offline.
 4. `id/alice-acct-agent` sends a signed `seallink-invocation/1` (`folder = "Invoices"`, `message_id = "msg-2026-001"`) + inline grant + inline manifest to `id/mail-host-a`.
-5. `id/mail-host-a` runs `SPEC-06 §4` on its own Namecoin node -> **Admits**, returns `MailReadResult` + raw MIME bytes + signed `seallink-receipt/1` (`outcome = "executed"`, `result_sha256 = SHA256(JCS(MailReadResult))`).
+5. `id/mail-host-a` runs `SPEC-06 §4` on its own Namecoin node (resolving `id/alice-acct-agent`'s confirmed name and request key at Step 11a) -> **Admits**, returns `MailReadResult` (`size_bytes = "69"`, matching the exact 69-byte RFC 5322 payload) + raw MIME bytes + signed `seallink-receipt/1` (`outcome = "executed"`, `result_sha256 = SHA256(JCS(MailReadResult))`).
 6. A second invocation requesting `folder = "Personal"` fails Step 11d -> **Refuses** `INVOKE_CONSTRAINT_FAILED` (non-closing).
 7. Later, `id/alice` spends `seal` from a secondary device. `id/mail-host-a` witnesses the spend in its mempool and durably writes a `closure(cause="SEAL_SPENT")` entry to its fenced journal (`c(0) -> c(1)`).
 8. When `id/alice-acct-agent` sends a new `mail/read` invocation for `"Invoices"`, Step 6a of `SPEC-06 §4` hits the durable closure journal and returns the single deterministic refusal code **`GRANT_CLOSED`** with signed `seallink-receipt/1` (`outcome = "refused"`, `refusal_code = "GRANT_CLOSED"`).

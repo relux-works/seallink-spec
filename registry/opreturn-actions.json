@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 OP_RETURN Commitment Framing Registry (SPEC-02). All standard frames fit strictly within Bitcoin/Namecoin MAX_OP_RETURN_RELAY = 83 bytes.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.1",
+  "version": "1.0.0-draft.2",
   "magic_ascii": "SLNK",
   "magic_hex": "534c4e4b",
   "max_relay_script_bytes": 83,
@@ -168,7 +168,7 @@
       "commitment": "content_addr(seallink-guardian/1)",
       "allowed_locators": ["0x00", "0x01", "0x05"],
       "owning_spec": "SPEC-04",
-      "description": "Stage 1 appointment: committed when spending a vacant guardianship slot UTXO (disposer + arbiter 2-of-2 P2WSH) to create the CSV-delayed pending slot output."
+      "description": "Stage 1 successor appointment (activation_mode=appointed): committed when spending a vacant guardianship slot UTXO (disposer + arbiter 2-of-2 P2WSH) to create the CSV-delayed pending slot output."
     },
     {
       "code": "0x0e",
@@ -188,7 +188,7 @@
       "commitment": "content_addr(seallink-guardian-roster/1)",
       "allowed_locators": ["0x00", "0x01", "0x05"],
       "owning_spec": "SPEC-04",
-      "description": "Committed when spending roster_seal (disposer + arbiter 2-of-2 P2WSH) to advance guardianship revision, resize approved revision_size, or re-anchor a burned slot."
+      "description": "Committed when spending roster_seal (disposer + arbiter 2-of-2 P2WSH) to advance guardianship revision, resize approved revision_size, rotate challenger_pk, or re-anchor a burned slot."
     },
     {
       "code": "0x10",
@@ -198,7 +198,7 @@
       "commitment": "id(seallink-name-binding/1)",
       "allowed_locators": ["0x00"],
       "owning_spec": "SPEC-04",
-      "description": "Committed inside an owner-authored (SIGHASH_ALL) OP_NAME_UPDATE of the live existing name prior to h_rec + delay_blocks to abort a pending dual-party recovery."
+      "description": "Committed inside an owner-authored (SIGHASH_ALL) OP_NAME_UPDATE of the live existing name prior to h_rec + delay_blocks to abort a pending dual-party recovery and restore prior binding admission."
     },
     {
       "code": "0x11",
@@ -209,6 +209,16 @@
       "allowed_locators": ["0x00"],
       "owning_spec": "SPEC-06",
       "description": "Committed when the grantee spends a single_use_1_of_2 grant seal via branch 0 (grantee) with SIGHASH_ALL to authorize at-most-once execution of the referenced invocation."
+    },
+    {
+      "code": "0x12",
+      "name": "GUARDIAN_INITIAL_ACTIVATION",
+      "status": "decided",
+      "version": "0x01",
+      "commitment": "content_addr(seallink-guardian/1)",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
+      "owning_spec": "SPEC-04",
+      "description": "Direct initial activation (activation_mode=initial): committed when spending an origin's initial_vacant slot UTXO for the disclosed initial_guardian_commitment (with guardian assent) directly to active_policy at active_vout."
     }
   ]
 }

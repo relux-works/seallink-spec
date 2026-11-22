@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Key Role & Custody Registry (SPEC-03). Coherent with registry/object-types.json (verified by tools/speclint.py).",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.1",
+  "version": "1.0.0-draft.2",
   "namecoin_coin_type": 7,
   "roles": [
     {
@@ -40,10 +40,10 @@
     {
       "role": "guardian_quorum",
       "curve": "secp256k1",
-      "scheme": "BIP-340 Schnorr (distinct active guardian slot keys)",
+      "scheme": "BIP-340 Schnorr (independent per-slot SignatureSets in guardian_approvals[])",
       "pubkey_encoding": "xonly_64hex",
       "custody_tier": "isolated_signer_with_presence",
-      "derivation_recommendation": "Each guardian signs with its own link.grant role key across distinct active slots matching guardian_context.revision",
+      "derivation_recommendation": "Each guardian signs its own SignatureSet with its link.grant role policy inside guardian_approvals[] matching guardian_context.revision",
       "published_in": "Each active guardian's Name value link.grant",
       "allowed_operations": ["seallink-grant/1", "seallink-assent/1"],
       "forbidden_operations": ["chain_transactions", "seallink-origin/1", "seallink-credential/1"]
@@ -183,12 +183,12 @@
     {
       "role": "guardian_seal",
       "curve": "secp256k1",
-      "scheme": "ECDSA (P2WPKH / P2WSH SIGHASH_ALL)",
+      "scheme": "ECDSA (P2WPKH / P2WSH SIGHASH_ALL; threshold ECDSA per OQ-007 for multi-custodian institutions)",
       "pubkey_encoding": "compressed_66hex",
       "custody_tier": "isolated_signer_with_presence",
       "derivation_recommendation": "Dedicated guardianship seal account >= 10'",
       "published_in": "seallink-origin/1, seallink-guardian/1, seallink-guardian-roster/1",
-      "allowed_operations": ["Slot halt, successor transition (0x0d), slot activation (0x0e), roster transition (0x0f), name binding (0x0c)"],
+      "allowed_operations": ["Slot halt, initial activation (0x12), successor transition (0x0d), slot activation (0x0e), roster transition (0x0f), name binding (0x0c)"],
       "forbidden_operations": ["seallink-grant/1", "ordinary_fee_funding"]
     },
     {
@@ -227,11 +227,11 @@
     {
       "role": "arbiter",
       "curve": "secp256k1",
-      "scheme": "BIP-340 Schnorr (off-chain) / ECDSA P2WSH (on-chain)",
+      "scheme": "BIP-340 Schnorr (off-chain) / ECDSA single compressed key in P2WSH branches (threshold ECDSA per OQ-007 for institutions)",
       "pubkey_encoding": "xonly_64hex_or_compressed_66hex",
       "custody_tier": "isolated_signer_with_presence",
       "derivation_recommendation": "Independent institution/court custody (never co-located with disposer)",
-      "published_in": "seallink-origin/1, seallink-contract/1",
+      "published_in": "seallink-origin/1, seallink-guardian-roster/1, seallink-contract/1",
       "allowed_operations": ["seallink-guardian/1", "seallink-guardian-roster/1", "seallink-termination/1", "2-of-2 guardian appointment (0x0d)", "2-of-2 roster transition (0x0f)", "2-of-2 name recovery (0x0c)", "arbiter contract termination (0x08)"],
       "forbidden_operations": ["unilateral_guardian_appointment", "grant_widening", "seallink-grant/1"]
     },

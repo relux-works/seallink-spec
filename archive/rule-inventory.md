@@ -25,7 +25,7 @@
 | `LIP-0003` | Batch anchor `0x02` Merkle commitment | `SL-LDGR-014` | `decided` | `ledger-scripts-and-opreturn.json` |
 | `LIP-0005` | Framed `OP_RETURN` action & non-exclusive locator table | `SL-LDGR-010`, `registry/opreturn-actions.json` | `decided` (`0x06` reserved) | `ledger-scripts-and-opreturn.json` |
 | `LIP-0010`, `LIP-0033` | 520B name value budget, single `m` pin, 4-channel non-exclusive distribution cascade | `SL-IDEN-001`–`SL-IDEN-004`, `SL-IDEN-009` | `decided` *(domain bind `open`: `OQ-004`)* | `trace-01` |
-| `LIP-0010 H51`, `LIP-0029` | Disposable CSPRNG fast-revocation seal + CPFP fee-bump output | `SL-LDGR-013`, `SL-IDEN-005` | `decided` format *(1p1c regtest `open`: `OQ-006`)* | `ledger-scripts-and-opreturn.json` |
+| `LIP-0010 H51`, `LIP-0029` | Disposable CSPRNG fast-revocation seal + TRUC/P2A CPFP fee-bump output | `SL-LDGR-013`, `SL-IDEN-005` | `decided` format *(2-node regtest passed; prod propagation `open`: `OQ-006`)* | `ledger-scripts-and-opreturn.json`, `conformance/p2a-regtest/` |
 | `KEY-REGISTRY` Rules 1–3, `KEY-MAP` | Strict key-role separation + cold `emergency_fee_reserve` (`m/84'/7'/3'`) | `SL-ARCH-006`, `SL-IDEN-005`, `registry/key-roles.json` | `decided` | `speclint.py` cross-registry check |
 | `LIP-0034` | Dedicated `auth_key` + `auth_seal`, provisional key-only cells, atomic `auth-upgrade` | `SL-IDEN-010` | `decided` | `schemas/invocation.schema.json` |
 | `LIP-0029`, `LIP-0015` | L0–L2 owner control plane, level inheritance, trust-root pin + delayed admin override | `SL-IDEN-011`, `SL-IDEN-012` | `decided` *(FIDO2/SSH `open`: `OQ-005`)* | `schemas/invocation.schema.json` |
@@ -53,9 +53,9 @@
 | `P3–P4` | Three-record separation (`origin/1`, `name-binding/1`, `guardian/1`) + identity permanence | `SL-ORIG-001`, `SL-ORIG-003` | `decided` |
 | `P5` | Pre-registration issuance + single-use `binding_seal` (`0x0c`) + reverse uniqueness | `SL-ORIG-002`, `SL-ORIG-003` | `decided` |
 | `P6–P7` | Privacy of public chain (`link.origin`) + salted commitments for initial guardians and `majority_unix` | `SL-ARCH-012`, `SL-IDEN-003`, `SL-ORIG-002` | `decided` |
-| `P8–P9` | $N$ equal guardian slots + revision-denominated quorums + closed verifier-derived `event_class` | `SL-ORIG-004`, `SL-ORIG-005` | `decided` |
-| `P10` | Protocol-level ward non-autonomy (`WARD_AUTONOMOUS_FORBIDDEN`) | `SL-ORIG-006` | `decided` |
-| `P11–P13` | Acyclic two-stage appointment (`0x0d` pending -> `0x0e` active), time-bounded challenger veto, fast halt, slot burn recovery via `0x0f` roster transition | `SL-ORIG-007`, `SL-ORIG-015` | `decided` |
+| `P8–P9` | $N$ equal guardian slots + revision-denominated quorums + 4-class linear verifier-derived `event_class` + `SL-ORIG-016` consistency | `SL-ORIG-004`, `SL-ORIG-005`, `SL-ORIG-016` | `decided` |
+| `P10` | Protocol-level ward non-autonomy (`WARD_AUTONOMOUS_FORBIDDEN`, `guardian_approvals[]`) | `SL-ORIG-006`, `SL-WIRE-013` | `decided` |
+| `P11–P13` | Direct initial activation (`0x12`), acyclic two-stage appointment (`0x0d` pending -> `0x0e` active), explicit `challenger_pk`, fast halt, slot burn recovery via `0x0f` roster transition | `SL-ORIG-007`, `SL-ORIG-015` | `decided` |
 | `P14` | Native `P2WSH` `m-of-n` multisig name ownership via `namepsbt` (ECDSA, no FROST on P2WPKH, no covenant renewal branch) | `SL-LDGR-004`, `SL-LDGR-006` | `decided` *(threshold ECDSA `open`: `OQ-007`)* |
 | `P15–P16` | Calendar vs indefinite terms; asymmetric safety pause at majority boundary `T` | `SL-ORIG-009`, `SL-ORIG-010` | **Time oracle `open`** (`OQ-001`) |
 | `P17` | Authenticated completeness via `status_seal` and `roster_seal` spines (`ORIGIN_STATUS_INCOMPLETE`) | `SL-ORIG-001`, `SL-ORIG-002`, `SL-ORIG-015` | `decided` |

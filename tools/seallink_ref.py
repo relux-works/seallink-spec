@@ -357,6 +357,49 @@ _G = (
 )
 
 
+def _jac_double(pt: tuple[int, int, int]) -> tuple[int, int, int]:
+    x1, y1, z1 = pt
+    if y1 == 0 or z1 == 0:
+        return (0, 1, 0)
+    xx = (x1 * x1) % _P
+    yy = (y1 * y1) % _P
+    yyyy = (yy * yy) % _P
+    s = (4 * x1 * yy) % _P
+    m = (3 * xx) % _P
+    x3 = (m * m - 2 * s) % _P
+    y3 = (m * (s - x3) - 8 * yyyy) % _P
+    z3 = (2 * y1 * z1) % _P
+    return (x3, y3, z3)
+
+
+def _jac_add(p1: tuple[int, int, int], p2: tuple[int, int, int]) -> tuple[int, int, int]:
+    x1, y1, z1 = p1
+    x2, y2, z2 = p2
+    if z1 == 0:
+        return p2
+    if z2 == 0:
+        return p1
+    z1z1 = (z1 * z1) % _P
+    z2z2 = (z2 * z2) % _P
+    u1 = (x1 * z2z2) % _P
+    u2 = (x2 * z1z1) % _P
+    s1 = (y1 * z2 * z2z2) % _P
+    s2 = (y2 * z1 * z1z1) % _P
+    if u1 == u2:
+        if s1 != s2:
+            return (0, 1, 0)
+        return _jac_double(p1)
+    h = (u2 - u1) % _P
+    hh = (h * h) % _P
+    hhh = (h * hh) % _P
+    r = (s2 - s1) % _P
+    v = (u1 * hh) % _P
+    x3 = (r * r - hhh - 2 * v) % _P
+    y3 = (r * (v - x3) - s1 * hhh) % _P
+    z3 = (h * z1 * z2) % _P
+    return (x3, y3, z3)
+
+
 def _point_add(p1: tuple[int, int] | None, p2: tuple[int, int] | None) -> tuple[int, int] | None:
     if p1 is None:
         return p2
@@ -376,15 +419,24 @@ def _point_add(p1: tuple[int, int] | None, p2: tuple[int, int] | None) -> tuple[
 
 
 def _point_mul(p: tuple[int, int] | None, n: int) -> tuple[int, int] | None:
-    r: tuple[int, int] | None = None
-    addend = p
+    if p is None:
+        return None
     k = n % _N
+    if k == 0:
+        return None
+    r = (0, 1, 0)
+    addend = (p[0], p[1], 1)
     while k:
         if k & 1:
-            r = _point_add(r, addend)
-        addend = _point_add(addend, addend)
+            r = _jac_add(r, addend)
+        addend = _jac_double(addend)
         k >>= 1
-    return r
+    rx, ry, rz = r
+    if rz == 0:
+        return None
+    z_inv = pow(rz, _P - 2, _P)
+    z_inv2 = (z_inv * z_inv) % _P
+    return ((rx * z_inv2) % _P, (ry * z_inv2 * z_inv) % _P)
 
 
 def _lift_x(x: int) -> tuple[int, int] | None:
@@ -488,47 +540,81 @@ def schnorr_verify(msg32: bytes, pubkey_hex: str, sig_hex: str) -> bool:
 
 def sign_envelope(
     payload: dict[str, Any],
-    signers: list[tuple[bytes, int | None, int | None]],
+    signers: list[bytes],
     policy_pks: list[str] | None = None,
     m: int | None = None,
 ) -> dict[str, Any]:
-    """Build a canonical signed SealLink envelope with BIP-340 SignatureSet."""
+    """Build a canonical signed SealLink envelope with pure BIP-340 SignatureSet."""
     digest = signing_digest(payload)
-    derived_pks = [xonly_pubkey(sk) for sk, _, _ in signers]
+    derived_pks = [xonly_pubkey(sk) for sk in signers]
     pks = sorted(set(policy_pks if policy_pks is not None else derived_pks))
     threshold = m if m is not None else len(signers)
     sigs = []
-    for sk, slot, rev in sorted(signers, key=lambda item: xonly_pubkey(item[0])):
+    for sk in sorted(signers, key=xonly_pubkey):
         pk = xonly_pubkey(sk)
-        entry: dict[str, Any] = {"pk": pk, "sig": schnorr_sign(digest, sk)}
-        if slot is not None:
-            entry["slot"] = slot
-        if rev is not None:
-            entry["revision"] = rev
-        sigs.append(entry)
+        sigs.append({"pk": pk, "sig": schnorr_sign(digest, sk)})
     return {"payload": payload, "signatures": {"policy": {"m": threshold, "pks": pks}, "sigs": sigs}}
 
 
-def verify_envelope_signatures(env: dict[str, Any]) -> tuple[bool, str]:
-    payload = env["payload"]
-    sigset = env["signatures"]
+def sign_guardian_envelope(
+    payload: dict[str, Any],
+    approvals: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build a canonical ward guardian-quorum envelope with independent per-slot SignatureSets.
+
+    Each item in `approvals` has keys:
+      slot (int), revision (int), guardian_name (str), signers (list[bytes]),
+      optional policy_pks (list[str]), optional m (int).
+    """
+    digest = signing_digest(payload)
+    out_approvals: list[dict[str, Any]] = []
+    for item in sorted(approvals, key=lambda a: a["slot"]):
+        signers = item["signers"]
+        derived_pks = [xonly_pubkey(sk) for sk in signers]
+        pks = sorted(set(item.get("policy_pks") or derived_pks))
+        threshold = item.get("m") if item.get("m") is not None else len(signers)
+        sigs = [{"pk": xonly_pubkey(sk), "sig": schnorr_sign(digest, sk)} for sk in sorted(signers, key=xonly_pubkey)]
+        out_approvals.append({
+            "guardian_name": item["guardian_name"],
+            "revision": item["revision"],
+            "signatures": {"policy": {"m": threshold, "pks": pks}, "sigs": sigs},
+            "slot": item["slot"],
+        })
+    return {"guardian_approvals": out_approvals, "payload": payload}
+
+
+def verify_signature_set(
+    digest: bytes,
+    sigset: dict[str, Any],
+    expected_policy: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
+    """Verify a BIP-340 SignatureSet over `digest`, optionally requiring exact policy equality (SL-WIRE-013)."""
+    if not isinstance(sigset, dict) or "policy" not in sigset or "sigs" not in sigset:
+        return False, "WIRE_SIGNATURE"
     policy = sigset["policy"]
     alg = policy.get("alg", "bip340")
     if alg != "bip340":
         return False, "WIRE_SIGNATURE"
-    pks = policy["pks"]
-    m = policy["m"]
+    pks = policy.get("pks", [])
+    m = policy.get("m", 0)
+    if not isinstance(pks, list) or not isinstance(m, int) or isinstance(m, bool):
+        return False, "WIRE_SIGNATURE"
     if not (1 <= m <= len(pks) <= 32):
         return False, "WIRE_SIGNATURE"
     if pks != sorted(set(pks)):
         return False, "WIRE_SIGNATURE"
     for pk in pks:
-        if not is_valid_xonly_pubkey(pk):
+        if not isinstance(pk, str) or not is_valid_xonly_pubkey(pk):
             return False, "WIRE_KEY"
-    digest = signing_digest(payload)
+    if expected_policy is not None:
+        exp_alg = expected_policy.get("alg", "bip340")
+        if exp_alg != alg or expected_policy.get("m") != m or expected_policy.get("pks") != pks:
+            return False, "WIRE_SIGNATURE"
     seen: set[str] = set()
     valid = 0
     for entry in sigset["sigs"]:
+        if not isinstance(entry, dict) or set(entry.keys()) != {"pk", "sig"}:
+            return False, "WIRE_SIGNATURE"
         pk = entry["pk"]
         if pk not in pks or pk in seen:
             return False, "WIRE_SIGNATURE"
@@ -539,6 +625,34 @@ def verify_envelope_signatures(env: dict[str, Any]) -> tuple[bool, str]:
     if valid < m:
         return False, "WIRE_SIGNATURE"
     return True, "OK"
+
+
+def verify_envelope_signatures(
+    env: dict[str, Any],
+    expected_policy: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
+    """Verify either an ordinary `signatures` envelope or a ward `guardian_approvals` envelope."""
+    payload = env.get("payload")
+    if not isinstance(payload, dict) or "type" not in payload:
+        return False, "WIRE_MEMBER"
+    digest = signing_digest(payload)
+    if "signatures" in env and "guardian_approvals" not in env:
+        return verify_signature_set(digest, env["signatures"], expected_policy=expected_policy)
+    if "guardian_approvals" in env and "signatures" not in env:
+        approvals = env["guardian_approvals"]
+        if not isinstance(approvals, list) or not (1 <= len(approvals) <= 32):
+            return False, "WIRE_SIGNATURE"
+        prev_slot = 0
+        for item in approvals:
+            slot = item.get("slot")
+            if not isinstance(slot, int) or isinstance(slot, bool) or not (1 <= slot <= 32) or slot <= prev_slot:
+                return False, "WIRE_SIGNATURE"
+            prev_slot = slot
+            ok, code = verify_signature_set(digest, item.get("signatures", {}))
+            if not ok:
+                return False, code
+        return True, "OK"
+    return False, "WIRE_MEMBER"
 
 
 # ============================================================================
@@ -776,7 +890,7 @@ def encode_opreturn(
     pointer_hex: str | None = None,
     h_c: int | None = None,
 ) -> bytes:
-    if action == 0x06:
+    if action == 0x06 or not (0x01 <= action <= 0x12):
         raise ValueError("CHAIN_FRAME_INVALID")
     comm = bytes.fromhex(commitment_hex)
     if len(comm) != 32:
@@ -809,7 +923,7 @@ def decode_opreturn(script: bytes) -> dict[str, Any]:
     if len(script) < 8 or len(script) > 83 or script[0] != 0x6A or script[1] != 0x05 or script[2:6] != SLNK_MAGIC:
         raise ValueError("CHAIN_FRAME_INVALID")
     action = script[6]
-    if action == 0x06 or not (0x01 <= action <= 0x11):
+    if action == 0x06 or not (0x01 <= action <= 0x12):
         raise ValueError("CHAIN_FRAME_INVALID")
     payload, end = _read_push(script, 7)
     if end != len(script) or len(payload) < 34 or payload[0] != 0x01:
@@ -1046,6 +1160,97 @@ def check_disjoint_ranges_r86(parent_payload: dict[str, Any]) -> bool:
                         return False
                     seen.add(op)
     return True
+
+
+# ============================================================================
+# 8. Guardianship Consistency (SL-ORIG-016) & Event Class Derivation (SPEC-04)
+# ============================================================================
+
+EVENT_CLASS_ORDER = {
+    "routine_read": 0,
+    "effect_grant": 1,
+    "contract_assent": 2,
+    "custody_change": 3,
+}
+EVENT_CLASS_BY_RANK = {v: k for k, v in EVENT_CLASS_ORDER.items()}
+
+# Actions with external_mutation=True or forced effect_grant class
+MUTATING_OR_EFFECT_ACTIONS = frozenset({
+    "mail/send",
+    "agent/tool",
+    "agent/session",
+    "agent/guardian-message",
+})
+
+
+def required_guardian_slots(quorum: dict[str, int], revision_size: int) -> int:
+    """Exact integer ceiling quorum formula SL-ORIG-005: max(min, ceil(num * revision_size / den))."""
+    num, den, mn = quorum["num"], quorum["den"], quorum["min"]
+    ceil_val = (num * revision_size + den - 1) // den
+    return max(mn, ceil_val)
+
+
+def check_guardian_policy_consistency(policy: dict[str, Any]) -> tuple[bool, str]:
+    """Validate SL-ORIG-016 mechanical consistency on origin.guardian_policy or GuardianRoster.payload."""
+    rev_size = policy.get("revision_size", 0)
+    if not isinstance(rev_size, int) or not (1 <= rev_size <= 32):
+        return False, "WIRE_INTEGER"
+    quorums = policy.get("quorums", {})
+    if set(quorums.keys()) != set(EVENT_CLASS_ORDER.keys()):
+        return False, "WIRE_MEMBER"
+    for q in quorums.values():
+        num, den, mn = q.get("num", 0), q.get("den", 0), q.get("min", 0)
+        if not (1 <= num <= den <= 32) or not (1 <= mn <= rev_size):
+            return False, "WIRE_INTEGER"
+    slots = policy.get("slots", [])
+    if len(slots) != rev_size:
+        return False, "WIRE_INTEGER"
+    slot_nums = [s.get("slot") for s in slots]
+    if len(set(slot_nums)) != rev_size or set(slot_nums) != set(range(1, rev_size + 1)):
+        return False, "WIRE_INTEGER"
+    disp = policy.get("disposer_pk")
+    arb = policy.get("arbiter_pk")
+    chal = policy.get("challenger_pk")
+    if not (disp and arb and chal):
+        return False, "WIRE_MEMBER"
+    if not (is_valid_compressed_pubkey(disp) and is_valid_compressed_pubkey(arb) and is_valid_compressed_pubkey(chal)):
+        return False, "WIRE_KEY"
+    if disp == arb:
+        return False, "ORIGIN_UNVERIFIED"
+    if "roster_seal" in policy:
+        expected_roster = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp, "b": arb}}
+        try:
+            got_spk, _ = compile_script_policy(policy["roster_seal"]["script_policy"])
+            exp_spk, _ = compile_script_policy(expected_roster)
+        except ValueError:
+            return False, "CHAIN_SCRIPT_UNSUPPORTED"
+        if got_spk != exp_spk:
+            return False, "CHAIN_SCRIPT_UNSUPPORTED"
+    return True, "OK"
+
+
+def derive_guardian_event_class(payload: dict[str, Any]) -> str:
+    """Deterministically derive the required GuardianEventClass (SPEC-04 §3.1)."""
+    obj_type = payload.get("type")
+    if obj_type == "seallink-assent/1":
+        target_type = payload.get("target_type")
+        if target_type == "seallink-migration/1":
+            return "custody_change"
+        return "contract_assent"
+    if obj_type == "seallink-grant/1":
+        if "delegate" in payload:
+            return "custody_change"
+        if "contract_id" in payload:
+            return "contract_assent"
+        rank = 0
+        rev = payload.get("revocation", {})
+        if rev.get("mode") == "seal" and rev.get("kind") == "single_use":
+            rank = max(rank, 1)
+        for cap in payload.get("capabilities", []):
+            if cap.get("quotas") or cap.get("action") in MUTATING_OR_EFFECT_ACTIONS:
+                rank = max(rank, 1)
+        return EVENT_CLASS_BY_RANK[rank]
+    raise ValueError(f"Unsupported guardian_context carrier: {obj_type}")
 
 
 def self_test() -> None:

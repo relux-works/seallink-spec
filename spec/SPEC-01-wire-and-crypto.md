@@ -1,8 +1,8 @@
 # SPEC-01: Wire Format, Cryptography, Thresholds, and Constraint Algebra
 
-- **Version:** `1.0.0-draft.1`
+- **Version:** `1.0.0-draft.2`
 - **Status:** `draft` (normative rules `decided`; see `OPEN-QUESTIONS.md` for deferred algorithm extensions)
-- **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/constraints-and-schemas.json`)
+- **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/constraints-and-schemas.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/refusal-codes.json`, `registry/constraints.json`
 - **Schemas:** `schemas/common.schema.json`
 
@@ -44,7 +44,7 @@ Every registered SealLink object type in `registry/object-types.json` carries it
 | Rule ID | State | Requirement | Refusal |
 | --- | --- | --- | --- |
 | `SL-WIRE-010` | `decided` | **Closed schemas.** Every object type has a closed member set (`additionalProperties: false`) defined in `schemas/` (plus action profile schemas for `Invocation.arguments`). Unknown, missing, or unregistered `type` values MUST refuse immediately. | `WIRE_TYPE` (unknown type), `WIRE_MEMBER` (schema error) |
-| `SL-WIRE-011` | `decided` | **Three distinct hashes.** For any object with canonical `payload_bytes` (the JCS bytes of `payload` for signed objects, or the full document for unsigned objects) and `signed_bytes` (full JCS bytes of `{"payload":...,"signatures":...}`):<br>1. **Object Identifier (`id`):** `SHA256(payload_bytes)` — excludes signatures; immune to signature randomness.<br>2. **Typed Signing Digest (`digest`):** BIP-340 tagged hash `H_tag(payload.type, payload_bytes)` where `H_tag(tag, msg) = SHA256(SHA256(tag) || SHA256(tag) || msg)` and `tag` is the exact ASCII bytes of `payload.type` (e.g. `"seallink-grant/1"`).<br>3. **Content Address (`content_addr`):** `SHA256(signed_bytes)` — covers signatures; used for retrieval pins and signed-form anchoring (`0x04`, `0x09`, `0x0d`, `0x0f`, `0x11`). | — |
+| `SL-WIRE-011` | `decided` | **Three distinct hashes.** For any object with canonical `payload_bytes` (the JCS bytes of `payload` for signed objects, or the full document for unsigned objects) and `signed_bytes` (full JCS bytes of the complete signed envelope, either `{"payload":...,"signatures":...}` or `{"guardian_approvals":...,"payload":...}`):<br>1. **Object Identifier (`id`):** `SHA256(payload_bytes)` — excludes signatures and guardian approvals; immune to signature randomness.<br>2. **Typed Signing Digest (`digest`):** BIP-340 tagged hash `H_tag(payload.type, payload_bytes)` where `H_tag(tag, msg) = SHA256(SHA256(tag) || SHA256(tag) || msg)` and `tag` is the exact ASCII bytes of `payload.type` (e.g. `"seallink-grant/1"`).<br>3. **Content Address (`content_addr`):** `SHA256(signed_bytes)` — covers the entire signed envelope; used for retrieval pins and signed-form anchoring (`0x04`, `0x09`, `0x0d`, `0x0f`, `0x11`, `0x12`). | — |
 
 ---
 
@@ -65,21 +65,26 @@ SealLink v1.0 specifies three exact off-chain signature algorithms plus one on-c
 
 Invalid curve points, non-lowercase hex, wrong byte lengths, or high-S `p256` signatures MUST refuse with `WIRE_KEY` (key defect) or `WIRE_SIGNATURE` (signature defect).
 
-### 4.2 Signed Envelope, `SignatureSet`, and Authoritative Policy Binding (`SL-WIRE-013`, `decided`)
+### 4.2 Signed Envelope, `SignatureSet`, `guardian_approvals`, and Authoritative Policy Binding (`SL-WIRE-013`, `decided`)
 
-Every signed SealLink object has exact top-level shape:
+Every signed SealLink object has one of two exact top-level shapes:
 
+1. **Ordinary signed envelope** (all signed objects without `payload.guardian_context`):
 ```json
 {"payload":{...},"signatures":{"policy":{"m":1,"pks":["..."]},"sigs":[{"pk":"...","sig":"..."}]}}
 ```
+2. **Ward guardian-quorum envelope** (permitted ONLY on `seallink-grant/1` and `seallink-assent/1` when `payload.guardian_context` is present):
+```json
+{"guardian_approvals":[{"guardian_name":"id/guardian-a","revision":1,"signatures":{"policy":{"m":1,"pks":["..."]},"sigs":[{"pk":"...","sig":"..."}]},"slot":1}],"payload":{...}}
+```
 
-Verification rules for `signatures` over `digest = H_tag(payload.type, canonical_JCS(payload))`:
+Verification rules over `digest = H_tag(payload.type, canonical_JCS(payload))`:
 
-1. **Structural validity:** `policy.m` MUST satisfy `1 <= m <= len(policy.pks) <= 32`. `policy.pks` MUST be strictly sorted in ascending lexicographical hex order with no duplicates.
-2. **Algorithm restriction:** `policy.alg` defaults to `"bip340"` when omitted. Non-`bip340` algorithms (`p256`, `ed25519`) are permitted **ONLY** on `seallink-owner-command/1` and `seallink-statement/1` when signed by a registered `device` key (`SPEC-03 §6`). All other signed objects MUST use `"bip340"`.
-3. **Cryptographic verification:** Each entry in `sigs` MUST name a `pk` present in `policy.pks`, MUST appear at most once per `pk`, and MUST verify strictly against `digest` under `policy.alg`. Verified distinct entries in `sigs` MUST number `>= policy.m`.
-4. **Universal authoritative policy binding (ALL object types):** Because `signatures.policy` lies outside `payload`, `signatures.policy` is NEVER trusted on its own. Every verifier MUST independently derive the **expected signing policy** from authoritative state (e.g., on-chain `link.<role>` for `grant`/`cred`/`notary`, `contract.parties[i].signing_policy`, `grant.recipient`, `grant.delegate.key`, `service.receipt_key`, `manifest.auth_key`, `seallink-device-list/1`, or active guardian slots for `guardian_context`) and MUST require exact equality between `signatures.policy` and the derived expected policy (for guardian quorums, see rule 5 below). Any mismatch refuses with `WIRE_SIGNATURE`.
-5. **Guardian quorum signatures (`SPEC-04`):** When `payload.guardian_context` is present (permitted on `seallink-grant/1` and `seallink-assent/1`), the payload cryptographically binds `(origin_id, ward_name, revision, event_class)`. Each entry in `sigs` MUST carry `slot` (distinct active slot number in `1..32`) and `revision` (strictly equal to `payload.guardian_context.revision`). The verifier resolves each claimed slot's active guardian `link.grant` policy at tip, verifies that each slot's signature(s) satisfy that guardian's own `link.grant` policy (preventing a multi-key guardian from double-counting), confirms all signing slots belong to distinct `(name, registration)` guardians, and verifies that the count of distinct satisfied slots meets `required(derived_event_class)` against `revision_size` (`GUARDIAN_QUORUM_UNMET` on shortfall, `GUARDIAN_INACTIVE` on inactive slot).
+1. **Structural validity (`SignatureSet`):** `policy.m` MUST satisfy `1 <= m <= len(policy.pks) <= 32`. `policy.pks` MUST be strictly sorted in ascending lexicographical hex order with no duplicates. Each entry in `sigs` carries strictly `{"pk","sig"}`.
+2. **Algorithm restriction:** `policy.alg` defaults to `"bip340"` when omitted. Non-`bip340` algorithms (`p256`, `ed25519`) are permitted **ONLY** on `seallink-owner-command/1` and `seallink-statement/1` when signed by a registered `device` key (`SPEC-03 §6`). All other signed objects (including every `guardian_approvals[i].signatures`) MUST use `"bip340"`.
+3. **Cryptographic verification (`SignatureSet`):** Each entry in `sigs` MUST name a `pk` present in `policy.pks`, MUST appear at most once per `pk`, and MUST verify strictly against `digest` under `policy.alg`. Verified distinct entries in `sigs` MUST number `>= policy.m`.
+4. **Universal authoritative policy binding (ALL object types without exception):** Because `signatures.policy` lies outside `payload`, `signatures.policy` is NEVER trusted on its own. Every verifier MUST independently derive the **expected signing policy** from authoritative state (e.g., on-chain `link.<role>` for `grant`/`cred`/`notary`, `contract.parties[i].signing_policy`, `grant.recipient`, `grant.delegate.key`, `service.receipt_key`, `manifest.auth_key`, `seallink-device-list/1`, or each active slot guardian's resolved `link.grant` policy for `guardian_approvals[i].signatures`) and MUST require exact equality between `signatures.policy` and the derived expected policy. Any mismatch refuses with `WIRE_SIGNATURE`.
+5. **Guardian quorum approvals (`guardian_approvals[]`, `SPEC-04`):** When `payload.guardian_context` is present (permitted ONLY on `seallink-grant/1` and `seallink-assent/1`), the payload cryptographically binds `(origin_id, ward_name, revision, event_class)` and the envelope MUST use `guardian_approvals[]` (and MUST NOT carry top-level `signatures`). Entries in `guardian_approvals[]` (`1..32` items) MUST be ordered by strictly ascending `slot` (`1..32`, no duplicate slots; `WIRE_SIGNATURE` otherwise), and every entry's `revision` MUST equal `payload.guardian_context.revision` (`GUARDIAN_QUORUM_UNMET` otherwise). For each entry, the verifier resolves slot `slot` at the active roster revision: if the slot is not `active` or its active guardian's name does not equal `entry.guardian_name`, refuse `GUARDIAN_INACTIVE`; otherwise derive that guardian's current `link.grant` policy at tip and verify `entry.signatures` under rules 1–4 with exact policy equality (`WIRE_SIGNATURE` on policy or signature mismatch). Because each slot carries its own independent `SignatureSet`, multi-key guardians cannot pool keys across slots or double-count. All approving slots MUST resolve to distinct `(name, registration)` guardians (`GUARDIAN_INACTIVE` on conflict), and the count of distinct satisfied slots MUST satisfy `required(derived_event_class)` against `revision_size` (`GUARDIAN_QUORUM_UNMET` on shortfall).
 
 ---
 
@@ -92,7 +97,7 @@ Contracts (`SPEC-05`), origin certificates (`SPEC-04`), and privacy-sensitive cr
   commit(salt_32B, obj) = H_tag("seallink-clause/1", salt_32B || canonical_JCS(obj))
                         = SHA256(SHA256("seallink-clause/1") || SHA256("seallink-clause/1") || salt_32B || canonical_JCS(obj))
   ```
-  where `salt_32B` is 32 raw bytes (encoded on wire as 64 lowercase hex when transmitted).
+  where `salt_32B` is an **independent 32-byte CSPRNG salt** (encoded on wire as 64 lowercase hex when transmitted). Issuers MUST generate a fresh, independent 32-byte CSPRNG salt for every committed clause, claim, `majority_commitment`, and `initial_guardian_commitment` — salts MUST NEVER be reused across items.
 - **Reference byte vector (`vectors/wire-jcs-and-hashes.json`):**
   For `salt_32B = 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f` and `obj = {"text":"Room inspection"}` (JCS bytes `7b2274657874223a22526f6f6d20696e7370656374696f6e227d`):
   `commit(salt_32B, obj) = b030a8a82ef79e9d6829f08c2e0bfc74db8b6c259a3b052988027ecc50ffd368` *(verified in `vectors/wire-jcs-and-hashes.json`)*.
@@ -153,7 +158,7 @@ Every verifier parsing any SealLink object **MUST** execute checks in this exact
 7. Registered `type` check (`SL-WIRE-010`) -> `WIRE_TYPE`
 8. Closed schema member check (`SL-WIRE-010`) -> `WIRE_MEMBER`; integer bounds (`SL-WIRE-007..009`) -> `WIRE_INTEGER`; Constraint Algebra sorting, range ordering, and `extensions` check (`SL-WIRE-015..016`) -> `WIRE_CONSTRAINT`
 9. Public key syntax and curve-point validation (`SL-WIRE-012`) -> `WIRE_KEY`
-10. Cryptographic signature verification and `SignatureSet` threshold check (`SL-WIRE-013`) -> `WIRE_SIGNATURE`
+10. Cryptographic signature verification, strictly ascending `guardian_approvals[]` slot order (where applicable), and `SignatureSet` threshold check (`SL-WIRE-013`) -> `WIRE_SIGNATURE`
 
 ---
 

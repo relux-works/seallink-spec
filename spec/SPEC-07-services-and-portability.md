@@ -1,8 +1,8 @@
 # SPEC-07: Grant-Gated Services, Replaceable Providers, Federated Disclosure, and Extensions
 
-- **Version:** `1.0.0-draft.1`
+- **Version:** `1.0.0-draft.2`
 - **Status:** `draft` (normative rules `decided`; unprofiled standard service types tracked `open` in `OPEN-QUESTIONS.md`)
-- **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`)
+- **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/trace-04-agent-guardian-intake.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/service-types.json`, `registry/object-types.json`, `registry/refusal-codes.json`
 - **Schemas:** `schemas/manifest.schema.json`, `schemas/invocation.schema.json`
 
@@ -34,7 +34,7 @@ Every service export profile MUST strictly partition three classes of data:
 1. **Stage:** Copy hash-checked holder data to `dest_executor` while `source_executor` remains the sole accounting authority (`dest_executor` admits zero effects on imported state).
 2. **Fence & Close:** `source_executor` durably fences new admissions across all replicas, drains in-flight work (retaining every unresolved outcome as bounded `outstanding_exposure`), and signs `seallink-migration/1` (`journal_pos`, `journal_commitment`, `inventory_sha256`, `outstanding_exposure`) with its pinned `receipt` key.
 3. **Revoke Old Grants & Issue Replacement Grants:** Close predecessor concrete-executor grants at `source_executor` via seal spend (a closing receipt alone is NOT revocation). For stateful grants, issue fresh concrete-executor grants naming `dest_executor` with reconciled remaining quotas (deducting settled usage AND all uncertain exposure). Update `manifest.providers` in one ledger name update.
-4. **Activate:** Holder signs `seallink-assent/1` (`target_type = "seallink-migration/1"`); `dest_executor` counter-signs acceptance, verifies full hash inventory, persists import atomically (rejecting rollback or conflicting `migration_id` with `SERVICE_MIGRATION_INVALID`), and enables admissions while `source_executor` remains fenced.
+4. **Activate:** Holder signs `seallink-assent/1` (`target_type = "seallink-migration/1"`; for a `ward`, carrying `guardian_context` with `event_class = "custody_change"` and `guardian_approvals[]` per `SPEC-04 §3.1`); `dest_executor` counter-signs acceptance, verifies full hash inventory, persists import atomically (rejecting rollback or conflicting `migration_id` with `SERVICE_MIGRATION_INVALID`), and enables admissions while `source_executor` remains fenced.
 
 - **Unavailable old provider:** Operator reconciliation is the default. Never infer unused budget or non-execution from timeouts or silence; keep old uncertain exposure isolated and issue an independent bounded allocation for non-conflicting work.
 - **Commercial default:** Start with small capped prepaid contracts. Unused prepaid credit remains `source_executor`'s liability and does not transfer automatically by data export.

@@ -1,8 +1,8 @@
 # SPEC-03: Identity, Name Value, Manifest, Key Taxonomy, Authentication, and Owner Control
 
-- **Version:** `1.0.0-draft.1`
+- **Version:** `1.0.0-draft.2`
 - **Status:** `draft` (normative rules `decided`; domain-binding verification and FIDO2/SSH device extensions tracked `open` in `OPEN-QUESTIONS.md`)
-- **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`)
+- **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/service-types.json`, `registry/refusal-codes.json`
 - **Schemas:** `schemas/name-value.schema.json`, `schemas/manifest.schema.json`, `schemas/card.schema.json`, `schemas/invocation.schema.json`
 
@@ -32,7 +32,7 @@ One `id/` name MAY publish distinct, strictly isolated role keys or threshold ro
 
 - **On-chain role threshold integrity:** Every role policy (`1-of-1` direct key OR `m-of-n` `ThresholdPolicy` pinned as `{"p":"<sha256>"}`) is anchored **directly inside `link.<role>` on the ledger** — never governed solely by an off-chain manifest update.
   - When `link.<role>` is a 64-hex string `k`, the resolved role policy is `{"m":1,"pks":[k]}`.
-  - When `link.<role>` is `{"p":h}`, the presenter supplies the full `ThresholdPolicy` (inside the signed object's `issuer.role_policy` and/or `manifest.role_policies.<role>`), and the verifier MUST confirm `SHA256(canonical_JCS(role_policy)) == h` (`WIRE_SIGNATURE` on mismatch).
+  - When `link.<role>` is `{"p":h}`, the presenter supplies the full `ThresholdPolicy` (inside the signed object's `issuer.role_policy` and/or `manifest.role_policies.<role>`), and the verifier MUST confirm `SHA256(canonical_JCS(role_policy)) == h` (`WIRE_SIGNATURE` on mismatch). *(For ward-represented `seallink-grant/1` objects using `guardian_approvals[]`, `issuer.role_policy` is omitted on the ward's `issuer` pin and signing authority is resolved from each approving guardian's `link.grant` policy per `SPEC-04`.)*
   - Rotating any key or threshold inside a role policy changes `link.<role>` via an owner-authored (`SIGHASH_ALL`) ledger update, triggering the exact per-role closure rule below.
 - **Byte budget:** With three roles (even with `{"p":...}` pins) + `origin` + `m`, the value is ~405 bytes — well within the 520-byte protocol limit.
 - **Per-role history isolation:** Rotating or removing `link.notary` or `link.cred` MUST NOT close live grants bound to `link.grant`. Rotating or removing `link.grant` closes active grants (`NAME_ROLE_CHANGED`), while leaving eternal credentials and notary acts intact unless closed by `0x0b` (`h_c`).
@@ -86,7 +86,7 @@ The single `m` pin in the name value authenticates one canonical JCS `seallink-m
    ]
    ```
    - Each `(service_type, label)` pair MUST be unique within `providers`.
-   - **Provider continuity:** Because `provider` pins `(name, registration, owner_policy)`, an attacker who re-registers an expired provider name string cannot hijack dynamic `executor_ref` delegations (`SERVICE_PROVIDER_UNBOUND` / `NAME_OWNER_MISMATCH`). Switching providers requires an explicit owner-authored manifest update.
+   - **Provider continuity:** Because `provider` pins `(name, registration, owner_policy)`, an attacker who re-registers an expired provider name string cannot hijack dynamic `executor_ref` delegations (`SERVICE_PROVIDER_UNBOUND` if holder's manifest lacks a matching `(service_type, label, provider)` entry; `NAME_OWNER_MISMATCH` if the pinned provider name's confirmed ledger output does not match `provider.owner_policy`). Switching providers requires an explicit owner-authored manifest update.
 4. **`auth_key` + `auth_seal`** *(paired optional)*: Dedicated BIP-340 foreign-service login key and its disposable fast-revocation seal.
 5. **`role_policies`** *(optional availability hint ONLY)*: Carries full `ThresholdPolicy` preimages for on-chain `link.<role>.p` pins. A `role_policies` entry has ZERO authority unless `SHA256(canonical_JCS(policy))` equals the confirmed on-chain `link.<role>.p` hash (`SL-IDEN-003`).
 
@@ -120,7 +120,7 @@ Bytes from ANY channel are accepted **if and only if** `SHA256(bytes)` equals th
 A foreign replaceable service authenticates actors using `seallink-auth-challenge/1` and `seallink-auth-upgrade/1` (`SL-IDEN-010`, `decided`):
 
 1. **Challenge lifecycle:** Service generates a 32-byte CSPRNG `nonce`, records `issued_at` and `expires_at` (`issued_at < expires_at <= issued_at + 120`), pins its own `service_id`, and records the challenge durably. Client signs with `auth_key` (never `device`, `grant`, or `name_owner`). Service verifies `SPEC-01 §7`, checks `issued_at <= now < expires_at` (`AUTH_CHALLENGE_EXPIRED`), checks audience/nonce (`AUTH_CHALLENGE_INVALID`), and **atomically consumes the nonce** before creating any session.
-2. **Named mode:** Service resolves `name`, walks owner history, verifies `manifest/1`, confirms `manifest.auth_key == auth_pubkey` (`AUTH_KEY_UNPINNED`), and confirms `manifest.auth_seal` is unspent (`SEAL_SPENT` / `SEAL_UNAVAILABLE`). Existing service accounts MUST retain their original `(name, registration, owner_policy)` binding; a re-registered name string MUST NOT take over an old account.
+2. **Named mode:** Service resolves `name`, walks owner history, verifies `manifest/1`, confirms `manifest.auth_key == auth_pubkey` (`AUTH_KEY_UNPINNED`), and confirms `manifest.auth_seal` is unspent (`SEAL_SPENT` if spent, `SEAL_UNAVAILABLE` if unconfirmed or inconclusive). Existing service accounts MUST retain their original `(name, registration, owner_policy)` binding; a re-registered name string MUST NOT take over an old account.
 3. **Provisional key-only onboarding:** A service MAY admit a challenge without `name` into a strictly rate- and storage-capped local cell (zero effect, PII-release, or federation rights).
 4. **Sponsored client-owned registration & atomic upgrade:** A sponsor MAY fund UTXOs controlled exclusively by the client so the client broadcasts `OP_NAME_NEW` and (`>= 12` blocks later) `OP_NAME_FIRSTUPDATE` (sponsor never owns the name). Once confirmed at required depth, client signs `seallink-auth-upgrade/1` under the same `auth_key` to atomically bind the confirmed registration to the provisional cell.
 5. **Authentication is NOT authorization:** A successful login session confers zero authority to spend funds, disclose data to third parties, or bypass grant checks.

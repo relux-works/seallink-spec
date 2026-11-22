@@ -1,6 +1,6 @@
 # SealLink Conformance Requirements
 
-- **Version:** `1.0.0-draft.1`
+- **Version:** `1.0.0-draft.2`
 - **Status:** `draft`
 - **Normative Language:** [RFC2119], [RFC8174]
 
@@ -13,10 +13,10 @@ An implementation claiming conformance to SealLink v1.0 **MUST** declare which o
 | Conformance Role | Required Specifications | Required Registries & Schemas | Required Vector Suites |
 | --- | --- | --- | --- |
 | **Core Wire Library** | `SPEC-00`, `SPEC-01` | `object-types.json`, `refusal-codes.json`, `constraints.json`, all `schemas/*.schema.json` | `vectors/wire-jcs-and-hashes.json`, `vectors/constraints-and-schemas.json` |
-| **Tier 1 Verifier** | Core Wire + `SPEC-02`, `SPEC-03` (§1–4), `SPEC-04`, `SPEC-05`, `SPEC-06` (§1–4, §6) | All `registry/*.json` and `schemas/*.schema.json` | All `vectors/*.json` (including `trace-01`, `trace-02`, `trace-03`) |
-| **Effect Executor / Provider** | Tier 1 Verifier + `SPEC-06` (§5 if bearer sessions enabled), `SPEC-07`, plus each supported `PROFILE-*.md` | All `registry/*.json`, `schemas/*.schema.json`, and owning `profile-*.schema.json` | All `vectors/*.json` plus profile-specific traces |
+| **Tier 1 Verifier** | Core Wire + `SPEC-02`, `SPEC-03` (§1–4), `SPEC-04`, `SPEC-05`, `SPEC-06` (§1–4, §6) | All `registry/*.json` and `schemas/*.schema.json` | All `vectors/*.json` (including `trace-01` through `trace-04` and `refusal-coverage-matrix.json`) |
+| **Effect Executor / Provider** | Tier 1 Verifier + `SPEC-06` (§5 if bearer sessions enabled), `SPEC-07`, plus each supported `PROFILE-*.md` | All `registry/*.json`, `schemas/*.schema.json`, and owning `profile-*.schema.json` | All `vectors/*.json` plus profile-specific traces (`trace-01`, `trace-03`, `trace-04`) |
 | **Issuer / Signer** | Core Wire + `SPEC-02` (§3, §5), `SPEC-03` (§1–3, §6), `SPEC-05`, `SPEC-06` (§1, §3) | `object-types.json`, `key-roles.json`, `opreturn-actions.json`, `constraints.json` | `wire-jcs-and-hashes.json`, `ledger-scripts-and-opreturn.json`, `constraints-and-schemas.json` |
-| **Institutional / Guardian Authority** | Tier 1 Verifier + Issuer + `SPEC-04` (full), `SPEC-05` (§4–5) | All `registry/*.json`, `origin.schema.json`, `guardian.schema.json`, `credential.schema.json` | `vectors/trace-02-guardian-succession-assent.json` |
+| **Institutional / Guardian Authority** | Tier 1 Verifier + Issuer + `SPEC-04` (full), `SPEC-05` (§4–5) | All `registry/*.json`, `origin.schema.json`, `guardian.schema.json`, `credential.schema.json` | `vectors/trace-02-guardian-succession-assent.json`, `vectors/trace-04-agent-guardian-intake.json` |
 
 ---
 
@@ -33,6 +33,6 @@ An implementation claiming conformance to SealLink v1.0 **MUST** declare which o
 ## 3. Interoperability Bar for Advancing Specification Maturity
 
 Per `SPEC-00 §5.1`:
-- **`prose` -> `vectors`:** Every `decided` rule in a document is exercised by positive and negative fixtures in `vectors/`, verified automatically by CI against Draft 2020-12 metaschemas and reference cryptography.
+- **`prose` -> `vectors`:** Every `decided` rule and every registered refusal code (`84/84`) is exercised by executable positive, negative, and stateful trace fixtures in `vectors/`, verified automatically by CI via Draft 2020-12 metaschemas and the reference Tier 1 verifier (`tools/seallink_verifier.py`).
 - **`vectors` -> `dual-impl`:** At least two independent implementations with disjoint cryptographic and JSON stacks pass 100% of `vectors/` byte-for-byte (identical object IDs, digests, content addresses, refusal codes, and journal commitments).
-- **`dual-impl` -> `chain-tested`:** All three end-to-end traces (`trace-01` mail offline + revoke, `trace-02` guardian succession + ward assent, `trace-03` parent pool + single-use + replay + revoke) plus `P2A` CPFP package relay are executed and recorded against a live Namecoin Core `nc28.0` regtest (and/or mainnet) network.
+- **`dual-impl` -> `chain-tested`:** All four end-to-end traces (`trace-01` mail offline + revoke, `trace-02` initial & successor guardian activation + ward assent, `trace-03` parent pool + single-use + crash-uncertain + replay + revoke, `trace-04` ward agent guardian intake) plus TRUC v3 / `P2A` CPFP package relay (`conformance/p2a-regtest/`) are executed and recorded against a live Namecoin Core `nc28.0` regtest (and/or mainnet) network.

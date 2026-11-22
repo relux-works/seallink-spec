@@ -1,8 +1,8 @@
 # SPEC-05: Contracts, Symmetric Assent, Verifiable Credentials, and General Notary Acts
 
-- **Version:** `1.0.0-draft.1`
+- **Version:** `1.0.0-draft.2`
 - **Status:** `draft` (normative rules `decided`)
-- **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/trace-02-guardian-succession-assent.json`)
+- **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/trace-02-guardian-succession-assent.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/opreturn-actions.json`, `registry/refusal-codes.json`
 - **Schemas:** `schemas/contract.schema.json`, `schemas/credential.schema.json`
 
@@ -23,7 +23,7 @@ In SealLink v1.0, a **unilateral grant (`SPEC-06`) is the base authorization pri
 
 A `seallink-contract/1` object (`<= 65536` bytes, `schemas/contract.schema.json`) binds `N >= 2` parties (any combination of people, organizations, agents, or unverified actors):
 
-1. **Header fields:** `type`, `network`, `genesis`, `profile`, `contract_salt` (32 CSPRNG bytes, preventing offline guessing of short contracts), `parties[2..32]` (each naming `role`, optional `name_pin`, and `signing_policy: ThresholdPolicy`), `window` (`not_before_height`, optional `not_after_height`, optional calendar `not_after_unix`), optional `machine_clause_indices`, optional `framework_id`, optional/required `seal`, optional `assent_output`, optional `config_sha256`, and optional `moderation`.
+1. **Header fields:** `type`, `network`, `genesis`, `profile`, `contract_salt` (32 CSPRNG bytes, preventing offline guessing of short contracts), `parties[2..32]` — where each entry is either an **autonomous party** `{role, name_pin?, signing_policy: ThresholdPolicy}` or a **ward party** `{role, ward_origin_id, name_pin}` (omitting static `signing_policy` so guardian succession never invalidates a live contract) — `window` (`not_before_height`, optional `not_after_height`, optional calendar `not_after_unix`), optional `machine_clause_indices`, optional `framework_id`, optional/required `seal`, optional `assent_output`, optional `config_sha256`, and optional `moderation`.
 2. **Clauses & Selective Disclosure:** Each clause `i` is a canonical JCS object containing free-text prose (`text`, where `\n` is allowed per `SL-WIRE-005`), typed machine terms (mirroring any bound grant capabilities/quotas), or both. The contract stores ONLY the ordered array `clause_commitments[]` where:
    ```text
    clause_commitments[i] = H_tag("seallink-clause/1", salt_i || canonical_JCS(clause_i))
@@ -35,9 +35,10 @@ A `seallink-contract/1` object (`<= 65536` bytes, `schemas/contract.schema.json`
 
 ### 2.2 Symmetric Native Assent (`seallink-assent/1`) and Anchoring (`SL-CONT-004`, `decided`)
 
-1. **Symmetric off-chain assent:** A contract is concluded when EVERY party in `parties[]` has signed an identical-format `seallink-assent/1` (`<= 16384` bytes, accommodating up to 32-of-32 `SignatureSet`, `target_type = "seallink-contract/1"`, `target_id = contract_id`) satisfying that party's `signing_policy` (`SL-WIRE-013`).
+1. **Symmetric off-chain assent:** A contract is concluded when EVERY party in `parties[]` has signed an identical-format `seallink-assent/1` (`<= 32768` bytes, accommodating multi-guardian `guardian_approvals[]` and up to 32-of-32 `SignatureSet`, `target_type = "seallink-contract/1"`, `target_id = contract_id`):
    - Permitted signer roles for `seallink-assent/1` are strictly `grant` and `guardian_quorum` (`registry/object-types.json`, coherent with `registry/key-roles.json`); `auth` and `device` keys MUST NEVER sign `seallink-assent/1` (`WIRE_SIGNATURE`).
-   - If a party is a `ward` (`SPEC-04`), `payload.guardian_context` MUST be present with `event_class = "contract_assent"` and `revision` matching the ward's active roster revision, and `signatures` MUST satisfy `required("contract_assent")` across distinct active guardian slots (`WARD_AUTONOMOUS_FORBIDDEN` / `GUARDIAN_QUORUM_UNMET`).
+   - For an **autonomous party** (`signing_policy` present), `seallink-assent/1` uses the ordinary `{"payload","signatures"}` envelope whose `signatures.policy` MUST strictly equal `party.signing_policy` (`SL-WIRE-013`).
+   - For a **ward party** (`ward_origin_id` present, `SPEC-04`), `seallink-assent/1` MUST carry `payload.guardian_context` (`origin_id == party.ward_origin_id`, `ward_name == party.name_pin.name`, `event_class = "contract_assent"`, `revision` matching the ward's active roster revision) and top-level `guardian_approvals[]` satisfying `required("contract_assent")` across distinct active guardian slots (`SL-ORIG-006` refusal precedence: `WARD_AUTONOMOUS_FORBIDDEN`, then `GUARDIAN_INACTIVE`, then `WIRE_SIGNATURE`, then `GUARDIAN_QUORUM_UNMET`).
    - Assent freshness for grant issuance is at most `72` hours (`259200s`) and single-use per issuance (`CONTRACT_ASSENT_INVALID`).
 2. **Contract anchor (`0x07`):** A contract is anchored via `OP_RETURN` action `0x07` committing `contract_id` (`loc_type = 0x00` default for private contracts).
 3. **Optional on-chain assent:** Parties MAY additionally name a confirmed `N-of-N` `P2WSH` `assent_output` in `seallink-contract/1` and have the `0x07` anchor transaction spend it (`SIGHASH_ALL` on all signatures), proving mutual assent on chain even to observers who never see contract plaintext.
@@ -84,7 +85,7 @@ Third-party attestations about a subject — diplomas, licenses, notary credenti
    - If an issuer's `cred` or `notary` role policy (current or retired) is compromised, the issuer's cold `name_owner` `ScriptPolicy` broadcasts an `OP_NAME_UPDATE` (removing/replacing the role if current, signed `SIGHASH_ALL`) containing the 50-byte `0x0b` frame embedding `h_c_le64` (`<= inclusion_height`) and `typed_digest(seallink-credential-break/1)`.
    - Because verifiers reconstruct `seallink-credential-break/1` directly from the name history and on-chain `h_c`, withholding off-chain break documents cannot hide a compromise.
    - For the affected `(issuer, registration, owner_policy, compromised_policy)`: anchors at `h_anchor < h_c` survive, while anchors at `h_anchor >= h_c` durably refuse **`CRED_ISSUER_CLOSED`** (for both eternal and revocable lifecycles). Multiple breaks narrow by `min(h_c)`.
-5. **Privacy:** Raw PII MUST NOT appear on chain (`loc_type = 0x00` default). Issuers deduplicating humans MUST NOT hash raw biometrics directly. Per-claim selective disclosure uses `claim_commitments` under `SL-WIRE-014`.
+5. **Privacy:** Raw PII MUST NOT appear on chain (`loc_type = 0x00` default). Issuers deduplicating humans MUST NOT hash raw biometrics directly. Per-claim selective disclosure uses `claim_commitments` with an independent 32-byte CSPRNG salt per entry (`SL-WIRE-014`).
 
 ### 4.2 Deterministic Credential Verification Order (`SL-CONT-010`, `decided`)
 

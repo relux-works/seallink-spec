@@ -1,0 +1,19 @@
+{
+  "profile": "independent 1-parent / 1-child P2A relay positive control",
+  "chain": "regtest",
+  "peers": "two fresh Namecoin Core 28, distinct local data directories, one loopback connection, no other peers",
+  "ordinary_peer_connected": true,
+  "ordinary_tx_seen_by_peer_before_mining": true,
+  "parent_alone_admitted": false,
+  "parent_alone_reason": "min relay fee not met",
+  "version": 3,
+  "parent_fee_sat": 0,
+  "child_fee_sat": 500000,
+  "p2a_value_sat": 100000,
+  "source_submitpackage": "success",
+  "peer_saw_both_before_block": true,
+  "peer_mempool_size_at_observation": 2,
+  "both_confirmed_at_peer": true,
+  "peer_received_no_rpc_submission": true,
+  "stopped_all_owned_processes": true
+}

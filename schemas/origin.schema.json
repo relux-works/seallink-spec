@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/schemas/v1/origin.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.2/schemas/origin.schema.json",
   "title": "SealLink v1.0 Origin Certificate (Birth, Materialization, Incorporation)",
   "type": "object",
   "additionalProperties": false,
@@ -11,7 +11,7 @@
       "additionalProperties": false,
       "required": [
         "type", "network", "genesis", "origin_class", "issuer", "request_sha256",
-        "subject_initial_key", "binding_seal", "status_seal", "claims_salt", "claims", "name_recovery"
+        "subject_initial_key", "binding_seal", "status_seal", "claims", "name_recovery"
       ],
       "properties": {
         "type": { "const": "seallink-origin/1" },
@@ -26,7 +26,6 @@
           "$ref": "common.schema.json#/$defs/Seal",
           "description": "Authenticated status spine UTXO; while unspent, proves neither seallink-capacity/1 nor seallink-end/1 has occurred."
         },
-        "claims_salt": { "$ref": "common.schema.json#/$defs/Hex64" },
         "claims": {
           "type": "object",
           "additionalProperties": false,
@@ -36,7 +35,7 @@
             "intended_owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
             "majority_commitment": {
               "$ref": "common.schema.json#/$defs/Hex64",
-              "description": "Salted selective-disclosure commitment H_tag('seallink-clause/1', salt || JCS({majority_unix: T})); keeps birthday/majority date private."
+              "description": "Salted selective-disclosure commitment H_tag('seallink-clause/1', salt_32B || JCS({majority_unix: T})) with an independent 32-byte CSPRNG salt."
             },
             "config_sha256": { "$ref": "common.schema.json#/$defs/Hex64" }
           }
@@ -44,15 +43,25 @@
         "guardian_policy": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["revision", "revision_size", "disposer", "arbiter", "roster_seal", "appointment_delay_blocks", "quorums", "slots"],
+          "required": ["revision", "revision_size", "disposer_pk", "arbiter_pk", "challenger_pk", "roster_seal", "appointment_delay_blocks", "quorums", "slots"],
           "properties": {
             "revision": { "const": 1 },
             "revision_size": { "type": "integer", "minimum": 1, "maximum": 32 },
-            "disposer": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
-            "arbiter": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+            "disposer_pk": {
+              "$ref": "common.schema.json#/$defs/CompressedPubkey66",
+              "description": "Single compressed ECDSA key for disposer branch of both_of_2/either_of_2/guardian_slot_pending seals (institutions use threshold ECDSA per OQ-007)."
+            },
+            "arbiter_pk": {
+              "$ref": "common.schema.json#/$defs/CompressedPubkey66",
+              "description": "Independent arbiter compressed ECDSA key for both_of_2 vacant/roster seals (MUST differ from disposer_pk)."
+            },
+            "challenger_pk": {
+              "$ref": "common.schema.json#/$defs/CompressedPubkey66",
+              "description": "Designated pre-activation challenger compressed ECDSA key checked against guardian_slot_pending.keys.challenger."
+            },
             "roster_seal": {
               "$ref": "common.schema.json#/$defs/Seal",
-              "description": "both_of_2(disposer, arbiter) seal spent with action 0x0f to advance guardianship revision."
+              "description": "both_of_2(disposer_pk, arbiter_pk) seal spent with action 0x0f to advance guardianship revision."
             },
             "appointment_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560 },
             "quorums": { "$ref": "common.schema.json#/$defs/QuorumMap" },
@@ -68,7 +77,7 @@
                   "slot": { "type": "integer", "minimum": 1, "maximum": 32 },
                   "initial_guardian_commitment": {
                     "$ref": "common.schema.json#/$defs/Hex64",
-                    "description": "Salted selective-disclosure commitment H_tag('seallink-clause/1', salt_i || JCS(initial_guardian_NamePin)); protects initial guardian identity privacy."
+                    "description": "Salted selective-disclosure commitment H_tag('seallink-clause/1', salt_i || JCS(initial_guardian_NamePin)) using an independent 32-byte CSPRNG salt."
                   },
                   "vacant_utxo": { "$ref": "common.schema.json#/$defs/Outpoint" }
                 }
@@ -88,11 +97,11 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["mode", "disposer", "arbiter", "delay_blocks", "recovery_seal"],
+              "required": ["mode", "disposer_pk", "arbiter_pk", "delay_blocks", "recovery_seal"],
               "properties": {
                 "mode": { "const": "dual_party_delayed" },
-                "disposer": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
-                "arbiter": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+                "disposer_pk": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" },
+                "arbiter_pk": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" },
                 "delay_blocks": { "type": "integer", "minimum": 144, "maximum": 52560 },
                 "recovery_seal": { "$ref": "common.schema.json#/$defs/Seal" }
               }

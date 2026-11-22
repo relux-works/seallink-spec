@@ -1,11 +1,15 @@
 {
   "cpfp_anchor": {
     "forbidden_bare_op_true_hex": "51",
+    "nc28_minrelaytxfee_base_units_per_kvb": 100000,
     "p2a_bytes": 4,
+    "p2a_dust_floor_base_units": 240,
     "p2a_script_pubkey_hex": "51024e73",
-    "rule": "SL-LDGR-013"
+    "regtest_evidence_dir": "conformance/p2a-regtest",
+    "rule": "SL-LDGR-013",
+    "truc_version": 3
   },
-  "description": "Namecoin prefix scripts (NAME_NEW/NAME_FIRSTUPDATE/NAME_UPDATE), ScriptPolicy compilations, P2A CPFP, SLNK OP_RETURN frames, and 5-leaf Merkle batch 0x02 proofs.",
+  "description": "Namecoin prefix scripts (NAME_NEW/NAME_FIRSTUPDATE/NAME_UPDATE), ScriptPolicy compilations, TRUC/P2A CPFP, SLNK OP_RETURN frames (0x01-0x12), and 5-leaf Merkle batch 0x02 proofs.",
   "merkle_batch_0x02": {
     "merkle_root": "7c391852d26b1821a9562565b0ca1f119ecb4d42640bbc0f9bb1d696b7f5b56d",
     "negative_tampered_proof": {
@@ -331,6 +335,18 @@
       "id": "SINGLE_USE_CONSUMPTION",
       "script_bytes": 42,
       "script_hex": "6a05534c4e4b112201d6fbefaf27e6d4b37b6772eb32b6eb8e94e131fcd653927bf6e595106106a23000"
+    },
+    {
+      "action": "0x12",
+      "decoded": {
+        "action": "0x12",
+        "commitment": "5dad8b900a116f5f1906365206b301fd9da28a95eb1b863ad7b0a97173b31cf9",
+        "loc_type": "0x00",
+        "version": 1
+      },
+      "id": "GUARDIAN_INITIAL_ACTIVATION",
+      "script_bytes": 42,
+      "script_hex": "6a05534c4e4b1222015dad8b900a116f5f1906365206b301fd9da28a95eb1b863ad7b0a97173b31cf900"
     }
   ],
   "opreturn_negative": [
@@ -441,5 +457,5 @@
     }
   ],
   "suite": "ledger-scripts-and-opreturn",
-  "version": "1.0.0-draft.1"
+  "version": "1.0.0-draft.2"
 }

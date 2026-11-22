@@ -1,6 +1,6 @@
 # SPEC-00: SealLink Architecture, Ontology, and Governance
 
-- **Version:** `1.0.0-draft.1`
+- **Version:** `1.0.0-draft.2`
 - **Status:** `draft` (normative rules tagged `decided` or `open`; open items tracked in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `prose`
 - **Authors:** Ivan Oparin, Alexey Grigorev
@@ -83,12 +83,12 @@ The SealLink v1.0 specification is organized as eight orthogonal normative docum
 | Spec | Layer | Owns |
 | --- | --- | --- |
 | **`SPEC-00`** | Foundation | Principles, actor ontology, role glossary, threat model, governance. |
-| **`SPEC-01`** | Wire & Crypto | Restricted RFC 8785 JCS, dual integers, BIP-340 tagged hashes, 3 hashes, `SignatureSet`, policy binding, salted selective disclosure, 7-predicate Constraint Algebra, wire pipeline. |
-| **`SPEC-02`** | Ledger Binding | Abstract `ChainView`, Namecoin Binding v1 (`NAME_NEW` / `NAME_FIRSTUPDATE` / `NAME_UPDATE` grammars, CSV/SegWit), `ScriptPolicy`, `SIGHASH_ALL` writer check, multi-node freshness, Witness construction, `SLNK` `OP_RETURN`, Merkle batch `0x02`, UTXO seals & P2A CPFP. |
+| **`SPEC-01`** | Wire & Crypto | Restricted RFC 8785 JCS, dual integers, BIP-340 tagged hashes, 3 hashes, `SignatureSet` & `guardian_approvals`, universal policy binding, salted selective disclosure, 7-predicate Constraint Algebra, wire pipeline. |
+| **`SPEC-02`** | Ledger Binding | Abstract `ChainView`, Namecoin Binding v1 (`NAME_NEW` / `NAME_FIRSTUPDATE` / `NAME_UPDATE` grammars, CSV/SegWit), `ScriptPolicy`, `SIGHASH_ALL` writer check, multi-node freshness, Witness construction, `SLNK` `OP_RETURN`, Merkle batch `0x02`, UTXO seals & TRUC/P2A CPFP. |
 | **`SPEC-03`** | Identity & Custody | 520-byte name value (multi-role keys / on-chain role-policy pins + uniform `origin` pin + `m` head), key taxonomy & cold emergency reserve, `manifest/1` (sets, self-service, pinned labeled `providers[]`, `auth`), `card/1`, 4-channel cascade, provisional onboarding & name auth, owner control plane (`devices`, L0–L2). |
-| **`SPEC-04`** | Origin & Guardianship | Eternal `origin/1` (salted privacy commitments, `status_seal`, `roster_seal`), single-use `name-binding/1`, `N` equal guardian slots & verifier-derived closed `event_class` quorums, ward non-autonomy, two-stage appointment/activation (`0x0d`/`0x0e`), roster transitions (`0x0f`), slot state table, calendar/chain time, emancipation (`capacity/1`), `end/1`, dual-mode `name_recovery` (`0x10` cancel). |
-| **`SPEC-05`** | Contracts & Credentials | N-party salted contracts with `machine_clause_indices`, framework nesting, confirmed contract seal termination, symmetric `assent/1` (including ward `guardian_context`), on-chain assent, agreed config hash, verifiable credentials (`eternal`/`revocable`, `h_c`), general notary acts, violation verdicts & salted request attribution. |
-| **`SPEC-06`** | Grants & Delegation | Universal `grant/1` (unilateral base + optional contract), concrete `executor` vs stateless `executor_ref`, UTXO seal vs root-only `window_only`, acyclic single-use attribution (`0x11`), `invocation/1` & `receipt/1`, depth-2 re-delegation (R8.5 aggregate budget + R8.6 disjoint coin ranges), early-auth admission pipeline, bearer sessions, anti-rollback fenced journals. |
+| **`SPEC-04`** | Origin & Guardianship | Eternal `origin/1` (salted privacy commitments, `status_seal`, `roster_seal`, explicit `disposer_pk`/`arbiter_pk`/`challenger_pk`), single-use `name-binding/1`, `N` equal guardian slots & 4-class verifier-derived quorums, ward non-autonomy, initial (`0x12`) & two-stage (`0x0d`/`0x0e`) activation, roster transitions (`0x0f`), consistency invariants, emancipation (`capacity/1`), `end/1`, dual-mode `name_recovery` (`0x10` cancel) & seal continuation tables. |
+| **`SPEC-05`** | Contracts & Credentials | N-party salted contracts (`ward_origin_id` for ward parties, `machine_clause_indices`), framework nesting, confirmed contract seal termination, symmetric `assent/1` (`guardian_approvals[]` for wards), on-chain assent, agreed config hash, verifiable credentials (`eternal`/`revocable`, `h_c`), general notary acts, violation verdicts & salted request attribution. |
+| **`SPEC-06`** | Grants & Delegation | Universal `grant/1` (unilateral base + optional contract + ward `guardian_approvals[]`), concrete `executor` vs stateless `executor_ref`, UTXO seal vs root-only `window_only`, acyclic single-use attribution (`0x11`), `invocation/1` & `receipt/1`, depth-2 re-delegation (R8.5 aggregate budget + R8.6 disjoint coin ranges), early-auth admission pipeline, crash-in-effect-window `uncertain` recovery, bearer sessions, anti-rollback fenced journals. |
 | **`SPEC-07`** | Services & Portability | Grant-gated executor contract, provider authority & pinned transport mutual auth, replaceable service cut-over (`migration/1`), federated screening & progressive PII disclosure (Contour A), extension/SLIP checklists. |
 
 ---
@@ -137,5 +137,6 @@ The SealLink v1.0 specification is organized as eight orthogonal normative docum
 
 ### 7.2 Informative References
 - **[RFC8448]** Thomson, M., "Example Handshake Traces for TLS 1.3", RFC 8448, January 2019.
-- **[BIP-431]** Sanders, G., "Topology Restrictions for Pinning (TRUC) / Pay-to-Anchor (P2A)", Bitcoin Core v28 / Namecoin Core `nc28.0`.
+- **[BIP-431]** Sanders, G., "Topology Restrictions for Pinning (TRUC)", v3 transactions in Bitcoin Core v28 / Namecoin Core `nc28.0`.
+- **[BIP-433]** Sanders, G., "Pay to Anchor (P2A)", witness v1 anchor output `51024e73` in Bitcoin Core v28 / Namecoin Core `nc28.0`.
 - **[NC28]** Namecoin Core `nc28.0`, `src/script/names.cpp`, `src/script/solver.cpp`, `src/policy/policy.cpp`.

@@ -203,7 +203,7 @@ def build_bundle(version: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build single-file SealLink specification Markdown bundle.")
-    parser.add_argument("--version", default="v1.0.0-draft.1", help="Release version label (e.g. v1.0.0-draft.1)")
+    parser.add_argument("--version", default="v1.0.0-draft.2", help="Release version label (e.g. v1.0.0-draft.2)")
     parser.add_argument("--out", help="Output path for bundled Markdown file")
     parser.add_argument("--sha256-out", help="Optional path to write SHA-256 checksum file")
     parser.add_argument("--check", action="store_true", help="Build in memory and verify non-empty deterministic output without writing")

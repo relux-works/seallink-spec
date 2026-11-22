@@ -1,8 +1,8 @@
 # SPEC-06: Universal Grants, Invocations, Re-Delegation, Sessions, and Anti-Rollback Journals
 
-- **Version:** `1.0.0-draft.1`
+- **Version:** `1.0.0-draft.2`
 - **Status:** `draft` (normative rules `decided`; external CAS witness transport protocol tracked `open` in `OPEN-QUESTIONS.md`)
-- **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/trace-03-delegation-pool-single-use.json`)
+- **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/trace-03-delegation-pool-single-use.json`, `vectors/trace-04-agent-guardian-intake.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/constraints.json`, `registry/opreturn-actions.json`, `registry/refusal-codes.json`
 - **Schemas:** `schemas/grant.schema.json`, `schemas/invocation.schema.json`
 
@@ -14,7 +14,7 @@ A `seallink-grant/1` (`<= 65536` bytes, `schemas/grant.schema.json`) is the univ
 
 ### 1.1 Unilateral Base and Optional Contract Binding
 
-- **Unilateral base:** A root grant requires ONLY the issuer's valid `SignatureSet` matching `issuer.role_policy` (pinned on chain in `link.grant` per `SL-IDEN-003`), plus a satisfied guardian quorum via `guardian_context` when acting for a `ward` (`SL-ORIG-006`). It requires zero recipient assent and imposes zero obligations on the recipient.
+- **Unilateral base:** An autonomous root grant requires ONLY the issuer's valid `SignatureSet` matching `issuer.role_policy` (pinned on chain in `link.grant` per `SL-IDEN-003`). A root grant issued on behalf of a `ward` omits `issuer.role_policy`, sets `payload.guardian_context`, and carries top-level `guardian_approvals[]` satisfying `required(derived_event_class)` (`SL-WIRE-013`, `SL-ORIG-006`). Neither form requires recipient assent or imposes obligations on the recipient.
 - **Contract-bound grants:** Setting optional `contract_id` binds the grant to a `seallink-contract/1` (`SPEC-05`): the grant's window MUST nest inside the contract (and any framework contract), all `machine_clause_indices` MUST be disclosed and match the grant's capabilities, and spending the contract or framework seal terminates the grant (`SEAL_SPENT`). Action profiles with `requires_contract = true` refuse unilateral grants (`GRANT_CONTRACT_REQUIRED`).
 
 ### 1.2 Recipient Modes (`SL-GRNT-002`, `decided`)
@@ -107,39 +107,46 @@ A root `seallink-grant/1` MAY authorize bounded child grants by including `deleg
 
 ## 4. Deterministic Admission Order (Invocation Pipeline)
 
-An executor MUST evaluate an incoming `seallink-invocation/1` in this exact 12-step order, returning the **first** failure (`SL-GRNT-012`, `decided`). Early authentication and replay checks run strictly **before** any blockchain RPC to prevent unauthenticated DoS and state-oracle leakage:
+An executor MUST evaluate an incoming `seallink-invocation/1` in this exact 12-step order, returning the **first** failure (`SL-GRNT-012`, `decided`). Early recipient authentication runs strictly **before** cached-receipt lookup and blockchain RPCs to prevent unauthenticated DoS, cached-receipt harvesting, and state-oracle leakage:
 
 1. **Invocation wire check (`SPEC-01 §7`):** Parse and verify `seallink-invocation/1` syntax, JCS, closed schema, profile argument schema, keys, and self-consistent `SignatureSet` -> `WIRE_*`
 2. **Early local request checks (pre-chain):**
    - 2a. Wall-clock half-open window `iat <= now < exp` -> `INVOKE_TIME_INVALID`
    - 2b. `invocation.executor` equals this executor's pinned `(name, receipt_key)` -> `GRANT_EXECUTOR_MISMATCH`
-   - 2c. Local journal replay/nonce check: identical `invocation_id` returns cached receipt (or `INVOKE_REPLAY` per profile); reused `nonce` with distinct payload -> `INVOKE_REPLAY`
-3. **Presented bundle wire & early recipient authentication (pre-chain):**
+3. **Presented bundle wire, early recipient authentication, and replay check (pre-chain):**
    - 3a. Wire pipeline on presented grant(s), optional contract(s), and optional manifest(s) -> `WIRE_*`
-   - 3b. If leaf grant uses `recipient.mode = "key"` or `"group"`, verify `invocation.signatures.policy` matches `grant.recipient` immediately -> `WIRE_SIGNATURE`
-4. **Consistent chain observation (`SPEC-02 §4`):** Chain/genesis pin (`CHAIN_MISMATCH`), node health (`CHAIN_UNHEALTHY`), independent comparison peer veto (`CHAIN_NODE_DISAGREEMENT`), clock watermark (`CHAIN_CLOCK_ERROR`), risk-class tip freshness (`CHAIN_TIP_STALE`)
-5. **Journal continuity (`§6`):** External witness readable & local store intact (`JOURNAL_LOST`), active write token held (`JOURNAL_FENCED`)
-6. **Durable closure check:** Check local closure journal for every grant ID, contract ID, framework ID, issuer role, and row in `proof_path`:
-   - 6a. Closed grant or ancestor grant -> `INVOKE_REPLAY` if closed specifically by `SINGLE_USE_CONSUMED` (for a new `invocation_id`; identical `invocation_id` already returned cached receipt in Step 2c), else `GRANT_CLOSED`
+   - 3b. If leaf grant uses `recipient.mode = "key"` or `"group"`, verify `invocation.signatures.policy` equals `grant.recipient` immediately -> `WIRE_SIGNATURE` *(runs before any cached-receipt lookup so forged callers cannot probe or retrieve cached receipts)*
+   - 3c. For `key` and `group` recipients (whose authentication succeeded in Step 3b): check local journal replay/nonce table. If `invocation_id` already has a stored terminal receipt, return that cached receipt (or `INVOKE_REPLAY` if profile forbids cached return). If `invocation_id` has an unsettled `reservation` (crash inside the external-effect window before receipt persistence), return `outcome = "uncertain"` while retaining the reservation and executing zero second effect. If `nonce` was already used for a different `invocation_id`, refuse `INVOKE_REPLAY`. *(For `recipient.mode = "name"`, this identical replay/crash-recovery check runs immediately after Step 11a once the recipient's on-chain key is verified.)*
+4. **Consistent chain observation (`SPEC-02 §4`):** Check in strict order:
+   - 4a. Chain/genesis pin -> `CHAIN_MISMATCH`
+   - 4b. Reading node health (`!IBD`, `txindex=1`, header lag `<= LAG`) -> `CHAIN_UNHEALTHY`
+   - 4c. Independent comparison peer veto -> `CHAIN_NODE_DISAGREEMENT`
+   - 4d. Monotonic UTC clock watermark and header future bound `S` -> `CHAIN_CLOCK_ERROR`
+   - 4e. Action risk-class tip freshness (`tip_age`) -> `CHAIN_TIP_STALE`
+5. **Journal continuity (`§6`):** Check external CAS witness readability, local store readability, and `journal_id` match (`JOURNAL_LOST`), then active `write_token` (`JOURNAL_FENCED`), then position/commitment continuity (`JOURNAL_LOST`)
+6. **Durable closure check:** Check local closure journal for every grant ID, contract ID, framework ID, issuer role, and row in `proof_path`, in strict order:
+   - 6a. Closed grant or ancestor grant -> `INVOKE_REPLAY` if closed specifically by `SINGLE_USE_CONSUMED` (for a new `invocation_id`), else `GRANT_CLOSED`
    - 6b. Stopped row -> `GRANT_ROW_STOPPED`
    - 6c. Closed issuer role -> `NAME_ROLE_CHANGED`
    - 6d. Closed seal -> `SEAL_SPENT`
 7. **Issuer identity, origin, and guardianship (`SPEC-03`, `SPEC-04`):**
-   - 7a. Resolve root issuer name (`NAME_NOT_FOUND`, `NAME_EXPIRED`), history walk & `SIGHASH_ALL` writer check (`NAME_HISTORY_UNAVAILABLE`, `NAME_WRITER_UNVERIFIED`, `NAME_OWNER_MISMATCH`, `NAME_VALUE_INVALID`), `link.grant` role policy continuity (`NAME_ROLE_CHANGED`), verify root grant `signatures` against resolved `link.grant` (`WIRE_SIGNATURE`)
-   - 7b. If origin-certified (`link.origin` or pinned origin): verify `origin/1` (`ORIGIN_UNVERIFIED`), `name-binding/1` (`ORIGIN_BINDING_INVALID`), `status_seal` and `roster_seal` completeness (`ORIGIN_STATUS_INCOMPLETE`, `SUBJECT_ENDED`, `GUARDIAN_TRANSFER_PENDING`, `GUARDIAN_TIME_BOUNDARY`); if `ward`, enforce `guardian_context` and verifier-derived `event_class` quorum (`WARD_AUTONOMOUS_FORBIDDEN`, `GUARDIAN_INACTIVE`, `GUARDIAN_QUORUM_UNMET`)
-8. **Contract and framework checks (`SPEC-05`):** If action requires contract (`GRANT_CONTRACT_REQUIRED`) or `contract_id` present: presentation (`CONTRACT_NOT_PRESENTED`), ID recomputation (`CONTRACT_ID_MISMATCH`), assents (`CONTRACT_ASSENT_INVALID`), confirmed unspent seals (`CONTRACT_SEAL_MISSING`, `SEAL_SPENT`, `SEAL_UNAVAILABLE`), disclosed `machine_clause_indices` & window nesting (`CONTRACT_TERMS_MISMATCH`), config hash if required (`CONTRACT_CONFIG_MISMATCH`)
-9. **Re-delegation checks (depth 2, `§3`):** Delegation rights & depth (`GRANT_NOT_DELEGABLE`), whole-parent R8.5 aggregate pool sum & child narrowing (`GRANT_CHILD_WIDER`), R8.6 disjointness & ordinal row coin spend (`GRANT_ROW_INVALID`), stop coin live (`GRANT_ROW_STOPPED`), optional notary act (`NOTARY_REQUIRED`), child `signatures` against `parent.delegate.key` (`WIRE_SIGNATURE`)
+   - 7a. Resolve root issuer name (`NAME_NOT_FOUND`), liveness (`NAME_EXPIRED`), history walk availability (`NAME_HISTORY_UNAVAILABLE`), `SIGHASH_ALL` writer check (`NAME_WRITER_UNVERIFIED`), `owner_policy` match (`NAME_OWNER_MISMATCH`), 520B name value grammar (`NAME_VALUE_INVALID`). For autonomous issuers (no verified ward origin): verify `link.grant` continuity (`NAME_ROLE_CHANGED`), verify `issuer.role_policy` matches `link.grant` and equals `root_grant.signatures.policy` (`WIRE_SIGNATURE`).
+   - 7b. If origin-certified (`link.origin` or pinned origin): check in strict order: `origin/1` validity & trust (`ORIGIN_UNVERIFIED`), `name-binding/1` validity (`ORIGIN_BINDING_INVALID`), `status_seal` and `roster_seal` completeness (`ORIGIN_STATUS_INCOMPLETE`), subject end (`SUBJECT_ENDED`), pending emancipation transfer (`GUARDIAN_TRANSFER_PENDING`), calendar majority time boundary (`GUARDIAN_TIME_BOUNDARY`); if `ward`, enforce `SL-ORIG-006` order (`WARD_AUTONOMOUS_FORBIDDEN`, then `GUARDIAN_INACTIVE`, then `WIRE_SIGNATURE`, then `GUARDIAN_QUORUM_UNMET`).
+8. **Contract and framework checks (`SPEC-05`):** Check in strict order: action requires contract (`GRANT_CONTRACT_REQUIRED`); if `contract_id` present: presentation (`CONTRACT_NOT_PRESENTED`), ID recomputation (`CONTRACT_ID_MISMATCH`), party assents (`CONTRACT_ASSENT_INVALID`), confirmed seal presence & `ScriptPolicy` match (`CONTRACT_SEAL_MISSING`), seal spend (`SEAL_SPENT`) or inconclusive seal (`SEAL_UNAVAILABLE`), disclosed `machine_clause_indices` & window nesting (`CONTRACT_TERMS_MISMATCH`), runtime `config_sha256` if required (`CONTRACT_CONFIG_MISMATCH`).
+9. **Re-delegation checks (depth 2, `§3`):** Check in strict order: parent delegation rights & depth `<= 2` (`GRANT_NOT_DELEGABLE`), whole-parent R8.5 aggregate pool sum (`GRANT_CHILD_WIDER`), R8.6 disjointness & ordinal row coin spend (`GRANT_ROW_INVALID`), stop coin live (`GRANT_ROW_STOPPED`), optional notary act (`NOTARY_REQUIRED`), child `signatures.policy` equals `parent.delegate.key` (`WIRE_SIGNATURE`), mechanical child narrowing against group template (`GRANT_CHILD_WIDER`).
 10. **Grant window, revocation / single-use seal, and executor binding:**
     - 10a. Grant height window `[not_before_height, not_after_height)` -> `GRANT_WINDOW_CLOSED`
-    - 10b. If `revocation.mode = "window_only"`: enforce `not_after - not_before <= 12` (`WIRE_INTEGER`) and executor opt-in policy (`GRANT_SEAL_REQUIRED`)
-    - 10c. If `revocation.mode = "seal"`: verify issuance `0x01`/`0x02` anchor & `recent_block` recency (`CHAIN_FRAME_INVALID`, `CHAIN_RECENCY_INVALID`, `CHAIN_DEPTH_INSUFFICIENT`, `CHAIN_TX_CONSTRUCTION`), then evaluate seal (`SPEC-02 §6.1` for `revocable` -> `SEAL_SPENT` / `SEAL_UNAVAILABLE`; `SPEC-02 §6.2` for `single_use` -> `SEAL_UNAVAILABLE` / `SEAL_SPENT` / `CHAIN_DEPTH_INSUFFICIENT` / `INVOKE_REPLAY`)
-    - 10d. Verify `executor` or resolve `executor_ref` via holder's confirmed manifest (`GRANT_EXECUTOR_REF_FORBIDDEN`, `MANIFEST_UNAVAILABLE`, `MANIFEST_MISMATCH`, `MANIFEST_ROLLBACK`, `SERVICE_PROVIDER_UNBOUND`, `GRANT_EXECUTOR_MISMATCH`)
+    - 10b. If `revocation.mode = "window_only"`: enforce `not_after_height - not_before_height <= 12` (`WIRE_INTEGER`), then executor opt-in policy (`GRANT_SEAL_REQUIRED`)
+    - 10c. If `revocation.mode = "seal"`: verify issuance `0x01`/`0x02` frame & Merkle proof (`CHAIN_FRAME_INVALID`), `recent_block` recency (`CHAIN_RECENCY_INVALID`), Witness `W` construction (`CHAIN_TX_CONSTRUCTION`), anchor depth (`CHAIN_DEPTH_INSUFFICIENT`); then evaluate seal:
+      - `revocable` (`SPEC-02 §6.1`): `revoked` -> write closure + `SEAL_SPENT`; `unavailable` -> `SEAL_UNAVAILABLE`
+      - `single_use` (`SPEC-02 §6.2`): `awaiting_spend` -> `SEAL_UNAVAILABLE`; `revoked` -> write closure + `SEAL_SPENT`; `pending_confirm` -> `CHAIN_DEPTH_INSUFFICIENT`; `consumed` with distinct `invocation_id` -> `INVOKE_REPLAY`
+    - 10d. Verify `executor` or resolve `executor_ref`: forbid `executor_ref` on stateful/mutating/single-use/delegating grants (`GRANT_EXECUTOR_REF_FORBIDDEN`); verify holder's confirmed manifest (`MANIFEST_UNAVAILABLE`, then `MANIFEST_MISMATCH`, then `MANIFEST_ROLLBACK`), confirm provider `NamePin` binding (`SERVICE_PROVIDER_UNBOUND`) and provider `owner_policy` (`NAME_OWNER_MISMATCH`), confirm resolved `(name, receipt_key)` matches this executor (`GRANT_EXECUTOR_MISMATCH`)
 11. **Named recipient, action, text ban, and constraints:**
-    - 11a. If leaf grant uses `recipient.mode = "name"`, resolve recipient name, check `owner_policy` (`NAME_NOT_FOUND`, `NAME_EXPIRED`, `NAME_OWNER_MISMATCH`), verify `invocation.signatures` against its authorized request key (`WIRE_SIGNATURE`)
+    - 11a. If leaf grant uses `recipient.mode = "name"`, resolve recipient name (`NAME_NOT_FOUND`), check liveness (`NAME_EXPIRED`), check `owner_policy` (`NAME_OWNER_MISMATCH`), verify `invocation.signatures.policy` against its authorized request key (`WIRE_SIGNATURE`), and then execute the Step 3c local journal replay / crash-recovery check (`INVOKE_REPLAY`, cached receipt, or `uncertain`)
     - 11b. Action supported and present in `grant.capabilities` (`INVOKE_ACTION_DENIED`)
     - 11c. Mechanical effect text ban (`GRANT_TEXT_FORBIDDEN`)
     - 11d. Target match and 7-predicate `where` evaluation against `invocation.arguments` (`INVOKE_CONSTRAINT_FAILED`)
-12. **Pre-effect recheck and atomic reservation:** Re-bracket chain tip (`CHAIN_OBSERVATION_VOID`, `CHAIN_TIP_STALE`) and re-check live seals (`SEAL_SPENT`), verify seconds-window monotonic clock (`QUOTA_CLOCK_REGRESSION`), atomically write `nonce` + `reservation` entries to fenced journal (`QUOTA_EXCEEDED`, `JOURNAL_FENCED`, `JOURNAL_LOST`)
+12. **Pre-effect recheck and atomic reservation:** Re-bracket chain tip (`CHAIN_OBSERVATION_VOID`, then `CHAIN_TIP_STALE`) and re-check live seals (`SEAL_SPENT`), verify seconds-window monotonic clock (`QUOTA_CLOCK_REGRESSION`), atomically write `nonce` + `reservation` entries to fenced journal (`QUOTA_EXCEEDED`, then `JOURNAL_FENCED`, then `JOURNAL_LOST`)
 
 ---
 

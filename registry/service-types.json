@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Service Types Registry (SPEC-03, SPEC-07). Standard lowercase types are reserved and updated via SLIPs. Permissionless custom types use reverse-domain namespace (e.g., com.example/car-lock).",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.1",
+  "version": "1.0.0-draft.2",
   "custom_namespace_regex": "^[a-z0-9-]+(\\.[a-z0-9-]+)+/[a-z0-9][a-z0-9._-]{0,63}$",
   "standard_types": [
     {

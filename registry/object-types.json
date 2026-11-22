@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Canonical Object Type Registry. Authoritative SSOT for object types, byte limits, signing roles, and schema targets. Signing domain tag equals the exact type string under SPEC-01.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.1",
+  "version": "1.0.0-draft.2",
   "types": [
     {
       "type": "seallink-manifest/1",
@@ -91,7 +91,7 @@
       "max_bytes": 65536,
       "owning_spec": "SPEC-04",
       "schema": "schemas/origin.schema.json",
-      "description": "Eternal Origin Certificate establishing immutable subject class (person, agent, organization), salted initial guardian commitments, revision-denominated quorum rules, status/roster UTXO spines, and name_recovery policy."
+      "description": "Eternal Origin Certificate establishing immutable subject class (person, agent, organization), salted initial guardian commitments, explicit disposer/arbiter/challenger keys, revision-denominated quorum rules, status/roster UTXO spines, and name_recovery policy."
     },
     {
       "type": "seallink-name-binding/1",
@@ -100,7 +100,7 @@
       "max_bytes": 4096,
       "owning_spec": "SPEC-04",
       "schema": "schemas/guardian.schema.json#/$defs/NameBinding",
-      "description": "Single-use binding record linking an eternal Origin Certificate to a specific name registration outpoint and ScriptPolicy."
+      "description": "Single-use binding record linking an eternal Origin Certificate to a specific name registration outpoint, ScriptPolicy, and optional successor recovery seal."
     },
     {
       "type": "seallink-guardian/1",
@@ -109,7 +109,7 @@
       "max_bytes": 16384,
       "owning_spec": "SPEC-04",
       "schema": "schemas/guardian.schema.json#/$defs/GuardianRecord",
-      "description": "Acyclic revocable guardianship appointment for one slot of a ward, committing pending output index and pending/active ScriptPolicies for two-stage activation."
+      "description": "Acyclic revocable guardianship record supporting direct initial activation (mode=initial, 0x12) and two-stage successor appointment/activation (mode=appointed, 0x0d -> 0x0e)."
     },
     {
       "type": "seallink-guardian-roster/1",
@@ -118,7 +118,7 @@
       "max_bytes": 32768,
       "owning_spec": "SPEC-04",
       "schema": "schemas/guardian.schema.json#/$defs/GuardianRoster",
-      "description": "Governed roster transition advancing guardianship revision (revision -> revision + 1), adjusting approved revision_size, and re-anchoring replaced or burned slots via roster_seal (0x0f)."
+      "description": "Governed roster transition authorized by disposer+arbiter roster_seal spend (0x0f), advancing revision, adjusting approved revision_size, rotating challenger_pk, or re-anchoring burned slots."
     },
     {
       "type": "seallink-capacity/1",
@@ -145,16 +145,16 @@
       "max_bytes": 65536,
       "owning_spec": "SPEC-05",
       "schema": "schemas/contract.schema.json#/$defs/Contract",
-      "description": "N-party structured contract with salted per-clause selective disclosure, explicit machine_clause_indices, optional framework link, confirmed contract termination seal, and optional agreed configuration hash."
+      "description": "N-party structured contract with salted per-clause selective disclosure, explicit machine_clause_indices, ward origin_id party binding, optional framework link, confirmed contract termination seal, and optional agreed configuration hash."
     },
     {
       "type": "seallink-assent/1",
       "signed": true,
       "signer_roles": ["grant", "guardian_quorum"],
-      "max_bytes": 16384,
+      "max_bytes": 32768,
       "owning_spec": "SPEC-05",
       "schema": "schemas/contract.schema.json#/$defs/Assent",
-      "description": "Symmetric native party assent binding a signer (or guardian quorum via guardian_context) to a contract, guardianship appointment, or migration manifest."
+      "description": "Symmetric native party assent binding a signer (via signatures) or a ward's guardian quorum (via guardian_approvals[]) to a contract, guardianship appointment, or migration manifest."
     },
     {
       "type": "seallink-termination/1",
@@ -217,7 +217,7 @@
       "max_bytes": 65536,
       "owning_spec": "SPEC-06",
       "schema": "schemas/grant.schema.json",
-      "description": "Universal revocable (or root-only short-lived window_only) capability grant: unilateral by default, optionally contract-bound, with 7-predicate Constraint Algebra, separate additive quotas, and bounded depth-2 re-delegation."
+      "description": "Universal revocable (or root-only short-lived window_only) capability grant: unilateral by default, optionally contract-bound, signed via signatures or ward guardian_approvals[], with 7-predicate Constraint Algebra, separate additive quotas, and bounded depth-2 re-delegation."
     },
     {
       "type": "seallink-issuance/1",
