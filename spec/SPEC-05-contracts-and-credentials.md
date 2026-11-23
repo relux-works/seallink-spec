@@ -1,6 +1,6 @@
 # SPEC-05: Contracts, Symmetric Assent, Verifiable Credentials, and General Notary Acts
 
-- **Version:** `1.0.0-draft.4`
+- **Version:** `1.0.0-draft.5`
 - **Status:** `draft` (normative rules `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/trace-02-guardian-succession-assent.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/opreturn-actions.json`, `registry/refusal-codes.json`
@@ -79,7 +79,7 @@ Third-party attestations about a subject — diplomas, licenses, notary credenti
 1. **Signing role:** Signed ONLY by the issuer's `link.cred` role policy (`issuer.role_policy`, verified per `SL-IDEN-003` and `SL-WIRE-013`). A credential is NEVER a grant and confers zero execution authority by itself; verifier policies may only use credentials to narrow admission.
 2. **Signed-form anchoring (`0x09`):** Every credential MUST be anchored via `OP_RETURN` action `0x09` committing **`content_addr = SHA256(signed_bytes)`**, proving the signature existed at or before the earliest confirmed anchor block `h_anchor` (`CRED_ANCHOR_MISSING`).
 3. **Two lifecycles:**
-   - **`eternal`:** MUST NOT carry `revocation_seal`; `not_after_height` optional. Verified against the issuer's `link.cred` role policy authorized at `h_anchor`. Survives routine issuer key rotation, expiry, and transfer.
+   - **`eternal`:** MUST NOT carry `revocation_seal`; `not_after_height` optional. Verified against the historical registration lineage matching `issuer.registration` at `h_anchor` (`link.cred` role policy active at `h_anchor`). Survives routine issuer key rotation, expiry, transfer, and lawful later re-registration of the same name spelling by another holder (while current tip lookups by spelling resolve to the new holder).
    - **`revocable`:** MUST carry a confirmed `revocation_seal`; `not_after_height` is optional. By default verifies the issuer's `link.cred` role policy current at tip (exceptions such as `seallink-guardian/1` verify at `h_anchor`, `SL-ORIG-008`). Spending the seal closes the credential (`SEAL_SPENT`); spending with `OP_RETURN 0x0a` (`seallink-credential-withdrawal/1`) records `CRED_REVOKED_FOR_CAUSE`.
 4. **Owner-authenticated compromise break `h_c` (`0x0b`, `SL-CONT-009`, `decided`):**
    - If an issuer's `cred` or `notary` role policy (current or retired) is compromised, the issuer's cold `name_owner` `ScriptPolicy` broadcasts an `OP_NAME_UPDATE` (removing/replacing the role if current, signed `SIGHASH_ALL`) containing the 50-byte `0x0b` frame embedding `h_c_le64` (`<= inclusion_height`) and `typed_digest(seallink-credential-break/1)`.

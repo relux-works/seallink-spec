@@ -1,6 +1,6 @@
 # SPEC-01: Wire Format, Cryptography, Thresholds, and Constraint Algebra
 
-- **Version:** `1.0.0-draft.4`
+- **Version:** `1.0.0-draft.5`
 - **Status:** `draft` (normative rules `decided`; see `OPEN-QUESTIONS.md` for deferred algorithm extensions)
 - **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/constraints-and-schemas.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/refusal-codes.json`, `registry/constraints.json`

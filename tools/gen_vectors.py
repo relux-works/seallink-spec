@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.4.
+Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.5.
 
 Produces nine executable JSON vector suites under vectors/:
   1. wire-jcs-and-hashes.json
@@ -30,7 +30,7 @@ import build_security_suite as sec
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.4"
+VERSION = "1.0.0-draft.5"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 VECTORS_DIR = ROOT / "vectors"
 

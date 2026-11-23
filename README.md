@@ -1,8 +1,8 @@
 # SealLink Protocol Specification
 
-**Version:** `1.0.0-draft.4`  
+**Version:** `1.0.0-draft.5`  
 **Status:** `draft` *(wire format not yet frozen; open items tracked in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md))*  
-**Evidence / Maturity:** `vectors` *(Draft 2020-12 schemas published live at `https://seallink.org/releases/v1.0.0-draft.4/schemas/`, pure-Python BIP-340 / Ed25519 / low-S P-256 reference primitives, 4 end-to-end RFC 8448-style byte traces, schema-validated `84/84` refusal matrix, `312` live verifier checks with `231/231` (`100.0%`) exhaustive refusal-branch verifier mutation kill rate via `tools/mutation_audit.py`, two-node `nc28.0` `P2A` regtest proof in `conformance/p2a-regtest/`, and live two-node `nc28.0` four-trace regtest proof in `conformance/traces-regtest/`; `dual-impl` Rust + Go follows next)*  
+**Evidence / Maturity:** `vectors` *(Draft 2020-12 schemas published live at `https://seallink.org/releases/v1.0.0-draft.5/schemas/`, pure-Python BIP-340 / Ed25519 / low-S P-256 reference primitives, 4 end-to-end RFC 8448-style byte traces, schema-validated `84/84` refusal matrix, `369` live verifier checks, multi-operator mutation audit via `tools/mutation_audit.py` achieving `215/215` (`100.0%`) `refusal-return`, `215/215` (`100.0%`, 0 exceptions) `wrong-code`, and `66/69` (`95.7%`, 0 exceptions) exact numeric `boundary` kill rates, cold-observer Namecoin Core RPC adapter `tools/nc_rpc_adapter.py`, two-node `nc28.0` `P2A` regtest proof in `conformance/p2a-regtest/`, and live two-node `nc28.0` five-trace cold-observer regtest proof in `conformance/traces-regtest/`; `dual-impl` Rust + Go follows next)*  
 **Authors:** Ivan Oparin, Alexey Grigorev  
 **License:** Prose under CC BY 4.0; registries, schemas, vectors, and tooling under MIT ([LICENSE.md](LICENSE.md)).
 
@@ -45,7 +45,7 @@ SealLink is an open protocol enabling **intelligent actors — people, organizat
   - [SLIP-TEMPLATE.md](SLIP-TEMPLATE.md) — SealLink Improvement Proposal template and lifecycle process.
   - [CHANGELOG.md](CHANGELOG.md) — Release history.
   - [`conformance/p2a-regtest/`](conformance/p2a-regtest/) — Reproducible two-node Namecoin Core `nc28.0` `P2A` 1p1c TRUC v3 package-relay positive control and SHA-256 checksums.
-  - [`conformance/traces-regtest/`](conformance/traces-regtest/) — Reproducible two-node Namecoin Core `nc28.0` live regtest execution of all 4 SealLink traces (`P2WSH` 2-of-3 `namepsbt`, `guardian_slot_pending` CSV `non-BIP68-final` negative control + post-delay `0x0e`, `single_use_1_of_2` `0x11` & issuer revoke, TRUC v3 `P2A` CPFP mempool revoke, and `agent/guardian-message`) with raw transaction hexes, txids, and live `Tier1Verifier` verdicts.
+  - [`conformance/traces-regtest/`](conformance/traces-regtest/) — Reproducible two-node Namecoin Core `nc28.0` (`-txindex=1 -namehistory=1 -acceptnonstdtxn=0`) live cold-observer regtest execution of all 5 SealLink traces via `tools/nc_rpc_adapter.py` (`PROFILE-mail-v1` `mail/read` + `executor_ref` + named recipient + mempool revoke, `P2WSH` 2-of-3 `namepsbt` + `guardian_slot_pending` CSV + `0x10` cancel, depth-2 sibling `row_ordinal` + crash/restart recovery + `single_use_1_of_2` + TRUC v3 `P2A` CPFP, `agent/guardian-message`, and historical eternal diploma across live 30-block expiry & lawful re-registration) with raw transaction hexes, txids, and live `Tier1Verifier` verdicts.
 - **Machine-Readable Registries ([`registry/`](registry/)):**
   - [`object-types.json`](registry/object-types.json) — 30 canonical `seallink-*/1` types, byte limits, signing roles, and schema links.
   - [`refusal-codes.json`](registry/refusal-codes.json) — 84 deterministic refusal codes with closure and retryability flags.
@@ -63,21 +63,23 @@ SealLink is an open protocol enabling **intelligent actors — people, organizat
   - `trace-03-delegation-pool-single-use.json` — Executable end-to-end delegation & single-use trace (2 groups sharing 1 pool under R8.5/R8.6, atomic dual-account `own` + `row` multi-quota reservation/settlement & partial-failure rollback, acyclic `0x11` single-use execution, crash-in-effect-window `uncertain` recovery, post-settlement replay idempotency, new-nonce `INVOKE_REPLAY`, issuer revocation -> `GRANT_CLOSED`).
   - `trace-04-agent-guardian-intake.json` — Executable end-to-end `PROFILE-agent-v1` `agent/guardian-message` trace (`strict_drop`, inactive guardian `GUARDIAN_INACTIVE`, downgraded `routine_read` -> `GUARDIAN_QUORUM_UNMET`, valid `effect_grant` + `guardian_approvals[]` -> `ADMIT` + Authority Frame `AgentGuardianMessageResult`).
   - `refusal-coverage-matrix.json` — Executable conformance matrix driving all `84/84` registered refusal codes with Draft 2020-12 schema-validated semantic fixtures through `tools/seallink_verifier.py` and `tools/seallink_ref.py`.
-  - `security-conformance.json` — Executable adversarial, false-admit, acceptance, and exhaustive refusal-branch regression suite covering stranger-signed envelopes, empty `trusted_origin_issuers`, closed-schema validation, policy-scoped `0x0b` compromise reconstruction, per-`row_ordinal` sibling quota isolation and journal replay, 64-entry `Receipt.settlements` boundary tests, and every single refusal return branch in `tools/seallink_verifier.py` (`231/231` = `100.0%` mutation kill rate).
+  - `security-conformance.json` — Executable adversarial, false-admit, acceptance, restart-recovery, historical re-registration, exact numeric boundary, and multi-operator mutation regression suite covering stranger-signed envelopes, empty `trusted_origin_issuers`, closed-schema validation, policy-scoped `0x0b` compromise reconstruction, multi-registration historical credential lookups after expiry & re-registration, full executor restart recovery (`quota_watermarks` + content-addressed `receipt_store`), per-`row_ordinal` sibling quota isolation, 64-entry `Receipt.settlements`, exact `<`/`<=`/`>`/`>=` boundary pinning, and every refusal branch in `tools/seallink_verifier.py` (`215/215` = `100.0%` `refusal-return`, `215/215` = `100.0%` `wrong-code`, `66/69` = `95.7%` exact `boundary` kill rate).
 - **Informative Guides & Traceability:**
-  - [GUIDE-01-custody-and-signers.md](guides/GUIDE-01-custody-and-signers.md) — Hardware/cold custody, Namecoin `namepsbt`, crash-safe delegation reservation ledger, Agent Isolation Runtime integration, and TLS SPKI pinning / managed CDN guidance.
+  - [GUIDE-01-custody-and-signers.md](guides/GUIDE-01-custody-and-signers.md) — Hardware/cold custody, Namecoin `namepsbt`, Tier 1 `-txindex=1 -namehistory=1` RPC observation (`tools/nc_rpc_adapter.py`), crash-safe delegation & restart recovery, Agent Isolation Runtime integration, and TLS SPKI pinning / managed CDN guidance.
   - [archive/rule-inventory.md](archive/rule-inventory.md) — Complete per-rule conformance index covering all 113 declared `SL-*` rules plus migration traceability from the historical draft corpus.
 
 ---
 
 ## Automated Verification and Release Bundles
 
-Run the specification linter (validating registries, cross-registry signer coherence, rule uniqueness, Draft 2020-12 metaschemas, schema validity of all semantic refusal inputs, cryptographic verification, **live execution of every trace, all 84/84 refusal codes, and adversarial security regressions through the Reference Verifier Core (`tools/seallink_verifier.py`), plus verifier-check mutation self-tests**) and the single-file bundle check locally:
+Run the specification linter (validating registries, cross-registry signer coherence, rule uniqueness, Draft 2020-12 metaschemas, schema validity of all semantic refusal inputs, `tools/nc_rpc_adapter.py` offline self-test, cryptographic verification, **live execution of every trace, all 84/84 refusal codes, historical re-registration, restart recovery, and exact-boundary regressions through the Reference Verifier Core (`tools/seallink_verifier.py`), plus verifier-check mutation self-tests**), multi-operator mutation audits, and the single-file bundle check locally:
 
 ```bash
 python3 tools/speclint.py --require-jsonschema
-python3 tools/mutation_audit.py --min-kill-pct 99
-python3 tools/build_bundle.py --version v1.0.0-draft.4 --check
+python3 tools/mutation_audit.py --mode refusal-return --min-kill-pct 100
+python3 tools/mutation_audit.py --mode wrong-code --min-kill-pct 100
+python3 tools/mutation_audit.py --mode boundary --min-kill-pct 95
+python3 tools/build_bundle.py --version v1.0.0-draft.5 --check
 ```
 
 Pushing a signed release tag (`v*`) triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which runs the full lint and executable verifier suite, compiles the entire specification into one deterministic Markdown file (`seallink-spec-<tag>.md` + `.sha256`), and publishes a GitHub Release automatically.

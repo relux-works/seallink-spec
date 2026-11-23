@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.4/schemas/profile-mail.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.5/schemas/profile-mail.schema.json",
   "title": "SealLink PROFILE-mail-v1 Action Arguments and Result Schemas",
   "$defs": {
     "MailListArgs": {

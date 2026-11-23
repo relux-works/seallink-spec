@@ -823,8 +823,10 @@ def main() -> int:
     errors: list[str] = []
     warnings: list[str] = []
 
-    # 0. Reference crypto self-test
+    # 0. Reference crypto & cold RPC adapter self-tests
     sl.self_test()
+    import nc_rpc_adapter as nca
+    nca.self_test()
 
     # 1. Load registries
     registries: dict[str, Any] = {}

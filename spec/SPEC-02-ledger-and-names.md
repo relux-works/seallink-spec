@@ -1,6 +1,6 @@
 # SPEC-02: Ledger Interface, Namecoin Binding, ScriptPolicy, Merkle Batching, and UTXO Seals
 
-- **Version:** `1.0.0-draft.4`
+- **Version:** `1.0.0-draft.5`
 - **Status:** `draft` (normative rules `decided` except provisional freshness constants and Tier 2 profile marked `open` in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `vectors` (`vectors/ledger-scripts-and-opreturn.json`, `vectors/refusal-coverage-matrix.json`; two-node P2A regtest proof in `conformance/p2a-regtest/`)
 - **Registries:** `registry/opreturn-actions.json`, `registry/refusal-codes.json`
@@ -25,7 +25,7 @@ Core SealLink semantics (`SPEC-03` through `SPEC-07`) depend solely on an abstra
 
 | Tier | Architecture | Cryptographic Guarantees & Honest Boundaries | Permitted Use |
 | --- | --- | --- | --- |
-| **Tier 1 (Full-Node Verifier)** | Verifier reads its own locally controlled, read-only, tx-indexed full node (`txindex=1`), cross-checked against `>= 1` independent comparison node. | Full cryptographic verification of name history, anchor inclusion, and **absence of spends or name updates in the active chain and its locally observed mempool**. Does not guarantee instant observation of unpropagated network transactions. | **Normative default; REQUIRED** for all effect executors (mail hosts, agent runtimes, wallets, locks, notaries). |
+| **Tier 1 (Full-Node Verifier)** | Verifier reads its own locally controlled, read-only, tx-indexed full node (`txindex=1`, plus `namehistory=1` or equivalent historical registration archive), cross-checked against `>= 1` independent comparison node. | Full cryptographic verification of current and historical registration lineages (addressable independently by pinned `registration` outpoint even after expiry and re-registration of the same spelling), anchor inclusion, and **absence of spends or name updates in the active chain and its locally observed mempool**. Does not guarantee instant observation of unpropagated network transactions. | **Normative default; REQUIRED** for all effect executors (mail hosts, agent runtimes, wallets, locks, notaries). |
 | **Tier 2 (Light / Proof-Bundle Verifier)** | PoW block header chain + Merkle transaction inclusion proofs + cross-query of `k >= 2` independent UTXO/name servers. | **Proves:** transaction inclusion, signatures, and already-observed spends. **Cannot cryptographically prove on Namecoin/Bitcoin** (no UTXO state root in block headers) that servers did not withhold a newer seal spend or name update, nor observe mempool spends. Security rests on at least 1 honest, non-eclipsed source among `k`. | `open` (deferred to a post-v1.0 profile; see `OPEN-QUESTIONS.md`). |
 
 ---

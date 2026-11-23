@@ -12,13 +12,14 @@ proving that disabling any security check fails at least one vector.
 from __future__ import annotations
 
 import copy
+import json
 from typing import Any
 
 import build_refusal_matrix as rm
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.4"
+VERSION = "1.0.0-draft.5"
 GENESIS_MAIN = rm.GENESIS_MAIN
 
 
@@ -47,6 +48,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         trusted_origin_issuers=set(inp.get("trusted_origin_issuers", [])),
         enforce_schemas=True,
         require_jsonschema=require_jsonschema,
+        max_history_steps=inp.get("max_history_steps", 500),
     )
     if runner == "origin_status":
         chain = sv.ChainView(inp["chain"])
@@ -71,6 +73,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             inp["executor_cfg"],
             use_txid=inp.get("use_txid"),
             raw_message_bytes=raw_msg,
+            actual_quota_usage=inp.get("actual_quota_usage"),
         )
         return res.verdict, res.refusal_code
     if runner == "migration":
@@ -215,6 +218,82 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         journal = sv.FencedJournal.from_dict(inp["journal"])
         res = v.verify_bearer_session(inp["token"], inp["slot_binding"], chain, journal)
         return res.verdict, res.refusal_code
+    if runner == "restart_recovery":
+        # Full executor restart verification: pre-restart admit -> persist entries + receipt_store ->
+        # replay into brand-new FencedJournal -> verify watermarks, clock regression refusal,
+        # exact boundary == watermark ADMIT, cached receipt idempotent replay (0 writes), and new-nonce replay refusal!
+        journal = sv.FencedJournal(inp["journal_id"])
+        for step in inp["pre_restart_steps"]:
+            ch = sv.ChainView(step["chain"])
+            res = v.verify_invocation(
+                step["invocation"],
+                step["bundle"],
+                ch,
+                journal,
+                inp["executor_cfg"],
+                use_txid=step.get("use_txid"),
+                receipt_env_for_cache=step.get("receipt_env"),
+                actual_quota_usage=step.get("actual_quota_usage"),
+            )
+            if (res.verdict, res.refusal_code) != (step["want_verdict"], step.get("want_refusal")):
+                return "REFUSE", f"PRE_STEP_MISMATCH:{step['label']}:{(res.verdict, res.refusal_code)}"
+        persisted_entries = json.loads(json.dumps(journal.entries))
+        persisted_store = json.loads(json.dumps(journal.receipt_store))
+        restarted = sv.FencedJournal.replay_persisted_entries(
+            journal.journal_id, persisted_entries, receipt_store=persisted_store
+        )
+        if restarted.commitment != journal.commitment or restarted.pos != journal.pos:
+            return "REFUSE", "RESTART_COMMITMENT_MISMATCH"
+        if restarted.quotas_used != journal.quotas_used:
+            return "REFUSE", "RESTART_QUOTAS_MISMATCH"
+        if restarted.quota_watermarks != journal.quota_watermarks:
+            return "REFUSE", "RESTART_WATERMARK_MISMATCH"
+        for step in inp["post_restart_steps"]:
+            ch = sv.ChainView(step["chain"])
+            before_n = len(restarted.entries)
+            res = v.verify_invocation(
+                step["invocation"],
+                step["bundle"],
+                ch,
+                restarted,
+                inp["executor_cfg"],
+                use_txid=step.get("use_txid"),
+                actual_quota_usage=step.get("actual_quota_usage"),
+            )
+            if (res.verdict, res.refusal_code) != (step["want_verdict"], step.get("want_refusal")):
+                return "REFUSE", f"POST_STEP_MISMATCH:{step['label']}:{(res.verdict, res.refusal_code)}"
+            if step.get("expect_zero_writes") and len(restarted.entries) != before_n:
+                return "REFUSE", f"POST_UNEXPECTED_WRITES:{step['label']}"
+            if "expect_cached_receipt_ca" in step and res.cached_receipt_content_addr != step["expect_cached_receipt_ca"]:
+                return "REFUSE", f"POST_CACHED_RECEIPT_MISMATCH:{step['label']}:{res.cached_receipt_content_addr}"
+        return "ADMIT", None
+    if runner == "historical_rereg":
+        # Verify BOTH current holder lookup AND historical eternal credential lookup from the EXACT SAME ChainView!
+        ch = sv.ChainView(inp["chain"])
+        cur_nrec, cur_err = v.resolve_name(
+            inp["name"],
+            ch,
+            expected_owner_policy=inp["new_owner_policy"],
+            expected_registration=inp["new_registration"],
+        )
+        if cur_err or cur_nrec is None:
+            return "REFUSE", f"NEW_OWNER_RESOLVE_FAILED:{cur_err}"
+        _, old_live_err = v.resolve_name(
+            inp["name"],
+            ch,
+            expected_owner_policy=inp["old_owner_policy"],
+            expected_registration=inp["old_registration"],
+        )
+        if old_live_err != "NAME_OWNER_MISMATCH":
+            return "REFUSE", f"OLD_LIVE_SHOULD_REFUSE:{old_live_err}"
+        r_hist = v.verify_credential(inp["old_credential"], inp["old_anchor_txid"], ch)
+        if r_hist.verdict != "ADMIT":
+            return "REFUSE", f"OLD_CRED_FAILED:{r_hist.refusal_code}"
+        if "post_expiry_credential" in inp:
+            r_exp = v.verify_credential(inp["post_expiry_credential"], inp["post_expiry_anchor_txid"], ch)
+            if (r_exp.verdict, r_exp.refusal_code) != ("REFUSE", "NAME_EXPIRED"):
+                return "REFUSE", f"POST_EXPIRY_CRED_WRONG:{(r_exp.verdict, r_exp.refusal_code)}"
+        return "ADMIT", None
     raise ValueError(f"Unknown security runner: {runner}")
 
 
@@ -811,6 +890,8 @@ def build_security_conformance_suite() -> dict[str, Any]:
 
     import build_branch_suite as bbs
     bbs.add_acceptance_and_branch_cases(add)
+    import build_boundary_suite as bbs2
+    bbs2.add_boundary_and_recovery_cases(add)
 
     return {
         "suite": "security-conformance",
