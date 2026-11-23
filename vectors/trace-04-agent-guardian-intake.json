@@ -1090,6 +1090,32 @@
         "object_id": "5a1232b35b4cc75b833b7df0bce71fcd8a825603964980a9841c993258eb5516",
         "schema": "schemas/profile-agent.schema.json#/$defs/AgentGuardianMessageResult"
       },
+      "settlement_journal_write": {
+        "c_after": "739acbcca8198e157ec13681be1d737ace616b500981b1cdfc5a22dbbb8dd75f",
+        "c_before": "f957d0d63a426257161ba3a7641ce7ac849363fe64d372bb3536bfdb67681e83",
+        "entry": {
+          "canonical_jcs": "{\"body\":{\"grant_id\":\"1c9df82341252a397836f83f688e92aa11da825768128e494340d92ab95ec336\",\"invocation_id\":\"1fb1fe00cd95c70a3671b640a3431b32b2b67de62e2eb98bc1cdc8c6b2d9a3be\",\"outcome\":\"executed\",\"receipt_sha256\":\"d3317d1e43c0ea28bf035eb6c3b08615b30f4b62e196a7085894194f6321bcfc\",\"recorded_at\":1795220020,\"released\":\"0\",\"settled\":\"0\"},\"journal_id\":\"6e266eef9c847870fc4c585cc6219e49a3261c349bdf29714c72d333ade76cb9\",\"kind\":\"settlement\",\"pos\":2,\"prev_commitment\":\"f957d0d63a426257161ba3a7641ce7ac849363fe64d372bb3536bfdb67681e83\",\"type\":\"seallink-journal-entry/1\"}",
+          "content_addr": "9e8a95b488a70d8b775db43b47528d6d16cb34ab53f1db7f6815c54b622e3aef",
+          "object": {
+            "body": {
+              "grant_id": "1c9df82341252a397836f83f688e92aa11da825768128e494340d92ab95ec336",
+              "invocation_id": "1fb1fe00cd95c70a3671b640a3431b32b2b67de62e2eb98bc1cdc8c6b2d9a3be",
+              "outcome": "executed",
+              "receipt_sha256": "d3317d1e43c0ea28bf035eb6c3b08615b30f4b62e196a7085894194f6321bcfc",
+              "recorded_at": 1795220020,
+              "released": "0",
+              "settled": "0"
+            },
+            "journal_id": "6e266eef9c847870fc4c585cc6219e49a3261c349bdf29714c72d333ade76cb9",
+            "kind": "settlement",
+            "pos": 2,
+            "prev_commitment": "f957d0d63a426257161ba3a7641ce7ac849363fe64d372bb3536bfdb67681e83",
+            "type": "seallink-journal-entry/1"
+          },
+          "object_id": "9e8a95b488a70d8b775db43b47528d6d16cb34ab53f1db7f6815c54b622e3aef",
+          "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+        }
+      },
       "step": 4,
       "verified_guardians": [
         "id/guardian-a",
@@ -1105,7 +1131,7 @@
   "trusted_origin_issuers": [
     "id/agent-registry"
   ],
-  "version": "1.0.0-draft.5",
+  "version": "1.0.0-draft.6",
   "ward_grant_downgraded": {
     "canonical_jcs": "{\"guardian_approvals\":[{\"guardian_name\":\"id/guardian-a\",\"revision\":1,\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"11b67dd92e87f1f7e0c66877029988b8380e45097e4fb766498552900d0bbe2c\"]},\"sigs\":[{\"pk\":\"11b67dd92e87f1f7e0c66877029988b8380e45097e4fb766498552900d0bbe2c\",\"sig\":\"5fa0778df7a5cb4f40a4f5ecf9e0c0c2cbb74b04ef337a62cc2224171ab08056a88b9285e8aab9b3b350c1ec1b6320fadfd039ba39a4006b50cc3c9046d51251\"}]},\"slot\":1}],\"payload\":{\"capabilities\":[{\"action\":\"agent/guardian-message\",\"target\":\"ward:293cef59edf47d00e2e83bbbe6b762b882cf95f5473fdf98451bc53beca36749\",\"where\":{\"channel\":{\"eq\":\"nostr-dm\"},\"delivery_mode\":{\"eq\":\"strict_drop\"},\"message_sha256\":{\"hash_eq\":\"9346ab861bf40df12bbf2362c6388915d97dc5710032fdb189ce11e21fe3da8b\"},\"origin_id\":{\"eq\":\"293cef59edf47d00e2e83bbbe6b762b882cf95f5473fdf98451bc53beca36749\"},\"subject_ward_name\":{\"eq\":\"id/agent-nova\"}}}],\"executor\":{\"key\":\"ce550d46e7f0e98785b6b564ec9373860e44d9d9c5fb857262911308ceca2130\",\"name\":\"id/station-nova\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"guardian_context\":{\"event_class\":\"routine_read\",\"origin_id\":\"293cef59edf47d00e2e83bbbe6b762b882cf95f5473fdf98451bc53beca36749\",\"revision\":1,\"ward_name\":\"id/agent-nova\"},\"issuer\":{\"name\":\"id/agent-nova\",\"owner_policy\":{\"kind\":\"multisig\",\"m\":2,\"pks\":[\"02d002a927f117fdae4329bd32ac410d1b0cf17fa5d7d53f1ab7993baf0ed264e3\",\"038a6ec46e16d2a6898564dd03c1943a38ef97a517a2033856b8b026fd160e0600\"]},\"registration\":{\"txid\":\"a06b44926b6076d2753eebdc3661e39e854b005d145619b55d9e5ca3267f72e2\",\"vout\":0}},\"network\":\"main\",\"not_after_height\":760000,\"not_before_height\":750000,\"recent_block\":\"2e22a8cc1bf0c85cdc7c4737a8c949b39083622f747b933a79170573eb7a36d2\",\"recipient\":{\"key\":\"a87e87842f47147102e8d1476f096f429855136f4c9799f7d4756347885d8e3f\",\"mode\":\"key\"},\"revocation\":{\"construction\":\"W\",\"kind\":\"revocable\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"kind\":\"key\",\"pk\":\"03b136a460fde0c04ce0a4a2ed348dbf86c17e8f6663b58218943fde331c6e6687\"},\"txid\":\"6ee43bdcd9c0c8218a28600f868cc15d05c6d2e0d6abe1c60be16cdc9486ca48\",\"vout\":0}},\"type\":\"seallink-grant/1\"}}",
     "content_addr": "ac100d7382157cb154a8e5b67f163fff22e1cc675e22da9eb6aea24aeeb76c46",

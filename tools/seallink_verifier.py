@@ -630,6 +630,7 @@ class Tier1Verifier:
         enforce_schemas: bool = True,
         require_jsonschema: bool = True,
         max_history_steps: int = 500,
+        require_observation_bracket: bool = False,
     ) -> None:
         self.pinned_network = pinned_network
         self.pinned_genesis = pinned_genesis
@@ -639,6 +640,7 @@ class Tier1Verifier:
         self.enforce_schemas = enforce_schemas
         self.require_jsonschema = require_jsonschema
         self.max_history_steps = max_history_steps
+        self.require_observation_bracket = require_observation_bracket
 
     # ------------------------------------------------------------------
     # SPEC-01 §7 Wire Pipeline (steps 1..10, closed Draft 2020-12 schemas)
@@ -816,6 +818,11 @@ class Tier1Verifier:
         best_hdr = c.get("best_header_height", chain.tip_height)
         if best_hdr - chain.tip_height > lag_limit:
             return "CHAIN_UNHEALTHY"
+        # Snapshot bracket check (SL-LDGR-008 item 1): discard mid-read tip changes before peer comparison!
+        if self.require_observation_bracket or c.get("observation_bracket") is not None:
+            rb_err = self.check_rebracket(chain, risk_class=risk_class)
+            if rb_err:
+                return rb_err
         # Require >= 1 healthy independent comparison peer (SL-LDGR-008 item 2)
         healthy_peers = [p for p in c.get("comparison_peers", []) if isinstance(p, dict) and p.get("healthy", True)]
         if not healthy_peers:
@@ -844,6 +851,8 @@ class Tier1Verifier:
     def check_rebracket(self, chain: ChainView, risk_class: int = 1) -> str | None:
         rb = chain.raw.get("rebracket_tip")
         if not rb:
+            if self.require_observation_bracket:
+                return "CHAIN_OBSERVATION_VOID"
             return None
         if rb.get("height") != chain.tip_height or rb.get("hash") != chain.tip_hash:
             return "CHAIN_OBSERVATION_VOID"
@@ -2962,6 +2971,21 @@ class Tier1Verifier:
                 },
             )
             journal_writes.append(jw_n)
+            if leaf_gp["revocation"].get("kind") != "single_use":
+                rcpt_caddr = sl.content_addr(receipt_env_for_cache) if receipt_env_for_cache else sl.sha256(inv_id.encode()).hex()
+                jw_set = journal.append(
+                    "settlement",
+                    {
+                        "grant_id": leaf_gid,
+                        "invocation_id": inv_id,
+                        "outcome": "executed",
+                        "receipt_sha256": rcpt_caddr,
+                        "recorded_at": chain.now,
+                        "released": "0",
+                        "settled": "0",
+                    },
+                )
+                journal_writes.append(jw_set)
 
         if leaf_gp["revocation"].get("kind") == "single_use":
             su_rcpt_caddr = sl.content_addr(receipt_env_for_cache) if receipt_env_for_cache else sl.sha256(inv_id.encode()).hex()

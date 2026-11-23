@@ -3,7 +3,7 @@
 Acceptance & Exhaustive Refusal-Branch Conformance Cases for SealLink v1.0.
 
 Provides:
-  Part A: Mandatory v1.0.0-draft.5 acceptance tests:
+  Part A: Mandatory v1.0.0-draft.6 acceptance tests:
     1. Policy-scoped 0x0b compromise cutoff (4 outcomes: retired key A before h_c,
        retired key A at/after h_c, rotated successor key B surviving break on A,
        distinct role 'notary' unaffected).
@@ -225,7 +225,7 @@ def _build_delegation_base(
 
 
 def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
-    """Append all v1.0.0-draft.5 acceptance tests and exhaustive refusal-branch cases."""
+    """Append all v1.0.0-draft.6 acceptance tests and exhaustive refusal-branch cases."""
 
     # ========================================================================
     # PART A — MANDATORY ACCEPTANCE TESTS (Review 2 §1.1, §1.2, §2)

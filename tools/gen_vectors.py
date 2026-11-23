@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.5.
+Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.6.
 
 Produces nine executable JSON vector suites under vectors/:
   1. wire-jcs-and-hashes.json
@@ -30,7 +30,7 @@ import build_security_suite as sec
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.5"
+VERSION = "1.0.0-draft.6"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 VECTORS_DIR = ROOT / "vectors"
 
@@ -815,8 +815,9 @@ def build_trace_01_mail() -> dict[str, Any]:
     }
 
     r1 = v.verify_invocation(inv_ok, bundle, ch, jr, executor_config, receipt_env_for_cache=rcpt_ok)
-    assert r1.verdict == "ADMIT" and len(r1.journal_writes) == 1
+    assert r1.verdict == "ADMIT" and len(r1.journal_writes) == 2
     jw1 = r1.journal_writes[0]
+    jw1_set = r1.journal_writes[1]
 
     step2_patch = {"now": 1795220105}
     ch.apply_patch(step2_patch)
@@ -876,6 +877,11 @@ def build_trace_01_mail() -> dict[str, Any]:
                     "entry": unsigned_record(jw1["entry"], "schemas/invocation.schema.json#/$defs/JournalEntry"),
                     "c_before": jw1["c_before"],
                     "c_after": jw1["c_after"],
+                },
+                "settlement_journal_write": {
+                    "entry": unsigned_record(jw1_set["entry"], "schemas/invocation.schema.json#/$defs/JournalEntry"),
+                    "c_before": jw1_set["c_before"],
+                    "c_after": jw1_set["c_after"],
                 },
             },
             {
@@ -2504,6 +2510,11 @@ def build_trace_04_agent_guardian_intake() -> dict[str, Any]:
                     "entry": unsigned_record(s4.journal_writes[0]["entry"], "schemas/invocation.schema.json#/$defs/JournalEntry"),
                     "c_before": s4.journal_writes[0]["c_before"],
                     "c_after": s4.journal_writes[0]["c_after"],
+                },
+                "settlement_journal_write": {
+                    "entry": unsigned_record(s4.journal_writes[1]["entry"], "schemas/invocation.schema.json#/$defs/JournalEntry"),
+                    "c_before": s4.journal_writes[1]["c_before"],
+                    "c_after": s4.journal_writes[1]["c_after"],
                 },
             },
         ],

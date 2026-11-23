@@ -1067,3 +1067,123 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     add("bnd-direct-grant-same-executor-name-wrong-key-refuse", ["SL-GRNT-003"], "invocation",
         {"invocation": inv_ek, "bundle": {**fx_ek["bundle"], "grants": [g_ek]}, "chain": fx_ek["chain"], "journal": {"journal_id": _h32("bnd-jek")}, "executor_cfg": fx_ek["executor_cfg"]},
         "REFUSE", "GRANT_EXECUTOR_MISMATCH", "Direct grant matching executor.name but mismatching executor.key MUST refuse GRANT_EXECUTOR_MISMATCH.")
+
+    # 3s. Quota-free invocation (agent/guardian-message with 2-of-2 guardian approval) restart recovery
+    #     & strict Tier 1 observation bracket enforcement (SL-GRNT-014, SL-AGNT-003, SL-LDGR-008)!
+    of_gm = rm._base_origin_fixture()
+    # Activate slot 2 as well so 2-of-2 effect_grant quorum is live
+    gp_gm_orig = of_gm["origin_bundle"]["origin"]["payload"]["guardian_policy"]
+    g2_seal_gm = _kp("bnd-gm-g2-seal")
+    g2_act_pol_gm = {"kind": "branch", "template": "either_of_2", "keys": {"a": gp_gm_orig["disposer_pk"], "b": g2_seal_gm["comp"]}}
+    g2_own_gm = rm._kp("o-g2-own")
+    g2_pol_gm = {"kind": "key", "pk": g2_own_gm["comp"]}
+    g2_reg_gm = {"txid": rm._h32("g2-reg"), "vout": 0}
+    g2_pin_gm = {"name": "id/parent-b", "owner_policy": g2_pol_gm, "registration": g2_reg_gm}
+    of_gm["chain"]["names"]["id/parent-b"] = sv.make_name_history("id/parent-b", g2_reg_gm, g2_pol_gm, {"link": {"grant": of_gm["_keys"]["g2_gr"]["xonly"]}}, first_height=748000, update_height=748500)
+    of_gm["origin_bundle"]["initial_guardian_disclosures"]["2"] = {"salt_hex": rm._h32("salt-g2"), "name_pin": g2_pin_gm}
+    g2_rec_gm_p = {
+        "activation_mode": "initial", "active_policy": g2_act_pol_gm, "active_vout": 0, "genesis": GENESIS_MAIN,
+        "guardian": g2_pin_gm, "issuer": of_gm["origin_bundle"]["origin"]["payload"]["issuer"], "network": "main",
+        "origin_id": of_gm["_origin_id"], "prev_outpoint": gp_gm_orig["slots"][1]["vacant_utxo"], "revision": 1, "slot": 2,
+        "term": {"mode": "indefinite"}, "type": "seallink-guardian/1",
+    }
+    g2_rec_gm = sl.sign_envelope(g2_rec_gm_p, [of_gm["_keys"]["reg_cred"]["sk"]])
+    g2_ass_gm = sl.sign_envelope(
+        {"expires_at": 1795400000, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main",
+         "nonce": _h32("bnd-gm-g2a"), "party_id": "g2-slot", "party_name": "id/parent-b", "party_role": "guardian",
+         "target_id": sl.object_id(g2_rec_gm_p), "target_type": "seallink-guardian/1", "type": "seallink-assent/1"},
+        [of_gm["_keys"]["g2_gr"]["sk"]],
+    )
+    g2_init_tx = _h32("bnd-gm-g2-0x12")
+    of_gm["chain"]["txs"][gp_gm_orig["slots"][1]["vacant_utxo"]["txid"]]["outputs"]["0"]["spent_by_txid"] = g2_init_tx
+    of_gm["chain"]["txs"][g2_init_tx] = {"confirmed_height": 749900, "opreturn_hex": sl.encode_opreturn(0x12, sl.content_addr(g2_rec_gm)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(g2_act_pol_gm)}}}
+    of_gm["origin_bundle"]["guardian_records"].append(g2_rec_gm)
+    of_gm["origin_bundle"]["guardian_assents"].append(g2_ass_gm)
+
+    gm_bridge = _kp("bnd-gm-bridge")
+    gm_station = _kp("bnd-gm-station")
+    gm_seal_k = _kp("bnd-gm-seal")
+    gm_seal_pol = {"kind": "key", "pk": gm_seal_k["comp"]}
+    gm_seal_tx = _h32("bnd-gm-seal-tx")
+    gm_itx = _h32("bnd-gm-itx")
+    gm_rblk = _h32("bnd-gm-rblk")
+    of_gm["chain"].setdefault("blocks", {})[gm_rblk] = 749950
+    of_gm["chain"]["txs"][gm_seal_tx] = {"confirmed_height": 749960, "outputs": {"0": {"script_pubkey_hex": _spk_hex(gm_seal_pol)}, "1": {"script_pubkey_hex": _spk_hex(gm_seal_pol)}}}
+    gm_exec_cfg = {"key": gm_station["xonly"], "name": "id/station-gm", "pinned_ward_origin_id": of_gm["_origin_id"]}
+    gm_gp = {
+        "capabilities": [{"action": "agent/guardian-message", "target": f"ward:{of_gm['_origin_id']}", "where": {}}],
+        "executor": {"key": gm_station["xonly"], "name": "id/station-gm"},
+        "genesis": GENESIS_MAIN,
+        "guardian_context": {"event_class": "effect_grant", "origin_id": of_gm["_origin_id"], "revision": 1, "ward_name": "id/child-leo"},
+        "issuer": {"name": "id/child-leo", "owner_policy": of_gm["origin_bundle"]["name_binding"]["owner_policy"], "registration": of_gm["origin_bundle"]["name_binding"]["registration"]},
+        "network": "main", "not_after_height": 760000, "not_before_height": 749900, "recent_block": gm_rblk,
+        "recipient": {"key": gm_bridge["xonly"], "mode": "key"},
+        "revocation": {"construction": "W", "kind": "revocable", "mode": "seal", "seal": {"script_policy": gm_seal_pol, "txid": gm_seal_tx, "vout": 0}},
+        "type": "seallink-grant/1",
+    }
+    gm_grant = sl.sign_guardian_envelope(
+        gm_gp,
+        [
+            {"slot": 1, "revision": 1, "guardian_name": "id/parent-a", "signers": [of_gm["_keys"]["g1_gr"]["sk"]]},
+            {"slot": 2, "revision": 1, "guardian_name": "id/parent-b", "signers": [of_gm["_keys"]["g2_gr"]["sk"]]},
+        ],
+    )
+    gm_gid = sl.object_id(gm_gp)
+    of_gm["chain"]["txs"][gm_itx] = {
+        "confirmed_height": 749970,
+        "inputs": [sv.make_segwit_input(gm_seal_tx, 1)],
+        "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(gm_grant), "grant_id": gm_gid, "type": "seallink-issuance/1"}).hex()).hex(),
+        "outputs": {},
+    }
+    gm_raw_msg = b"Quota-free guardian instruction: check schedule."
+    gm_inv = sl.sign_envelope(
+        {
+            "action": "agent/guardian-message",
+            "arguments": {"channel": "direct", "delivery_mode": "strict_drop", "message_sha256": sl.sha256(gm_raw_msg).hex(), "origin_id": of_gm["_origin_id"], "revision": 1, "subject_ward_name": "id/child-leo"},
+            "executor": {"key": gm_station["xonly"], "name": "id/station-gm"},
+            "exp": of_gm["chain"]["now"] + 600, "genesis": GENESIS_MAIN, "iat": of_gm["chain"]["now"] - 10,
+            "network": "main", "nonce": _h32("bnd-gm-n1"), "proof_path": [{"grant_id": gm_gid, "issuance_txid": gm_itx}],
+            "target": f"ward:{of_gm['_origin_id']}", "type": "seallink-invocation/1",
+        },
+        [gm_bridge["sk"]],
+    )
+    gm_result_obj = {"authority_frame_sha256": _h32("gm-af"), "delivered": True, "message_sha256": sl.sha256(gm_raw_msg).hex(), "verified_guardians": ["id/parent-a", "id/parent-b"], "verified_revision": 1}
+    gm_rcpt = sl.sign_envelope(
+        {
+            "action": "agent/guardian-message", "executor_name": "id/station-gm", "genesis": GENESIS_MAIN,
+            "grant_id": gm_gid, "invocation_id": sl.object_id(gm_inv["payload"]), "network": "main",
+            "outcome": "executed", "recorded_at": of_gm["chain"]["now"],
+            "result_sha256": sl.sha256(sl.jcs_encode(gm_result_obj)).hex(),
+            "tip_hash": of_gm["chain"]["tip_hash"], "tip_height": of_gm["chain"]["tip_height"],
+            "type": "seallink-receipt/1",
+        },
+        [gm_station["sk"]],
+    )
+    gm_bundle = {"grants": [gm_grant], "origin_bundle": of_gm["origin_bundle"]}
+    add("accept-restart-recovery-quota-free-guardian-message-receipt", ["SL-GRNT-014", "SL-AGNT-003"], "restart_recovery",
+        {
+            "journal_id": _h32("gm-rr-jid"),
+            "executor_cfg": gm_exec_cfg,
+            "trusted_origin_issuers": of_gm["trusted_origin_issuers"],
+            "pre_restart_steps": [
+                {"label": "pre-gm", "chain": of_gm["chain"], "invocation": gm_inv, "bundle": gm_bundle, "receipt_env": gm_rcpt, "raw_message_hex": gm_raw_msg.hex(), "want_verdict": "ADMIT", "want_refusal": None},
+            ],
+            "post_restart_steps": [
+                {"label": "post-gm-cached-retry", "chain": of_gm["chain"], "invocation": gm_inv, "bundle": gm_bundle, "raw_message_hex": gm_raw_msg.hex(), "want_verdict": "ADMIT", "want_refusal": None, "expect_zero_writes": True, "expect_cached_receipt_ca": sl.content_addr(gm_rcpt)},
+            ],
+        },
+        "ADMIT", None,
+        "A completed quota-free agent/guardian-message MUST commit a terminal settlement entry referencing receipt_sha256 so restart replay restores invocation_id -> receipt and returns the exact signed receipt with 0 writes.")
+
+    # Strict observation bracket checks (SL-LDGR-008): missing rebracket_tip or mid-read tip mismatch -> CHAIN_OBSERVATION_VOID!
+    add("bnd-chain-obs-require-bracket-missing-rebracket-refuse", ["SL-LDGR-008"], "chain_obs",
+        {"chain": fx0["chain"], "require_observation_bracket": True, "risk_class": 1},
+        "REFUSE", "CHAIN_OBSERVATION_VOID",
+        "When require_observation_bracket=True, a ChainView omitting closing rebracket_tip MUST refuse CHAIN_OBSERVATION_VOID.")
+    ch_ob_void = copy.deepcopy(fx0["chain"])
+    ch_ob_void["observation_bracket"] = {"consistent": False}
+    ch_ob_void["rebracket_tip"] = {"hash": _h32("different-end-tip"), "height": ch_ob_void["tip_height"] + 1, "now": ch_ob_void["now"]}
+    add("bnd-chain-obs-bracket-tip-mismatch-refuse", ["SL-LDGR-008"], "chain_obs",
+        {"chain": ch_ob_void, "risk_class": 1},
+        "REFUSE", "CHAIN_OBSERVATION_VOID",
+        "A ChainView whose observation_bracket closing tip differs from the starting tip MUST refuse CHAIN_OBSERVATION_VOID during check_chain_observation.")

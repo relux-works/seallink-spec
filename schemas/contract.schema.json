@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.5/schemas/contract.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.6/schemas/contract.schema.json",
   "title": "SealLink v1.0 Contracts, Assent, Termination & Violation Verdicts",
   "$defs": {
     "Contract": {

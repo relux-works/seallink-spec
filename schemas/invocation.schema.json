@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.5/schemas/invocation.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.6/schemas/invocation.schema.json",
   "title": "SealLink v1.0 Invocation, Receipt, Sessions, Auth, Owner Control, Journal & Migration",
   "$defs": {
     "Invocation": {
@@ -391,7 +391,7 @@
                 "receipt_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "recorded_at": { "$ref": "common.schema.json#/$defs/Uint53" }
               },
-              "if": { "properties": { "account": { "const": "row" } } },
+              "if": { "required": ["account"], "properties": { "account": { "const": "row" } } },
               "then": { "required": ["row_ordinal"] },
               "else": { "not": { "required": ["row_ordinal"] } }
             }

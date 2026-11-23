@@ -261,6 +261,11 @@ def execute_traces_and_matrix(
                         errors.append(f"trace-01 step {st['step']}: expected journal write, got none")
                     else:
                         _assert_journal_write(res.journal_writes[0], st["journal_write"], f"trace-01/step-{st['step']}", errors)
+                if "settlement_journal_write" in st:
+                    if len(res.journal_writes) < 2:
+                        errors.append(f"trace-01 step {st['step']}: expected terminal settlement journal write")
+                    else:
+                        _assert_journal_write(res.journal_writes[1], st["settlement_journal_write"], f"trace-01/step-{st['step']}/settlement", errors)
                 exec_checks += 1
             else:
                 _, serr, jw = v.evaluate_seal(
@@ -496,6 +501,11 @@ def execute_traces_and_matrix(
                     errors.append(f"trace-04 step {st['step']}: verified details mismatch {res.details}")
                 if res.journal_writes and "journal_write" in st:
                     _assert_journal_write(res.journal_writes[0], st["journal_write"], f"trace-04/step-{st['step']}", errors)
+                if "settlement_journal_write" in st:
+                    if len(res.journal_writes) < 2:
+                        errors.append(f"trace-04 step {st['step']}: expected terminal settlement journal write")
+                    else:
+                        _assert_journal_write(res.journal_writes[1], st["settlement_journal_write"], f"trace-04/step-{st['step']}/settlement", errors)
             exec_checks += 1
 
     # --- Execute refusal-coverage-matrix.json (MUST cover 100% = 84/84 refusal codes!) ---
@@ -824,9 +834,15 @@ def main() -> int:
     warnings: list[str] = []
 
     # 0. Reference crypto & cold RPC adapter self-tests
-    sl.self_test()
+    try:
+        sl.self_test()
+    except AssertionError as exc:
+        errors.append(f"seallink_ref.self_test failed: {exc}")
     import nc_rpc_adapter as nca
-    nca.self_test()
+    try:
+        nca.self_test()
+    except AssertionError as exc:
+        errors.append(f"nc_rpc_adapter.self_test failed: {exc}")
 
     # 1. Load registries
     registries: dict[str, Any] = {}

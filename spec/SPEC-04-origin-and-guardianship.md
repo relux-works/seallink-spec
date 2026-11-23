@@ -1,6 +1,6 @@
 # SPEC-04: Origin Certificates, Legal Capacity, and Multi-Guardian Quorums
 
-- **Version:** `1.0.0-draft.5`
+- **Version:** `1.0.0-draft.6`
 - **Status:** `draft` (core model and acyclic transitions `decided`; trusted calendar time-interval oracle profile remains `open` in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-02-guardian-succession-assent.json`, `vectors/trace-04-agent-guardian-intake.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/opreturn-actions.json`, `registry/refusal-codes.json`

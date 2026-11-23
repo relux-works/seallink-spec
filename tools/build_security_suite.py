@@ -19,7 +19,7 @@ import build_refusal_matrix as rm
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.5"
+VERSION = "1.0.0-draft.6"
 GENESIS_MAIN = rm.GENESIS_MAIN
 
 
@@ -49,6 +49,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         enforce_schemas=True,
         require_jsonschema=require_jsonschema,
         max_history_steps=inp.get("max_history_steps", 500),
+        require_observation_bracket=inp.get("require_observation_bracket", False),
     )
     if runner == "origin_status":
         chain = sv.ChainView(inp["chain"])
@@ -225,6 +226,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         journal = sv.FencedJournal(inp["journal_id"])
         for step in inp["pre_restart_steps"]:
             ch = sv.ChainView(step["chain"])
+            raw_msg = bytes.fromhex(step["raw_message_hex"]) if "raw_message_hex" in step else None
             res = v.verify_invocation(
                 step["invocation"],
                 step["bundle"],
@@ -233,6 +235,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 inp["executor_cfg"],
                 use_txid=step.get("use_txid"),
                 receipt_env_for_cache=step.get("receipt_env"),
+                raw_message_bytes=raw_msg,
                 actual_quota_usage=step.get("actual_quota_usage"),
             )
             if (res.verdict, res.refusal_code) != (step["want_verdict"], step.get("want_refusal")):
@@ -248,9 +251,12 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             return "REFUSE", "RESTART_QUOTAS_MISMATCH"
         if restarted.quota_watermarks != journal.quota_watermarks:
             return "REFUSE", "RESTART_WATERMARK_MISMATCH"
+        if set(restarted.receipts.keys()) != set(journal.receipts.keys()):
+            return "REFUSE", "RESTART_RECEIPT_INDEX_MISMATCH"
         for step in inp["post_restart_steps"]:
             ch = sv.ChainView(step["chain"])
             before_n = len(restarted.entries)
+            raw_msg = bytes.fromhex(step["raw_message_hex"]) if "raw_message_hex" in step else None
             res = v.verify_invocation(
                 step["invocation"],
                 step["bundle"],
@@ -258,6 +264,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 restarted,
                 inp["executor_cfg"],
                 use_txid=step.get("use_txid"),
+                raw_message_bytes=raw_msg,
                 actual_quota_usage=step.get("actual_quota_usage"),
             )
             if (res.verdict, res.refusal_code) != (step["want_verdict"], step.get("want_refusal")):

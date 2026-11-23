@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.5.
+Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.6.
 
 Executes five end-to-end SealLink protocol traces on two fresh loopback-only
 Namecoin Core 28 regtest nodes under strict standard policy (`-acceptnonstdtxn=0`,
@@ -279,12 +279,21 @@ class RegtestCluster:
         self.genesis_hash = ""
         self.coinbase_pool: list[dict[str, Any]] = []
 
-    def new_cold_observer(self) -> nca.ColdNamecoinObserver:
+    def new_cold_observer(self, *, rpc_counter: dict[str, int] | None = None) -> nca.ColdNamecoinObserver:
         """Instantiate a fresh stateless ColdNamecoinObserver with ZERO writer-side state."""
+        raw_read = nca.make_cli_rpc(self.bin_dir, self.dirs[1], self.ports[1], regtest=True)
+        if rpc_counter is not None:
+            def _counted_read(method: str, *args: Any, wait: bool = False) -> Any:
+                rpc_counter[method] = rpc_counter.get(method, 0) + 1
+                return raw_read(method, *args, wait=wait)
+            read_fn = _counted_read
+        else:
+            read_fn = raw_read
         return nca.ColdNamecoinObserver(
-            nca.make_cli_rpc(self.bin_dir, self.dirs[1], self.ports[1], regtest=True),
+            read_fn,
             [("node-a-local", nca.make_cli_rpc(self.bin_dir, self.dirs[0], self.ports[0], regtest=True))],
             network="regtest",
+            clock_mode="regtest_deterministic",
         )
 
     def rpc(self, node: int, method: str, *args: Any, wait: bool = False) -> Any:
@@ -787,7 +796,7 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
 
     manifests = {alice_man_ca: alice_man, host_man_ca: host_man}
     exec_cfg = {"key": host_rcpt["xonly"], "name": "id/t1-mail-host"}
-    v = sv.Tier1Verifier(pinned_network="regtest", pinned_genesis=cl.genesis_hash, require_jsonschema=True)
+    v = sv.Tier1Verifier(pinned_network="regtest", pinned_genesis=cl.genesis_hash, require_jsonschema=True, require_observation_bracket=True)
     journal = sv.FencedJournal(sl.sha256(b"t1-regtest-j").hex())
 
     def _mk_inv(tag: str, now_s: int) -> dict[str, Any]:
@@ -808,10 +817,15 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
             [bob_req["sk"]],
         )
 
-    # Cold observer #1 (brand-new stateless observer with ZERO writer state!)
+    # Cold observer #1 (brand-new stateless observer with ZERO writer state + full bracket + pre_effect_recheck!)
+    t1_ctr: dict[str, int] = {}
+    obs1 = cl.new_cold_observer(rpc_counter=t1_ctr)
     inv_step1 = _mk_inv("step1", int(cl.rpc(1, "getblockheader", cl.rpc(1, "getbestblockhash"))["time"]) + 30)
-    ch1_dict = cl.new_cold_observer().build_chain_view(wire_objects=[grant_env, inv_step1], manifests=manifests)
-    ch1 = sv.ChainView(ch1_dict)
+    ch1_dict = obs1.build_chain_view(wire_objects=[grant_env, inv_step1], manifests=manifests)
+    assert t1_ctr.get("getblockchaininfo", 0) >= 2 and ch1_dict["observation_bracket"]["consistent"] is True
+    ch1_pre_dict = obs1.pre_effect_recheck(ch1_dict, [(seal_txid, 0)])
+    assert ch1_pre_dict["observation_bracket"]["pre_effect_rechecked"] is True
+    ch1 = sv.ChainView(ch1_pre_dict)
     res_admit = v.verify_invocation(
         inv_step1,
         {"grants": [grant_env], "manifests": manifests},
@@ -843,9 +857,9 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
     seen_mempool_b = rev_txid in cl.rpc(1, "getrawmempool")
     assert seen_mempool_b
 
-    # Cold observer #2 discovers mempool revocation strictly from Node B `gettxout` + `getrawmempool`!
+    # Fresh pre_effect_recheck discovers mempool revocation strictly from Node B `gettxout` + `getrawmempool`!
     inv_step2 = _mk_inv("step2", ch1.now)
-    ch2_dict = cl.new_cold_observer().build_chain_view(wire_objects=[grant_env, inv_step2], manifests=manifests)
+    ch2_dict = obs1.pre_effect_recheck(ch1_dict, [(seal_txid, 0)])
     assert ch2_dict["txs"][rev_txid]["in_mempool"] is True and ch2_dict["txs"][rev_txid]["confirmed_height"] is None
     res_mempool_revoke = v.verify_invocation(
         inv_step2,
@@ -872,8 +886,10 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
     assert (res_closed.verdict, res_closed.refusal_code) == ("REFUSE", "GRANT_CLOSED"), f"Trace 01 post-closure got {res_closed}"
 
     return {
-        "profile": "PROFILE-mail-v1 (mail/read + executor_ref + recipient.mode=name + actual_message_meta)",
+        "profile": "PROFILE-mail-v1 (mail/read + executor_ref + recipient.mode=name + actual_message_meta + pre_effect_recheck)",
         "cold_observer_adapter": "tools/nc_rpc_adapter.py:ColdNamecoinObserver",
+        "cold_observer_initial_gbi_calls": t1_ctr["getblockchaininfo"],
+        "pre_effect_recheck_verified": True,
         "name_new_alice_txid": names["id/t1-alice"]["new_txid"],
         "name_firstupdate_alice_txid": names["id/t1-alice"]["first_txid"],
         "name_update_alice_txid": upd_txid,
@@ -1159,7 +1175,8 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     cl.broadcast_and_wait_peer(rost0f_raw)
     cl.mine(1)
 
-    # 0x0d Pending appointment of Carol on rev 2 slot 1 -> creates REAL guardian_slot_pending CSV P2WSH output!
+    # 0x0d Pending appointment of Carol on rev 2 slot 1 -> places guardian_slot_pending CSV P2WSH at lawful pending_vout=2!
+    # (vout 0 = OP_RETURN 0x0d, vout 1 = non-continuation change output, vout 2 = signed pending_vout!)
     g2_rec_p = {
         "activation_mode": "appointed",
         "active_policy": g2_act_pol,
@@ -1170,7 +1187,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         "network": "regtest",
         "origin_id": origin_id,
         "pending_policy": pend_pol,
-        "pending_vout": 0,
+        "pending_vout": 2,
         "prev_outpoint": {"txid": rost0f_txid, "vout": 1},
         "revision": 2,
         "slot": 1,
@@ -1200,20 +1217,20 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
             f_more[1],
         ],
         [
-            (SEAL_SAT, pend_spk),
             (0, op_return_spk(0x0D, sl.content_addr(g2_rec))),
             (f_more[1]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
+            (SEAL_SAT, pend_spk),
         ],
     )
     cl.broadcast_and_wait_peer(pend0d_raw)
     cl.mine(1)  # Pending depth = 1 (< delay_blocks = 3!)
 
-    # Build 0x0e activation spend of guardian_slot_pending CSV branch (witness = [sig_g2, b"", b"", pend_ws], sequence = delay_blocks!)
+    # Build 0x0e activation spend of guardian_slot_pending CSV branch at vout=2 -> active seal at mandatory vout=0!
     act0e_txid, act0e_raw = build_signed_tx(
         [
             {
                 "txid": pend0d_txid,
-                "vout": 0,
+                "vout": 2,
                 "value_sat": SEAL_SAT,
                 "sequence": delay_blocks,
                 "kind": "p2wsh_single_key_branch",
@@ -1312,13 +1329,16 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         "recovery_bindings": [cand_b2],
         "roster_records": [roster2],
     }
-    ch_dict = cl.new_cold_observer().build_chain_view(wire_objects=[origin_bundle])
+    t2_ctr: dict[str, int] = {}
+    ch_dict = cl.new_cold_observer(rpc_counter=t2_ctr).build_chain_view(wire_objects=[origin_bundle])
+    assert t2_ctr.get("getblockchaininfo", 0) >= 2 and ch_dict["observation_bracket"]["consistent"] is True
     ch = sv.ChainView(ch_dict)
     v = sv.Tier1Verifier(
         pinned_network="regtest",
         pinned_genesis=cl.genesis_hash,
         trusted_origin_issuers={"id/t2-civil-registry"},
         require_jsonschema=True,
+        require_observation_bracket=True,
     )
     wstate_chk, werr_chk = v.verify_origin_and_status(origin_bundle, ch)
     assert werr_chk is None and wstate_chk is not None, f"Trace 02 origin status failed: {werr_chk}"
@@ -1382,6 +1402,9 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         "roster_0x0f_raw_hex": rost0f_raw,
         "pending_0x0d_csv_txid": pend0d_txid,
         "pending_0x0d_csv_raw_hex": pend0d_raw,
+        "pending_0x0d_vout": 2,
+        "activate_0x0e_active_vout": 0,
+        "cold_observer_gbi_calls": t2_ctr["getblockchaininfo"],
         "pending_csv_witness_script_hex": pend_ws.hex(),
         "premature_csv_spend_rejected_by_nc28": not premature_check["allowed"],
         "premature_csv_reject_reason": premature_check.get("reject-reason"),
@@ -1657,7 +1680,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         manifests={host_man_ca: host_man},
     )
     ch = sv.ChainView(ch_dict)
-    v = sv.Tier1Verifier(pinned_network="regtest", pinned_genesis=cl.genesis_hash, require_jsonschema=True)
+    v = sv.Tier1Verifier(pinned_network="regtest", pinned_genesis=cl.genesis_hash, require_jsonschema=True, require_observation_bracket=True)
     journal = sv.FencedJournal(sl.sha256(b"t3-regtest-j").hex())
 
     # 1. Depth-2 sibling row_ordinal (row 1 + row 2) + pool enforcement + crash/restart recovery!
@@ -2062,16 +2085,19 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
         "origin": origin_env,
         "origin_anchor_txid": anc09_txid,
     }
-    ch_dict = cl.new_cold_observer().build_chain_view(
+    t4_ctr: dict[str, int] = {}
+    ch_dict = cl.new_cold_observer(rpc_counter=t4_ctr).build_chain_view(
         wire_objects=[origin_bundle, g_2of2, g_1of2],
         extra_txids=[iss_ok_txid, iss_bad_txid],
     )
+    assert t4_ctr.get("getblockchaininfo", 0) >= 2 and ch_dict["observation_bracket"]["consistent"] is True
     ch = sv.ChainView(ch_dict)
     v = sv.Tier1Verifier(
         pinned_network="regtest",
         pinned_genesis=cl.genesis_hash,
         trusted_origin_issuers={"id/t4-civil-registry"},
         require_jsonschema=True,
+        require_observation_bracket=True,
     )
     journal = sv.FencedJournal(sl.sha256(b"t4-regtest-j").hex())
 
@@ -2100,12 +2126,85 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
             [bridge_req["sk"]],
         )
 
-    r_bad = v.verify_invocation(_mk_agm_inv(gid_1of2, iss_bad_txid, "1of2"), {"grants": [g_1of2], "origin_bundle": origin_bundle}, ch, journal, exec_cfg, raw_message_bytes=raw_msg)
-    r_ok = v.verify_invocation(_mk_agm_inv(gid_2of2, iss_ok_txid, "2of2"), {"grants": [g_2of2], "origin_bundle": origin_bundle}, ch, journal, exec_cfg, raw_message_bytes=raw_msg)
+    inv_bad = _mk_agm_inv(gid_1of2, iss_bad_txid, "1of2")
+    inv_ok = _mk_agm_inv(gid_2of2, iss_ok_txid, "2of2")
+    gm_result = {
+        "authority_frame_sha256": sl.sha256(b"t4-authority-frame:" + raw_msg).hex(),
+        "delivered": True,
+        "message_sha256": msg_sha,
+        "verified_guardians": ["id/t4-guardian-a", "id/t4-guardian-b"],
+        "verified_revision": 1,
+    }
+    rcpt_ok = sl.sign_envelope(
+        {
+            "action": "agent/guardian-message",
+            "executor_name": "id/t4-station",
+            "genesis": cl.genesis_hash,
+            "grant_id": gid_2of2,
+            "invocation_id": sl.object_id(inv_ok["payload"]),
+            "network": "regtest",
+            "outcome": "executed",
+            "recorded_at": ch.now,
+            "result_sha256": sl.sha256(sl.jcs_encode(gm_result)).hex(),
+            "tip_hash": ch.tip_hash,
+            "tip_height": ch.tip_height,
+            "type": "seallink-receipt/1",
+        },
+        [station_rcpt["sk"]],
+    )
+    rcpt_ok_ca = sl.content_addr(rcpt_ok)
+
+    r_bad = v.verify_invocation(inv_bad, {"grants": [g_1of2], "origin_bundle": origin_bundle}, ch, journal, exec_cfg, raw_message_bytes=raw_msg)
+    r_ok = v.verify_invocation(inv_ok, {"grants": [g_2of2], "origin_bundle": origin_bundle}, ch, journal, exec_cfg, receipt_env_for_cache=rcpt_ok, raw_message_bytes=raw_msg)
     assert (r_bad.verdict, r_bad.refusal_code) == ("REFUSE", "GUARDIAN_QUORUM_UNMET"), f"Trace 04 downgrade got {r_bad}"
-    assert r_ok.verdict == "ADMIT", f"Trace 04 2-of-2 ADMIT got {r_ok}"
+    assert r_ok.verdict == "ADMIT" and len(r_ok.journal_writes) == 2, f"Trace 04 2-of-2 ADMIT got {r_ok}"
+    assert r_ok.journal_writes[1]["entry"]["kind"] == "settlement"
+
+    # Separate-process restart recovery proof for quota-free agent/guardian-message (SL-GRNT-014, SL-AGNT-003)!
+    restart_file = cl.work_dir / "t4-quota-free-restart.json"
+    restart_file.write_text(
+        json.dumps(
+            {
+                "journal_id": journal.journal_id,
+                "commitment": journal.commitment,
+                "entries": journal.entries,
+                "receipt_store": journal.receipt_store,
+                "chain": ch_dict,
+                "inv_ok": inv_ok,
+                "grant": g_2of2,
+                "origin_bundle": origin_bundle,
+                "exec_cfg": exec_cfg,
+                "raw_msg_hex": raw_msg.hex(),
+                "genesis": cl.genesis_hash,
+                "expected_rcpt_ca": rcpt_ok_ca,
+                "expected_rcpt_jcs_hex": sl.jcs_encode(rcpt_ok).hex(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    child_code = (
+        "import json, sys; from pathlib import Path; "
+        f"sys.path.insert(0, {str(REPO_ROOT / 'tools')!r}); "
+        "import seallink_ref as sl, seallink_verifier as sv; "
+        "d = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8')); "
+        "rj = sv.FencedJournal.replay_persisted_entries(d['journal_id'], d['entries'], receipt_store=d['receipt_store']); "
+        "assert rj.commitment == d['commitment']; "
+        "assert len(rj.receipts) == 1, f'Expected 1 indexed receipt after restart, got {len(rj.receipts)}'; "
+        "inv_id = sl.object_id(d['inv_ok']['payload']); "
+        "assert sl.jcs_encode(rj.receipts[inv_id]).hex() == d['expected_rcpt_jcs_hex']; "
+        "v = sv.Tier1Verifier(pinned_network='regtest', pinned_genesis=d['genesis'], trusted_origin_issuers={'id/t4-civil-registry'}, require_jsonschema=True, require_observation_bracket=True); "
+        "before_n = len(rj.entries); "
+        "res = v.verify_invocation(d['inv_ok'], {'grants': [d['grant']], 'origin_bundle': d['origin_bundle']}, sv.ChainView(d['chain']), rj, d['exec_cfg'], raw_message_bytes=bytes.fromhex(d['raw_msg_hex'])); "
+        "assert res.verdict == 'ADMIT' and res.details.get('cached_receipt') is True and res.cached_receipt_content_addr == d['expected_rcpt_ca'] and len(rj.entries) == before_n, res; "
+        "print('SEPARATE_PROCESS_QUOTA_FREE_RESTART_OK')"
+    )
+    proc = subprocess.run([sys.executable, "-c", child_code, str(restart_file)], capture_output=True, text=True, timeout=30)
+    assert proc.returncode == 0 and "SEPARATE_PROCESS_QUOTA_FREE_RESTART_OK" in proc.stdout, (
+        f"Separate-process quota-free restart check failed: rc={proc.returncode} stdout={proc.stdout!r} stderr={proc.stderr!r}"
+    )
 
     return {
+        "cold_observer_gbi_calls": t4_ctr["getblockchaininfo"],
         "origin_0x09_txid": anc09_txid,
         "origin_0x09_raw_hex": anc09_raw,
         "binding_0x0c_txid": anc0c_txid,
@@ -2116,9 +2215,12 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
         "slot_2_0x12_raw_hex": act2_raw,
         "grant_2of2_0x01_txid": iss_ok_txid,
         "grant_2of2_0x01_raw_hex": iss_ok_raw,
+        "quota_free_terminal_settlement_committed": True,
+        "quota_free_separate_process_restart_receipt_ca": rcpt_ok_ca,
         "verdicts": {
             "downgraded_1of2_routine_read": {"verdict": r_bad.verdict, "refusal_code": r_bad.refusal_code},
             "full_2of2_effect_grant_strict_drop": {"verdict": r_ok.verdict, "outcome": r_ok.outcome},
+            "quota_free_post_restart_separate_process_cached_retry": {"verdict": "ADMIT", "writes": 0, "second_delivery": False},
         },
     }
 
@@ -2163,7 +2265,7 @@ def run_trace_05(cl: RegtestCluster) -> dict[str, Any]:
     cl.mine(1)
     h_dip_ok = cl.rpc(1, "getblockcount")
 
-    v = sv.Tier1Verifier(pinned_network="regtest", pinned_genesis=cl.genesis_hash, operator_min_depth=1, require_jsonschema=True)
+    v = sv.Tier1Verifier(pinned_network="regtest", pinned_genesis=cl.genesis_hash, operator_min_depth=1, require_jsonschema=True, require_observation_bracket=True)
 
     # Cold check A: while Reg #1 is live -> ADMIT!
     ch_live = sv.ChainView(cl.new_cold_observer().build_chain_view(wire_objects=[dip_ok], extra_txids=[dip_ok_txid]))
@@ -2231,6 +2333,40 @@ def run_trace_05(cl: RegtestCluster) -> dict[str, Any]:
         f"Expected NAME_EXPIRED for post-expiry anchor, got {r_post_exp_forgery}"
     )
 
+    # 7. Live mid-read tip transition bracket test on REAL nc28.0 nodes!
+    #    Mine 1 real block between the observer's opening and closing getblockchaininfo calls:
+    #    - retry_on_tip_change=0 -> Tier1Verifier(require_observation_bracket=True) refuses CHAIN_OBSERVATION_VOID!
+    #    - retry_on_tip_change=1 -> ColdNamecoinObserver discards straddling snapshot, re-reads new tip -> ADMIT!
+    def _make_straddling_observer() -> nca.ColdNamecoinObserver:
+        raw_read = nca.make_cli_rpc(cl.bin_dir, cl.dirs[1], cl.ports[1], regtest=True)
+        fired = {"mined": False, "gbi": 0}
+        def _hooked_read(method: str, *args: Any, wait: bool = False) -> Any:
+            res = raw_read(method, *args, wait=wait)
+            if method == "getblockchaininfo":
+                fired["gbi"] += 1
+                if fired["gbi"] == 1 and not fired["mined"]:
+                    fired["mined"] = True
+                    cl.mine(1)
+            return res
+        return nca.ColdNamecoinObserver(
+            _hooked_read,
+            [("node-a-local", nca.make_cli_rpc(cl.bin_dir, cl.dirs[0], cl.ports[0], regtest=True))],
+            network="regtest",
+            clock_mode="regtest_deterministic",
+        )
+
+    ch_void_dict = _make_straddling_observer().build_chain_view(wire_objects=[dip_ok], extra_txids=[dip_ok_txid], retry_on_tip_change=0)
+    assert ch_void_dict["observation_bracket"]["consistent"] is False
+    r_mid_tip_void = v.verify_credential(dip_ok, dip_ok_txid, sv.ChainView(ch_void_dict))
+    assert (r_mid_tip_void.verdict, r_mid_tip_void.refusal_code) == ("REFUSE", "CHAIN_OBSERVATION_VOID"), (
+        f"Expected CHAIN_OBSERVATION_VOID on live mid-read tip change, got {r_mid_tip_void}"
+    )
+
+    ch_retry_dict = _make_straddling_observer().build_chain_view(wire_objects=[dip_ok], extra_txids=[dip_ok_txid], retry_on_tip_change=1)
+    assert ch_retry_dict["observation_bracket"]["consistent"] is True and ch_retry_dict["observation_bracket"]["attempts"] == 2
+    r_mid_tip_retry = v.verify_credential(dip_ok, dip_ok_txid, sv.ChainView(ch_retry_dict))
+    assert r_mid_tip_retry.verdict == "ADMIT", f"Expected ADMIT after bracket retry on new tip, got {r_mid_tip_retry}"
+
     return {
         "cold_observer_adapter": "tools/nc_rpc_adapter.py:ColdNamecoinObserver",
         "name": "id/t5-school",
@@ -2245,6 +2381,7 @@ def run_trace_05(cl: RegtestCluster) -> dict[str, Any]:
         "reg2_firstupdate_txid": reg2["txid"],
         "reg2_update_txid": n2["id/t5-school"]["update_txid"],
         "cold_discovered_registration_lineages": len(ch_final_dict["name_registrations"]["id/t5-school"]),
+        "live_mid_read_tip_change_retry_attempts": ch_retry_dict["observation_bracket"]["attempts"],
         "verdicts": {
             "diploma_while_reg1_live": {"verdict": r_live.verdict, "outcome": r_live.outcome},
             "diploma_after_30_block_expiry": {"verdict": r_after_exp.verdict, "outcome": r_after_exp.outcome},
@@ -2252,6 +2389,8 @@ def run_trace_05(cl: RegtestCluster) -> dict[str, Any]:
             "same_chainview_live_old_owner_pin": {"verdict": "REFUSE", "refusal_code": err_live_old},
             "same_chainview_historical_diploma_after_reregistration": {"verdict": r_after_rereg.verdict, "outcome": r_after_rereg.outcome},
             "same_chainview_post_expiry_forgery": {"verdict": r_post_exp_forgery.verdict, "refusal_code": r_post_exp_forgery.refusal_code},
+            "live_mid_read_tip_change_no_retry": {"verdict": r_mid_tip_void.verdict, "refusal_code": r_mid_tip_void.refusal_code},
+            "live_mid_read_tip_change_with_retry": {"verdict": r_mid_tip_retry.verdict, "outcome": r_mid_tip_retry.outcome},
         },
     }
 
@@ -2275,7 +2414,7 @@ def main() -> int:
         elapsed = round(time.monotonic() - t0, 2)
         report = {
             "suite": "seallink-nc28-live-traces-regtest",
-            "spec_version": "1.0.0-draft.5",
+            "spec_version": "1.0.0-draft.6",
             "chain": "regtest",
             "policy": "standard (-acceptnonstdtxn=0 -txindex=1 -namehistory=1), two loopback-only nodes (node A writer outbound -> node B read-only cold observer with -disablewallet=1)",
             "observer_adapter": "tools/nc_rpc_adapter.py:ColdNamecoinObserver",

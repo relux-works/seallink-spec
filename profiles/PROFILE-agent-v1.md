@@ -1,6 +1,6 @@
 # PROFILE-agent-v1: Bounded Autonomous Agent Tasks, Tool Execution, Isolated Sessions, and Guardian Intake
 
-- **Version:** `1.0.0-draft.5`
+- **Version:** `1.0.0-draft.6`
 - **Service Type:** `agent-session` (`registry/service-types.json`)
 - **Status:** `draft` (normative profile rules `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-03-delegation-pool-single-use.json`, `vectors/trace-04-agent-guardian-intake.json`, `vectors/refusal-coverage-matrix.json`)
@@ -54,7 +54,7 @@ This profile defines normative SealLink authorization for autonomous software ag
   - `agent/session`: `AgentSessionArgs` -> `AgentSessionResult`
   - `agent/guardian-message`: `AgentGuardianMessageArgs` -> `AgentGuardianMessageResult`
 - **Normative `result_sha256` (`SL-AGNT-003`, `decided`):** For every `outcome = "executed"` receipt, `receipt.payload.result_sha256` MUST equal `SHA256(canonical_JCS(result_object))`.
-- **Replay semantics:** Duplicate `invocation_id` for `agent/brief`, `agent/tool`, `agent/session`, or `agent/guardian-message` MUST NOT spawn a second run, second tool execution, or duplicate Authority Frame delivery; the host returns the stored signed receipt (including `outcome = "uncertain"` if a crash interrupted execution inside the external-effect window before receipt persistence).
+- **Replay semantics:** Duplicate `invocation_id` for `agent/brief`, `agent/tool`, `agent/session`, or `agent/guardian-message` MUST NOT spawn a second run, second tool execution, or duplicate Authority Frame delivery; the host returns the stored signed receipt (including `outcome = "uncertain"` if a crash interrupted execution inside the external-effect window before receipt persistence). Even when an invocation consumes no quota (such as `agent/guardian-message`), the host MUST commit a terminal `settlement` journal entry referencing `receipt_sha256` (`SPEC-06 §6`, `SL-GRNT-014`) so the `invocation_id -> receipt` index survives process restarts without losing the cached reply.
 
 ### 4.1 Constrained Arguments and Predicates
 

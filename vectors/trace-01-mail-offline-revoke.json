@@ -563,6 +563,32 @@
         "object_id": "b61e032c15b39e7228b88befffaf4839d0026b1b7c71cec0ad9fd728e1c8c2c4",
         "schema": "schemas/profile-mail.schema.json#/$defs/MailReadResult"
       },
+      "settlement_journal_write": {
+        "c_after": "d891aa4f3e6fd782a2d794fa2ec161e5e164bcfcedaaa3a6ce63caa0d0be4e08",
+        "c_before": "34cf9d62bcac3f7206faf3f1da1caf6ac94b49698d1d8e6fa3e88541383dbcf8",
+        "entry": {
+          "canonical_jcs": "{\"body\":{\"grant_id\":\"213293b80b252b3fea3171442c3300270f6def5a6c738298d839d5fd418b8491\",\"invocation_id\":\"536844227238772de16d4d1d36b9ca52824cbbb8f96b95c4b24f6d5818a024d7\",\"outcome\":\"executed\",\"receipt_sha256\":\"4888fa95975c92402bc99caf0c6a133bcccfaa842b177ff26b264b40e0e52cdb\",\"recorded_at\":1795220010,\"released\":\"0\",\"settled\":\"0\"},\"journal_id\":\"93c632cd97d8abc9ebea5393e77249e1562ca45da0e51945a205d8c10a11d118\",\"kind\":\"settlement\",\"pos\":2,\"prev_commitment\":\"34cf9d62bcac3f7206faf3f1da1caf6ac94b49698d1d8e6fa3e88541383dbcf8\",\"type\":\"seallink-journal-entry/1\"}",
+          "content_addr": "7e15f7669eb7b260384f569b75237ad8c8be046e1f6aa233f0af29b25600c893",
+          "object": {
+            "body": {
+              "grant_id": "213293b80b252b3fea3171442c3300270f6def5a6c738298d839d5fd418b8491",
+              "invocation_id": "536844227238772de16d4d1d36b9ca52824cbbb8f96b95c4b24f6d5818a024d7",
+              "outcome": "executed",
+              "receipt_sha256": "4888fa95975c92402bc99caf0c6a133bcccfaa842b177ff26b264b40e0e52cdb",
+              "recorded_at": 1795220010,
+              "released": "0",
+              "settled": "0"
+            },
+            "journal_id": "93c632cd97d8abc9ebea5393e77249e1562ca45da0e51945a205d8c10a11d118",
+            "kind": "settlement",
+            "pos": 2,
+            "prev_commitment": "34cf9d62bcac3f7206faf3f1da1caf6ac94b49698d1d8e6fa3e88541383dbcf8",
+            "type": "seallink-journal-entry/1"
+          },
+          "object_id": "7e15f7669eb7b260384f569b75237ad8c8be046e1f6aa233f0af29b25600c893",
+          "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
+        }
+      },
       "step": 1
     },
     {
@@ -687,11 +713,11 @@
       },
       "expected_seal_refusal": "SEAL_SPENT",
       "journal_write": {
-        "c_after": "5609f975ee5be68255d917cff9ddbf27fd956b8b02cd59ffb21931d23aeb07c8",
-        "c_before": "34cf9d62bcac3f7206faf3f1da1caf6ac94b49698d1d8e6fa3e88541383dbcf8",
+        "c_after": "1f4407ab1a6456707700bb20027480d27aa7d224fef9b1342b291c56e7e05020",
+        "c_before": "d891aa4f3e6fd782a2d794fa2ec161e5e164bcfcedaaa3a6ce63caa0d0be4e08",
         "entry": {
-          "canonical_jcs": "{\"body\":{\"cause\":\"SEAL_SPENT\",\"observed_at\":1795220500,\"observed_height\":750011,\"spend_txid\":\"2b8fe055c6b40eb4865d081c83503d458657dbd992f4ad5e4ecd0771b075e7e1\",\"subject_id\":\"213293b80b252b3fea3171442c3300270f6def5a6c738298d839d5fd418b8491\",\"subject_kind\":\"grant\"},\"journal_id\":\"93c632cd97d8abc9ebea5393e77249e1562ca45da0e51945a205d8c10a11d118\",\"kind\":\"closure\",\"pos\":2,\"prev_commitment\":\"34cf9d62bcac3f7206faf3f1da1caf6ac94b49698d1d8e6fa3e88541383dbcf8\",\"type\":\"seallink-journal-entry/1\"}",
-          "content_addr": "0f10dab14a4a8948c55ecfa41f6de913b920d1905e3644ff85be1e2e010a8d0b",
+          "canonical_jcs": "{\"body\":{\"cause\":\"SEAL_SPENT\",\"observed_at\":1795220500,\"observed_height\":750011,\"spend_txid\":\"2b8fe055c6b40eb4865d081c83503d458657dbd992f4ad5e4ecd0771b075e7e1\",\"subject_id\":\"213293b80b252b3fea3171442c3300270f6def5a6c738298d839d5fd418b8491\",\"subject_kind\":\"grant\"},\"journal_id\":\"93c632cd97d8abc9ebea5393e77249e1562ca45da0e51945a205d8c10a11d118\",\"kind\":\"closure\",\"pos\":3,\"prev_commitment\":\"d891aa4f3e6fd782a2d794fa2ec161e5e164bcfcedaaa3a6ce63caa0d0be4e08\",\"type\":\"seallink-journal-entry/1\"}",
+          "content_addr": "d0af756c0a3fb930699053285cc6f02952879a05644a0dfc11834018ae9965fa",
           "object": {
             "body": {
               "cause": "SEAL_SPENT",
@@ -703,11 +729,11 @@
             },
             "journal_id": "93c632cd97d8abc9ebea5393e77249e1562ca45da0e51945a205d8c10a11d118",
             "kind": "closure",
-            "pos": 2,
-            "prev_commitment": "34cf9d62bcac3f7206faf3f1da1caf6ac94b49698d1d8e6fa3e88541383dbcf8",
+            "pos": 3,
+            "prev_commitment": "d891aa4f3e6fd782a2d794fa2ec161e5e164bcfcedaaa3a6ce63caa0d0be4e08",
             "type": "seallink-journal-entry/1"
           },
-          "object_id": "0f10dab14a4a8948c55ecfa41f6de913b920d1905e3644ff85be1e2e010a8d0b",
+          "object_id": "d0af756c0a3fb930699053285cc6f02952879a05644a0dfc11834018ae9965fa",
           "schema": "schemas/invocation.schema.json#/$defs/JournalEntry"
         }
       },
@@ -811,5 +837,5 @@
     }
   ],
   "suite": "trace-01-mail-offline-revoke",
-  "version": "1.0.0-draft.5"
+  "version": "1.0.0-draft.6"
 }
