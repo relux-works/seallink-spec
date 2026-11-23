@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.3/schemas/name-value.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.4/schemas/name-value.schema.json",
   "title": "SealLink v1.0 Ledger Name Value (520-Byte Budget)",
   "description": "Formal schema for SealLink-recognized top-level members in a Namecoin name value. Unknown owner-defined top-level members are permitted and ignored by SealLink readers (SL-IDEN-002).",
   "type": "object",

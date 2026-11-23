@@ -798,10 +798,11 @@ def verify_jsonschema(
                     if errs:
                         errors.append(f"Semantic refusal case {hint} FAILED Draft 2020-12 schema {sref}: {errs[0].message}")
                     validated += 1
-        # Validate EVERY recognizable typed object inside non-WIRE_MEMBER security-conformance cases!
+        # Validate EVERY recognizable typed object inside non-wire-syntax security-conformance cases!
         if vname == "security-conformance.json":
             for case in vdoc.get("cases", []):
-                if case.get("expected_refusal") in ("WIRE_MEMBER", "WIRE_TYPE", "WIRE_SIZE"):
+                exp_r = case.get("expected_refusal") or ""
+                if exp_r.startswith("WIRE_") and exp_r not in ("WIRE_SIGNATURE", "WIRE_KEY"):
                     continue
                 typed_objs = []
                 _collect_typed_objects(case["inputs"], reg_types, typed_objs, f"security[{case['id']}]")
@@ -954,11 +955,12 @@ def main() -> int:
         if rid not in rule_locations:
             errors.append(f"Undeclared Rule ID referenced: {rid} at {loc}")
 
-    # 5b. Check archive/rule-inventory.md Section 1 indexes 100% of declared SL-* rule IDs
+    # 5b. Check archive/rule-inventory.md Section 1 indexes 100% of declared SL-* rule IDs AND cites only registered refusal codes
     inv_path = ROOT / "archive" / "rule-inventory.md"
     if inv_path.exists():
+        inv_text = inv_path.read_text(encoding="utf-8")
         inv_indexed: set[str] = set()
-        for line in inv_path.read_text(encoding="utf-8").splitlines():
+        for line in inv_text.splitlines():
             m = re.match(r"^\|\s*`(SL-[A-Z]+-\d{3})`\s*\|", line)
             if m:
                 inv_indexed.add(m.group(1))
@@ -968,6 +970,11 @@ def main() -> int:
             errors.append(f"archive/rule-inventory.md missing per-rule rows for {len(missing_inv)} rule(s): {', '.join(missing_inv)}")
         if extra_inv:
             errors.append(f"archive/rule-inventory.md lists undeclared rule(s): {', '.join(extra_inv)}")
+        for c in CODE_RE.findall(inv_text):
+            if c.endswith("_") or c in non_refusal_ids:
+                continue
+            if c not in registered_codes:
+                errors.append(f"archive/rule-inventory.md: unregistered refusal code '{c}'")
 
     # 6. Check all registry files share the same protocol version string
     reg_versions = {name: data.get("version") for name, data in registries.items() if "version" in data}

@@ -1,6 +1,6 @@
 # SealLink Conformance Requirements
 
-- **Version:** `1.0.0-draft.3`
+- **Version:** `1.0.0-draft.4`
 - **Status:** `draft`
 - **Normative Language:** [RFC2119], [RFC8174]
 
@@ -47,4 +47,4 @@ A production **Tier 1 Verifier** or **Effect Executor** claiming full operationa
 Per `SPEC-00 §5.1`:
 - **`prose` -> `vectors`:** Every registered refusal code (`84/84`) is exercised by schema-valid semantic refusal fixtures and raw wire fixtures, every `decided` normative rule is explicitly mapped in the rule-coverage audit, negative security/false-admit regressions and verifier-check mutation tests pass, and all suites execute live through `tools/seallink_verifier.py` and Draft 2020-12 metaschemas in CI.
 - **`vectors` -> `dual-impl`:** At least two independent implementations with disjoint cryptographic and JSON stacks pass 100% of `vectors/` byte-for-byte (identical object IDs, digests, content addresses, refusal codes, and journal commitments).
-- **`dual-impl` -> `chain-tested`:** All four end-to-end traces (`trace-01` mail offline + revoke, `trace-02` initial & successor guardian activation + ward assent + recovery, `trace-03` parent pool + dual-account multi-quota + single-use + crash-uncertain + replay + revoke, `trace-04` ward agent guardian intake) plus TRUC v3 / `P2A` CPFP package relay (`conformance/p2a-regtest/`) are executed with raw transaction artifacts against a live Namecoin Core `nc28.0` regtest (and/or mainnet) network.
+- **`dual-impl` -> `chain-tested`:** All four end-to-end traces (`trace-01` mail offline + revoke, `trace-02` initial & successor guardian activation + `P2WSH` `namepsbt` + CSV `guardian_slot_pending` + ward assent + recovery, `trace-03` parent pool + dual-account per-`row_ordinal` multi-quota + single-use `0x11` + crash-uncertain + replay + revoke, `trace-04` ward agent guardian intake) plus TRUC v3 / `P2A` CPFP package relay are executed with raw transaction artifacts against a live Namecoin Core `nc28.0` regtest network (reference regtest proofs provided in `conformance/p2a-regtest/` and `conformance/traces-regtest/`) and qualified under production/mainnet conditions across independent implementations.

@@ -8158,10 +8158,9 @@
                   "vout": 0
                 },
                 {
-                  "break_role": "cred",
                   "confirmed_height": 749600,
                   "op": "NAME_UPDATE",
-                  "opreturn_hex": "6a05534c4e4b0b2a01ea2bf07efa82b06d69d0039baab6c34f43a3f7b5596d120130b3a598f149329a586f0b000000000000",
+                  "opreturn_hex": "6a05534c4e4b0b2a017e8ce86de7e0786d58c3c71271253e60c9713fd130897c27f17ef4911dbb7cc5586f0b000000000000",
                   "output_script_hex": "530b69642f6973737565722d614c547b226c696e6b223a7b2263726564223a2264373837303639383962373365383234383262376663623638346466656563386235386637666264333064623338343761333832633062306361343861306261227d7d6d75001440c609c77b9184ad947075d75074acf2d14a5865",
                   "owner_policy": {
                     "kind": "key",
@@ -30582,5 +30581,5 @@
   "suite": "refusal-coverage-matrix",
   "total_covered_codes": 84,
   "total_registered_codes": 84,
-  "version": "1.0.0-draft.3"
+  "version": "1.0.0-draft.4"
 }

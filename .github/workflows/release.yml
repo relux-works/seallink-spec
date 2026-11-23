@@ -27,6 +27,9 @@ jobs:
       - name: Run specification consistency, schema, and vector linter
         run: python3 tools/speclint.py --require-jsonschema
 
+      - name: Run exhaustive verifier refusal-branch mutation audit
+        run: python3 tools/mutation_audit.py --min-kill-pct 99
+
       - name: Build single-file Markdown and standalone HTML/Print-PDF release bundles
         env:
           TAG: ${{ github.ref_name }}
@@ -80,8 +83,8 @@ jobs:
           - Conformance Requirements, Open Questions, and SLIP Template
           - Machine-Readable Registries (\`registry/*.json\`)
           - Formal Draft 2020-12 Wire JSON Schemas (\`schemas/*.schema.json\`) — live at \`https://seallink.org/releases/${TAG}/schemas/\`
-          - Informative Guides (\`GUIDE-01\`), Complete 113-Rule Inventory, and Conformance Vector Manifest (9 executable suites, including 4 full traces, schema-validated 84/84 refusal-code matrix, adversarial security-conformance suite, and verifier-check mutation self-tests executed by \`tools/seallink_verifier.py\`)
-          - Two-node Namecoin Core \`nc28.0\` \`P2A\` package-relay regtest proof (\`conformance/p2a-regtest/\`)
+          - Informative Guides (\`GUIDE-01\`), Complete 113-Rule Inventory (mechanically checked against \`registry/refusal-codes.json\`), and Conformance Vector Manifest (9 executable suites, 312 live verifier checks, 1312 Draft 2020-12 schema checks, schema-validated 84/84 refusal-code matrix, and 100.0% \`231/231\` exhaustive refusal-branch verifier mutation coverage via \`tools/mutation_audit.py\`)
+          - Two-node Namecoin Core \`nc28.0\` regtest proofs: standalone \`P2A\` package relay (\`conformance/p2a-regtest/\`) and live 4-trace end-to-end suite (\`conformance/traces-regtest/\`, including \`P2WSH\` 2-of-3 \`namepsbt\`, CSV \`guardian_slot_pending\`, \`single_use_1_of_2\` \`0x11\`/revoke, and TRUC v3 \`P2A\` CPFP revoke)
 
           **SHA-256 (\`seallink-spec-${TAG}.md\`):** \`${SHA_MD}\`  
           **SHA-256 (\`seallink-spec-${TAG}.html\`):** \`${SHA_HTML}\`

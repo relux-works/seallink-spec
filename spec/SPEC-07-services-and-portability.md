@@ -1,6 +1,6 @@
 # SPEC-07: Grant-Gated Services, Replaceable Providers, Federated Disclosure, and Extensions
 
-- **Version:** `1.0.0-draft.3`
+- **Version:** `1.0.0-draft.4`
 - **Status:** `draft` (normative rules `decided`; unprofiled standard service types tracked `open` in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/trace-04-agent-guardian-intake.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/service-types.json`, `registry/object-types.json`, `registry/refusal-codes.json`

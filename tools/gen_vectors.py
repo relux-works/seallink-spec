@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.3.
+Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.4.
 
 Produces nine executable JSON vector suites under vectors/:
   1. wire-jcs-and-hashes.json
@@ -30,7 +30,7 @@ import build_security_suite as sec
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.3"
+VERSION = "1.0.0-draft.4"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 VECTORS_DIR = ROOT / "vectors"
 
@@ -1694,10 +1694,10 @@ def build_trace_03_delegation() -> dict[str, Any]:
             "recorded_at": 1795220050,
             "result_sha256": sl.content_addr(tool_result),
             "settlements": [
-                {"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "station:fleet:tools", "settled": "1", "unit": "calls"},
-                {"account": "row", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "station:fleet:tools", "settled": "1", "unit": "calls"},
-                {"account": "own", "kind": "seallink/bytes", "released": "64296", "reserved": "65536", "resource": "station:fleet:tools", "settled": "1240", "unit": "bytes"},
-                {"account": "row", "kind": "seallink/bytes", "released": "64296", "reserved": "65536", "resource": "station:fleet:tools", "settled": "1240", "unit": "bytes"},
+                {"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "station:fleet:tools", "settled": "1", "unit": "calls", "window": "term"},
+                {"account": "row", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "station:fleet:tools", "row_ordinal": 1, "settled": "1", "unit": "calls", "window": "term"},
+                {"account": "own", "kind": "seallink/bytes", "released": "64296", "reserved": "65536", "resource": "station:fleet:tools", "settled": "1240", "unit": "bytes", "window": "term"},
+                {"account": "row", "kind": "seallink/bytes", "released": "64296", "reserved": "65536", "resource": "station:fleet:tools", "row_ordinal": 1, "settled": "1240", "unit": "bytes", "window": "term"},
             ],
             "tip_hash": h32("t3-tip-750110"),
             "tip_height": 750110,
@@ -1939,13 +1939,13 @@ def build_trace_03_delegation() -> dict[str, Any]:
     # Step C: normal confirmed execute on jr_a -> ADMIT + exact 10-entry dual-account multi-quota journal chain!
     rc = v.verify_invocation(inv1_env, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid, receipt_env_for_cache=rcpt1, actual_quota_usage=actual_usage_c1)
     assert rc.verdict == "ADMIT" and len(rc.journal_writes) == 10 and not jr_a.unsettled_reservations, rc
-    # Verify BOTH own(c1_id) and row(parent_id) settled to exact (1 call, 1240 bytes)!
+    # Verify BOTH own(c1_id) and row(parent_id, row_ordinal=1) settled to exact (1 call, 1240 bytes)!
     q_calls_k = "seallink/count|station:fleet:tools|calls|term"
     q_bytes_k = "seallink/bytes|station:fleet:tools|bytes|term"
     assert jr_a.quotas_used[(f"own:{c1_id}", q_calls_k, "term")] == 1
-    assert jr_a.quotas_used[(f"row:{parent_id}", q_calls_k, "term")] == 1
+    assert jr_a.quotas_used[(f"row:{parent_id}:1", q_calls_k, "term")] == 1
     assert jr_a.quotas_used[(f"own:{c1_id}", q_bytes_k, "term")] == 1240
-    assert jr_a.quotas_used[(f"row:{parent_id}", q_bytes_k, "term")] == 1240
+    assert jr_a.quotas_used[(f"row:{parent_id}:1", q_bytes_k, "term")] == 1240
 
     # Step D: unauthenticated forged replay of same invocation_id -> WIRE_SIGNATURE (Step 3b BEFORE Step 3c!)
     rd = v.verify_invocation(inv1_forged, bundle_c1, ch_a, jr_a, exec_a, use_txid=use_txid)
@@ -2017,9 +2017,9 @@ def build_trace_03_delegation() -> dict[str, Any]:
                 "receipt": envelope_record(rcpt1, "schemas/invocation.schema.json#/$defs/Receipt"),
                 "expected_settled_balances": {
                     f"own:{c1_id}|{q_calls_k}": 1,
-                    f"row:{parent_id}|{q_calls_k}": 1,
+                    f"row:{parent_id}:1|{q_calls_k}": 1,
                     f"own:{c1_id}|{q_bytes_k}": 1240,
-                    f"row:{parent_id}|{q_bytes_k}": 1240,
+                    f"row:{parent_id}:1|{q_bytes_k}": 1240,
                 },
                 "journal_chain": [
                     {"entry": unsigned_record(jw["entry"], "schemas/invocation.schema.json#/$defs/JournalEntry"), "c_before": jw["c_before"], "c_after": jw["c_after"]}

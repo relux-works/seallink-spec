@@ -20,7 +20,7 @@ import seallink_ref as sl
 import seallink_verifier as sv
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = "1.0.0-draft.3"
+VERSION = "1.0.0-draft.4"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 
 
@@ -491,7 +491,7 @@ def _strip_private(obj: Any) -> Any:
     return obj
 
 
-def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = False) -> str | None:
+def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = True) -> str | None:
     """Execute one refusal-coverage-matrix case using ONLY seallink_verifier / seallink_ref.
     Returns the computed refusal code (or None if admitted). NEVER reads case['expected_refusal'].
     """
@@ -1160,6 +1160,11 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             cp["revocation_seal"] = {"script_policy": cseal_pol, "txid": _h32("cr-seal-tx"), "vout": 0}
         c_env = sl.sign_envelope(cp, [iss_cr["sk"]])
         atx = _h32("cr-anchor-tx")
+        base_hist = sv.make_name_history(
+            "id/issuer-a", iss_reg, iss_owner_pol, {"link": {"cred": iss_cr["xonly"]}},
+            first_height=748000, update_height=749000,
+        )
+        prev_u = base_hist["updates"][-1]
         extra_upds = None
         if break_h_c is not None:
             brk_obj = {
@@ -1167,7 +1172,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
                 "genesis": GENESIS_MAIN,
                 "h_c": break_h_c,
                 "issuer": {"name": "id/issuer-a", "owner_policy": iss_owner_pol, "registration": iss_reg},
-                "name_input": iss_reg,
+                "name_input": {"txid": prev_u["txid"], "vout": prev_u["vout"]},
                 "role": "cred",
                 "type": "seallink-credential-break/1",
             }
@@ -1176,7 +1181,6 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
                 "confirmed_height": 749600,
                 "value": {"link": {"cred": _kp("cred-iss-cr-new")["xonly"]}},
                 "opreturn_hex": sl.encode_opreturn(0x0B, sl.signing_digest(brk_obj).hex(), 0x00, h_c=break_h_c).hex(),
-                "break_role": "cred",
             }]
         chain = {
             "network": "main",

@@ -84,6 +84,7 @@ def markdown_to_html(md_text: str, rel_link_map: dict[str, str]) -> tuple[str, l
     lines = md_text.splitlines()
     out: list[str] = []
     toc: list[tuple[int, str, str]] = []
+    seen_ids: dict[str, int] = {}
     i = 0
     n = len(lines)
 
@@ -120,12 +121,15 @@ def markdown_to_html(md_text: str, rel_link_map: dict[str, str]) -> tuple[str, l
             out.append(f"<pre><code{lang_cls}>{html.escape(chr(10).join(code_lines))}</code></pre>")
             continue
 
-        # Heading
+        # Heading (deduplicate repeated IDs deterministically within the document)
         hm = re.match(r"^(#{1,6})\s+(.*)$", line)
         if hm:
             lvl = len(hm.group(1))
             raw_title = hm.group(2).strip()
-            hid = _slugify(raw_title)
+            base_hid = _slugify(raw_title) or "section"
+            cnt = seen_ids.get(base_hid, 0) + 1
+            seen_ids[base_hid] = cnt
+            hid = base_hid if cnt == 1 else f"{base_hid}-{cnt}"
             if 2 <= lvl <= 3:
                 toc.append((lvl, re.sub(r"`([^`]+)`", r"\1", raw_title), hid))
             out.append(f'<h{lvl} id="{hid}">{_render_inline(raw_title, rel_link_map)}</h{lvl}>')
@@ -660,14 +664,18 @@ def build_site(version: str, out_dir: Path) -> dict[str, Any]:
                 render_page(title, version, body, toc), encoding="utf-8"
             )
 
-    # Full single-page HTML edition (with Print-to-PDF button)
+    # Full single-page HTML edition (with Print-to-PDF button & canonical release checksum link)
     full_body, full_toc = markdown_to_html(bundle_md, link_map)
     print_banner = (
-        '<div class="btn-row no-print" style="margin-bottom:24px;">'
+        '<div class="btn-row no-print" style="margin-bottom:12px;">'
         '<button class="btn btn-primary" onclick="window.print()" style="cursor:pointer;">Print / Save as PDF</button>'
         f'<a class="btn" href="/releases/{html.escape(version)}/{html.escape(md_name)}">Download Single-File Markdown</a>'
         f'<a class="btn" href="/releases/{html.escape(version)}/{html.escape(md_name)}.sha256">SHA-256 Checksum</a>'
+        f'<a class="btn" href="https://github.com/relux-works/seallink-spec/releases/tag/{html.escape(version)}" target="_blank" rel="noopener">GitHub Release Assets</a>'
         "</div>"
+        '<p class="no-print" style="font-size:0.84rem;color:var(--fg-muted);margin:0 0 24px;">'
+        'Note: For byte-exact SHA-256 verification of the standalone HTML bundle, download the signed GitHub Release asset (web proxies may inject scripts on HTML pages).'
+        "</p>"
     )
     html_name = f"seallink-spec-{version}.html"
     full_html = render_page(
@@ -677,6 +685,15 @@ def build_site(version: str, out_dir: Path) -> dict[str, Any]:
         full_toc,
         inline_css=True,
     )
+    # Self-check: verify zero duplicate element IDs and zero broken internal #fragment links
+    all_ids = re.findall(r'\bid="([^"]+)"', full_html)
+    dup_ids = sorted({x for x in all_ids if all_ids.count(x) > 1})
+    if dup_ids:
+        raise RuntimeError(f"Duplicate HTML IDs in {html_name}: {dup_ids}")
+    id_set = set(all_ids)
+    broken_frags = sorted({frag for frag in re.findall(r'href="#([^"]+)"', full_html) if frag not in id_set})
+    if broken_frags:
+        raise RuntimeError(f"Broken internal fragment links in {html_name}: {broken_frags}")
     full_html_bytes = full_html.encode("utf-8")
     full_html_sha = hashlib.sha256(full_html_bytes).hexdigest()
     (rel_base / html_name).write_bytes(full_html_bytes)
@@ -803,7 +820,8 @@ def build_site(version: str, out_dir: Path) -> dict[str, Any]:
 </div>
 
 <h2 id="release-artifacts">Release Checksums</h2>
-<pre><code>{bundle_sha}  {html.escape(md_name)}</code></pre>
+<pre><code>{bundle_sha}  {html.escape(md_name)}
+{full_html_sha}  {html.escape(html_name)}</code></pre>
 """
     (out_dir / "index.html").write_text(
         render_page("SealLink Protocol Specification", version, index_body), encoding="utf-8"
@@ -860,7 +878,7 @@ def build_site(version: str, out_dir: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build static website & live schema host for seallink.org.")
-    parser.add_argument("--version", default="v1.0.0-draft.3", help="Release version label (e.g. v1.0.0-draft.3)")
+    parser.add_argument("--version", default="v1.0.0-draft.4", help="Release version label (e.g. v1.0.0-draft.4)")
     parser.add_argument("--out", default=str(ROOT / "site"), help="Output directory for generated static site")
     args = parser.parse_args()
 

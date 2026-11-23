@@ -18,7 +18,7 @@ import build_refusal_matrix as rm
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.3"
+VERSION = "1.0.0-draft.4"
 GENESIS_MAIN = rm.GENESIS_MAIN
 
 
@@ -35,7 +35,7 @@ def _spk_hex(policy: dict[str, Any]) -> str:
     return sl.compile_script_policy(policy)[0].hex()
 
 
-def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = False) -> tuple[str, str | None]:
+def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = True) -> tuple[str, str | None]:
     """Execute one security-conformance case through Tier1Verifier. NEVER reads expected_* fields."""
     runner = case["runner"]
     inp = case["inputs"]
@@ -62,10 +62,19 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Fa
     if runner == "invocation":
         chain = sv.ChainView(inp["chain"])
         journal = sv.FencedJournal.from_dict(inp["journal"])
-        res = v.verify_invocation(inp["invocation"], inp["bundle"], chain, journal, inp["executor_cfg"])
+        raw_msg = bytes.fromhex(inp["raw_message_hex"]) if "raw_message_hex" in inp else None
+        res = v.verify_invocation(
+            inp["invocation"],
+            inp["bundle"],
+            chain,
+            journal,
+            inp["executor_cfg"],
+            use_txid=inp.get("use_txid"),
+            raw_message_bytes=raw_msg,
+        )
         return res.verdict, res.refusal_code
     if runner == "migration":
-        chain = sv.ChainView(inp["chain"])
+        chain = sv.ChainView(inp["chain"]) if inp.get("chain") is not None else None
         journal = sv.FencedJournal.from_dict(inp["journal"])
         res = v.verify_migration(inp["migration"], inp["export_bundle"], journal, chain, inp.get("manifests"))
         return res.verdict, res.refusal_code
@@ -74,8 +83,137 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Fa
         res = v.verify_owner_command(inp["command"], inp["device_list"], inp["is_foreign_service"], chain)
         return res.verdict, res.refusal_code
     if runner == "federation":
-        chain = sv.ChainView(inp["chain"])
+        chain = sv.ChainView(inp["chain"]) if inp.get("chain") is not None else None
         res = v.verify_federation_disclosure(inp["policy"], inp["peer_ctx"], inp["grant"], chain=chain)
+        return res.verdict, res.refusal_code
+    if runner == "credential":
+        chain = sv.ChainView(inp["chain"])
+        sk = set(inp["supported_kinds"]) if inp.get("supported_kinds") is not None else None
+        res = v.verify_credential(inp["credential"], inp.get("anchor_txid"), chain, supported_kinds=sk)
+        return res.verdict, res.refusal_code
+    if runner == "issuer_role":
+        chain = sv.ChainView(inp["chain"])
+        err = v.verify_issuer_role_at_height(
+            inp["issuer_pin"],
+            inp["envelope"],
+            inp["role"],
+            inp["anchor_height"],
+            chain,
+            resolve_at_tip=inp.get("resolve_at_tip", False),
+        )
+        return ("REFUSE", err) if err else ("ADMIT", None)
+    if runner == "sibling_rows_replay":
+        chain = sv.ChainView(inp["chain"])
+        journal = sv.FencedJournal.from_dict(inp["journal"])
+        for step in inp["steps"]:
+            before_n = len(journal.entries)
+            res = v.verify_invocation(
+                step["invocation"],
+                step["bundle"],
+                chain,
+                journal,
+                inp["executor_cfg"],
+                use_txid=step.get("use_txid"),
+            )
+            if (res.verdict, res.refusal_code) != (step["want_verdict"], step.get("want_refusal")):
+                return "REFUSE", f"STEP_MISMATCH:{step['label']}:{(res.verdict, res.refusal_code)}"
+            if res.verdict == "REFUSE" and len(journal.entries) != before_n:
+                return "REFUSE", f"UNEXPECTED_WRITE_ON_REFUSAL:{step['label']}"
+        # Reconstruct a brand-new journal strictly from persisted entries and verify distinct row balances!
+        replayed = sv.FencedJournal.replay_persisted_entries(journal.journal_id, copy.deepcopy(journal.entries))
+        if replayed.commitment != journal.commitment or replayed.pos != journal.pos:
+            return "REFUSE", "REPLAY_COMMITMENT_MISMATCH"
+        for bspec in inp["check_balances"]:
+            key = (bspec["scope"], bspec["qkey"], bspec["bucket_id"])
+            got_live = journal.quotas_used.get(key, 0)
+            got_rep = replayed.quotas_used.get(key, 0)
+            if got_live != bspec["expected"] or got_rep != bspec["expected"]:
+                return "REFUSE", f"BALANCE_MISMATCH:{bspec['scope']}:{got_live}:{got_rep}"
+        return "ADMIT", None
+    if runner == "raw_wire":
+        if "raw_bytes_utf8" in inp:
+            ok, res = v.verify_wire_bytes(
+                inp["raw_bytes_utf8"].encode("utf-8"),
+                max_bytes_override=inp.get("max_bytes_override"),
+            )
+            return ("ADMIT", None) if ok else ("REFUSE", res)
+        ok, res = v._verify_object_wire(inp["object"], expected_type=inp.get("expected_type"))
+        if ok and "max_wire_bytes" in inp:
+            if len(sl.jcs_encode(res)) > inp["max_wire_bytes"]:
+                return "REFUSE", "WIRE_SIZE"
+        return ("ADMIT", None) if ok else ("REFUSE", res)
+    if runner == "continuity":
+        journal = sv.FencedJournal.from_dict(inp["journal"])
+        err = journal.check_continuity()
+        return ("REFUSE", err) if err else ("ADMIT", None)
+    if runner == "chain_obs":
+        chain = sv.ChainView(inp["chain"])
+        if inp.get("rebracket"):
+            err = v.check_rebracket(chain, risk_class=inp.get("risk_class", 1))
+        else:
+            err = v.check_chain_observation(chain, risk_class=inp.get("risk_class", 1))
+        return ("REFUSE", err) if err else ("ADMIT", None)
+    if runner == "seal":
+        chain = sv.ChainView(inp["chain"])
+        _, err, _ = v.evaluate_seal(inp["seal"], chain, required_depth=inp.get("required_depth", 1))
+        return ("REFUSE", err) if err else ("ADMIT", None)
+    if runner == "single_use_seal":
+        chain = sv.ChainView(inp["chain"])
+        _, err, _ = v.evaluate_single_use_seal(
+            inp["seal"],
+            inp.get("use_txid"),
+            inp["invocation_content_addr"],
+            inp.get("required_depth", 1),
+            chain,
+        )
+        return ("REFUSE", err) if err else ("ADMIT", None)
+    if runner == "name_resolve":
+        chain = sv.ChainView(inp["chain"])
+        nrec, err = v.resolve_name(
+            inp["name"],
+            chain,
+            expected_owner_policy=inp.get("expected_owner_policy"),
+            expected_registration=inp.get("expected_registration"),
+            require_writer=inp.get("require_writer", True),
+            require_history=inp.get("require_history", True),
+            at_height=inp.get("at_height"),
+        )
+        if err:
+            return "REFUSE", err
+        if "check_role" in inp:
+            assert nrec is not None
+            _, rerr = v.resolve_role_policy(
+                nrec,
+                inp["check_role"],
+                presented_role_policy=inp.get("presented_role_policy"),
+                recent_block_height=inp.get("recent_block_height"),
+            )
+            return ("REFUSE", rerr) if rerr else ("ADMIT", None)
+        if inp.get("check_manifest"):
+            assert nrec is not None
+            journal = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+            _, merr = v.resolve_manifest(inp["name"], nrec, inp.get("manifests", {}), chain, journal)
+            return ("REFUSE", merr) if merr else ("ADMIT", None)
+        return "ADMIT", None
+    if runner == "auth_challenge":
+        chain = sv.ChainView(inp["chain"])
+        journal = sv.FencedJournal.from_dict(inp.get("journal", {"journal_id": _h32("ac-j")}))
+        res = v.verify_auth_challenge(
+            inp["challenge"],
+            chain,
+            journal,
+            inp["service_id"],
+            inp.get("manifests", {}),
+        )
+        return res.verdict, res.refusal_code
+    if runner == "contract_assents":
+        chain = sv.ChainView(inp["chain"])
+        res = v.verify_contract_assents(inp["contract"], inp["assents"], inp.get("origin_bundles", {}), chain)
+        return res.verdict, res.refusal_code
+    if runner == "bearer_session":
+        chain = sv.ChainView(inp["chain"])
+        journal = sv.FencedJournal.from_dict(inp["journal"])
+        res = v.verify_bearer_session(inp["token"], inp["slot_binding"], chain, journal)
         return res.verdict, res.refusal_code
     raise ValueError(f"Unknown security runner: {runner}")
 
@@ -671,10 +809,13 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "Direct Contour A routing (no screening_agent hop) backed by verified L2 P-256 owner command admits PII disclosure.",
     )
 
+    import build_branch_suite as bbs
+    bbs.add_acceptance_and_branch_cases(add)
+
     return {
         "suite": "security-conformance",
         "version": VERSION,
-        "description": "Executable adversarial false-admit regression and positive interoperability suite covering authoritative issuer/executor key binding, mandatory guardian assent, closed-schema ingress, healthy comparison peers, disposer rotation, Ed25519/P-256 low-S device keys, and emancipation handover.",
+        "description": "Executable adversarial false-admit regression, acceptance (0x0b policy-scoped compromise, sibling-row row_ordinal quota accounting & journal replay, 32-quota/64-settlement max receipt), interoperability, and exhaustive refusal-branch suite.",
         "total_cases": len(cases),
         "cases": cases,
     }
@@ -684,7 +825,7 @@ def run_verifier_mutation_tests(
     sec_suite: dict[str, Any],
     matrix_suite: dict[str, Any],
     *,
-    require_jsonschema: bool = False,
+    require_jsonschema: bool = True,
 ) -> tuple[int, list[str]]:
     """Mutate 10 real security checks inside Tier1Verifier/seallink_ref and prove EVERY mutation is caught!"""
     sec_by_id = {c["id"]: c for c in sec_suite["cases"]}

@@ -1,6 +1,6 @@
 # SPEC-04: Origin Certificates, Legal Capacity, and Multi-Guardian Quorums
 
-- **Version:** `1.0.0-draft.3`
+- **Version:** `1.0.0-draft.4`
 - **Status:** `draft` (core model and acyclic transitions `decided`; trusted calendar time-interval oracle profile remains `open` in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-02-guardian-succession-assent.json`, `vectors/trace-04-agent-guardian-intake.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/opreturn-actions.json`, `registry/refusal-codes.json`
@@ -145,7 +145,7 @@ To change approved `revision_size` (e.g., reducing `2 -> 1` when one parent lose
 2. The `0x0f` transaction creates `next_roster_policy` (`both_of_2(new_disposer_pk, new_arbiter_pk)`) at `next_roster_vout`, creates any `new_vacant` slot UTXOs at their declared `new_vacant_vout` indices, and anchors `content_addr(seallink-guardian-roster/1)` via `OP_RETURN 0x0f`. Each slot entry in `slots[]` specifies one of three transition actions:
    - **`retain_active`:** Carries forward an unspent active slot outpoint `(active_outpoint, guardian_id)` from the previous revision (FORBIDDEN if `disposer_pk` or `arbiter_pk` changed, because the existing `either_of_2` output would still reference the retired `disposer_pk`).
    - **`retain_vacant`:** Carries forward an unspent vacant slot outpoint (`vacant_outpoint`) from the previous revision (FORBIDDEN if `disposer_pk` or `arbiter_pk` changed, because the existing `both_of_2` output would still reference retired keys).
-   - **`new_vacant`:** Creates a fresh `both_of_2(new_disposer_pk, new_arbiter_pk)` vacant slot UTXO at `(txid_0x0f, new_vacant_vout)` (REQUIRED for every slot whenever `disposer_pk` or `arbiter_pk` changes, and used to recover `contested_burned` slots or add new slots).
+   - **`new_vacant`:** Creates a fresh `both_of_2(new_disposer_pk, new_arbiter_pk)` vacant slot UTXO at `(txid_0x0f, new_vacant_vout)` (REQUIRED for every slot whenever `disposer_pk` or `arbiter_pk` changes, and used to recover `contested_burned` slots or add new slots). **Operational consequence:** because rotating `disposer_pk` or `arbiter_pk` recreates all slots as `new_vacant`, the ward remains without active guardians (fail-closed) for at least one appointment delay window (`appointment_delay_blocks`) until successor appointments complete `0x0d -> 0x0e`.
 3. `payload.revision` MUST equal `prev_revision + 1`, and `payload` MUST satisfy all `SL-ORIG-016` invariants (`len(slots) == revision_size`, `1 <= num <= den`, `1 <= min <= revision_size`, `disposer_pk != arbiter_pk`, and no `retain_active` / `retain_vacant` when `disposer_pk` or `arbiter_pk` changes -> `CHAIN_SCRIPT_UNSUPPORTED`).
 4. The new roster takes effect after `effective_delay_blocks` confirmations (`>= origin.guardian_policy.appointment_delay_blocks`). While `roster_seal` is spent and `seallink-guardian-roster/1` is not presented (or fails verification), verifiers fail closed with `ORIGIN_STATUS_INCOMPLETE`.
 5. **Issuer-key survival (`SL-ORIG-008`, `decided`):** Both `seallink-guardian/1` and `seallink-guardian-roster/1` verify `issuer.role_policy` (`link.cred`) **at their confirmed anchor height**, bounded by `0x0b` (`h_c`), so routine issuer key rotation never orphans wards.

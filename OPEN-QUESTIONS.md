@@ -1,6 +1,6 @@
 # SealLink Open Questions and Provisional Parameters
 
-- **Version:** `1.0.0-draft.3`
+- **Version:** `1.0.0-draft.4`
 - **Purpose:** Authoritative registry of every unresolved design item, provisional numeric constant, deferred extension, and unprofiled standard service type. Per `SPEC-00 §5.1`, readers MUST fail closed on any unprofiled `open` construct.
 
 ---
@@ -14,8 +14,8 @@
 | `OQ-003` | `SPEC-06 §6` (`SL-GRNT-014`) | `open` | **External CAS witness wire protocol** (`advance(journal_id, token, pos, from_commit, to_commit)`). | State machine and fencing invariants are `decided`; interoperable wire transport (e.g., HTTP CAS / Raft / consensus-backed service) remains operator-local until profiled. |
 | `OQ-004` | `SPEC-03 §4` (`SL-IDEN-009`) | `open` | **HTTPS `.well-known` domain-binding verification** (Channel 2 pairing between `id/<label>` and `d/<label>` or DNSSEC/NIP-05). | Channel 0 (inline) and Channel 1 (local cache / configured mirrors) work unconditionally; Channel 2 is optional and hash-pinned only. |
 | `OQ-005` | `SPEC-01 §4.1` (`SL-WIRE-012`) | `open` | **Additional hardware device algorithms** (`fido2-es256`, `fido2-eddsa`, `ssh-ed25519` WebAuthn/SSH wrappers). | v1.0 closes `DeviceList.alg` to `bip340`, `p256`, and `ed25519`. Hardware wrapper formats will be proposed via SLIPs with exact canonical challenge framing. |
-| `OQ-006` | `SPEC-02 §6.3` (`SL-LDGR-013`) | `open` | **Production propagation qualification for TRUC v3 / `P2A` (`51024e73`) CPFP revocation.** | Two-node Namecoin Core `nc28.0` regtest 1p1c `submitpackage` + P2P propagation + confirmation is verified (`conformance/p2a-regtest/`, covering `minrelaytxfee = 0.001 NMC/1000 vB` and `240`-sat `P2A` dust floor). Independent operator administration, fee competition, and mainnet propagation remain open before `chain-tested` maturity. |
-| `OQ-007` | `SPEC-02 §3.1` (`SL-LDGR-004`), `SPEC-04 §3.1` | `open` | **Threshold ECDSA (`P2WPKH` / single-key branch) operational qualification.** | Native `P2WSH` `m-of-n` via `namepsbt` is the primary v1.0 threshold custody path for name outputs (`nc28.0` standard policy). Institutional single-key roles (`disposer_pk`, `arbiter_pk`, `challenger_pk`, single-key `P2WPKH` seals) require external threshold ECDSA signing qualification if shared across multiple operators. |
+| `OQ-006` | `SPEC-02 §6.3` (`SL-LDGR-013`) | `open` | **Production propagation qualification for TRUC v3 / `P2A` (`51024e73`) CPFP revocation.** | Two-node Namecoin Core `nc28.0` regtest 1p1c `submitpackage` + P2P propagation + confirmation is verified both standalone (`conformance/p2a-regtest/`) and end-to-end inside live `Tier1Verifier` Trace 03 (`conformance/traces-regtest/`, covering `minrelaytxfee = 0.001 NMC/1000 vB` and `240`-sat `P2A` dust floor). Independent operator administration, fee competition, and mainnet propagation remain open before `chain-tested` maturity. |
+| `OQ-007` | `SPEC-02 §3.1` (`SL-LDGR-004`), `SPEC-04 §3.1` | `open` | **Threshold ECDSA (`P2WPKH` / single-key branch) operational qualification.** | Native `P2WSH` `m-of-n` via `namepsbt` is verified live on `nc28.0` standard policy (`conformance/traces-regtest/` Trace 02) and is the primary v1.0 threshold custody path for name outputs. Institutional single-key roles (`disposer_pk`, `arbiter_pk`, `challenger_pk`, single-key `P2WPKH` seals) require external threshold ECDSA signing qualification if shared across multiple operators. |
 
 ---
 

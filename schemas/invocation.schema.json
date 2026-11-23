@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.3/schemas/invocation.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.4/schemas/invocation.schema.json",
   "title": "SealLink v1.0 Invocation, Receipt, Sessions, Auth, Owner Control, Journal & Migration",
   "$defs": {
     "Invocation": {
@@ -68,20 +68,25 @@
             "refusal_code": { "type": "string", "minLength": 1, "maxLength": 64 },
             "settlements": {
               "type": "array",
-              "maxItems": 32,
+              "maxItems": 64,
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["kind", "resource", "unit", "reserved", "settled", "released"],
+                "required": ["account", "kind", "resource", "unit", "window", "reserved", "settled", "released"],
                 "properties": {
                   "account": { "type": "string", "enum": ["own", "row", "session"] },
+                  "row_ordinal": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
                   "kind": { "type": "string", "minLength": 1, "maxLength": 128 },
                   "resource": { "type": "string", "minLength": 1, "maxLength": 256 },
                   "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
+                  "window": { "type": "string", "pattern": "^(term|blocks:[1-9][0-9]{0,8}|seconds:[1-9][0-9]{0,9})$" },
                   "reserved": { "$ref": "common.schema.json#/$defs/Uint64Str" },
                   "settled": { "$ref": "common.schema.json#/$defs/Uint64Str" },
                   "released": { "$ref": "common.schema.json#/$defs/Uint64Str" }
-                }
+                },
+                "if": { "properties": { "account": { "const": "row" } } },
+                "then": { "required": ["row_ordinal"] },
+                "else": { "not": { "required": ["row_ordinal"] } }
               }
             },
             "result_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
@@ -341,6 +346,7 @@
                 "invocation_id": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "grant_id": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "account": { "type": "string", "enum": ["own", "row", "session"] },
+                "row_ordinal": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
                 "quota_kind": { "type": "string", "minLength": 1, "maxLength": 128 },
                 "resource": { "type": "string", "minLength": 1, "maxLength": 256 },
                 "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
@@ -348,7 +354,10 @@
                 "bucket_id": { "type": "string", "minLength": 1, "maxLength": 64 },
                 "amount": { "$ref": "common.schema.json#/$defs/Uint64Str" },
                 "recorded_at": { "$ref": "common.schema.json#/$defs/Uint53" }
-              }
+              },
+              "if": { "properties": { "account": { "const": "row" } } },
+              "then": { "required": ["row_ordinal"] },
+              "else": { "not": { "required": ["row_ordinal"] } }
             }
           }
         },
@@ -370,6 +379,7 @@
                 "invocation_id": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "grant_id": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "account": { "type": "string", "enum": ["own", "row", "session"] },
+                "row_ordinal": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
                 "quota_kind": { "type": "string", "minLength": 1, "maxLength": 128 },
                 "resource": { "type": "string", "minLength": 1, "maxLength": 256 },
                 "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
@@ -380,7 +390,10 @@
                 "released": { "$ref": "common.schema.json#/$defs/Uint64Str" },
                 "receipt_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "recorded_at": { "$ref": "common.schema.json#/$defs/Uint53" }
-              }
+              },
+              "if": { "properties": { "account": { "const": "row" } } },
+              "then": { "required": ["row_ordinal"] },
+              "else": { "not": { "required": ["row_ordinal"] } }
             }
           }
         },

@@ -1,6 +1,6 @@
 # SPEC-05: Contracts, Symmetric Assent, Verifiable Credentials, and General Notary Acts
 
-- **Version:** `1.0.0-draft.3`
+- **Version:** `1.0.0-draft.4`
 - **Status:** `draft` (normative rules `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/trace-02-guardian-succession-assent.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/opreturn-actions.json`, `registry/refusal-codes.json`
@@ -83,8 +83,8 @@ Third-party attestations about a subject — diplomas, licenses, notary credenti
    - **`revocable`:** MUST carry a confirmed `revocation_seal`; `not_after_height` is optional. By default verifies the issuer's `link.cred` role policy current at tip (exceptions such as `seallink-guardian/1` verify at `h_anchor`, `SL-ORIG-008`). Spending the seal closes the credential (`SEAL_SPENT`); spending with `OP_RETURN 0x0a` (`seallink-credential-withdrawal/1`) records `CRED_REVOKED_FOR_CAUSE`.
 4. **Owner-authenticated compromise break `h_c` (`0x0b`, `SL-CONT-009`, `decided`):**
    - If an issuer's `cred` or `notary` role policy (current or retired) is compromised, the issuer's cold `name_owner` `ScriptPolicy` broadcasts an `OP_NAME_UPDATE` (removing/replacing the role if current, signed `SIGHASH_ALL`) containing the 50-byte `0x0b` frame embedding `h_c_le64` (`<= inclusion_height`) and `typed_digest(seallink-credential-break/1)`.
-   - Because verifiers reconstruct `seallink-credential-break/1` directly from the name history and on-chain `h_c`, withholding off-chain break documents cannot hide a compromise.
-   - For the affected `(issuer, registration, owner_policy, compromised_policy)`: anchors at `h_anchor < h_c` survive, while anchors at `h_anchor >= h_c` durably refuse **`CRED_ISSUER_CLOSED`** (for both eternal and revocable lifecycles). Multiple breaks narrow by `min(h_c)`.
+   - Because verifiers reconstruct `seallink-credential-break/1` directly from the name history (using the spent previous name output `name_input`, `issuer` `NamePin`, `role`, candidate historical `compromised_policy`, and on-chain `h_c`), withholding off-chain break documents cannot hide a compromise.
+   - For the exact affected `(issuer, registration, owner_policy, role, compromised_policy)` whose reconstructed `typed_digest(seallink-credential-break/1)` matches the `0x0b` frame commitment: anchors at `h_anchor < h_c` survive, while anchors at `h_anchor >= h_c` durably refuse **`CRED_ISSUER_CLOSED`** (for both eternal and revocable lifecycles). Multiple breaks matching the same policy narrow by `min(h_c)`. Records signed by a distinct successor policy `B` installed via valid `OP_NAME_UPDATE` (or under a different role) do NOT match `compromised_policy = A` and therefore remain valid.
 5. **Privacy:** Raw PII MUST NOT appear on chain (`loc_type = 0x00` default). Issuers deduplicating humans MUST NOT hash raw biometrics directly. Per-claim selective disclosure uses `claim_commitments` with an independent 32-byte CSPRNG salt per entry (`SL-WIRE-014`).
 
 ### 4.2 Deterministic Credential Verification Order (`SL-CONT-010`, `decided`)

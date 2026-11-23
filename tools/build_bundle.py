@@ -91,48 +91,48 @@ def build_bundle(version: str) -> str:
         "> **License:** Prose under CC BY 4.0; registries, schemas, vectors, and tooling under MIT.\n"
     )
 
-    # Table of Contents
+    # Table of Contents (bold part labels avoid duplicate heading anchors with Part I..VI body sections)
     toc: list[str] = ["## Table of Contents\n"]
-    toc.append("### Part I — Normative Core Specifications")
+    toc.append("**Part I — Normative Core Specifications**")
     for p in spec_files:
         title = first_heading(p)
         toc.append(f"- [{title}](#{github_anchor(title)}) (`{p.relative_to(ROOT)}`)")
 
     if profile_files:
-        toc.append("\n### Part II — Standard Profiles")
+        toc.append("\n**Part II — Standard Profiles**")
         for p in profile_files:
             title = first_heading(p)
             toc.append(f"- [{title}](#{github_anchor(title)}) (`{p.relative_to(ROOT)}`)")
 
     if governance_files:
-        toc.append("\n### Part III — Conformance, Open Questions, and SLIP Governance")
+        toc.append("\n**Part III — Conformance, Open Questions, and SLIP Governance**")
         for p in governance_files:
             title = first_heading(p)
             toc.append(f"- [{title}](#{github_anchor(title)}) (`{p.relative_to(ROOT)}`)")
 
-    toc.append("\n### Part IV — Machine-Readable Registries (Normative SSOT)")
+    toc.append("\n**Part IV — Machine-Readable Registries (Normative SSOT)**")
     for p in registry_files:
         heading = f"Registry: {p.name}"
         toc.append(f"- [{heading}](#{github_anchor(heading)}) (`{p.relative_to(ROOT)}`)")
 
-    toc.append("\n### Part V — Formal Wire JSON Schemas (Normative SSOT)")
+    toc.append("\n**Part V — Formal Wire JSON Schemas (Normative SSOT)**")
     for p in schema_files:
         heading = f"Schema: {p.name}"
         toc.append(f"- [{heading}](#{github_anchor(heading)}) (`{p.relative_to(ROOT)}`)")
 
     if guide_files:
-        toc.append("\n### Part VI — Informative Implementation Guides")
+        toc.append("\n**Part VI — Informative Implementation Guides**")
         for p in guide_files:
             title = first_heading(p)
             toc.append(f"- [{title}](#{github_anchor(title)}) (`{p.relative_to(ROOT)}`)")
 
     if inventory_file.exists():
         title = first_heading(inventory_file)
-        toc.append("\n### Appendix A — Migration Traceability")
+        toc.append("\n**Appendix A — Migration Traceability**")
         toc.append(f"- [{title}](#{github_anchor(title)}) (`{inventory_file.relative_to(ROOT)}`)")
 
     if vector_files:
-        toc.append("\n### Appendix B — Conformance Vector Manifest")
+        toc.append("\n**Appendix B — Conformance Vector Manifest**")
         toc.append("- [Conformance Vector Manifest](#conformance-vector-manifest) (`vectors/*.json`)")
 
     parts.append("\n".join(toc) + "\n")
@@ -203,7 +203,7 @@ def build_bundle(version: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build single-file SealLink specification Markdown bundle.")
-    parser.add_argument("--version", default="v1.0.0-draft.3", help="Release version label (e.g. v1.0.0-draft.3)")
+    parser.add_argument("--version", default="v1.0.0-draft.4", help="Release version label (e.g. v1.0.0-draft.4)")
     parser.add_argument("--out", help="Output path for bundled Markdown file")
     parser.add_argument("--sha256-out", help="Optional path to write SHA-256 checksum file")
     parser.add_argument("--check", action="store_true", help="Build in memory and verify non-empty deterministic output without writing")
