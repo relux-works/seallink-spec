@@ -64,11 +64,9 @@ ROLES = ("control", "witness", "decision")
 CODE_STATUS = {
     "text": "The refusal code is named by the cited rule or by its registry description for exactly this condition.",
     "derived": (
-        "No rule names a code for this exact condition, but the text makes the result equal to that of a paired control: "
-        "the varied element cannot change the subject's state (a presenter-supplied or presenter-withheld element, while "
-        "the state is defined by chain events), or the same admission pipeline runs on the same grant. The expected result "
-        "is therefore the paired control's. Where failing closed on the element itself is equally defensible, that result "
-        "is listed in also_acceptable."
+        "No rule names a code for this exact condition, but the text makes the result equal to that of a paired control (for "
+        "example, the same admission pipeline runs on the same grant), so the expected result is the paired control's. Where "
+        "failing closed on the varied element itself is equally defensible, that result is listed in also_acceptable."
     ),
     "undefined": (
         f"{REFERENCE_LABEL} defines no admission step or refusal code for this condition: expected_refusal is null, only "
@@ -131,6 +129,22 @@ def _published_ids(predicate: Callable[[dict[str, Any], str], bool]) -> list[str
             out.append(case["id"])
     assert out, "a decision record must name at least one published case it conflicts with"
     return out
+
+
+def _check_published_refs(refs: list[str]) -> list[str]:
+    """Every conflicts_with entry must name a published security case id, a refusal-matrix row
+    (`vectors/refusal-coverage-matrix.json#<CODE>`) or a published vector file (`vectors/<file>`)."""
+    case_ids = {c["id"] for c in _vector("security-conformance.json")["cases"]}
+    matrix_codes = {c["code"] for c in _vector("refusal-coverage-matrix.json")["cases"]}
+    for ref in refs:
+        if ref.startswith("vectors/refusal-coverage-matrix.json#"):
+            assert ref.split("#", 1)[1] in matrix_codes, ref
+        elif ref.startswith("vectors/"):
+            assert (ROOT / ref).is_file(), ref
+        else:
+            assert ref in case_ids, ref
+    assert len(set(refs)) == len(refs), refs
+    return refs
 
 
 _RULES: set[str] = set()
@@ -380,7 +394,7 @@ class CandidateSuite:
             "reference_result": {"verdict": reference[0], "refusal": reference[1]},
         }
         if conflicts_with:
-            cand["conflicts_with"] = conflicts_with
+            cand["conflicts_with"] = _check_published_refs(conflicts_with)
         case = self._add(cid, rules, runner, inputs, (readings[0]["verdict"], readings[0]["refusal"]), note, cand)
         if self.verify:
             observed = sec.execute_security_case(case)
@@ -408,7 +422,8 @@ def build_r2g01(s: CandidateSuite) -> None:
         "R2G-01",
         "A withheld recovery candidate keeps the superseded (or recovery-frozen) name binding B1 in force: regression of D-1",
         [
-            "spec/SPEC-04 §6 Recovery Seal State Transition Table (SL-ORIG-013, SL-ORIG-014)",
+            "spec/SPEC-04 §6 and its Recovery Seal State Transition Table (SL-ORIG-013, SL-ORIG-014)",
+            "spec/SPEC-04 §2.1 item 6 and §3.5 item 4 (fail-closed handling of the other spine seals)",
             "CONFORMANCE.md §2 item 5",
             f"tools/seallink_verifier.py:2316-2356 ({REFERENCE_LABEL})",
         ],
@@ -421,7 +436,15 @@ def build_r2g01(s: CandidateSuite) -> None:
     candidates = [nr["candidate_b2"]["object"], nr["candidate_b3"]["object"]]
     b1 = sl.object_id(t2["name_binding"]["object"])
     trusted = t2["trusted_origin_issuers"]
-    post_delay = branch_b["chain_state"]
+
+    # trace-02 never registers the names its candidate bindings B2 and B3 name ('naming the new confirmed registration',
+    # SPEC-04 §6); confirm both, so that no reading of the controls depends on that gap of the published trace.
+    post_delay = copy.deepcopy(branch_b["chain_state"])
+    for cand in candidates:
+        assert cand["name"] not in post_delay["names"], cand["name"]
+        post_delay["names"][cand["name"]] = sv.make_name_history(
+            cand["name"], cand["registration"], cand["owner_policy"], {"link": {"origin": cand["origin_id"]}}, first_height=750000, update_height=750010
+        )
 
     # The same branch observed while the B3 recovery is still pending: tip between the last 0x0c record and h_rec + delay.
     def action(tx: dict[str, Any]) -> str | None:
@@ -433,8 +456,10 @@ def build_r2g01(s: CandidateSuite) -> None:
     assert h_rec < pending_tip < h_rec + delay <= post_delay["tip_height"], (h_rec, delay, post_delay["tip_height"])
     pending = copy.deepcopy(post_delay)
     pending["tip_height"] = pending_tip
+    pending["tip_hash"] = _h32("r2g01-pending-tip")
     for peer in pending["comparison_peers"]:
         peer["height"] = pending_tip
+        peer["hash_at_tip"] = pending["tip_hash"]
     pending["txs"] = {txid: tx for txid, tx in pending["txs"].items() if (tx.get("confirmed_height") or 0) <= pending_tip}
 
     def status(chain: dict[str, Any], *, presented: bool, assert_b1: bool) -> dict[str, Any]:
@@ -445,19 +470,23 @@ def build_r2g01(s: CandidateSuite) -> None:
         return inputs
 
     basis = (
-        "SPEC-04 §6 Recovery Seal State Transition Table: a valid 0x0c spend of recovery_seal moves the origin to "
-        "pending_recovery (RECOVERY_FORBIDDEN); once h_rec + delay_blocks passes without a valid 0x10 cancel, B_{k+1} is active "
-        "and B_k is superseded (ORIGIN_BINDING_INVALID); only a malformed spend or a recovery_seal 'absent from UTXO without "
-        "valid 0x0c record' burns the recovery line and lets B_k continue. The 0x0c record here is the one the paired control "
-        "verifies; whether it is valid is a property of the chain, and CONFORMANCE.md §2 item 5 says a verifier 'MUST NOT "
-        "accept ledger state, block heights, or UTXO spend status from the presenter or issuer'. Withholding the candidate "
-        "document therefore cannot turn the recovery into a burned one: the expected result is the paired control's."
+        "SPEC-04 §6: a recovery spends recovery_seal with OP_RETURN 0x0c 'committing a new seallink-name-binding/1 (seq = "
+        "prev_binding.seq + 1, naming the new confirmed registration, new owner_policy, supersedes_binding_id = id(prev_binding), "
+        "AND continuation next_recovery_vout + next_recovery_policy ...)'. Whether a spend is a valid recovery (pending_recovery, "
+        "RECOVERY_FORBIDDEN; after the delay 'B_k permanently superseded (ORIGIN_BINDING_INVALID)') or a 'Malformed spend of "
+        "recovery_seal (missing valid 0x0c or missing valid next_recovery_vout)' that burns the line and lets B_k continue is "
+        "decided by that committed document, and only the presenter supplies it; with it, the paired controls show the codes "
+        "of the true state. No row covers a well-formed 0x0c whose committed binding is withheld. For the other spine seals "
+        "SPEC-04 resolves exactly this situation by failing closed: status_seal spent 'without matching presented capacity/1 or "
+        "end/1' -> 'Fail closed with ORIGIN_STATUS_INCOMPLETE' (§2.1 item 6), and 'While roster_seal is spent and "
+        "seallink-guardian-roster/1 is not presented ... verifiers fail closed with ORIGIN_STATUS_INCOMPLETE' (§3.5 item 4); "
+        "CONFORMANCE.md §2 item 5 forbids accepting 'ledger state ... or UTXO spend status from the presenter'. Reading the "
+        "withheld document as 'missing valid 0x0c' (what the reference does) lets the presenter, typically the holder of the "
+        "displaced binding, pick the row and keep B_k admitting, so a recovery could never take effect against the party it is "
+        "meant to displace; the published branch-recovery-bad-candidate-seq burns the line only for a presented, checkably "
+        "invalid candidate. draft.6 refused here with ORIGIN_STATUS_INCOMPLETE."
     )
-    fail_closed = (
-        "Fail closed on the withheld document: recovery_seal was spent by a 0x0c record whose committed candidate binding is "
-        "not presented. draft.6 returned this code here, and the registry description of ORIGIN_STATUS_INCOMPLETE covers the "
-        "analogous spent status_seal / roster_seal whose record is not presented."
-    )
+    proposed = "ORIGIN_STATUS_INCOMPLETE"
 
     c_b3 = s.control(
         "cand-r2g01-control-branch-b-candidates-presented-b3-active",
@@ -465,8 +494,8 @@ def build_r2g01(s: CandidateSuite) -> None:
         "origin_status",
         status(post_delay, presented=True, assert_b1=False),
         ("ADMIT_WARD", None),
-        "Published trace-02 branch B exactly as speclint.py executes it: both candidates presented, the 0x0c recovery to B3 "
-        "has passed its delay, B3 is the active binding.",
+        "Published trace-02 branch B as speclint.py executes it (plus confirmed name histories for the registrations B2 and B3 "
+        "name): both candidates presented, the 0x0c recovery to B3 has passed its delay, B3 is the active binding.",
     )
     c_b1 = s.control(
         "cand-r2g01-control-branch-b-assert-b1-candidates-presented-refuses",
@@ -474,21 +503,30 @@ def build_r2g01(s: CandidateSuite) -> None:
         "origin_status",
         status(post_delay, presented=True, assert_b1=True),
         ("REFUSE", "ORIGIN_BINDING_INVALID"),
-        "Published trace-02 branch B, asserting the superseded B1: expected_superseded_b1_refusal of the trace.",
+        "The same branch B, asserting the superseded B1: expected_superseded_b1_refusal of the published trace.",
+    )
+    c_none = s.control(
+        "cand-r2g01-control-no-recovery-spend-assert-b1-candidates-withheld-ward",
+        rules,
+        "origin_status",
+        status(t2["chain_state"], presented=False, assert_b1=True),
+        ("ADMIT_WARD", None),
+        "The trace's main chain, where recovery_seal is unspent, asserting B1 with no recovery_bindings: withholding candidates "
+        "is harmless when there is no recovery spend, under every reading.",
     )
     s.witness(
         "cand-r2g01-branch-b-assert-b1-candidates-withheld",
         rules,
         "origin_status",
         status(post_delay, presented=False, assert_b1=True),
-        ("REFUSE", "ORIGIN_BINDING_INVALID"),
-        "The same chain and the same assertion of B1, but the presenter leaves recovery_bindings out of the origin bundle. "
-        "The reference classifies the spent recovery_seal as burned and treats B1 as still active.",
+        ("REFUSE", None),
+        "Branch B and the assertion of B1 of the second control, but the presenter leaves recovery_bindings out of the origin "
+        "bundle. The reference classifies the spent recovery_seal as burned and treats B1 as still active.",
         reference=("ADMIT_WARD", None),
-        code_status="derived",
+        code_status="undefined",
+        proposed_refusal=proposed,
         basis=basis,
-        controls=[c_b1, c_b3],
-        also_acceptable=[("REFUSE", "ORIGIN_STATUS_INCOMPLETE", fail_closed)],
+        controls=[c_b1, c_none],
     )
     c_pending = s.control(
         "cand-r2g01-control-pending-recovery-assert-b1-candidates-presented-refuses",
@@ -496,23 +534,23 @@ def build_r2g01(s: CandidateSuite) -> None:
         "origin_status",
         status(pending, presented=True, assert_b1=True),
         ("REFUSE", "RECOVERY_FORBIDDEN"),
-        f"Published trace-02 branch B observed at tip {pending_tip} (peers moved with it, later transactions dropped): "
-        f"{pending_tip - h_rec} blocks after the 0x0c record at {h_rec}, before h_rec + delay_blocks = {h_rec + delay}. "
-        "The recovery is pending and B1 is frozen.",
+        f"Branch B observed at tip {pending_tip} (a tip hash of its own, the peer moved with it, later transactions dropped): "
+        f"{pending_tip - h_rec} blocks after the 0x0c record at {h_rec}, before h_rec + delay_blocks = {h_rec + delay}. The "
+        "recovery is pending: 'RECOVERY_FORBIDDEN for both bindings' (SPEC-04 §6).",
     )
     s.witness(
         "cand-r2g01-pending-recovery-assert-b1-candidates-withheld",
         rules,
         "origin_status",
         status(pending, presented=False, assert_b1=True),
-        ("REFUSE", "RECOVERY_FORBIDDEN"),
+        ("REFUSE", None),
         "The pending state of the previous control with recovery_bindings withheld: the reference lets B1 act while its "
         "recovery is pending.",
         reference=("ADMIT_WARD", None),
-        code_status="derived",
+        code_status="undefined",
+        proposed_refusal=proposed,
         basis=basis,
-        controls=[c_pending, c_b3],
-        also_acceptable=[("REFUSE", "ORIGIN_STATUS_INCOMPLETE", fail_closed)],
+        controls=[c_pending, c_none],
     )
 
     assent_rules = rules + ["SL-CONT-004"]
@@ -529,29 +567,56 @@ def build_r2g01(s: CandidateSuite) -> None:
         "assent",
         assent(t2["chain_state"], presented=False),
         ("ADMIT", None),
-        "Published trace-02 assent 'active-successor-guardian-admitted' on the trace's main chain, where B1 is active.",
+        "Published trace-02 assent 'active-successor-guardian-admitted' (ward party student-1, name_pin id/child-leo) on the "
+        "trace's main chain, where B1 is active.",
     )
-    c_assent_b3 = s.control(
-        "cand-r2g01-control-assent-after-recovery-candidates-presented-refuses",
+    s.decision(
+        "cand-r2g01-assent-through-superseded-binding-code",
         assent_rules,
         "assent",
         assent(post_delay, presented=True),
-        ("REFUSE", "ORIGIN_BINDING_INVALID"),
-        "The same guardian assent for the ward bound by B1, evaluated on the branch B chain with both candidates presented.",
+        "The same guardian assent on the branch B chain with both candidates presented: the verified bundle now binds the ward "
+        "to B3 (id/child-leo-recovered-final), while the party's name_pin and guardian_context.ward_name still name id/child-leo.",
+        reference=("REFUSE", "ORIGIN_BINDING_INVALID"),
+        question=(
+            "Which check comes first when a ward party's assent disagrees with the verified origin bundle twice? The published "
+            "vectors fix each check alone: a party name_pin that disagrees with the verified binding refuses ORIGIN_BINDING_INVALID "
+            "(d7-assent-ward-party-name-pin-mismatch-refuse), a guardian_context.ward_name that disagrees with the active binding "
+            "refuses ORIGIN_UNVERIFIED (branch-ward-gc-wrong-ward-name). After a promoted recovery both disagree, and neither "
+            "SPEC-05 §2.2 nor SPEC-04 orders the two checks; the reference checks name_pin first."
+        ),
+        readings=[
+            {
+                "reading": "name_pin first",
+                "source": "published d7-assent-ward-party-name-pin-mismatch-refuse ('Contract ward party whose name_pin disagrees "
+                "with verified origin binding refuses ORIGIN_BINDING_INVALID'), SPEC-04 §6 Recovery Seal State Transition Table "
+                "('B_k permanently superseded (ORIGIN_BINDING_INVALID)'); the reference",
+                "verdict": "REFUSE",
+                "refusal": "ORIGIN_BINDING_INVALID",
+            },
+            {
+                "reading": "ward_name first",
+                "source": "SPEC-04 §3.3 item 2 ('payload.guardian_context.origin_id or ward_name mismatch -> ORIGIN_UNVERIFIED'), "
+                "published branch-ward-gc-wrong-ward-name ('guardian_context.ward_name mismatching active binding MUST refuse "
+                "ORIGIN_UNVERIFIED')",
+                "verdict": "REFUSE",
+                "refusal": "ORIGIN_UNVERIFIED",
+            },
+        ],
     )
     s.witness(
         "cand-r2g01-assent-after-recovery-candidates-withheld",
         assent_rules,
         "assent",
         assent(post_delay, presented=False),
-        ("REFUSE", "ORIGIN_BINDING_INVALID"),
+        ("REFUSE", None),
         "The same assent on the branch B chain with recovery_bindings withheld: the guardians of the superseded binding still "
         "assent for the ward.",
         reference=("ADMIT", None),
-        code_status="derived",
+        code_status="undefined",
+        proposed_refusal=proposed,
         basis=basis,
-        controls=[c_assent_b3, c_assent],
-        also_acceptable=[("REFUSE", "ORIGIN_STATUS_INCOMPLETE", fail_closed)],
+        controls=[c_assent, c_b1],
     )
 
 
@@ -580,17 +645,22 @@ def build_r2g02(s: CandidateSuite) -> None:
     other = _key_pol(_kp("r2g02-other-owner"))
     subject = _key_pol(_kp("r2g02-subject-owner"))
 
-    def chain_with(extra: list[dict[str, Any]] | None, *, at_t: bool) -> dict[str, Any]:
+    # Observed one day after T: t_low = tip header time = T + 86400. With ~10-minute blocks the round trip (about 1040 blocks
+    # below the tip) lies about six days before T and the handover (40-50 blocks below the tip) after T, and t_low is clear
+    # of the exact-T boundary of SPEC-04 §4.
+    after = t_majority + 86400
+
+    def chain_with(extra: list[dict[str, Any]] | None, *, after_t: bool) -> dict[str, Any]:
         chain = copy.deepcopy(base_chain)
         if extra is not None:
             chain["names"][WARD_NAME] = sv.make_name_history(
                 WARD_NAME, ward["registration"], ward_policy, value, first_height=749005, update_height=749015, extra_updates=extra
             )
-        if at_t:  # the trigger is reached at the tip: t_low = T
-            chain["credible_utc_interval"] = [t_majority, t_majority + 20]
-            chain["now"] = t_majority + 10
-            chain["tip_header_time"] = t_majority
-            chain["tip_first_sight"] = t_majority + 5
+        if after_t:
+            chain["credible_utc_interval"] = [after, after + 20]
+            chain["now"] = after + 10
+            chain["tip_header_time"] = after
+            chain["tip_first_sight"] = after + 5
         return chain
 
     def update(tag: str, height: int, policy: dict[str, Any]) -> dict[str, Any]:
@@ -611,45 +681,47 @@ def build_r2g02(s: CandidateSuite) -> None:
         "cand-r2g02-control-round-trip-before-t-ward",
         rules,
         "origin_status",
-        inputs(chain_with(round_trip, at_t=False)),
+        inputs(chain_with(round_trip, after_t=False)),
         ("ADMIT_WARD", None),
         "Ward fixture of the refusal matrix (person, opened majority commitment T) before T, after the holders of the ward "
         "name's owner_policy moved the name to a key X, updated it with X and moved it back (heights 749030-749060).",
     )
     c_pending = s.control(
-        "cand-r2g02-control-at-t-no-transfer-pending",
+        "cand-r2g02-control-after-t-no-transfer-pending",
         rules,
         "origin_status",
-        inputs(chain_with(None, at_t=True)),
+        inputs(chain_with(None, after_t=True)),
         ("REFUSE", "GUARDIAN_TRANSFER_PENDING"),
-        f"The same ward with t_low = T = {t_majority} at the tip and no name transfer: state 3.",
+        f"The same ward observed with t_low = tip header time = T + 1 day (T = {t_majority}) and no name transfer: state 3.",
     )
     c_auto = s.control(
-        "cand-r2g02-control-at-t-handover-to-fresh-policy-autonomous",
+        "cand-r2g02-control-after-t-handover-to-fresh-policy-autonomous",
         rules,
         "origin_status",
-        inputs(chain_with(handover, at_t=True)),
+        inputs(chain_with(handover, after_t=True)),
         ("ADMIT_AUTONOMOUS", None),
-        "At T after a transfer to a fresh policy S and an S-authored update (heights 750050/750060); the name is held by S at "
-        "the tip: state 4.",
+        "After T: a transfer to a fresh policy S and an S-authored update at heights 750050/750060, 40-50 blocks below the "
+        "tip (so after T), and the name is held by S at the tip: state 4.",
     )
     s.witness(
-        "cand-r2g02-at-t-round-trip-back-to-guardian-policy",
+        "cand-r2g02-after-t-round-trip-back-to-guardian-policy",
         rules,
         "origin_status",
-        inputs(chain_with(round_trip, at_t=True)),
+        inputs(chain_with(round_trip, after_t=True)),
         ("REFUSE", "GUARDIAN_TRANSFER_PENDING"),
-        "At T after the round trip of the first control: the name output at the tip is held by the ward owner_policy again. "
-        "The reference counts the earlier transfer to X followed by an X-signed update as the handover and ignores both the "
-        "current owner and that the transfer was made, and undone, about 1000 blocks before the tip whose header time is T.",
+        "After T, following the round trip of the first control: the name output at the tip is held by the ward owner_policy "
+        "again. The reference counts the earlier transfer to X followed by an X-signed update as the handover; it ignores the "
+        "current owner, and that the transfer was made and undone about 1040 blocks below the tip, i.e. while the subject was "
+        "still a ward.",
         reference=("ADMIT_AUTONOMOUS", None),
         code_status="text",
         basis=(
             "SPEC-04 §5.1 state 3 (Transfer Pending): 'Emancipation trigger reached — either (Path A) calendar majority t_low >= T "
             "... — but the name output has NOT yet been confirmed-transferred to a fresh subject ScriptPolicy (distinct from the "
             "prior guardian owner_policy ...)' -> GUARDIAN_TRANSFER_PENDING. State 4 (Path A) requires 'confirmed transfer to "
-            "fresh subject ScriptPolicy (distinct from ward owner_policy)'. The name output here is held by the prior guardian "
-            "owner_policy."
+            "fresh subject ScriptPolicy (distinct from ward owner_policy)'. 'The name output' is read as the output at the tip, "
+            "which is held by the prior guardian owner_policy here; the only transfer away from it was made and undone before "
+            "the trigger was reached."
         ),
         controls=[c_pending, c_auto, c_ward],
     )
@@ -679,6 +751,9 @@ def build_r2g03(s: CandidateSuite) -> None:
     wrong_value["origin_bundle"]["opened_majority_unix"] = of["_maj_unix"] + 1
     published = _published_case("branch-origin-bad-majority-salt")
     assert published["expected_refusal"] == "ORIGIN_UNVERIFIED", published["expected_refusal"]
+    assert published["inputs"]["origin_bundle"]["origin"] == base["origin_bundle"]["origin"]
+    published_value = published["inputs"]["origin_bundle"]["opened_majority_unix"]
+    assert published_value != of["_maj_unix"]
 
     s.control(
         "cand-r2g03-control-valid-majority-opening-ward",
@@ -699,7 +774,10 @@ def build_r2g03(s: CandidateSuite) -> None:
     question = (
         "Which code does a majority opening that fails claims.majority_commitment return: ORIGIN_STATUS_INCOMPLETE as SPEC-04 "
         "§2.1 item 5 says for 'withheld or mismatched', or ORIGIN_UNVERIFIED as the published vector branch-origin-bad-majority-"
-        "salt and its note say? CONFORMANCE.md requires identical codes, so one of the two has to change."
+        "salt and its note say? CONFORMANCE.md requires identical codes, so one of the two has to change. Neither registry "
+        "description mentions a majority opening (ORIGIN_UNVERIFIED: 'Origin certificate missing, untrusted issuer policy, class "
+        "mismatch, or invalid anchor'; ORIGIN_STATUS_INCOMPLETE: spent status_seal or roster_seal records), so the fix touches "
+        "registry/refusal-codes.json as well."
     )
     readings = [
         {
@@ -722,7 +800,9 @@ def build_r2g03(s: CandidateSuite) -> None:
         rules,
         "origin_status",
         published["inputs"],
-        "Inputs of the published case branch-origin-bad-majority-salt, unchanged: the opened salt does not match the commitment.",
+        "Inputs of the published case branch-origin-bad-majority-salt, unchanged: on the same ward origin as the controls, both "
+        f"the opened salt and the opened majority_unix ({published_value}, against a committed T of {of['_maj_unix']}) differ "
+        "from the commitment.",
         reference=("REFUSE", "ORIGIN_UNVERIFIED"),
         question=question,
         readings=readings,
@@ -733,7 +813,7 @@ def build_r2g03(s: CandidateSuite) -> None:
         rules,
         "origin_status",
         wrong_value,
-        "The valid control with the right salt but an opened majority_unix of T + 1: the other way an opening can mismatch.",
+        "The valid control with the right salt and an opened majority_unix of T + 1: only the value mismatches.",
         reference=("REFUSE", "ORIGIN_UNVERIFIED"),
         question=question,
         readings=readings,
@@ -802,9 +882,10 @@ def build_g701(s: CandidateSuite) -> None:
 
     harness = (
         "executor_cfg.slot_owners (like executor_cfg.authorized_issuers) is a configuration key of the reference harness only; "
-        "no specification text, schema or published vector names it."
+        "no specification text, schema or published vector names it, and it matches the issuer by name alone, so a "
+        "re-registered id/alice would inherit the slot."
     )
-    c_owner = s.control(
+    s.control(
         "cand-g701-control-configured-slot-owner-admits",
         rules,
         "invocation",
@@ -813,7 +894,7 @@ def build_g701(s: CandidateSuite) -> None:
         f"Root agent/tool grant by id/alice on {target} (the host is the executor) with the host's slot 'tools' bound to "
         f"id/alice. {harness}",
     )
-    c_foreign = s.control(
+    s.control(
         "cand-g701-control-configured-slot-foreign-issuer-refuses",
         rules,
         "invocation",
@@ -821,60 +902,61 @@ def build_g701(s: CandidateSuite) -> None:
         ("REFUSE", "GRANT_TARGET_UNAUTHORIZED"),
         "The same grant issued by id/mallory, an unrelated name registered by the attacker, on the configured host.",
     )
-    s.witness(
-        "cand-g701-unconfigured-host-foreign-issuer",
-        rules,
-        "invocation",
-        case(mallory_env, mallory_gid, mallory_itx, unconfigured, "g701-mallory-unconfigured"),
-        ("REFUSE", "GRANT_TARGET_UNAUTHORIZED"),
-        "id/mallory's grant on a host that has no slot binding at all (the executor_cfg of every published vector). If the "
-        "authors decide that an unconfigured host accepts every root issuer (decision cand-g701-unconfigured-host-owner-"
-        "issuer), this witness goes with that decision.",
-        reference=("ADMIT", None),
-        code_status="text",
-        basis=(
-            "SPEC-06 §4 step 11d: 'station:<host>:<slot> -> <host> == executor.name and root issuer authorized for <slot> ... -> "
-            "GRANT_TARGET_UNAUTHORIZED'; PROFILE-agent-v1 §4: the host MUST verify 'that the root grant's issuer is authorized "
-            "for <workspace_or_slot> under local host binding (GRANT_TARGET_UNAUTHORIZED otherwise)'. No binding authorizes "
-            "id/mallory."
-        ),
-        controls=[c_foreign, c_owner],
+    station_cases = _published_ids(lambda c, blob: '"target": "station:' in blob)
+    unconfigured_station = _published_ids(lambda c, blob: '"target": "station:' in blob and "slot_owners" not in blob and "authorized_issuers" not in blob)
+    assert station_cases == unconfigured_station, "a published station case configures its host; reword the question"
+    admitted = _published_ids(lambda c, blob: c["expected_verdict"] == "ADMIT" and '"target": "station:' in blob)
+    question = (
+        "Is a station host without a local host binding closed (no root issuer is authorized for any slot) or open (every root "
+        "issuer is)? The text gives the binding no data model, so an independent implementation cannot configure one either. "
+        f"All {len(station_cases)} published security cases with a station target run on hosts without a binding; "
+        f"{len(admitted)} of them, and vectors/{TRACE_03}, expect ADMIT and therefore require an open host."
     )
+
+    def readings(open_comment: str | None) -> list[dict[str, Any]]:
+        closed = {
+            "reading": "fail-closed host binding",
+            "source": "SPEC-06 §4 step 11d ('station:<host>:<slot> -> <host> == executor.name and root issuer authorized for "
+            "<slot>') and PROFILE-agent-v1 §4 (the host MUST verify that the root grant's issuer 'is authorized for "
+            "<workspace_or_slot> under local host binding (GRANT_TARGET_UNAUTHORIZED otherwise)')",
+            "verdict": "REFUSE",
+            "refusal": "GRANT_TARGET_UNAUTHORIZED",
+            "comment": "Needs a normative binding (slot -> NamePin[], e.g. in the station manifest) and regenerated vectors.",
+        }
+        opened: dict[str, Any] = {
+            "reading": "default-open host",
+            "source": f"vectors/{TRACE_03} and the published station cases listed in conflicts_with; the reference",
+            "verdict": "ADMIT",
+            "refusal": None,
+        }
+        if open_comment:
+            opened["comment"] = open_comment
+        return [closed, opened]
+
+    conflicts = [f"vectors/{TRACE_03}"] + admitted
     s.decision(
         "cand-g701-unconfigured-host-owner-issuer",
         rules,
         "invocation",
         case(owner_env, owner_gid, owner_itx, unconfigured, "g701-owner-unconfigured"),
-        "id/alice's grant of the first control on the unconfigured host.",
+        "id/alice's grant of the first control on a host without a slot binding, the configuration of every published station "
+        "vector.",
         reference=("ADMIT", None),
-        question=(
-            "Is a station host without a local host binding closed (no root issuer is authorized for any slot) or open (every "
-            "root issuer is)? The text gives the binding no data model, so an independent implementation cannot configure one "
-            "either; every published station vector runs on an unconfigured host and expects ADMIT."
-        ),
-        readings=[
-            {
-                "reading": "fail-closed host binding",
-                "source": "SPEC-06 §4 step 11d and PROFILE-agent-v1 §4 ('authorized for <workspace_or_slot> under local host "
-                "binding (GRANT_TARGET_UNAUTHORIZED otherwise)')",
-                "verdict": "REFUSE",
-                "refusal": "GRANT_TARGET_UNAUTHORIZED",
-                "comment": "Needs a normative binding (slot -> NamePin[], e.g. in the station manifest) and regenerated vectors.",
-            },
-            {
-                "reading": "default-open host",
-                "source": f"vectors/{TRACE_03} and the published station cases listed in conflicts_with, all on executor "
-                "configurations without a binding; the reference",
-                "verdict": "ADMIT",
-                "refusal": None,
-                "comment": "Then cand-g701-unconfigured-host-foreign-issuer is admitted by design and an unrelated name may "
-                "grant any slot of any unconfigured host.",
-            },
-        ],
-        conflicts_with=[f"vectors/{TRACE_03}"]
-        + _published_ids(
-            lambda c, blob: c["expected_verdict"] == "ADMIT" and '"target": "station:' in blob and "slot_owners" not in blob and "authorized_issuers" not in blob
-        ),
+        question=question,
+        readings=readings(None),
+        conflicts_with=conflicts,
+    )
+    s.decision(
+        "cand-g701-unconfigured-host-foreign-issuer",
+        rules,
+        "invocation",
+        case(mallory_env, mallory_gid, mallory_itx, unconfigured, "g701-mallory-unconfigured"),
+        "id/mallory's grant of the second control on the same host without a slot binding.",
+        reference=("ADMIT", None),
+        question=question,
+        readings=readings("Nothing then separates id/mallory from id/alice: any unrelated name may grant any slot of any host "
+                          "that has no binding."),
+        conflicts_with=conflicts,
     )
 
 
@@ -935,14 +1017,17 @@ def build_g702(s: CandidateSuite) -> None:
         "invocation",
         mail_send("mailbox:id/bob:private", "messages", "g702-other"),
         ("REFUSE", "QUOTA_EXCEEDED"),
-        "The same grant whose only quota counts mailbox:id/bob:private: nothing limits the messages sent from "
-        "mailbox:id/alice:work.",
+        "The same grant whose only quota counts mailbox:id/bob:private. The reference still caps the sends at 5, but debits a "
+        "counter keyed by mailbox:id/bob:private; the counter for mailbox:id/alice:work that the profile requires is never "
+        "debited.",
         reference=("ADMIT", None),
         code_status="text",
         basis=(
             "PROFILE-mail-v1 §4.1: 'Every mail/send capability MUST carry a matching {\"kind\":\"seallink/count\",\"resource\":"
             "\"mailbox:<owner>:<label>\",\"unit\":\"messages\"} quota (refusing QUOTA_EXCEEDED if omitted)'; registry/actions.json "
-            "gives mail/send required_quotas with \"resource\": \"{target}\"."
+            "gives mail/send required_quotas with \"resource\": \"{target}\". This reads mailbox:<owner>:<label> as the "
+            "invocation target, as the {target} placeholder says; a pattern reading (any resource of that shape) admits this case "
+            "and is the question of the decision cand-g702-delegation-quota-on-fleet-resource."
         ),
         controls=[c_unit, c_match],
     )
@@ -950,6 +1035,8 @@ def build_g702(s: CandidateSuite) -> None:
     agent_rules = ["SL-GRNT-007", "SL-AGNT-005"]
     df = rm._delegation_fx("none")
     assert df["invocation"]["payload"]["target"] == "station:id/station-a:tools"
+    assert df["bundle"]["grants"][0]["payload"]["issuer"]["name"] == "id/alice"
+    df["executor_cfg"]["slot_owners"] = {"tools": "id/alice"}  # bind the slot, so that no result here depends on G7-01
 
     def quotas(obj: Any) -> list[dict[str, Any]]:
         if isinstance(obj, dict):
@@ -988,7 +1075,7 @@ def build_g702(s: CandidateSuite) -> None:
         df,
         ("ADMIT", None),
         "Depth-2 delegation fixture of the refusal matrix (notary_mode none): agent/tool on station:id/station-a:tools, every "
-        "quota of parent and child on that same resource.",
+        "quota of parent and child on that same resource, the host's slot 'tools' bound to the root issuer id/alice.",
     )
     s.decision(
         "cand-g702-delegation-quota-on-fleet-resource",
@@ -1000,7 +1087,8 @@ def build_g702(s: CandidateSuite) -> None:
         reference=("ADMIT", None),
         question=(
             "Does a required profile quota have to count the invocation target (registry/actions.json \"resource\": \"{target}\", "
-            "PROFILE-agent-v1 §6 '{\"resource\":\"<target>\",\"unit\":\"calls\"}'), or may it count any resource, as trace-03's "
+            "PROFILE-agent-v1 §6 '{\"kind\":\"seallink/count\",\"resource\":\"<target>\",\"unit\":\"calls\"}'), or may it "
+            "count any resource, as trace-03's "
             "fleet-wide pool does? Either remove resource from required_quotas and the profiles, or check it and regenerate "
             "trace-03; the placeholder syntax {target} is not defined either."
         ),
@@ -1016,10 +1104,13 @@ def build_g702(s: CandidateSuite) -> None:
             {
                 "reading": "published trace",
                 "source": f"vectors/{TRACE_03} (targets station:id/station-a:tools and station:id/station-b:tools, quotas on "
-                "station:fleet:tools) and the reference, which matches required quotas by kind and unit only",
+                "station:fleet:tools) and the reference, which matches required quotas by kind and unit only; SPEC-06 §3 R8.5 keys "
+                "the parent pools by (kind, resource, unit, window) and says the pool 'prevents sibling rows at different executors "
+                "from exceeding the parent's total budget', which needs a resource equal to neither executor's target; and a "
+                "pattern reading of <target> (station:fleet:tools matches the station target_pattern of registry/actions.json)",
                 "verdict": "ADMIT",
                 "refusal": None,
-                "comment": "Then the witness cand-g702-mail-send-quota-on-other-mailbox needs the same decision for mail/send.",
+                "comment": "A pattern reading admits the mail witness cand-g702-mail-send-quota-on-other-mailbox as well.",
             },
         ],
         conflicts_with=[f"vectors/{TRACE_03}"],
@@ -1142,10 +1233,23 @@ def build_g703(s: CandidateSuite) -> None:
         ("REFUSE", "GRANT_TARGET_UNAUTHORIZED"),
         "A validly signed and anchored grant by id/mallory over mailbox:id/alice:work, presented in a signed mail/read invocation.",
     )
-    basis = (
+    pipeline = (
         "SPEC-06 §5 item 1 (op = \"open\"): 'Executor runs the full admission pipeline (§4) on the backing grant' before it binds "
-        "a session and returns a bearer token. On the same grant the §4 pipeline returns the paired invocation control's code. "
-        "By the scenario-runner convention the case verdict is ADMIT when the open step returns exactly that refusal."
+        "a session and returns a bearer token, so the open step returns the first failure the pipeline finds on that grant, "
+        "the code of the paired invocation control. By the scenario-runner convention the case verdict is ADMIT when the open "
+        "step returns exactly that refusal."
+    )
+    basis_forged = (
+        pipeline + " Here the first failure is SPEC-06 §4 step 7a: 'verify issuer.role_policy matches link.grant and equals "
+        "root_grant.signatures.policy (WIRE_SIGNATURE)'. That check uses only the grant, so it applies to a session-open, "
+        "which carries no action, target or arguments, exactly as to an invocation."
+    )
+    basis_foreign = (
+        pipeline + " Here the first failure is target authority (step 11d), which SPEC-06 §4 defines over invocation.target; "
+        "seallink-session-open/1 has no target, so this expectation assumes that the open checks 11d over the backing grant's "
+        "capability targets, its only targets. If target authority were deferred to the in-session requests instead, the open "
+        "would be admitted and this case would not hold; the grant could then only be refused per request, which SPEC-06 §5 "
+        "item 2 does not require."
     )
     s.witness(
         "cand-g703-session-open-on-forged-grant",
@@ -1160,7 +1264,7 @@ def build_g703(s: CandidateSuite) -> None:
         "reference opens the session.",
         reference=("REFUSE", "SESSION_STEP_MISMATCH:open-forged:('ADMIT', None)"),
         code_status="derived",
-        basis=basis,
+        basis=basis_forged,
         controls=[c_forged, c_valid],
     )
     s.witness(
@@ -1185,7 +1289,7 @@ def build_g703(s: CandidateSuite) -> None:
         "invocation control. The reference opens the session.",
         reference=("REFUSE", "SESSION_STEP_MISMATCH:open-foreign-issuer:('ADMIT', None)"),
         code_status="derived",
-        basis=basis,
+        basis=basis_foreign,
         controls=[c_foreign, c_valid],
     )
 
@@ -1250,7 +1354,13 @@ def build_r203(s: CandidateSuite) -> None:
         ("REFUSE", "ORIGIN_UNVERIFIED"),
         "The published case with an empty trusted_origin_issuers set.",
     )
-    basis = "SPEC-05 §4.2 step 5: 'if subject.mode = \"origin\", verify subject.origin_id -> ORIGIN_UNVERIFIED'. Without an origin document nothing verifies it."
+    basis = (
+        "SPEC-05 §4.2 step 5: 'if subject.mode = \"origin\", verify subject.origin_id -> ORIGIN_UNVERIFIED'; the registry "
+        "describes ORIGIN_UNVERIFIED as 'Origin certificate missing, untrusted issuer policy, class mismatch, or invalid "
+        "anchor'. Without an origin document nothing verifies subject.origin_id. (SPEC-04 §2.1 item 3, 'Absence of an origin "
+        "certificate yields class unverified', classifies an actor that presents no certificate; it does not make an "
+        "origin-mode credential subject verified.)"
+    )
     s.witness(
         "cand-r203-origin-subject-bundle-withheld",
         rules,
@@ -1296,22 +1406,30 @@ def build_r201(s: CandidateSuite) -> None:
     )
     rules = ["SL-CONT-002"]
     cf = rm._contract_fx()
+    assert cf["invocation"]["payload"]["target"] == "station:id/station-a:slot1"
+    assert cf["bundle"]["grants"][0]["payload"]["issuer"]["name"] == "id/alice"
+    cf["executor_cfg"]["slot_owners"] = {"slot1": "id/alice"}  # bind the slot, so that no result here depends on G7-01
     capability = copy.deepcopy(cf["bundle"]["grants"][0]["payload"]["capabilities"][0])
 
-    def rebind(clause: dict[str, Any], tag: str) -> dict[str, Any]:
-        """Commit `clause` as clause 0 of the matrix contract fixture, re-sign both assents, re-bind and re-anchor the grant."""
+    def rebind(clause: dict[str, Any], tag: str, *, machine: bool = True) -> dict[str, Any]:
+        """Commit `clause` as clause 0 of the matrix contract fixture (as its machine clause, or as a plain clause with no
+        machine_clause_indices and no disclosure), re-sign both assents, re-bind and re-anchor the grant."""
         f = copy.deepcopy(cf)
         contract = copy.deepcopy(f["bundle"]["contract"])
         salt = _h32(f"{tag}-salt")
         contract["clause_commitments"] = [sl.clause_commit(salt, clause)]
         assert contract.get("machine_clause_indices") == [0], contract.get("machine_clause_indices")
+        if machine:
+            f["bundle"]["disclosed_clauses"] = {"0": {"salt_hex": salt, "clause": clause}}
+        else:
+            del contract["machine_clause_indices"]
+            f["bundle"].pop("disclosed_clauses", None)
         cid = sl.object_id(contract)
         keys = {"client-1": f["_keys"]["alice_gr"]["sk"], "worker-1": f["_keys"]["agent_req"]["sk"]}
         old = {a["payload"]["party_id"]: a["payload"] for a in f["bundle"]["contract_assents"]}
         assert set(old) == set(keys), sorted(old)
         f["bundle"]["contract_assents"] = [sl.sign_envelope(dict(old[pid], target_id=cid), [keys[pid]]) for pid in sorted(old)]
         f["bundle"]["contract"] = contract
-        f["bundle"]["disclosed_clauses"] = {"0": {"salt_hex": salt, "clause": clause}}
         gp = copy.deepcopy(f["bundle"]["grants"][0]["payload"])
         gp["contract_id"] = cid
         keep = copy.deepcopy(f["invocation"]["payload"])
@@ -1339,20 +1457,52 @@ def build_r201(s: CandidateSuite) -> None:
         "valid under MachineClauseTerms', CONTRACT_TERMS_MISMATCH)",
     }
     text = "Isolated session terms"
+    s.control(
+        "cand-r201-control-text-only-clause-admits",
+        rules,
+        "invocation",
+        rebind({"text": text}, "r201-text", machine=False),
+        ("ADMIT", None),
+        "Contract fixture of the refusal matrix (slot1 bound to id/alice) re-committed with one plain clause {text} and no "
+        "machine_clause_indices, so nothing is disclosed: valid under both readings, and a check that re-committing the clause, "
+        "re-signing the assents and re-anchoring the grant leave a valid fixture.",
+    )
+    prose_conflicts = [
+        "d7-b10-issuance-prep-without-assent-addrs-admit",
+        "d7-b08-agent-session-checkpoint-zero-debit-admit",
+        "d7-bnd-framework-exact-window-and-unix-admit",
+        "d7-bnd-r3b5-machine-clause-exact-window-admit",
+        "d7-agent-session-start-missing-contract-config-refuse",
+        "vectors/refusal-coverage-matrix.json#CONTRACT_CONFIG_MISMATCH",
+        "d7-bnd-fw-not-after-unix-eq-now-refuse",
+        "d7-bnd-contract-not-after-unix-eq-now-refuse",
+    ]
     s.decision(
         "cand-r201-clause-in-schema-form",
         rules,
         "invocation",
         rebind({"machine_terms": {"capabilities": [capability]}, "text": text}, "r201-schema"),
-        "Contract fixture of the refusal matrix (machine_clause_indices = [0]) whose clause 0 is "
+        "Contract fixture of the refusal matrix (machine_clause_indices = [0], slot1 bound to id/alice) whose clause 0 is "
         "{machine_terms: {capabilities: [the grant capability]}, text}; the grant binds the re-committed contract.",
         reference=("ADMIT", None),
         question=question,
         readings=[
             {**schema_reading, "verdict": "ADMIT", "refusal": None},
-            {**prose_reading, "verdict": "REFUSE", "refusal": "CONTRACT_TERMS_MISMATCH", "comment": "clause_i.machine is missing."},
+            {
+                **prose_reading,
+                "verdict": "REFUSE",
+                "refusal": "CONTRACT_TERMS_MISMATCH",
+                "comment": "clause_i.machine is missing; under a closed prose ClauseObject the unknown member machine_terms could "
+                "equally refuse WIRE_MEMBER first (CONFORMANCE.md §2 item 2). Every published case that discloses a machine_terms "
+                "clause, gets past the clause check and does not already refuse CONTRACT_TERMS_MISMATCH changes under this "
+                "reading: the four ADMIT cases, "
+                "d7-agent-session-start-missing-contract-config-refuse and the CONTRACT_CONFIG_MISMATCH row of the refusal matrix "
+                "(the config check follows the clause check in SPEC-06 §4 step 8, so the matrix would lose that code), and, if "
+                "step 8 is evaluated in its listing order (machine-clause narrowing before window/calendar nesting), the two "
+                "GRANT_WINDOW_CLOSED calendar cases.",
+            },
         ],
-        conflicts_with=_published_ids(lambda c, blob: c["expected_verdict"] == "ADMIT" and '"machine_terms"' in blob),
+        conflicts_with=prose_conflicts,
     )
     s.decision(
         "cand-r201-clause-in-prose-form",
