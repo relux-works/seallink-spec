@@ -46,6 +46,7 @@ SealLink is an open protocol enabling **intelligent actors — people, organizat
   - [CHANGELOG.md](CHANGELOG.md) — Release history.
   - [`conformance/p2a-regtest/`](conformance/p2a-regtest/) — Reproducible two-node Namecoin Core `nc28.0` `P2A` 1p1c TRUC v3 package-relay positive control and SHA-256 checksums.
   - [`conformance/traces-regtest/`](conformance/traces-regtest/) — Reproducible two-node Namecoin Core `nc28.0` (`-txindex=1 -namehistory=1 -acceptnonstdtxn=0`) live cold-observer regtest execution of all 5 SealLink traces (`32` live `Tier1Verifier` verdicts with `require_observation_bracket=True`) via `tools/nc_rpc_adapter.py` (`PROFILE-mail-v1` `mail/read` + `executor_ref` + named recipient with `registration` + foreign-issuer `GRANT_TARGET_UNAUTHORIZED` + two-phase late-receipt commit + closed-bracket `pre_effect_recheck` + mempool revoke, native `P2WSH` 2-of-3 `BranchKeySpec` `disposer_pk` + `P2WSH` 2-of-3 `namepsbt` + non-default `pending_vout = 2` `guardian_slot_pending` CSV + `0x10` cancel, depth-2 sibling `row_ordinal` + `(seal_txid, seal_vout + 1)` linkage + witness-verified crash/restart recovery + `single_use_1_of_2` + TRUC v3 `P2A` CPFP, `agent/guardian-message` + two-phase late-receipt separate-process restart recovery, and historical eternal diploma across live 30-block expiry, lawful re-registration, live mid-read tip-change bracket `CHAIN_OBSERVATION_VOID` -> retry `ADMIT`, live ownership-transfer `NAME_WRITER_UNVERIFIED` -> new owner self-update `ADMIT`, and live `invalidateblock` reorg exclusion) with raw transaction hexes, txids, and live verdicts.
+  - [`conformance/review-candidates/`](conformance/review-candidates/) — **Non-normative** candidate negative vectors for the eight `Blocker` findings of the second round of the independent review of `v1.0.0-draft.7` (paired controls, witnesses still open against the Reference Verifier Core, and records that need an authors' decision; counts in its `INDEX.md`), in the case shape of `security-conformance.json`. Not part of `vectors/`, the release bundle, or the conformance requirements; generated and ratchet-checked by `tools/build_candidate_suite.py`.
 - **Machine-Readable Registries ([`registry/`](registry/)):**
   - [`object-types.json`](registry/object-types.json) — 30 canonical `seallink-*/1` types, byte limits, signing roles, and schema links.
   - [`refusal-codes.json`](registry/refusal-codes.json) — 85 deterministic refusal codes (including `GRANT_TARGET_UNAUTHORIZED`) with closure and retryability flags.
@@ -81,6 +82,14 @@ python3 tools/mutation_audit.py --mode refusal-return --min-kill-pct 100
 python3 tools/mutation_audit.py --mode wrong-code --min-kill-pct 100
 python3 tools/mutation_audit.py --mode boundary --min-kill-pct 100
 python3 tools/build_bundle.py --version v1.0.0-draft.7 --check
+```
+
+The non-normative review candidates in [`conformance/review-candidates/`](conformance/review-candidates/) are checked separately (outputs: `conformance/review-candidates/draft7-blockers.json`, `INDEX.md`, `SHA256SUMS`):
+
+```bash
+python3 tools/build_candidate_suite.py            # ratchet: every control passes, every candidate behaves exactly as recorded
+python3 tools/build_candidate_suite.py --strict   # target state: every witness must return an accepted result
+python3 tools/build_candidate_suite.py --write    # regenerate the suite after changing a builder
 ```
 
 Pushing a signed release tag (`v*`) triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which runs the full lint and executable verifier suite, compiles the entire specification into one deterministic Markdown file (`seallink-spec-<tag>.md` + `.sha256`), and publishes a GitHub Release automatically.

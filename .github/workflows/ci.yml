@@ -30,3 +30,6 @@ jobs:
 
       - name: Verify single-file Markdown bundle build
         run: python3 tools/build_bundle.py --version "${GITHUB_SHA::7}" --check
+
+      - name: Check non-normative review-candidate vectors (ratchet)
+        run: python3 tools/build_candidate_suite.py --quiet
