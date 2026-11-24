@@ -222,6 +222,8 @@ def execute_traces_and_matrix(
     registered_codes: set[str],
     require_jsonschema: bool,
     errors: list[str],
+    *,
+    fail_fast: bool = False,
 ) -> tuple[int, int, int]:
     """Execute ALL traces (trace-01..04), ALL 85/85 refusal-coverage-matrix cases,
     ALL security-conformance cases, and 10 live verifier-mutation tests via Tier1Verifier.
@@ -391,10 +393,15 @@ def execute_traces_and_matrix(
 
         ch_a.apply_patch(t3["confirm_use_tx_patch"])
 
-        # Step B: crash-in-effect-window (4 dual-account reservations) + replay_persisted_entries restart!
+        # Step B: crash-in-effect-window (4 dual-account reservations) + witness-verified replay_persisted_entries restart!
         jr_crash = sv.FencedJournal.from_dict({"journal_id": t3["station_a_crash_journal_id"]})
         rb1 = v.verify_invocation(inv1, bundle_c1, ch_a, jr_crash, exec_a, use_txid=use_txid, simulate_crash_before_settlement=True, actual_quota_usage=actual_usage)
-        jr_restarted = sv.FencedJournal.replay_persisted_entries(t3["station_a_crash_journal_id"], [w["entry"] for w in rb1.journal_writes])
+        jr_restarted = sv.FencedJournal.replay_persisted_entries(
+            t3["station_a_crash_journal_id"],
+            [w["entry"] for w in rb1.journal_writes],
+            witness_pos=jr_crash.pos,
+            witness_commitment=jr_crash.commitment,
+        )
         rb2 = v.verify_invocation(inv1, bundle_c1, ch_a, jr_restarted, exec_a, use_txid=use_txid, actual_quota_usage=actual_usage)
         exp_b = c1t["step_b_crash_in_effect_window"]
         if (
@@ -521,6 +528,8 @@ def execute_traces_and_matrix(
             exec_checks += 1
 
     # --- Execute refusal-coverage-matrix.json (MUST cover 100% = 85/85 refusal codes!) ---
+    if fail_fast and errors:
+        return exec_checks, len(covered_refusals), 0
     if "refusal-coverage-matrix.json" not in vectors:
         errors.append("Missing vectors/refusal-coverage-matrix.json")
     else:
@@ -529,6 +538,8 @@ def execute_traces_and_matrix(
             got = rm.execute_matrix_case(case, require_jsonschema=require_jsonschema)
             if got != case["expected_refusal"]:
                 errors.append(f"refusal-coverage-matrix '{case['code']}': expected {case['expected_refusal']}, verifier computed {got!r}")
+                if fail_fast:
+                    return exec_checks, len(covered_refusals), 0
             else:
                 covered_refusals.add(got)
             exec_checks += 1
@@ -548,6 +559,8 @@ def execute_traces_and_matrix(
             got_v, got_c = sec.execute_security_case(case, require_jsonschema=require_jsonschema)
             if (got_v, got_c) != (case["expected_verdict"], case.get("expected_refusal")):
                 errors.append(f"security-conformance '{cid}': expected {(case['expected_verdict'], case.get('expected_refusal'))}, got {(got_v, got_c)}")
+                if fail_fast:
+                    return exec_checks, len(covered_refusals), 0
             exec_checks += 1
         if "refusal-coverage-matrix.json" in vectors:
             mutations_killed, mut_errs = sec.run_verifier_mutation_tests(
@@ -567,6 +580,8 @@ def verify_all_vectors(
     registered_codes: set[str],
     require_jsonschema: bool,
     errors: list[str],
+    *,
+    fail_fast: bool = False,
 ) -> tuple[int, int, int, int]:
     checked = 0
     # 1. wire-jcs-and-hashes.json
@@ -592,11 +607,15 @@ def verify_all_vectors(
         verify_envelope_record(th["envelope_2of3_subset_ac"], "wire/2of3_ac", errors)
         if th["envelope_2of3_subset_ab"]["object_id"] != th["envelope_2of3_subset_ac"]["object_id"]:
             errors.append("wire/2of3 object_id invariance failed")
+        t1v_w = sv.Tier1Verifier(require_jsonschema=require_jsonschema)
         for neg in th["negative_signaturesets"]:
             ok, code = sl.verify_envelope_signatures(neg["object"])
             if ok or code != neg["expected_refusal"]:
                 errors.append(f"wire negative sigset '{neg['id']}' expected {neg['expected_refusal']}, got {(ok, code)}")
-            checked += 1
+            ok_w, code_w = t1v_w.verify_wire_bytes(sl.jcs_encode(neg["object"]))
+            if ok_w or code_w != neg["expected_refusal"]:
+                errors.append(f"wire negative sigset '{neg['id']}' verify_wire_bytes expected {neg['expected_refusal']}, got {(ok_w, code_w)}")
+            checked += 2
         if "device_signature_algorithms" in v:
             dsa = v["device_signature_algorithms"]
             verify_envelope_record(dsa["owner_command_ed25519"], "wire/ed25519", errors)
@@ -727,9 +746,12 @@ def verify_all_vectors(
             errors.append("trace-03 negative R8.6 unexpectedly passed")
         checked += 4
 
+    if fail_fast and errors:
+        return checked, 0, 0, 0
+
     # 5. Live executable Reference Verifier Core replay + security conformance + verifier mutations!
     exec_checks, covered_cnt, mutations_killed = execute_traces_and_matrix(
-        vectors, registered_codes, require_jsonschema, errors
+        vectors, registered_codes, require_jsonschema, errors, fail_fast=fail_fast
     )
     return checked, exec_checks, covered_cnt, mutations_killed
 
@@ -842,9 +864,20 @@ def verify_jsonschema(
                     else:
                         _record_type(inst)
                     validated += 1
-        # Validate EVERY recognizable typed object inside non-wire-syntax security-conformance cases!
+        # Validate trace-02 disclosed machine clause against canonical ClauseObject schema (R2-01)!
+        if vname == "trace-02-guardian-succession-assent.json" and "machine_clause_0_disclosure" in vdoc:
+            mc_obj = vdoc["machine_clause_0_disclosure"].get("clause")
+            val_mc = get_validator("schemas/contract.schema.json#/$defs/ClauseObject")
+            errs_mc = list(val_mc.iter_errors(mc_obj))
+            if errs_mc:
+                errors.append(f"trace-02 machine_clause_0_disclosure FAILED ClauseObject schema: {errs_mc[0].message}")
+            validated += 1
+        # Validate EVERY recognizable typed object inside non-wire-syntax security-conformance cases AND module tags!
         if vname == "security-conformance.json":
+            valid_modules = {"core", "bearer-sessions", "service-migration", "federated-screening"}
             for case in vdoc.get("cases", []):
+                if case.get("module") not in valid_modules:
+                    errors.append(f"Security conformance case '{case.get('id')}' has missing/invalid module tag: {case.get('module')!r}")
                 exp_r = case.get("expected_refusal") or ""
                 if exp_r.startswith("WIRE_") and exp_r not in ("WIRE_SIGNATURE", "WIRE_KEY"):
                     continue
@@ -867,6 +900,7 @@ def verify_jsonschema(
 def main() -> int:
     parser = argparse.ArgumentParser(description="SealLink specification consistency, schema, and executable verifier linter.")
     parser.add_argument("--require-jsonschema", action="store_true", help="Fail if 'jsonschema' package is unavailable.")
+    parser.add_argument("--fail-fast", action="store_true", help="Stop immediately on first error (used by mutation_audit.py; surviving mutants still run all checks).")
     args = parser.parse_args()
 
     errors: list[str] = []
@@ -1033,10 +1067,25 @@ def main() -> int:
             if c not in registered_codes:
                 errors.append(f"archive/rule-inventory.md: unregistered refusal code '{c}'")
 
-    # 6. Check all registry files share the same protocol version string
+    # 6. Check all registry files share the same protocol version string AND zero stale prior draft versions remain in normative docs/schemas
     reg_versions = {name: data.get("version") for name, data in registries.items() if "version" in data}
     if len(set(reg_versions.values())) > 1:
         errors.append(f"Inconsistent version strings across registry/*.json: {reg_versions}")
+    cur_ver = next(iter(reg_versions.values()), "")
+    if cur_ver:
+        for sname, sdoc in schemas.items():
+            sid = sdoc.get("$id", "")
+            if f"/releases/v{cur_ver}/schemas/{sname}" not in sid:
+                errors.append(f"schemas/{sname}: $id '{sid}' does not match current version v{cur_ver}")
+        ver_check_files = list(normative_files) + [ROOT / "CONFORMANCE.md"] + sorted((ROOT / "guides").glob("*.md"))
+        for vpath in ver_check_files:
+            if not vpath.exists():
+                continue
+            vtxt = vpath.read_text(encoding="utf-8")
+            for m in re.finditer(r"\b1\.0\.0-draft\.\d+\b", vtxt):
+                if m.group(0) != cur_ver:
+                    errors.append(f"{vpath.relative_to(ROOT)}: stale protocol version '{m.group(0)}' (expected '{cur_ver}')")
+                    break
 
     # 7. Load, cryptographically verify, and LIVE-EXECUTE all vectors/
     vectors: dict[str, dict[str, Any]] = {}
@@ -1047,11 +1096,14 @@ def main() -> int:
     if not vectors:
         errors.append("No conformance vector files found under vectors/")
     vector_checks, exec_checks, covered_cnt, mutations_killed = verify_all_vectors(
-        vectors, registered_codes, args.require_jsonschema, errors
+        vectors, registered_codes, args.require_jsonschema, errors, fail_fast=args.fail_fast
     )
 
     # 8. Draft 2020-12 metaschema & instance validation (including all semantic matrix/security fixtures!)
-    js_ok, schema_checks = verify_jsonschema(schemas, vectors, args.require_jsonschema, errors, warnings)
+    if args.fail_fast and errors:
+        js_ok, schema_checks = False, 0
+    else:
+        js_ok, schema_checks = verify_jsonschema(schemas, vectors, args.require_jsonschema, errors, warnings)
 
     unused_codes = sorted(registered_codes - used_codes)
     if unused_codes:

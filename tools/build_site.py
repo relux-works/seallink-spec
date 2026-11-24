@@ -26,6 +26,7 @@ import html
 import json
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -560,7 +561,72 @@ def render_page(
 """
 
 
-def build_site(version: str, out_dir: Path) -> dict[str, Any]:
+def _discover_archive_tags(version: str, archive_tags: str) -> list[str]:
+    """Return prior immutable release tags (oldest -> newest) whose schemas use /releases/<tag>/schemas/."""
+    mode = (archive_tags or "auto").strip()
+    if mode.lower() in ("none", ""):
+        return []
+    if mode.lower() != "auto":
+        return [t.strip() for t in mode.split(",") if t.strip() and t.strip() != version]
+    try:
+        res = subprocess.run(
+            ["git", "tag", "--list", "v*", "--sort=v:refname"],
+            cwd=str(ROOT),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    tags: list[str] = []
+    for raw in res.stdout.splitlines():
+        tag = raw.strip()
+        if not tag or tag == version:
+            continue
+        # Only archive tags that published versioned /releases/<tag>/schemas/ $ids
+        chk = subprocess.run(
+            ["git", "show", f"{tag}:schemas/common.schema.json"],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
+        if chk.returncode == 0 and f"/releases/{tag}/schemas/" in chk.stdout:
+            tags.append(tag)
+    return tags
+
+
+def _extract_archived_release(tag: str, out_dir: Path) -> list[str]:
+    """Extract immutable schemas/, registry/, and vectors/ from a historical git tag."""
+    rel_dir = out_dir / "releases" / tag
+    extracted_schemas: list[str] = []
+    for sub in ("schemas", "registry", "vectors"):
+        ls = subprocess.run(
+            ["git", "ls-tree", "--name-only", tag, f"{sub}/"],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
+        if ls.returncode != 0:
+            continue
+        for rel_path in sorted(p.strip() for p in ls.stdout.splitlines() if p.strip()):
+            if not rel_path.endswith(".json"):
+                continue
+            blob = subprocess.run(
+                ["git", "show", f"{tag}:{rel_path}"],
+                cwd=str(ROOT),
+                capture_output=True,
+            )
+            if blob.returncode != 0:
+                raise RuntimeError(f"Failed to extract {tag}:{rel_path} from git")
+            dest = rel_dir / rel_path
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(blob.stdout)
+            if sub == "schemas" and rel_path.endswith(".schema.json"):
+                extracted_schemas.append(Path(rel_path).name)
+    return extracted_schemas
+
+
+def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[str, Any]:
     if out_dir.exists():
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -603,6 +669,13 @@ def build_site(version: str, out_dir: Path) -> dict[str, Any]:
         shutil.copy2(rf, out_dir / "registry" / rf.name)
     for vf in vector_files:
         shutil.copy2(vf, rel_base / "vectors" / vf.name)
+
+    # 3b. Preserve immutable historical /releases/<prev_tag>/{schemas,registry,vectors}/ endpoints
+    archived_releases: list[tuple[str, list[str]]] = []
+    for prev_tag in _discover_archive_tags(version, archive_tags):
+        prev_schemas = _extract_archived_release(prev_tag, out_dir)
+        if prev_schemas:
+            archived_releases.append((prev_tag, prev_schemas))
 
     # Copy optional SealLink Channel 2 /.well-known/ assets if present in repo
     wk_src = ROOT / "well-known"
@@ -824,49 +897,59 @@ def build_site(version: str, out_dir: Path) -> dict[str, Any]:
 <pre><code>{bundle_sha}  {html.escape(md_name)}
 {full_html_sha}  {html.escape(html_name)}</code></pre>
 """
+    if archived_releases:
+        arch_rows = "\n".join(
+            f'<tr><td><code>{html.escape(t)}</code></td>'
+            f'<td><a href="/releases/{html.escape(t)}/schemas/common.schema.json"><code>/releases/{html.escape(t)}/schemas/…</code></a> ({len(sfiles)} schemas)</td>'
+            f'<td><a href="/releases/{html.escape(t)}/registry/object-types.json"><code>/releases/{html.escape(t)}/registry/…</code></a></td>'
+            f'<td><a href="https://github.com/relux-works/seallink-spec/releases/tag/{html.escape(t)}" target="_blank" rel="noopener">GitHub Release</a></td></tr>'
+            for t, sfiles in reversed(archived_releases)
+        )
+        index_body += (
+            '\n<h2 id="archived-releases">Archived Immutable Releases</h2>\n'
+            '<p style="color:var(--fg-muted);">Previously published release <code>$id</code> schema, registry, and vector endpoints remain preserved verbatim:</p>\n'
+            '<div class="table-wrap"><table>'
+            '<thead><tr><th>Tag</th><th>Schemas</th><th>Registries</th><th>Release</th></tr></thead>'
+            f'<tbody>{arch_rows}</tbody></table></div>\n'
+        )
     (out_dir / "index.html").write_text(
         render_page("SealLink Protocol Specification", version, index_body), encoding="utf-8"
     )
 
-    # 7. Cloudflare Pages _headers (explicit version path because Pages wildcards match trailing segments)
-    headers_txt = f"""\
-/*
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: no-referrer
-
-/releases/*
-  Access-Control-Allow-Origin: *
-  Cache-Control: public, max-age=31536000, immutable
-
-/releases/{version}/schemas/*
-  Content-Type: application/schema+json; charset=utf-8
-
-/schemas/*
-  Content-Type: application/schema+json; charset=utf-8
-  Access-Control-Allow-Origin: *
-  Cache-Control: public, max-age=300
-
-/registry/*
-  Content-Type: application/json; charset=utf-8
-  Access-Control-Allow-Origin: *
-  Cache-Control: public, max-age=300
-
-/releases/{version}/registry/*
-  Content-Type: application/json; charset=utf-8
-
-/releases/{version}/vectors/*
-  Content-Type: application/json; charset=utf-8
-
-/.well-known/seallink/*
-  Content-Type: application/json; charset=utf-8
-  Access-Control-Allow-Origin: *
-  Cache-Control: public, max-age=31536000, immutable
-
-/.well-known/nostr.json
-  Content-Type: application/json; charset=utf-8
-  Access-Control-Allow-Origin: *
-  Cache-Control: public, max-age=300
-"""
+    # 7. Cloudflare Pages _headers:
+    # - NEVER put wildcard Content-Type overrides on /releases/*, /schemas/*, /registry/*, or /vectors/*,
+    #   so 404.html ALWAYS serves text/html; charset=utf-8 for nonexistent paths.
+    # - Emit exact per-file Content-Type: application/schema+json; charset=utf-8 ONLY for existing
+    #   *.schema.json files, staying strictly within Cloudflare Pages' 100-rule limit.
+    header_blocks: list[str] = [
+        "/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer",
+        "/releases/*\n  Access-Control-Allow-Origin: *\n  Cache-Control: public, max-age=31536000, immutable",
+        "/schemas/*\n  Access-Control-Allow-Origin: *\n  Cache-Control: public, max-age=300",
+        "/registry/*\n  Access-Control-Allow-Origin: *\n  Cache-Control: public, max-age=300",
+        "/.well-known/seallink/*\n  Access-Control-Allow-Origin: *\n  Cache-Control: public, max-age=31536000, immutable",
+    ]
+    if (out_dir / ".well-known" / "nostr.json").is_file():
+        header_blocks.append(
+            "/.well-known/nostr.json\n  Content-Type: application/json; charset=utf-8\n  Access-Control-Allow-Origin: *\n  Cache-Control: public, max-age=300"
+        )
+    for sf in schema_files:
+        header_blocks.append(
+            f"/releases/{version}/schemas/{sf.name}\n  Content-Type: application/schema+json; charset=utf-8"
+        )
+    for sf in schema_files:
+        header_blocks.append(
+            f"/schemas/{sf.name}\n  Content-Type: application/schema+json; charset=utf-8"
+        )
+    # Add exact application/schema+json rules for newest archived releases while staying <= 95 rules (< 100 CF limit)
+    for prev_tag, prev_schemas in reversed(archived_releases):
+        if len(header_blocks) + len(prev_schemas) <= 95:
+            for sname in prev_schemas:
+                header_blocks.append(
+                    f"/releases/{prev_tag}/schemas/{sname}\n  Content-Type: application/schema+json; charset=utf-8"
+                )
+    if len(header_blocks) > 100:
+        raise RuntimeError(f"Cloudflare Pages _headers exceeds 100-rule limit ({len(header_blocks)})")
+    headers_txt = "\n\n".join(header_blocks) + "\n"
     (out_dir / "_headers").write_text(headers_txt, encoding="utf-8")
 
     # 8. Also write explicit 404.html (prevents Cloudflare Pages SPA 200 fallback on missing paths),
@@ -889,17 +972,33 @@ def build_site(version: str, out_dir: Path) -> dict[str, Any]:
     (out_dir / "robots.txt").write_text("User-agent: *\nAllow: /\n", encoding="utf-8")
 
     file_count = sum(1 for p in out_dir.rglob("*") if p.is_file())
-    return {"version": version, "out_dir": str(out_dir), "files": file_count, "bundle_sha256": bundle_sha}
+    return {
+        "version": version,
+        "out_dir": str(out_dir),
+        "files": file_count,
+        "bundle_sha256": bundle_sha,
+        "archived_releases": [t for t, _ in archived_releases],
+        "header_rules": len(header_blocks),
+    }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build static website & live schema host for seallink.org.")
-    parser.add_argument("--version", default="v1.0.0-draft.7", help="Release version label (e.g. v1.0.0-draft.7)")
+    parser.add_argument("--version", default="v1.0.0-draft.8", help="Release version label (e.g. v1.0.0-draft.8)")
     parser.add_argument("--out", default=str(ROOT / "site"), help="Output directory for generated static site")
+    parser.add_argument(
+        "--archive-tags",
+        default="auto",
+        help="Historical release tags to preserve under /releases/<tag>/: 'auto', 'none', or comma-separated tags",
+    )
     args = parser.parse_args()
 
-    info = build_site(args.version, Path(args.out))
-    print(f"Built seallink.org static site ({info['files']} files, version={info['version']}, bundle_sha256={info['bundle_sha256']}) -> {info['out_dir']}")
+    info = build_site(args.version, Path(args.out), archive_tags=args.archive_tags)
+    print(
+        f"Built seallink.org static site ({info['files']} files, version={info['version']}, "
+        f"archived={len(info['archived_releases'])}, header_rules={info['header_rules']}, "
+        f"bundle_sha256={info['bundle_sha256']}) -> {info['out_dir']}"
+    )
     return 0
 
 

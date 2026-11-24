@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.7.
+Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.8.
 
 Executes five end-to-end SealLink protocol traces on two fresh loopback-only
 Namecoin Core 28 regtest nodes under strict standard policy (`-acceptnonstdtxn=0`,
 `-txindex=1`, `-namehistory=1`), extracting live ChainViews via a stateless cold
 `ColdNamecoinObserver` (`tools/nc_rpc_adapter.py`) talking strictly to the independent
-read-only peer node B (`-disablewallet=1`) with ZERO writer-side state, and verifying
+read-only peer node B (`-disablewallet=1`, dedicated 9-method `rpcwhitelist` credential
+with `-rpcwhitelistdefault=0`) with ZERO writer-side state, and verifying
 every step with `tools/seallink_verifier.py`
 (`Tier1Verifier(pinned_network="regtest", require_jsonschema=True)`).
 
@@ -309,10 +310,35 @@ class RegtestCluster:
         self.fund_addr = ""
         self.genesis_hash = ""
         self.coinbase_pool: list[dict[str, Any]] = []
+        # A-14: Dedicated least-privilege read-only RPC credentials for Node B ColdNamecoinObserver
+        self.obs_user = "seallink_obs"
+        self.obs_password = "seallink-regtest-readonly-obs-pass"
+        self.admin_user = "harness_admin"
+        self.admin_password = "seallink-regtest-harness-admin-pass"
+        self.obs_whitelist = (
+            "getblock,getblockchaininfo,getblockhash,getblockheader,"
+            "getindexinfo,getrawmempool,getrawtransaction,gettxout,name_history"
+        )
+        self.admin_whitelist = (
+            self.obs_whitelist
+            + ",getbestblockhash,getblockcount,getpeerinfo,invalidateblock,name_show,reconsiderblock,stop"
+        )
+
+    @staticmethod
+    def _rpcauth_line(username: str, password: str, salt_hex: str) -> str:
+        pw_hmac = hmac.new(salt_hex.encode("utf-8"), password.encode("utf-8"), hashlib.sha256).hexdigest()
+        return f"{username}:{salt_hex}${pw_hmac}"
 
     def new_cold_observer(self, *, rpc_counter: dict[str, int] | None = None) -> nca.ColdNamecoinObserver:
-        """Instantiate a fresh stateless ColdNamecoinObserver with ZERO writer-side state."""
-        raw_read = nca.make_cli_rpc(self.bin_dir, self.dirs[1], self.ports[1], regtest=True)
+        """Instantiate a fresh stateless ColdNamecoinObserver with ZERO writer-side state using Node B's read-only rpcwhitelist user."""
+        raw_read = nca.make_cli_rpc(
+            self.bin_dir,
+            self.dirs[1],
+            self.ports[1],
+            regtest=True,
+            rpcuser=self.obs_user,
+            rpcpassword=self.obs_password,
+        )
         if rpc_counter is not None:
             def _counted_read(method: str, *args: Any, wait: bool = False) -> Any:
                 rpc_counter[method] = rpc_counter.get(method, 0) + 1
@@ -336,6 +362,8 @@ class RegtestCluster:
             "-rpcconnect=127.0.0.1",
             "-stdin",
         ]
+        if node == 1:
+            cmd.extend([f"-rpcuser={self.admin_user}", f"-rpcpassword={self.admin_password}"])
         if wait:
             cmd.extend(["-rpcwait", "-rpcwaittimeout=25"])
         cmd.append(method)
@@ -387,7 +415,17 @@ class RegtestCluster:
             "-par=2",
         ]
         for i in range(2):
-            extra = ["-disablewallet=1"] if i == 1 else []
+            if i == 1:
+                extra = [
+                    "-disablewallet=1",
+                    f"-rpcauth={self._rpcauth_line(self.obs_user, self.obs_password, 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4')}",
+                    f"-rpcauth={self._rpcauth_line(self.admin_user, self.admin_password, 'f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3')}",
+                    "-rpcwhitelistdefault=0",
+                    f"-rpcwhitelist={self.obs_user}:{self.obs_whitelist}",
+                    f"-rpcwhitelist={self.admin_user}:{self.admin_whitelist}",
+                ]
+            else:
+                extra = []
             cmd = [
                 str(self.bin_dir / "namecoind"),
                 f"-datadir={self.dirs[i]}",
@@ -401,6 +439,18 @@ class RegtestCluster:
         for i in range(2):
             info = self.rpc(i, "getblockchaininfo", wait=True)
             assert info["chain"] == "regtest"
+        # A-14 live proof: verify read-only observer user CANNOT invoke privileged RPCs (sendrawtransaction/invalidateblock)!
+        obs_rpc_probe = nca.make_cli_rpc(
+            self.bin_dir, self.dirs[1], self.ports[1], regtest=True, rpcuser=self.obs_user, rpcpassword=self.obs_password
+        )
+        assert obs_rpc_probe("getblockchaininfo")["chain"] == "regtest"
+        try:
+            obs_rpc_probe("sendrawtransaction", "00")
+            raise AssertionError("Node B rpcwhitelist unexpectedly permitted sendrawtransaction for seallink_obs!")
+        except RuntimeError as exc:
+            assert "403" in str(exc) or "forbidden" in str(exc).lower() or "not allowed" in str(exc).lower(), (
+                f"Expected HTTP 403 / forbidden from rpcwhitelist, got: {exc}"
+            )
         # Connect outbound from Node A -> Node B so Node A uses fast 2s outbound inventory trickle (not 5s inbound)
         self.rpc(0, "addnode", f"127.0.0.1:{self.ports[3]}", "onetry")
         assert self.until(
@@ -748,6 +798,7 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
             "endpoint": "https://mail-t1.regtest.invalid/seallink",
             "receipt_key": host_rcpt["xonly"],
             "service_type": "mail",
+            "tls_spki_sha256": sl.sha256(b"t1-mail-host-tls-spki").hex(),
         },
         "type": "seallink-manifest/1",
     }
@@ -1040,12 +1091,12 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     g1_pol = {"kind": "key", "pk": g1_own["comp"]}
     g2_pol = {"kind": "key", "pk": g2_own["comp"]}
 
-    vac_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp_spec, "b": arb["comp"]}}
-    stat_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": stat_cap["comp"], "b": stat_end["comp"]}}
-    rec_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": rec_disp["comp"], "b": rec_arb["comp"]}}
+    vac_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(disp_spec, arb["comp"])}
+    stat_pol = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(stat_cap["comp"], stat_end["comp"])}
+    rec_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(rec_disp["comp"], rec_arb["comp"])}
     bind_pol = {"kind": "key", "pk": bind_seal["comp"]}
-    g1_act_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp_spec, "b": g1_seal["comp"]}}
-    g2_act_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp_spec, "b": g2_seal["comp"]}}
+    g1_act_pol = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(disp_spec, g1_seal["comp"])}
+    g2_act_pol = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(disp_spec, g2_seal["comp"])}
     delay_blocks = 3
     pend_pol = {
         "kind": "branch",
@@ -1055,13 +1106,13 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     }
 
     vac_spk, vac_ws = sl.compile_script_policy(vac_pol)
-    stat_spk, _ = sl.compile_script_policy(stat_pol)
+    stat_spk, stat_ws = sl.compile_script_policy(stat_pol)
     rec_spk, rec_ws = sl.compile_script_policy(rec_pol)
     bind_spk, _ = sl.compile_script_policy(bind_pol)
     g1_act_spk, g1_act_ws = sl.compile_script_policy(g1_act_pol)
     g2_act_spk, _ = sl.compile_script_policy(g2_act_pol)
     pend_spk, pend_ws = sl.compile_script_policy(pend_pol)
-    assert vac_ws and rec_ws and g1_act_ws and pend_ws
+    assert vac_ws and stat_ws and rec_ws and g1_act_ws and pend_ws
 
     # Register registry & guardians BEFORE origin 0x09 (ward name registered STRICTLY AFTER 0x09 per R3-B3!)
     names_pre = cl.register_names_batch([
@@ -1235,6 +1286,51 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     cl.broadcast_and_wait_peer(init12_raw)
     cl.mine(1)
 
+    # R1 #1 live proof: Anchor a real historical ward contract (`0x07`) at rev=1 signed by id/t2-parent-a (K1)
+    # BEFORE slot 1 halt, BEFORE 0x0f roster transition to rev=2, and BEFORE id/t2-parent-a rotates link.grant K1 -> K2!
+    sch_k = kp("t2-school")
+    h_init_tip = cl.rpc(1, "getblockcount")
+    t_init_tip = int(cl.rpc(1, "getblockheader", cl.rpc(1, "getbestblockhash"))["time"])
+    hist_contract = {
+        "clause_commitments": [sl.clause_commit(sl.sha256(b"t2-hist-c0").hex(), {"text": "Historical Term 1 Enrollment", "title": "Enrollment"})],
+        "contract_salt": sl.sha256(b"t2-hist-csalt").hex(),
+        "genesis": cl.genesis_hash,
+        "network": "regtest",
+        "parties": [
+            {"name_pin": {"name": "id/t2-child-leo", "owner_policy": ward_ms_pol, "registration": names["id/t2-child-leo"]["registration"]}, "party_id": "student-1", "role": "student_ward", "ward_origin_id": origin_id},
+            {"party_id": "school-1", "role": "school", "signing_policy": {"m": 1, "pks": [sch_k["xonly"]]}},
+        ],
+        "profile": "school-enrollment-v1",
+        "type": "seallink-contract/1",
+        "window": {"not_after_height": h_init_tip + 30, "not_before_height": h_init_tip - 5},
+    }
+    hist_cid = sl.object_id(hist_contract)
+    hist_0x07_txid, hist_0x07_raw = build_signed_tx(
+        [f_orig[5]],
+        [(0, op_return_spk(0x07, hist_cid)), (f_orig[5]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+    )
+    cl.broadcast_and_wait_peer(hist_0x07_raw)
+    hist_blk = cl.mine(1)[0]
+    h_hist_0x07 = cl.rpc(1, "getblockcount")
+    t_hist_0x07 = int(cl.rpc(1, "getblockheader", hist_blk)["time"])
+    assent_hist_g1 = sl.sign_guardian_envelope(
+        {
+            "expires_at": t_hist_0x07 + 200_000,
+            "genesis": cl.genesis_hash,
+            "guardian_context": {"event_class": "contract_assent", "origin_id": origin_id, "revision": 1, "ward_name": "id/t2-child-leo"},
+            "issued_at": t_hist_0x07 - 10,
+            "network": "regtest",
+            "nonce": sl.sha256(b"t2-hist-a-g1").hex(),
+            "party_id": "student-1",
+            "party_name": "id/t2-child-leo",
+            "party_role": "student_ward",
+            "target_id": hist_cid,
+            "target_type": "seallink-contract/1",
+            "type": "seallink-assent/1",
+        },
+        [{"slot": 1, "revision": 1, "guardian_name": "id/t2-parent-a", "signers": [g1_gr["sk"]]}],
+    )
+
     # Halt spend of slot 1's active either_of_2(2-of-3 disposer, g1_seal) seal using 2-of-3 disposer branch -> vacant!
     halt_txid, halt_raw = build_signed_tx(
         [
@@ -1364,6 +1460,12 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     cl.broadcast_and_wait_peer(act0e_raw)
     cl.mine(1)
 
+    # Rotate id/t2-parent-a's link.grant K1 -> K2 AFTER h_hist_0x07 (proving R1 #1 survives guardian key rotation too!)
+    g1_gr_rot = kp("t2-g1-gr-rot")
+    g1_rot_txid, _ = cl.update_name_p2wpkh(
+        names["id/t2-parent-a"], "id/t2-parent-a", g1_own, {"link": {"grant": g1_gr_rot["xonly"]}}
+    )
+
     # Execute live 0x0c recovery attempt spending recovery_seal (both_of_2), THEN cancel it via P2WSH 2-of-3 OP_NAME_UPDATE carrying 0x10 RECOVERY_CANCEL!
     cand_b2 = {
         "genesis": cl.genesis_hash,
@@ -1422,7 +1524,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     names["id/t2-child-leo"]["current_txid"] = rec10_txid
     names["id/t2-child-leo"]["current_vout"] = 0
 
-    # Build LIVE ChainView via fresh ColdNamecoinObserver (ZERO writer state!) and verify all 3 assents!
+    # Build LIVE ChainView via fresh ColdNamecoinObserver (ZERO writer state!) and verify ALL assents (incl. R1 #1 historical survival)!
     origin_bundle = {
         "guardian_assents": [g1_assent, g2_assent],
         "guardian_records": [g1_rec, g2_rec],
@@ -1437,7 +1539,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         "roster_records": [roster2],
     }
     t2_ctr: dict[str, int] = {}
-    ch_dict = cl.new_cold_observer(rpc_counter=t2_ctr).build_chain_view(wire_objects=[origin_bundle])
+    ch_dict = cl.new_cold_observer(rpc_counter=t2_ctr).build_chain_view(wire_objects=[origin_bundle], extra_txids=[hist_0x07_txid])
     assert t2_ctr.get("getblockchaininfo", 0) >= 2 and ch_dict["observation_bracket"]["consistent"] is True
     ch = sv.ChainView(ch_dict)
     v = sv.Tier1Verifier(
@@ -1450,9 +1552,8 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     wstate_chk, werr_chk = v.verify_origin_and_status(origin_bundle, ch)
     assert werr_chk is None and wstate_chk is not None, f"Trace 02 origin status failed: {werr_chk}"
     assert wstate_chk["recovery_events"] and wstate_chk["recovery_events"][0]["outcome"] == "cancelled_restored"
-    sch_k = kp("t2-school")
     contract = {
-        "clause_commitments": [sl.clause_commit(sl.sha256(b"t2-c0").hex(), {"text": "Enrollment"})],
+        "clause_commitments": [sl.clause_commit(sl.sha256(b"t2-c0").hex(), {"text": "Enrollment", "title": "Enrollment"})],
         "contract_salt": sl.sha256(b"t2-csalt").hex(),
         "genesis": cl.genesis_hash,
         "network": "regtest",
@@ -1490,9 +1591,102 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     r_self = v.verify_assent(assent_ward_self, contract, origin_bundle, ch)
     r_old = v.verify_assent(assent_old_g1, contract, origin_bundle, ch)
     r_new = v.verify_assent(assent_new_g2, contract, origin_bundle, ch)
+    # R1 #1 live verification: historical ward contract anchored at h_hist_0x07 (rev=1, K1) SURVIVES 0x0f (rev=2) + K1->K2 rotation!
+    r_hist_ok = v.verify_assent(assent_hist_g1, hist_contract, origin_bundle, ch, anchor_height=h_hist_0x07, anchor_time=t_hist_0x07)
     assert (r_self.verdict, r_self.refusal_code) == ("REFUSE", "WARD_AUTONOMOUS_FORBIDDEN"), f"Trace 02 self got {r_self}"
     assert (r_old.verdict, r_old.refusal_code) == ("REFUSE", "GUARDIAN_INACTIVE"), f"Trace 02 old got {r_old}"
     assert r_new.verdict == "ADMIT", f"Trace 02 new Carol got {r_new}"
+    assert r_hist_ok.verdict == "ADMIT", f"Trace 02 R1 #1 historical ward contract survival failed: {r_hist_ok}"
+
+    # Decision 1B / R2G-04 live proof: Emancipate id/t2-child-leo via confirmed seallink-capacity/1 (spending status_seal)
+    # + P2WSH 2-of-3 custodian handover + adult subject SIGHASH_ALL self-update -> State 4 autonomous assent ADMIT!
+    cl.update_name_p2wpkh(names["id/t2-civil-registry"], "id/t2-civil-registry", reg_own, {"link": {"cred": reg_cred["xonly"]}})
+    f_s4 = cl.split_funding(3, each_sat=2_000_000)
+    adult_own, adult_gr = kp("t2-adult-own"), kp("t2-adult-gr")
+    adult_pol = {"kind": "key", "pk": adult_own["comp"]}
+    adult_spk, _ = sl.compile_script_policy(adult_pol)
+    cap_s4_p = {
+        "basis_sha256": sl.sha256(b"t2-capacity-order").hex(),
+        "genesis": cl.genesis_hash,
+        "issued_at": ch.now,
+        "issuer": origin_p["issuer"],
+        "network": "regtest",
+        "next_status_policy": stat_pol,
+        "next_status_vout": 0,
+        "origin_id": origin_id,
+        "status_prev_outpoint": {"txid": seals_txid, "vout": 1},
+        "subject_new_owner_policy": adult_pol,
+        "type": "seallink-capacity/1",
+    }
+    cap_s4_env = sl.sign_envelope(cap_s4_p, [reg_cred["sk"]])
+    cap_txid, cap_raw = build_signed_tx(
+        [
+            {"txid": seals_txid, "vout": 1, "value_sat": SEAL_SAT, "kind": "p2wsh_multisig", "witness_script": stat_ws, "signers": [stat_cap]},
+            f_s4[0],
+        ],
+        [
+            (SEAL_SAT, stat_spk),
+            (0, op_return_spk(0x09, sl.content_addr(cap_s4_env))),
+            (f_s4[0]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
+        ],
+    )
+    cl.broadcast_and_wait_peer(cap_raw)
+    cl.mine(1)
+
+    # Custodian P2WSH 2-of-3 handover OP_NAME_UPDATE transferring id/t2-child-leo -> adult_pol
+    handover_val = sl.jcs_encode({"link": {"grant": adult_gr["xonly"], "origin": origin_id}})
+    handover_spk = sl.encode_name_output("NAME_UPDATE", adult_spk, name=b"id/t2-child-leo", value=handover_val)
+    ho_txid, ho_raw = build_signed_tx(
+        [
+            {"txid": names["id/t2-child-leo"]["current_txid"], "vout": names["id/t2-child-leo"]["current_vout"], "value_sat": MIN_NAME_SAT, "kind": "p2wsh_multisig", "witness_script": ward_ws, "signers": [wm1, wm2]},
+            f_s4[1],
+        ],
+        [(MIN_NAME_SAT, handover_spk), (f_s4[1]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+        version=NAMECOIN_TX_VERSION,
+    )
+    cl.broadcast_and_wait_peer(ho_raw)
+    cl.mine(1)
+    names["id/t2-child-leo"]["current_txid"] = ho_txid
+    names["id/t2-child-leo"]["current_vout"] = 0
+    names["id/t2-child-leo"]["owner_policy"] = adult_pol
+
+    # Adult subject's own SIGHASH_ALL OP_NAME_UPDATE confirming autonomy under adult_pol!
+    adult_self_txid, _ = cl.update_name_p2wpkh(
+        names["id/t2-child-leo"], "id/t2-child-leo", adult_own, {"link": {"grant": adult_gr["xonly"], "origin": origin_id}}
+    )
+    origin_bundle_s4 = {**origin_bundle, "capacity_record": cap_s4_env}
+    ch_s4_dict = cl.new_cold_observer().build_chain_view(wire_objects=[origin_bundle_s4])
+    ch_s4 = sv.ChainView(ch_s4_dict)
+    wstate_s4, werr_s4 = v.verify_origin_and_status(origin_bundle_s4, ch_s4)
+    assert werr_s4 is None and wstate_s4 is not None and wstate_s4["capacity"] == "autonomous", f"Trace 02 State 4 emancipation failed: {(wstate_s4, werr_s4)}"
+    assert wstate_s4["effective_binding"]["owner_policy"] == adult_pol
+    adult_contract = {
+        **copy.deepcopy(contract),
+        "contract_salt": sl.sha256(b"t2-adult-csalt").hex(),
+        "parties": [
+            {"name_pin": {"name": "id/t2-child-leo", "owner_policy": adult_pol, "registration": names["id/t2-child-leo"]["registration"]}, "party_id": "student-1", "role": "student_adult", "signing_policy": {"m": 1, "pks": [adult_gr["xonly"]]}},
+            {"party_id": "school-1", "role": "school", "signing_policy": {"m": 1, "pks": [sch_k["xonly"]]}},
+        ],
+        "window": {"not_after_height": ch_s4.tip_height + 20, "not_before_height": ch_s4.tip_height - 10},
+    }
+    assent_adult_s4 = sl.sign_envelope(
+        {
+            "expires_at": ch_s4.now + 100_000,
+            "genesis": cl.genesis_hash,
+            "issued_at": ch_s4.now - 10,
+            "network": "regtest",
+            "nonce": sl.sha256(b"t2-adult-s4-assent").hex(),
+            "party_id": "student-1",
+            "party_name": "id/t2-child-leo",
+            "party_role": "student_adult",
+            "target_id": sl.object_id(adult_contract),
+            "target_type": "seallink-contract/1",
+            "type": "seallink-assent/1",
+        },
+        [adult_gr["sk"]],
+    )
+    r_adult_s4 = v.verify_assent(assent_adult_s4, adult_contract, origin_bundle_s4, ch_s4)
+    assert r_adult_s4.verdict == "ADMIT", f"Trace 02 Decision 1B State-4 autonomous assent failed: {r_adult_s4}"
 
     return {
         "decision_6a_branch_key_spec_2of3_verified": True,
@@ -1504,6 +1698,9 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         "binding_0x0c_raw_hex": anc0c_raw,
         "init_0x12_txid": init12_txid,
         "init_0x12_raw_hex": init12_raw,
+        "historical_ward_contract_0x07_txid": hist_0x07_txid,
+        "historical_ward_contract_anchor_height": h_hist_0x07,
+        "guardian_1_key_rotation_txid": g1_rot_txid,
         "halt_either_of_2_txid": halt_txid,
         "halt_either_of_2_raw_hex": halt_raw,
         "roster_0x0f_txid": rost0f_txid,
@@ -1523,10 +1720,15 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         "recovery_cancel_0x10_txid": rec10_txid,
         "recovery_cancel_0x10_raw_hex": rec10_raw,
         "recovery_cancelled_restored_verified": True,
+        "emancipation_capacity_0x09_txid": cap_txid,
+        "emancipation_handover_txid": ho_txid,
+        "emancipation_adult_self_update_txid": adult_self_txid,
         "verdicts": {
             "ward_self_assent": {"verdict": r_self.verdict, "refusal_code": r_self.refusal_code},
             "halted_guardian_assent": {"verdict": r_old.verdict, "refusal_code": r_old.refusal_code},
             "csv_activated_successor_assent": {"verdict": r_new.verdict, "outcome": r_new.outcome},
+            "historical_ward_contract_survives_0x0f_and_key_rot": {"verdict": r_hist_ok.verdict, "outcome": r_hist_ok.outcome},
+            "decision_1b_state4_emancipated_autonomous_assent": {"verdict": r_adult_s4.verdict, "outcome": r_adult_s4.outcome},
         },
     }
 
@@ -1574,14 +1776,32 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
             "endpoint": "https://mail-t3.regtest.invalid/seallink",
             "receipt_key": host_rcpt["xonly"],
             "service_type": "mail",
+            "tls_spki_sha256": sl.sha256(b"t3-mail-host-tls-spki").hex(),
         },
         "type": "seallink-manifest/1",
     }
     host_man_ca = sl.content_addr(host_man)
-    names = cl.register_names_batch([
-        {"name": "id/t3-alice", "owner_policy": alice_pol, "owner_kp": alice_own, "value_obj": {"link": {"grant": alice_gr["xonly"]}}, "rand_label": "t3-alice"},
+    names_h = cl.register_names_batch([
         {"name": "id/t3-mail-host", "owner_policy": host_pol, "owner_kp": host_own, "value_obj": {"m": {"h": host_man_ca, "s": 1}}, "rand_label": "t3-host"},
     ])
+    host_pin_t3 = {"name": "id/t3-mail-host", "owner_policy": host_pol, "registration": names_h["id/t3-mail-host"]["registration"]}
+    alice_man = {
+        "network": "regtest",
+        "owner": "id/t3-alice",
+        "providers": [
+            {"label": lbl, "provider": host_pin_t3, "service_type": "mail"}
+            for lbl in ("del", "su1", "su2", "p2a")
+        ],
+        "seq": 1,
+        "type": "seallink-manifest/1",
+    }
+    alice_man_ca = sl.content_addr(alice_man)
+    names_a = cl.register_names_batch([
+        {"name": "id/t3-alice", "owner_policy": alice_pol, "owner_kp": alice_own, "value_obj": {"link": {"grant": alice_gr["xonly"]}, "m": {"h": alice_man_ca, "s": 1}}, "rand_label": "t3-alice"},
+    ])
+    names = {**names_h, **names_a}
+    cl.update_name_p2wpkh(names["id/t3-mail-host"], "id/t3-mail-host", host_own, {"m": {"h": host_man_ca, "s": 1}})
+    t3_manifests = {host_man_ca: host_man, alice_man_ca: alice_man}
 
     f = cl.split_funding(8, each_sat=10_000_000)
     # Tx 1: Even vouts = seals, Odd vouts = companion linkage coins (seal_vout + 1 per R3-H1!)
@@ -1623,20 +1843,20 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
 
     # --- Part A: Real Depth-2 Delegation + Sibling row_ordinal (1 & 2) + Crash/Restart Recovery ---
     parent_gp = {
-        "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": "10", "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
+        "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": "10", "resource": "mailbox:id/t3-alice:del", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
         "delegate": {
             "child_seal_key": cseal_k["comp"],
             "groups": [{
                 "ranges": [{"count": 2, "first": 0, "script_policy": row_pol, "txid": rows_txid}],
                 "template": {
-                    "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": "2", "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
+                    "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": "2", "resource": "mailbox:id/t3-alice:del", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
                     "executor": exec_cfg,
                     "notary_mode": "none",
                     "recipient_rule": {"key": child_req["xonly"], "mode": "exact_key"},
                 },
             }],
             "key": del_k["xonly"],
-            "pools": [{"kind": "seallink/count", "max": "4", "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}],
+            "pools": [{"kind": "seallink/count", "max": "4", "resource": "mailbox:id/t3-alice:del", "unit": "calls", "window": "seconds:3600"}],
         },
         "executor": exec_cfg,
         "genesis": cl.genesis_hash,
@@ -1654,7 +1874,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
 
     def _mk_child(ordinal: int, seal_vout: int, row_max: str) -> tuple[dict[str, Any], str]:
         cp = {
-            "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": row_max, "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
+            "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": row_max, "resource": "mailbox:id/t3-alice:del", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
             "executor": exec_cfg,
             "genesis": cl.genesis_hash,
             "network": "regtest",
@@ -1808,7 +2028,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
     ch_dict = cl.new_cold_observer().build_chain_view(
         wire_objects=[parent_env, c1_env, c2_env, g1_env, g2_env, grev_env, inv1_env],
         extra_txids=[iss_par_txid, iss_c1_txid, iss_c2_txid, iss1_txid, iss2_txid, issr_txid, use1_txid],
-        manifests={host_man_ca: host_man},
+        manifests=t3_manifests,
     )
     ch = sv.ChainView(ch_dict)
     v = sv.Tier1Verifier(pinned_network="regtest", pinned_genesis=cl.genesis_hash, require_jsonschema=True, require_observation_bracket=True)
@@ -1833,7 +2053,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
             [child_req["sk"]],
         )
 
-    del_bundle = {"grants": [parent_env, c1_env, c2_env], "manifests": {host_man_ca: host_man}}
+    del_bundle = {"grants": [parent_env, c1_env, c2_env], "manifests": t3_manifests}
     inv_r1_1 = _mk_del_inv(c1_gid, iss_c1_txid, "r1-1")
     rcpt_r1_1 = sl.sign_envelope(
         {
@@ -1847,8 +2067,8 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
             "recorded_at": ch.now,
             "result_sha256": sl.sha256(b"t3-r1-1-res").hex(),
             "settlements": [
-                {"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mail/read", "settled": "1", "unit": "calls", "window": "seconds:3600"},
-                {"account": "row", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mail/read", "row_ordinal": 1, "settled": "1", "unit": "calls", "window": "seconds:3600"},
+                {"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mailbox:id/t3-alice:del", "settled": "1", "unit": "calls", "window": "seconds:3600"},
+                {"account": "row", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mailbox:id/t3-alice:del", "row_ordinal": 1, "settled": "1", "unit": "calls", "window": "seconds:3600"},
             ],
             "tip_hash": ch.tip_hash,
             "tip_height": ch.tip_height,
@@ -1861,8 +2081,8 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
     inv_r2_1 = _mk_del_inv(c2_gid, iss_c2_txid, "r2-1")
     rcpt_r2_1 = sl.sign_envelope(
         {**rcpt_r1_1["payload"], "grant_id": c2_gid, "invocation_id": sl.object_id(inv_r2_1["payload"]), "result_sha256": sl.sha256(b"t3-r2-1-res").hex(),
-         "settlements": [{"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mail/read", "settled": "1", "unit": "calls", "window": "seconds:3600"},
-                         {"account": "row", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mail/read", "row_ordinal": 2, "settled": "1", "unit": "calls", "window": "seconds:3600"}]},
+         "settlements": [{"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mailbox:id/t3-alice:del", "settled": "1", "unit": "calls", "window": "seconds:3600"},
+                         {"account": "row", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mailbox:id/t3-alice:del", "row_ordinal": 2, "settled": "1", "unit": "calls", "window": "seconds:3600"}]},
         [host_rcpt["sk"]],
     )
     inv_r2_2 = _mk_del_inv(c2_gid, iss_c2_txid, "r2-2")
@@ -1936,10 +2156,14 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         },
         [host_rcpt["sk"]],
     )
-    r_su1 = v.verify_invocation(inv1_env, {"grants": [g1_env], "manifests": {host_man_ca: host_man}}, ch, restarted_j, exec_cfg, use_txid=use1_txid, receipt_env_for_cache=rcpt_su1)
+    r_su1 = v.verify_invocation(inv1_env, {"grants": [g1_env], "manifests": t3_manifests}, ch, restarted_j, exec_cfg, use_txid=use1_txid, receipt_env_for_cache=rcpt_su1)
     assert r_su1.verdict == "ADMIT", f"Trace 03 su1 failed: {r_su1}"
+    # R3 Blocker #2: single_use commits in ONE unified atomic terminal `settlement` entry (2 total writes: reservation + settlement)!
+    assert len(r_su1.journal_writes) == 2 and r_su1.journal_writes[1]["entry"]["kind"] == "settlement" and r_su1.journal_writes[1]["entry"]["body"].get("single_use_consumed") is True, (
+        f"Expected 2 unified journal writes for single_use, got {len(r_su1.journal_writes)}"
+    )
     inv1_replay = sl.sign_envelope({**inv1_env["payload"], "nonce": sl.sha256(b"t3-su1-replay").hex()}, [agent_req["sk"]])
-    r_su1_rep = v.verify_invocation(inv1_replay, {"grants": [g1_env], "manifests": {host_man_ca: host_man}}, ch, restarted_j, exec_cfg, use_txid=use1_txid)
+    r_su1_rep = v.verify_invocation(inv1_replay, {"grants": [g1_env], "manifests": t3_manifests}, ch, restarted_j, exec_cfg, use_txid=use1_txid)
     assert (r_su1_rep.verdict, r_su1_rep.refusal_code) == ("REFUSE", "INVOKE_REPLAY"), f"Trace 03 su1 replay got {r_su1_rep}"
 
     # 3. Single-use #2 branch-1 issuer revoke -> SEAL_SPENT -> GRANT_CLOSED
@@ -1959,10 +2183,10 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         },
         [agent_req["sk"]],
     )
-    r_su2 = v.verify_invocation(inv2_env, {"grants": [g2_env], "manifests": {host_man_ca: host_man}}, ch, restarted_j, exec_cfg)
+    r_su2 = v.verify_invocation(inv2_env, {"grants": [g2_env], "manifests": t3_manifests}, ch, restarted_j, exec_cfg)
     assert (r_su2.verdict, r_su2.refusal_code) == ("REFUSE", "SEAL_SPENT"), f"Trace 03 su2 got {r_su2}"
     inv2_sub = sl.sign_envelope({**inv2_env["payload"], "nonce": sl.sha256(b"t3-su2-n2").hex()}, [agent_req["sk"]])
-    r_su2_sub = v.verify_invocation(inv2_sub, {"grants": [g2_env], "manifests": {host_man_ca: host_man}}, ch, restarted_j, exec_cfg)
+    r_su2_sub = v.verify_invocation(inv2_sub, {"grants": [g2_env], "manifests": t3_manifests}, ch, restarted_j, exec_cfg)
     assert (r_su2_sub.verdict, r_su2_sub.refusal_code) == ("REFUSE", "GRANT_CLOSED"), f"Trace 03 su2 sub got {r_su2_sub}"
 
     # 4. TRUC v3 P2A-boosted revocation observed in peer B mempool -> SEAL_SPENT!
@@ -1982,7 +2206,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         },
         [agent_req["sk"]],
     )
-    r_p2a = v.verify_invocation(inv_p2a, {"grants": [grev_env], "manifests": {host_man_ca: host_man}}, ch, restarted_j, exec_cfg)
+    r_p2a = v.verify_invocation(inv_p2a, {"grants": [grev_env], "manifests": t3_manifests}, ch, restarted_j, exec_cfg)
     assert (r_p2a.verdict, r_p2a.refusal_code) == ("REFUSE", "SEAL_SPENT"), f"Trace 03 P2A mempool revoke got {r_p2a}"
 
     # Mine block and verify BOTH TRUC v3 package txs confirm on peer B!
@@ -2041,12 +2265,12 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
     ga_pol = {"kind": "key", "pk": ga_own["comp"]}
     gb_pol = {"kind": "key", "pk": gb_own["comp"]}
     ward_pol = {"kind": "key", "pk": ward_own["comp"]}
-    vac_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp["comp"], "b": arb["comp"]}}
-    stat_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": stat_cap["comp"], "b": stat_end["comp"]}}
+    vac_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(disp["comp"], arb["comp"])}
+    stat_pol = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(stat_cap["comp"], stat_end["comp"])}
     bind_pol = {"kind": "key", "pk": bind_seal["comp"]}
-    ga_act_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp["comp"], "b": ga_seal["comp"]}}
-    gb_act_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp["comp"], "b": gb_seal["comp"]}}
-    rec_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp["comp"], "b": arb["comp"]}}
+    ga_act_pol = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(disp["comp"], ga_seal["comp"])}
+    gb_act_pol = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(disp["comp"], gb_seal["comp"])}
+    rec_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(disp["comp"], arb["comp"])}
     gseal_pol = {"kind": "key", "pk": gseal_k["comp"]}
 
     vac_spk, vac_ws = sl.compile_script_policy(vac_pol)
@@ -2552,7 +2776,9 @@ def run_trace_05(cl: RegtestCluster) -> dict[str, Any]:
     #    - retry_on_tip_change=0 -> Tier1Verifier(require_observation_bracket=True) refuses CHAIN_OBSERVATION_VOID!
     #    - retry_on_tip_change=1 -> ColdNamecoinObserver discards straddling snapshot, re-reads new tip -> ADMIT!
     def _make_straddling_observer() -> nca.ColdNamecoinObserver:
-        raw_read = nca.make_cli_rpc(cl.bin_dir, cl.dirs[1], cl.ports[1], regtest=True)
+        raw_read = nca.make_cli_rpc(
+            cl.bin_dir, cl.dirs[1], cl.ports[1], regtest=True, rpcuser=cl.obs_user, rpcpassword=cl.obs_password
+        )
         fired = {"mined": False, "gbi": 0}
         def _hooked_read(method: str, *args: Any, wait: bool = False) -> Any:
             res = raw_read(method, *args, wait=wait)
@@ -2661,9 +2887,11 @@ def main() -> int:
         elapsed = round(time.monotonic() - t0, 2)
         report = {
             "suite": "seallink-nc28-live-traces-regtest",
-            "spec_version": "1.0.0-draft.7",
+            "spec_version": "1.0.0-draft.8",
             "chain": "regtest",
-            "policy": "standard (-acceptnonstdtxn=0 -txindex=1 -namehistory=1), two loopback-only nodes (node A writer outbound -> node B read-only cold observer with -disablewallet=1)",
+            "policy": "standard (-acceptnonstdtxn=0 -txindex=1 -namehistory=1), two loopback-only nodes (node A writer outbound -> node B read-only cold observer with -disablewallet=1 and -rpcwhitelistdefault=0)",
+            "node_b_rpcwhitelist": cl.obs_whitelist.split(","),
+            "node_b_rpcwhitelist_enforced": True,
             "observer_adapter": "tools/nc_rpc_adapter.py:ColdNamecoinObserver",
             "node_meta": meta,
             "final_tip_height": cl.rpc(1, "getblockcount"),

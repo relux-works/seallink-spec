@@ -19,7 +19,7 @@ import build_refusal_matrix as rm
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.7"
+VERSION = "1.0.0-draft.8"
 GENESIS_MAIN = rm.GENESIS_MAIN
 
 
@@ -46,6 +46,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         operator_min_depth=inp.get("operator_min_depth", 1),
         allow_window_only=inp.get("allow_window_only", False),
         trusted_origin_issuers=set(inp.get("trusted_origin_issuers", [])),
+        trusted_origin_issuer_pins=inp.get("trusted_origin_issuer_pins"),
         enforce_schemas=True,
         require_jsonschema=require_jsonschema,
         max_history_steps=inp.get("max_history_steps", 500),
@@ -53,26 +54,60 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
     )
     if runner == "origin_status":
         chain = sv.ChainView(inp["chain"])
-        st, err = v.verify_origin_and_status(inp["origin_bundle"], chain, assert_binding_id=inp.get("assert_binding_id"))
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+        st, err = v.verify_origin_and_status(
+            inp["origin_bundle"],
+            chain,
+            assert_binding_id=inp.get("assert_binding_id"),
+            journal=j,
+            at_height=inp.get("at_height"),
+            at_time=inp.get("at_time"),
+        )
         if err is not None:
             return "REFUSE", err
         assert st is not None
         if "expect_recovery_burned" in inp and bool(st.get("recovery_burned")) != bool(inp["expect_recovery_burned"]):
             return "REFUSE", f"RECOVERY_BURNED_MISMATCH:{st.get('recovery_burned')}"
+        if "expect_recovery_outcome" in inp:
+            evs = st.get("recovery_events") or []
+            got_out = evs[-1].get("outcome") if evs else None
+            if got_out != inp["expect_recovery_outcome"]:
+                return "REFUSE", f"RECOVERY_OUTCOME_MISMATCH:{got_out}"
         return ("ADMIT_AUTONOMOUS" if st["capacity"] == "autonomous" else "ADMIT_WARD"), None
     if runner == "assent":
         chain = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
         res = v.verify_assent(
             inp["assent"],
             inp["contract"],
             inp.get("origin_bundle"),
             chain,
+            anchor_height=inp.get("anchor_height"),
             anchor_time=inp.get("anchor_time"),
+            journal=j,
         )
         return res.verdict, res.refusal_code
     if runner == "invocation":
         chain = sv.ChainView(inp["chain"])
         journal = sv.FencedJournal.from_dict(inp["journal"])
+        if "external_witness" in inp:
+            journal.external_witness = copy.deepcopy(inp["external_witness"])
+            journal.write_token = inp.get("write_token", 1)
+        if "write_race" in inp:
+            race_mode = inp["write_race"]
+            orig_append = journal.append
+
+            def _racy_append(kind: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
+                if kind == "reservation":
+                    if race_mode == "fence" and journal.external_witness is not None:
+                        journal.external_witness["active_write_token"] += 1
+                    elif race_mode == "drift" and journal.external_witness is not None:
+                        journal.external_witness["pos"] += 1
+                    elif race_mode == "value_err":
+                        raise ValueError("non_registered_validation_error")
+                return orig_append(kind, body, **kw)
+
+            journal.append = _racy_append  # type: ignore[method-assign]
         raw_msg = bytes.fromhex(inp["raw_message_hex"]) if "raw_message_hex" in inp else None
         res = v.verify_invocation(
             inp["invocation"],
@@ -89,6 +124,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
     if runner == "migration":
         chain = sv.ChainView(inp["chain"]) if inp.get("chain") is not None else None
         journal = sv.FencedJournal.from_dict(inp["journal"])
+        before_n = len(journal.entries)
         res = v.verify_migration(
             inp["migration"],
             inp["export_bundle"],
@@ -98,7 +134,11 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             holder_assent=inp.get("holder_assent"),
             dest_accept_stmt=inp.get("dest_accept_stmt"),
             origin_bundle=inp.get("origin_bundle"),
+            local_executor_pin=inp.get("local_executor_pin"),
+            mode=inp.get("mode", "activate"),
         )
+        if inp.get("expect_zero_writes") and len(journal.entries) != before_n:
+            return "REFUSE", f"UNEXPECTED_MIGRATION_WRITES:{len(journal.entries) - before_n}"
         return res.verdict, res.refusal_code
     if runner == "owner_command":
         chain = sv.ChainView(inp["chain"])
@@ -112,15 +152,24 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         return res.verdict, res.refusal_code
     if runner == "federation":
         chain = sv.ChainView(inp["chain"]) if inp.get("chain") is not None else None
-        res = v.verify_federation_disclosure(inp["policy"], inp["peer_ctx"], inp["grant"], chain=chain)
+        journal = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+        res = v.verify_federation_disclosure(
+            inp["policy"],
+            inp["peer_ctx"],
+            inp["grant"],
+            chain=chain,
+            journal=journal,
+        )
         return res.verdict, res.refusal_code
     if runner == "credential":
         chain = sv.ChainView(inp["chain"])
         sk = set(inp["supported_kinds"]) if inp.get("supported_kinds") is not None else None
+        journal = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
         res = v.verify_credential(
             inp["credential"],
             inp.get("anchor_txid"),
             chain,
+            journal=journal,
             supported_kinds=sk,
             withdrawal_doc=inp.get("withdrawal_doc"),
             origin_bundle=inp.get("origin_bundle"),
@@ -155,7 +204,12 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             if res.verdict == "REFUSE" and len(journal.entries) != before_n:
                 return "REFUSE", f"UNEXPECTED_WRITE_ON_REFUSAL:{step['label']}"
         # Reconstruct a brand-new journal strictly from persisted entries and verify distinct row balances!
-        replayed = sv.FencedJournal.replay_persisted_entries(journal.journal_id, copy.deepcopy(journal.entries))
+        replayed = sv.FencedJournal.replay_persisted_entries(
+            journal.journal_id,
+            copy.deepcopy(journal.entries),
+            witness_pos=journal.pos,
+            witness_commitment=journal.commitment,
+        )
         if replayed.commitment != journal.commitment or replayed.pos != journal.pos:
             return "REFUSE", "REPLAY_COMMITMENT_MISMATCH"
         for bspec in inp["check_balances"]:
@@ -169,6 +223,12 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         if "raw_bytes_utf8" in inp:
             ok, res = v.verify_wire_bytes(
                 inp["raw_bytes_utf8"].encode("utf-8"),
+                max_bytes_override=inp.get("max_bytes_override"),
+            )
+            return ("ADMIT", None) if ok else ("REFUSE", res)
+        if "raw_bytes_hex" in inp:
+            ok, res = v.verify_wire_bytes(
+                bytes.fromhex(inp["raw_bytes_hex"]),
                 max_bytes_override=inp.get("max_bytes_override"),
             )
             return ("ADMIT", None) if ok else ("REFUSE", res)
@@ -262,6 +322,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             chain,
             journal,
             grant_env=inp.get("grant_env"),
+            parent_grant_env=inp.get("parent_grant_env"),
             action=inp.get("action"),
             arguments=inp.get("arguments"),
         )
@@ -290,7 +351,11 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         persisted_entries = json.loads(json.dumps(journal.entries))
         persisted_store = json.loads(json.dumps(journal.receipt_store))
         restarted = sv.FencedJournal.replay_persisted_entries(
-            journal.journal_id, persisted_entries, receipt_store=persisted_store
+            journal.journal_id,
+            persisted_entries,
+            receipt_store=persisted_store,
+            witness_pos=journal.pos,
+            witness_commitment=journal.commitment,
         )
         if restarted.commitment != journal.commitment or restarted.pos != journal.pos:
             return "REFUSE", "RESTART_COMMITMENT_MISMATCH"
@@ -402,8 +467,21 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
     if runner == "session_lifecycle":
         j = sv.FencedJournal.from_dict(inp.get("journal", {"journal_id": _h32("sl-j")}))
         for step in inp["steps"]:
-            ch = sv.ChainView(step["chain"])
             op_kind = step["kind"]
+            if op_kind == "replay_restart":
+                j = sv.FencedJournal.replay_persisted_entries(
+                    j.journal_id,
+                    json.loads(json.dumps(j.entries)),
+                    receipt_store=json.loads(json.dumps(j.receipt_store)),
+                    witness_pos=j.witness_pos,
+                    witness_commitment=j.witness_commitment,
+                    write_token_active=True,
+                )
+                rep_err = j.check_continuity()
+                if rep_err is not None:
+                    return "REFUSE", f"SESSION_REPLAY_ERR:{rep_err}"
+                continue
+            ch = sv.ChainView(step["chain"])
             if op_kind == "session_open":
                 res = v.verify_session_open(
                     step["session_open"],
@@ -420,7 +498,9 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                     ch,
                     j,
                     grant_env=step.get("grant_env"),
+                    parent_grant_env=step.get("parent_grant_env"),
                     action=step.get("action"),
+                    target=step.get("target"),
                     arguments=step.get("arguments"),
                 )
             else:
@@ -512,14 +592,148 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             witness_pos=inp.get("witness_pos"),
             witness_commitment=inp.get("witness_commitment"),
             write_token_active=inp.get("write_token_active", True),
+            require_witness=inp.get("require_witness", True),
         )
         rep_err = restarted.check_continuity()
         return ("REFUSE", rep_err) if rep_err else ("ADMIT", None)
+    if runner == "commit_edge":
+        j = sv.FencedJournal(inp["journal_id"])
+        ch = sv.ChainView(inp["chain"])
+        if inp.get("skip_phase1"):
+            rp = inp["receipt_env"]["payload"]
+            res = v.commit_result(
+                inp["receipt_env"],
+                j,
+                inp["executor_cfg"],
+                invocation_id=rp["invocation_id"],
+                grant_id=rp["grant_id"],
+            )
+            return res.verdict, res.refusal_code
+        p1 = v.admit_and_reserve(
+            inp["invocation"],
+            inp["bundle"],
+            ch,
+            j,
+            inp["executor_cfg"],
+            use_txid=inp.get("use_txid"),
+        )
+        if p1.verdict != "ADMIT":
+            return p1.verdict, p1.refusal_code
+        p2 = v.commit_result(
+            inp["receipt_env"],
+            j,
+            inp["executor_cfg"],
+            invocation_id=p1.details["invocation_id"],
+            grant_id=inp.get("override_grant_id", p1.details["grant_id"]),
+            actual_quota_usage=inp.get("actual_quota_usage"),
+            single_use=p1.details["single_use"],
+            use_txid=p1.details["use_txid"],
+            recorded_at=p1.details["recorded_at"],
+            tip_height=p1.details["tip_height"],
+            expected_action=inp.get("expected_action"),
+        )
+        if p2.verdict != "ADMIT":
+            return p2.verdict, p2.refusal_code
+        if "expect_total_entries" in inp and len(j.entries) != inp["expect_total_entries"]:
+            return "REFUSE", f"ENTRY_COUNT_MISMATCH:{len(j.entries)}"
+        if inp.get("second_receipt_env") is not None:
+            before_n = len(j.entries)
+            before_c = j.commitment
+            p2b = v.commit_result(
+                inp["second_receipt_env"],
+                j,
+                inp["executor_cfg"],
+                invocation_id=p1.details["invocation_id"],
+                grant_id=p1.details["grant_id"],
+                actual_quota_usage=inp.get("actual_quota_usage"),
+                single_use=p1.details["single_use"],
+                use_txid=p1.details["use_txid"],
+                recorded_at=p1.details["recorded_at"],
+                tip_height=p1.details["tip_height"],
+            )
+            if p2b.verdict == "ADMIT" and (len(j.entries) != before_n or j.commitment != before_c):
+                return "REFUSE", "IDEMPOTENT_COMMIT_MUTATED_JOURNAL"
+            return p2b.verdict, p2b.refusal_code
+        if inp.get("post_restart_new_invocation") is not None:
+            restarted = sv.FencedJournal.replay_persisted_entries(
+                j.journal_id,
+                json.loads(json.dumps(j.entries)),
+                receipt_store=json.loads(json.dumps(j.receipt_store)),
+                witness_pos=j.witness_pos,
+                witness_commitment=j.witness_commitment,
+            )
+            r_new = v.admit_and_reserve(
+                inp["post_restart_new_invocation"],
+                inp["bundle"],
+                ch,
+                restarted,
+                inp["executor_cfg"],
+                use_txid=inp.get("use_txid"),
+            )
+            return r_new.verdict, r_new.refusal_code
+        return p2.verdict, p2.refusal_code
+    if runner == "journal_cas_fence":
+        jid = inp["journal_id"]
+        ext: dict[str, Any] = {
+            "journal_id": jid,
+            "pos": 0,
+            "commitment": sl.journal_commit_init(jid),
+            "active_write_token": 1,
+        }
+        ja = sv.FencedJournal(jid, external_witness=ext, write_token=1)
+        jb = sv.FencedJournal(jid, external_witness=ext, write_token=1)
+        # Replica B takes over by fencing active_write_token -> 2 and writing an entry
+        ext["active_write_token"] = 2
+        jb.write_token = 2
+        jb.append("recovery", {"fenced_at": 1795220000, "new_write_token": 2, "prev_write_token": 1})
+        try:
+            ja.append("recovery", {"fenced_at": 1795220001, "new_write_token": 1, "prev_write_token": 0})
+            return "ADMIT", None
+        except PermissionError:
+            return "REFUSE", "JOURNAL_FENCED"
+        except RuntimeError:
+            return "REFUSE", "JOURNAL_LOST"
+        except ValueError as exc:
+            return "REFUSE", str(exc)
+    if runner == "journal_entry_wire":
+        j = sv.FencedJournal(inp["journal_id"])
+        try:
+            w = j.append(inp["kind"], inp["body"])
+        except ValueError as exc:
+            return "REFUSE", str(exc)
+        raw = sl.jcs_encode(w["entry"])
+        if "expect_exact_bytes" in inp and len(raw) != inp["expect_exact_bytes"]:
+            return "REFUSE", f"EXACT_SIZE_MISMATCH:{len(raw)}"
+        if inp.get("expect_gt_16384") and len(raw) <= 16384:
+            return "REFUSE", f"TOO_SMALL:{len(raw)}"
+        if len(raw) > 65536:
+            return "REFUSE", f"TOO_LARGE:{len(raw)}"
+        ok_w, code_w = v.verify_wire_bytes(raw)
+        return ("ADMIT", None) if ok_w else ("REFUSE", code_w)
+    if runner == "single_use_anti_dos":
+        ch = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal(inp["journal_id"])
+        r_bad = v.verify_invocation(inp["foreign_invocation"], inp["bundle"], ch, j, inp["executor_cfg"], use_txid=inp["foreign_use_txid"])
+        if r_bad.verdict != "REFUSE" or r_bad.refusal_code != "SEAL_SPENT":
+            return "REFUSE", f"FOREIGN_UNEXPECTED:{(r_bad.verdict, r_bad.refusal_code)}"
+        if j.entries:
+            return "REFUSE", f"FOREIGN_WROTE_CLOSURE:{len(j.entries)}"
+        r_ok = v.verify_invocation(inp["good_invocation"], inp["bundle"], ch, j, inp["executor_cfg"], use_txid=inp["good_use_txid"])
+        return r_ok.verdict, r_ok.refusal_code
     raise ValueError(f"Unknown security runner: {runner}")
 
 
 def build_security_conformance_suite() -> dict[str, Any]:
     cases: list[dict[str, Any]] = []
+
+    def _default_module(runner_name: str) -> str:
+        if runner_name in ("session_lifecycle", "bearer_session"):
+            return "bearer-sessions"
+        if runner_name == "migration":
+            return "service-migration"
+        if runner_name == "federation":
+            return "federated-screening"
+        return "core"
 
     def add(
         cid: str,
@@ -529,10 +743,13 @@ def build_security_conformance_suite() -> dict[str, Any]:
         expected_verdict: str,
         expected_refusal: str | None,
         note: str,
+        *,
+        module: str | None = None,
     ) -> None:
         clean_inputs = rm._strip_private(inputs)
         case = {
             "id": cid,
+            "module": module or _default_module(runner),
             "rules": rules,
             "runner": runner,
             "inputs": clean_inputs,
@@ -635,7 +852,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
     of = rm._base_origin_fixture()
     disp = of["_keys"]["disp"]
     arb = of["_keys"]["arb"]
-    vac_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp["comp"], "b": arb["comp"]}}
+    vac_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(disp["comp"], arb["comp"])}
     rp_forged = {
         "arbiter_pk": arb["comp"],
         "challenger_pk": of["origin_bundle"]["origin"]["payload"]["guardian_policy"]["challenger_pk"],
@@ -677,7 +894,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
     # 6. Disposer rotation with retain_active FORBIDDEN -> CHAIN_SCRIPT_UNSUPPORTED
     of = rm._base_origin_fixture()
     new_disp = _kp("new-disposer-rotated")
-    new_vac_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": new_disp["comp"], "b": arb["comp"]}}
+    new_vac_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(new_disp["comp"], arb["comp"])}
     rp_bad_rot = {
         "arbiter_pk": arb["comp"],
         "challenger_pk": of["origin_bundle"]["origin"]["payload"]["guardian_policy"]["challenger_pk"],
@@ -1134,6 +1351,8 @@ def build_security_conformance_suite() -> dict[str, Any]:
     bbs2.add_boundary_and_recovery_cases(add)
     import build_draft7_suite as bd7
     bd7.add_draft7_conformance_cases(add)
+    import build_draft8_suite as bd8
+    bd8.add_draft8_conformance_cases(add)
 
     return {
         "suite": "security-conformance",
@@ -1262,12 +1481,12 @@ def run_verifier_mutation_tests(
     finally:
         sl._P256_HALF_N = orig_half
 
-    # Mutation 10: Bypass emancipation handover check -> must fail GUARDIAN_TRANSFER_PENDING
+    # Mutation 10: Bypass emancipation handover check -> must fail d7-b13-path-b-capacity-handover-wrong-policy-pending (GUARDIAN_TRANSFER_PENDING)
     orig_ho = sv.Tier1Verifier._check_emancipation_handover
     try:
-        sv.Tier1Verifier._check_emancipation_handover = lambda self, *a, **kw: True  # type: ignore[method-assign]
-        mc = mat_by_code["GUARDIAN_TRANSFER_PENDING"]
-        assert_killed("bypass-emancipation-handover-check", lambda: rm.execute_matrix_case(mc, require_jsonschema=require_jsonschema) != mc["expected_refusal"])
+        sv.Tier1Verifier._check_emancipation_handover = lambda self, wn, reg, init_pol, subj_pol, *a, **kw: (True, subj_pol or init_pol)  # type: ignore[method-assign]
+        c = sec_by_id["d7-b13-path-b-capacity-handover-wrong-policy-pending"]
+        assert_killed("bypass-emancipation-handover-check", lambda: execute_security_case(c, require_jsonschema=require_jsonschema) != (c["expected_verdict"], c["expected_refusal"]))
     finally:
         sv.Tier1Verifier._check_emancipation_handover = orig_ho  # type: ignore[method-assign]
 

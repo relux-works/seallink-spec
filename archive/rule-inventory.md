@@ -4,7 +4,7 @@
 
 ---
 
-## 1. Complete Per-Rule Conformance Index (113 Declared `SL-*` Rules)
+## 1. Complete Per-Rule Conformance Index (114 Declared `SL-*` Rules)
 
 Every rule ID and refusal code below is mechanically validated by `tools/speclint.py` against `spec/SPEC-*.md`, `profiles/PROFILE-*.md`, and `registry/refusal-codes.json`.
 
@@ -53,7 +53,7 @@ Every rule ID and refusal code below is mechanically validated by `tools/speclin
 | Rule ID | Status | Normative Requirement | Primary Verification / Conformance Coverage |
 | --- | :-: | --- | --- |
 | `SL-LDGR-001` | `decided` | Abstract `ChainView` ledger interface decoupling core semantics from specific node RPC | `tools/seallink_verifier.py`, `CONFORMANCE.md §3`, `trace-01`–`trace-04` |
-| `SL-LDGR-002` | `open` | Verifier conformance tiers (Tier 1 full tx-indexed node `decided`; Tier 2 SPV `open`: `OQ-008`) | `CONFORMANCE.md §1, §3`, `OPEN-QUESTIONS.md` (`OQ-008`) |
+| `SL-LDGR-002` | `open` | Verifier conformance tiers (Tier 1 full tx-indexed node `decided`; Tier 2 SPV `open`: `OQ-002`) | `CONFORMANCE.md §1, §3`, `OPEN-QUESTIONS.md` (`OQ-002`) |
 | `SL-LDGR-003` | `decided` | Namecoin Binding Profile v1 chain pins (mainnet genesis, `36000`-block expiry, `520`B value cap) | `refusal-coverage-matrix.json` (`CHAIN_MISMATCH`, `NAME_EXPIRED`), `trace-01` |
 | `SL-LDGR-004` | `decided` | Closed `ScriptPolicy` templates (`P2WPKH`, `P2WSH` multisig, `single_use_1_of_2`, `guardian_slot_*`, `recovery_delayed_transfer`) | `ledger-scripts-and-opreturn.json`, `refusal-coverage-matrix.json` (`CHAIN_SCRIPT_UNSUPPORTED`) |
 | `SL-LDGR-005` | `decided` | Three Namecoin output prefix grammars (`NAME_NEW`, `NAME_FIRSTUPDATE`, `NAME_UPDATE`) and pre-spend verification | `ledger-scripts-and-opreturn.json`, `refusal-coverage-matrix.json` |
@@ -66,17 +66,18 @@ Every rule ID and refusal code below is mechanically validated by `tools/speclin
 | `SL-LDGR-012` | `decided` | Single-use branch attribution via witness selector (issuer revocation vs. grantee `0x11` use; input-first scan) | `trace-03`, `refusal-coverage-matrix.json` (`SEAL_SPENT`, `GRANT_CLOSED`) |
 | `SL-LDGR-013` | `open` | Pre-signed disposable seals, `240`-sat `P2A` dust floor, mandatory TRUC `nVersion = 3` for zero-fee `tx_revoke` (format `decided`; prod relay `open`: `OQ-006`) | `ledger-scripts-and-opreturn.json`, `conformance/p2a-regtest/`, `conformance/traces-regtest/` |
 | `SL-LDGR-014` | `decided` | Merkle batch anchor (`0x02`) domain-separated leaf/node hashing and sorted sibling inclusion proof | `ledger-scripts-and-opreturn.json`, `seallink_ref.py` |
+| `SL-LDGR-015` | `decided` | Normative `ChainView` snapshot fields, units, fail-closed defaults, per-registration `history_truncated`, and no-resurrection `pre_effect_recheck` bracket | `SPEC-02 §2.2`, `tools/nc_rpc_adapter.py`, `security-conformance.json` |
 
 ### 1.4 Sovereign Identity, Manifests, and Custody (`SPEC-03`)
 
 | Rule ID | Status | Normative Requirement | Primary Verification / Conformance Coverage |
 | --- | :-: | --- | --- |
 | `SL-IDEN-001` | `decided` | Namecoin name value encoded as canonical JCS within strict 520-byte budget | `schemas/name-value.schema.json`, `refusal-coverage-matrix.json` (`NAME_VALUE_INVALID`) |
-| `SL-IDEN-002` | `decided` | Closed name value top-level members (`v`, `k`, `m`, optional `origin`, `kp`) | `schemas/name-value.schema.json`, `trace-01`–`trace-04` |
-| `SL-IDEN-003` | `decided` | Multi-role keys, on-chain role-policy hash pins (`kp`), and uniform `origin` commitment | `schemas/name-value.schema.json`, `trace-02`, `refusal-coverage-matrix.json` (`NAME_ROLE_CHANGED`, `ORIGIN_UNVERIFIED`) |
+| `SL-IDEN-002` | `decided` | Strict top-level name value members (`link`, `m`, `nostr`) blocking duplicate keys and 71 Unicode case-fold aliases (`WIRE_DUPLICATE`) | `schemas/name-value.schema.json`, `trace-01`–`trace-04`, `security-conformance.json` |
+| `SL-IDEN-003` | `decided` | Multi-role keys, on-chain role-policy hash pins (`{"p":...}`), cross-role key & policy-pin disjointness, and uniform `origin` commitment | `schemas/name-value.schema.json`, `trace-02`, `refusal-coverage-matrix.json` (`NAME_ROLE_CHANGED`, `ORIGIN_UNVERIFIED`) |
 | `SL-IDEN-004` | `decided` | Name history walk resolving historical role policies at anchor height and recency window | `trace-01`, `refusal-coverage-matrix.json` (`NAME_HISTORY_UNAVAILABLE`, `NAME_ROLE_CHANGED`), `security-conformance.json` |
 | `SL-IDEN-005` | `decided` | Closed 22-role key taxonomy, custody tiers, and cold `emergency_fee_reserve` separation | `registry/key-roles.json`, `speclint.py` cross-registry check, `GUIDE-01 §1` |
-| `SL-IDEN-006` | `decided` | Single `m` pin authenticating canonical `seallink-manifest/1` (`<= 16384` bytes) and off-chain sets | `schemas/manifest.schema.json`, `trace-01`, `refusal-coverage-matrix.json` (`MANIFEST_MISMATCH`, `MANIFEST_UNAVAILABLE`) |
+| `SL-IDEN-006` | `decided` | Single `m` pin authenticating canonical `seallink-manifest/1` (`<= 65536` bytes) and off-chain sets | `schemas/manifest.schema.json`, `trace-01`, `refusal-coverage-matrix.json` (`MANIFEST_MISMATCH`, `MANIFEST_UNAVAILABLE`) |
 | `SL-IDEN-007` | `decided` | Pinned `providers[]` declarations and mutual provider/user bindings | `schemas/manifest.schema.json`, `trace-01`, `refusal-coverage-matrix.json` (`SERVICE_PROVIDER_UNBOUND`) |
 | `SL-IDEN-008` | `decided` | Manifest `seq` monotonicity, removal semantics, and chain-reorg replacement rules | `refusal-coverage-matrix.json` (`MANIFEST_ROLLBACK`), `tools/seallink_verifier.py` |
 | `SL-IDEN-009` | `open` | Non-exclusive 4-channel distribution cascade (cascade `decided`; DNS/TLS domain-bind `open`: `OQ-004`) | `refusal-coverage-matrix.json` (`MANIFEST_UNAVAILABLE`), `OPEN-QUESTIONS.md` (`OQ-004`), `GUIDE-01 §5` |
@@ -92,7 +93,7 @@ Every rule ID and refusal code below is mechanically validated by `tools/speclin
 | `SL-ORIG-002` | `decided` | Origin-certified class (`person`, `agent`, `organization`), local trusted-issuer allowlist, issuer `link.cred` at anchor height, salted commitments, and `status_seal` binding to `capacity_authority` | `trace-02`, `refusal-coverage-matrix.json` (`ORIGIN_UNVERIFIED`, `ORIGIN_STATUS_INCOMPLETE`), `security-conformance.json`, mutation audit |
 | `SL-ORIG-003` | `decided` | Pre-registration issuance, single-use `binding_seal` (`0x0c`), and reverse name-binding uniqueness | `trace-02`, `refusal-coverage-matrix.json` (`ORIGIN_BINDING_INVALID`) |
 | `SL-ORIG-004` | `decided` | $N$ equal guardian slots and revision-denominated rational quorum thresholds (`m/n` exact integer math) | `trace-02`, `trace-04`, `schemas/origin.schema.json`, `schemas/guardian.schema.json` |
-| `SL-ORIG-005` | `decided` | Four-class linear verifier-derived `event_class` (`routine_read`, `effect_grant`, `contract_assent`, `custody_critical`) | `trace-02`, `trace-04`, `refusal-coverage-matrix.json` (`GUARDIAN_QUORUM_UNMET`) |
+| `SL-ORIG-005` | `decided` | Four-class linear verifier-derived `event_class` (`routine_read`, `effect_grant`, `contract_assent`, `custody_change`) | `trace-02`, `trace-04`, `refusal-coverage-matrix.json` (`GUARDIAN_QUORUM_UNMET`) |
 | `SL-ORIG-006` | `decided` | Protocol-level ward non-autonomy (`WARD_AUTONOMOUS_FORBIDDEN`, `guardian_approvals[]`, fail-safe halt on roster/key change) | `trace-02`, `trace-04`, `refusal-coverage-matrix.json` (`WARD_AUTONOMOUS_FORBIDDEN`, `GUARDIAN_INACTIVE`, `GUARDIAN_QUORUM_UNMET`), `security-conformance.json` |
 | `SL-ORIG-007` | `decided` | Direct initial activation (`0x12`), acyclic two-stage appointment (`0x0d` -> `0x0e`), mandatory incoming `guardian_assent`, explicit `challenger_pk`, fast halt | `trace-02`, `trace-04`, `refusal-coverage-matrix.json` (`GUARDIAN_INACTIVE`), `security-conformance.json`, `conformance/traces-regtest/` |
 | `SL-ORIG-008` | `decided` | Issuer-key survival: `guardian/1`, `guardian-roster/1`, `capacity/1`, and `end/1` verified against issuer `link.cred` at anchor height (policy-scoped `0x0b` `h_c`) | `trace-02`, `security-conformance.json`, mutation audit |

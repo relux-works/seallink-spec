@@ -1,6 +1,6 @@
 # SealLink Open Questions and Provisional Parameters
 
-- **Version:** `1.0.0-draft.7`
+- **Version:** `1.0.0-draft.8`
 - **Purpose:** Authoritative registry of every unresolved design item, provisional numeric constant, deferred extension, and unprofiled standard service type. Per `SPEC-00 §5.1`, readers MUST fail closed on any unprofiled `open` construct.
 
 ---

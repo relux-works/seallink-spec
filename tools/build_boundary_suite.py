@@ -456,16 +456,16 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     ch_ac120 = copy.deepcopy(fx0["chain"])
     ch_ac120["now"] = 1795220050
     add("bnd-auth-challenge-ttl-exact-120-admit", ["SL-IDEN-010"], "auth_challenge",
-        {"challenge": ac_ttl120, "service_id": "svc.example", "journal": {"journal_id": _h32("bnd-acj1"), "auth_nonces": {_h32("bnd-ac-120"): {"service_id": "svc.example", "used": False}}}, "chain": ch_ac120},
+        {"challenge": ac_ttl120, "service_id": "svc.example", "journal": {"journal_id": _h32("bnd-acj1"), "auth_nonces": {_h32("bnd-ac-120"): {"service_id": "svc.example", "used": False, "issued_at": 1795220000, "expires_at": 1795220120}}}, "chain": ch_ac120},
         "ADMIT", None, "AuthChallenge with exact 120s TTL MUST admit.")
     ac_eq_iat = sl.sign_envelope({"auth_pubkey": ac_k["xonly"], "expires_at": 1795220060, "issued_at": 1795220060, "nonce": _h32("bnd-ac-eqiat"), "service_id": "svc.example", "type": "seallink-auth-challenge/1"}, [ac_k["sk"]])
     add("bnd-auth-challenge-exp-eq-iat-refuse", ["SL-IDEN-010"], "auth_challenge",
-        {"challenge": ac_eq_iat, "service_id": "svc.example", "journal": {"journal_id": _h32("bnd-acj2"), "auth_nonces": {_h32("bnd-ac-eqiat"): {"service_id": "svc.example", "used": False}}}, "chain": ch_ac120},
+        {"challenge": ac_eq_iat, "service_id": "svc.example", "journal": {"journal_id": _h32("bnd-acj2"), "auth_nonces": {_h32("bnd-ac-eqiat"): {"service_id": "svc.example", "used": False, "issued_at": 1795220060, "expires_at": 1795220060}}}, "chain": ch_ac120},
         "REFUSE", "AUTH_CHALLENGE_EXPIRED", "AuthChallenge with expires_at == issued_at MUST refuse AUTH_CHALLENGE_EXPIRED.")
     ch_ac_exp = copy.deepcopy(fx0["chain"])
     ch_ac_exp["now"] = 1795220120
     add("bnd-auth-challenge-now-eq-exp-refuse", ["SL-IDEN-010"], "auth_challenge",
-        {"challenge": ac_ttl120, "service_id": "svc.example", "journal": {"journal_id": _h32("bnd-acj3"), "auth_nonces": {_h32("bnd-ac-120"): {"service_id": "svc.example", "used": False}}}, "chain": ch_ac_exp},
+        {"challenge": ac_ttl120, "service_id": "svc.example", "journal": {"journal_id": _h32("bnd-acj3"), "auth_nonces": {_h32("bnd-ac-120"): {"service_id": "svc.example", "used": False, "issued_at": 1795220000, "expires_at": 1795220120}}}, "chain": ch_ac_exp},
         "REFUSE", "AUTH_CHALLENGE_EXPIRED", "AuthChallenge at exact now == expires_at MUST refuse AUTH_CHALLENGE_EXPIRED.")
     # L1318 compound `or`: named auth challenge with valid auth_seal present in manifest, ONLY auth_key mismatched!
     ac_seal_pol = {"kind": "key", "pk": _kp("bnd-ac-seal")["comp"]}
@@ -479,7 +479,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     ac_named = sl.sign_envelope({"auth_pubkey": ac_k["xonly"], "expires_at": 1795220120, "issued_at": 1795220000, "name": "id/alice", "nonce": _h32("bnd-ac-named"), "service_id": "svc.example", "type": "seallink-auth-challenge/1"}, [ac_k["sk"]])
     add("bnd-auth-named-wrong-key-with-valid-seal-refuse", ["SL-IDEN-010"], "auth_challenge",
         {"challenge": ac_named, "service_id": "svc.example", "manifests": {sl.content_addr(man_ac_wrong): man_ac_wrong},
-         "journal": {"journal_id": _h32("bnd-acj4"), "auth_nonces": {_h32("bnd-ac-named"): {"service_id": "svc.example", "used": False}}}, "chain": ch_ac_named},
+         "journal": {"journal_id": _h32("bnd-acj4"), "auth_nonces": {_h32("bnd-ac-named"): {"service_id": "svc.example", "used": False, "issued_at": 1795220000, "expires_at": 1795220120}}}, "chain": ch_ac_named},
         "REFUSE", "AUTH_KEY_UNPINNED", "Named auth challenge with valid auth_seal present but mismatched auth_key MUST refuse AUTH_KEY_UNPINNED.")
 
     # 3i. OwnerCommand exact iat == now (ADMIT) and exp == now (REFUSE) (kills L1344 both shifts!)
@@ -531,19 +531,12 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     add("bnd-majority-interval-t-high-eq-T-refuse", ["SL-ORIG-010"], "origin_status",
         {"origin_bundle": of_maj_hi["origin_bundle"], "chain": of_maj_hi["chain"], "trusted_origin_issuers": of_maj_hi["trusted_origin_issuers"]},
         "REFUSE", "GUARDIAN_TIME_BOUNDARY", "Credible UTC interval with t_high == T MUST refuse GUARDIAN_TIME_BOUNDARY.")
-    # t_low == maj_u (with handover!) -> ADMIT_AUTONOMOUS (kills L1676 < -> <= AND L1678 >= -> >!)
+    # t_low == maj_u (without capacity/1, Decision 1B) -> GUARDIAN_TRANSFER_PENDING (kills t_low >= T -> >!)
     of_maj_eq = copy.deepcopy(of_maj)
     of_maj_eq["chain"]["credible_utc_interval"] = [maj_u, maj_u + 10]
-    leo_u = of_maj_eq["chain"]["names"]["id/child-leo"]["updates"]
-    prev_l = leo_u[-1]
-    ad_pol = {"kind": "key", "pk": _kp("bnd-leo-ad")["comp"]}
-    ad_spk, _ = sl.compile_script_policy(ad_pol)
-    l_val = sl.jcs_encode({"link": {"grant": of_maj["_keys"]["ward_gr"]["xonly"], "origin": of_maj["_origin_id"]}})
-    leo_u.append({"confirmed_height": 749900, "op": "NAME_UPDATE", "output_script_hex": sl.encode_name_output("NAME_UPDATE", ad_spk, name=b"id/child-leo", value=l_val).hex(), "owner_policy": ad_pol, "prev_input": {"sighash_bytes": [0x01], "txid": prev_l["txid"], "vout": prev_l["vout"], "witness_policy": prev_l["owner_policy"]}, "txid": _h32("bnd-leo-ho1"), "vout": 0})
-    leo_u.append({"confirmed_height": 749910, "op": "NAME_UPDATE", "output_script_hex": sl.encode_name_output("NAME_UPDATE", ad_spk, name=b"id/child-leo", value=l_val).hex(), "owner_policy": ad_pol, "prev_input": {"sighash_bytes": [0x01], "txid": _h32("bnd-leo-ho1"), "vout": 0, "witness_policy": ad_pol}, "txid": _h32("bnd-leo-ho2"), "vout": 0})
     add("bnd-majority-interval-t-low-eq-T-autonomous", ["SL-ORIG-010", "SL-ORIG-011"], "origin_status",
         {"origin_bundle": of_maj_eq["origin_bundle"], "chain": of_maj_eq["chain"], "trusted_origin_issuers": of_maj_eq["trusted_origin_issuers"]},
-        "ADMIT_AUTONOMOUS", None, "Credible UTC interval with t_low == T after handover MUST admit autonomous capacity.")
+        "REFUSE", "GUARDIAN_TRANSFER_PENDING", "Decision 1B: Credible UTC interval with exact t_low == T enters State 3 (GUARDIAN_TRANSFER_PENDING) without capacity/1.")
 
     # Recovery deadline exact boundary: cancel at confirmed_height == deadline fails cancel -> tip == deadline promotes B_2 (kills L1593 & L1604!)
     of_rec = rm._base_origin_fixture()
@@ -637,7 +630,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     delay_pr = gp_orig_pr["appointment_delay_blocks"]  # 144
     g1_pin_pr = of_pr["origin_bundle"]["guardian_records"][0]["payload"]["guardian"]
     pend_pol_pr = {"delay_blocks": delay_pr, "keys": {"challenger": gp_orig_pr["challenger_pk"], "disposer": gp_orig_pr["disposer_pk"], "guardian": _kp("bnd-pr-g")["comp"]}, "kind": "branch", "template": "guardian_slot_pending"}
-    act_pol_pr = {"keys": {"a": gp_orig_pr["disposer_pk"], "b": _kp("bnd-pr-g")["comp"]}, "kind": "branch", "template": "either_of_2"}
+    act_pol_pr = {"keys": sl.canonical_branch_pair(gp_orig_pr["disposer_pk"], _kp("bnd-pr-g")["comp"]), "kind": "branch", "template": "either_of_2"}
     quorums_1 = {k: {"den": 1, "min": 1, "num": 1} for k in gp_orig_pr["quorums"]}
     rost_p_pr = {
         "arbiter_pk": gp_orig_pr["arbiter_pk"], "challenger_pk": gp_orig_pr["challenger_pk"], "disposer_pk": gp_orig_pr["disposer_pk"],
@@ -664,7 +657,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     of_pr["chain"]["txs"][gp_orig_pr["roster_seal"]["txid"]]["outputs"]["0"]["spent_by_txid"] = rtx_pr
     of_pr["chain"]["txs"][rtx_pr] = {"confirmed_height": tip_pr - (2 * delay_pr + 20), "opreturn_hex": sl.encode_opreturn(0x0F, sl.content_addr(rost_pr)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(vac_pol_pr)}, "1": {"script_pubkey_hex": _spk_hex(vac_pol_pr), "spent_by_txid": dtx_pr}}}
     of_pr["chain"]["txs"][dtx_pr] = {"confirmed_height": tip_pr - delay_pr, "opreturn_hex": sl.encode_opreturn(0x0D, sl.content_addr(g2_pr)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(pend_pol_pr), "spent_by_txid": etx_pr}}}
-    of_pr["chain"]["txs"][etx_pr] = {"confirmed_height": tip_pr, "opreturn_hex": sl.encode_opreturn(0x0E, sl.object_id(g2_pr_p)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(act_pol_pr)}}}
+    of_pr["chain"]["txs"][etx_pr] = {"confirmed_height": tip_pr, "inputs": [sv.make_guardian_csv_input(dtx_pr, 0, pend_pol_pr, sequence=delay_pr)], "opreturn_hex": sl.encode_opreturn(0x0E, sl.object_id(g2_pr_p)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(act_pol_pr)}}}
     of_pr["origin_bundle"]["roster_records"] = [rost_pr]
     of_pr["origin_bundle"]["guardian_records"].append(g2_pr)
     of_pr["origin_bundle"]["guardian_assents"].append(g2_ass_pr)
@@ -848,9 +841,9 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     cg_id = sl.object_id(cg_p)
     citx = _h32("bd-citx")
     fx_d["chain"]["txs"][row_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(row_pol)}, "1": {"script_pubkey_hex": _spk_hex(row_pol), "spent_by_txid": citx}}}
-    fx_d["chain"]["txs"][cseal_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(cseal_pol)}}}
+    fx_d["chain"]["txs"][cseal_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(cseal_pol)}, "1": {"script_pubkey_hex": _spk_hex(cseal_pol)}}}
     fx_d["chain"]["txs"][pitx] = {"confirmed_height": orig_itx_h, "inputs": [sv.make_segwit_input(pg_p["revocation"]["seal"]["txid"], 1)], "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(pg_env), "grant_id": pg_id, "type": "seallink-issuance/1"}).hex()).hex(), "outputs": {}}
-    fx_d["chain"]["txs"][citx] = {"confirmed_height": orig_itx_h, "inputs": [sv.make_segwit_input(row_tx, 1)], "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(cg_env), "grant_id": cg_id, "type": "seallink-issuance/1"}).hex()).hex(), "outputs": {}}
+    fx_d["chain"]["txs"][citx] = {"confirmed_height": orig_itx_h, "inputs": [sv.make_segwit_input(row_tx, 1), sv.make_segwit_input(cseal_tx, 1)], "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(cg_env), "grant_id": cg_id, "type": "seallink-issuance/1"}).hex()).hex(), "outputs": {}}
     inv_d = sl.sign_envelope({**fx_d["invocation"]["payload"], "nonce": _h32("bd-inv"), "proof_path": [{"grant_id": pg_id, "issuance_txid": pitx}, {"grant_id": cg_id, "issuance_txid": citx}]}, [child_rcpt["sk"]])
     add("bnd-delegation-exact-ordinal-upper-and-window-bounds-admit", ["SL-GRNT-005", "SL-GRNT-006"], "invocation",
         {"invocation": inv_d, "bundle": {**fx_d["bundle"], "grants": [pg_env, cg_env]}, "chain": fx_d["chain"], "journal": {"journal_id": _h32("bd-j")}, "executor_cfg": fx_d["executor_cfg"]},
@@ -1035,12 +1028,34 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
         "ADMIT", None,
         "A role rotation confirmed at exact confirmed_height == recent_block_height with no subsequent change MUST admit.")
 
-    #     - L1480 (`len(updates) < 3`): emancipation handover in exact 3 updates (FIRSTUPDATE + transfer + subject update) -> ADMIT_AUTONOMOUS!
+    #     - L1480 (`len(updates) < 3`): emancipation handover (Decision 1B: capacity/1 + exact 3 updates) -> ADMIT_AUTONOMOUS!
     of_3u = rm._base_origin_fixture()
     of_3u["chain"]["credible_utc_interval"] = [of_3u["origin_bundle"]["opened_majority_unix"], of_3u["origin_bundle"]["opened_majority_unix"] + 10]
     u0_3 = copy.deepcopy(of_3u["chain"]["names"]["id/child-leo"]["updates"][0])
     ad3_pol = {"kind": "key", "pk": _kp("bnd-leo-3u")["comp"]}
     ad3_spk, _ = sl.compile_script_policy(ad3_pol)
+    cap_3u_p = {
+        "basis_sha256": _h32("bnd-3u-basis"),
+        "genesis": GENESIS_MAIN,
+        "issued_at": of_3u["chain"]["now"] - 500,
+        "issuer": of_3u["origin_bundle"]["origin"]["payload"]["issuer"],
+        "network": "main",
+        "next_status_policy": of_3u["origin_bundle"]["origin"]["payload"]["status_seal"]["script_policy"],
+        "next_status_vout": 0,
+        "origin_id": of_3u["_origin_id"],
+        "status_prev_outpoint": {"txid": of_3u["origin_bundle"]["origin"]["payload"]["status_seal"]["txid"], "vout": of_3u["origin_bundle"]["origin"]["payload"]["status_seal"]["vout"]},
+        "subject_new_owner_policy": ad3_pol,
+        "type": "seallink-capacity/1",
+    }
+    cap_3u_env = sl.sign_envelope(cap_3u_p, [of_3u["_keys"]["reg_cred"]["sk"]])
+    cap_3u_tx = _h32("bnd-3u-cap-tx")
+    of_3u["chain"]["txs"][of_3u["origin_bundle"]["origin"]["payload"]["status_seal"]["txid"]]["outputs"]["0"]["spent_by_txid"] = cap_3u_tx
+    of_3u["chain"]["txs"][cap_3u_tx] = {
+        "confirmed_height": 749890,
+        "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(cap_3u_env)).hex(),
+        "outputs": {"0": {"script_pubkey_hex": _spk_hex(cap_3u_p["next_status_policy"])}},
+    }
+    of_3u["origin_bundle"]["capacity_record"] = cap_3u_env
     l3_val = sl.jcs_encode({"link": {"grant": of_3u["_keys"]["ward_gr"]["xonly"], "origin": of_3u["_origin_id"]}})
     u1_3 = {"confirmed_height": 749900, "op": "NAME_UPDATE", "output_script_hex": sl.encode_name_output("NAME_UPDATE", ad3_spk, name=b"id/child-leo", value=l3_val).hex(), "owner_policy": ad3_pol, "prev_input": {"sighash_bytes": [0x01], "txid": u0_3["txid"], "vout": u0_3["vout"], "witness_policy": u0_3["owner_policy"]}, "txid": _h32("bnd-3u-1"), "vout": 0}
     u2_3 = {"confirmed_height": 749910, "op": "NAME_UPDATE", "output_script_hex": sl.encode_name_output("NAME_UPDATE", ad3_spk, name=b"id/child-leo", value=l3_val).hex(), "owner_policy": ad3_pol, "prev_input": {"sighash_bytes": [0x01], "txid": u1_3["txid"], "vout": 0, "witness_policy": ad3_pol}, "txid": _h32("bnd-3u-2"), "vout": 0}
@@ -1095,7 +1110,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     # Activate slot 2 as well so 2-of-2 effect_grant quorum is live
     gp_gm_orig = of_gm["origin_bundle"]["origin"]["payload"]["guardian_policy"]
     g2_seal_gm = _kp("bnd-gm-g2-seal")
-    g2_act_pol_gm = {"kind": "branch", "template": "either_of_2", "keys": {"a": gp_gm_orig["disposer_pk"], "b": g2_seal_gm["comp"]}}
+    g2_act_pol_gm = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(gp_gm_orig["disposer_pk"], g2_seal_gm["comp"])}
     g2_own_gm = rm._kp("o-g2-own")
     g2_pol_gm = {"kind": "key", "pk": g2_own_gm["comp"]}
     g2_reg_gm = {"txid": rm._h32("g2-reg"), "vout": 0}

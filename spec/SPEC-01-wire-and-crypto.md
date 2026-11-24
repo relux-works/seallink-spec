@@ -1,6 +1,6 @@
 # SPEC-01: Wire Format, Cryptography, Thresholds, and Constraint Algebra
 
-- **Version:** `1.0.0-draft.7`
+- **Version:** `1.0.0-draft.8`
 - **Status:** `draft` (normative rules `decided`; see `OPEN-QUESTIONS.md` for deferred algorithm extensions)
 - **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/constraints-and-schemas.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/refusal-codes.json`, `registry/constraints.json`
@@ -18,10 +18,10 @@ Every canonical SealLink document — signed or unsigned, including manifests, c
 | `SL-WIRE-002` | `decided` | Input MUST be valid UTF-8 with no BOM and no leading or trailing bytes (including leading or trailing ASCII whitespace), parsing as exactly one RFC 8259 JSON object. | `WIRE_JSON` |
 | `SL-WIRE-003` | `decided` | No JSON object at any nesting level MAY contain duplicate member names (compared after escape decoding). | `WIRE_DUPLICATE` |
 | `SL-WIRE-004` | `decided` | Allowed JSON values are objects, arrays, strings, number-form integers (`SL-WIRE-007`), and booleans (`true`, `false`). The literal `null` is FORBIDDEN everywhere: optional fields MUST be omitted rather than set to `null`. | `WIRE_VALUE` |
-| `SL-WIRE-005` | `decided` | Every string (including member names) MUST consist solely of Unicode scalar values `>= U+0020`, excluding `U+007F` (DEL), the C1 control block `U+0080..U+009F`, and unpaired surrogates. **Multiline prose exception:** `U+000A` (LF, encoded as `\n` under RFC 8785) is permitted ONLY at the exact four schema paths annotated with `"x-seallink-allow-lf": true` (`GrantPayload.terms_text`, `ClauseObject.text`, `TerminationStatement.reason`, `card.role`); LF at any other path, CR (`U+000D`), TAB (`U+0009`), and all other `< U+0020` code points remain FORBIDDEN everywhere. No Unicode normalization is performed; string equality is exact code-point equality. | `WIRE_STRING` |
+| `SL-WIRE-005` | `decided` | Every string (including member names) MUST consist solely of Unicode scalar values `>= U+0020`, excluding `U+007F` (DEL), the C1 control block `U+0080..U+009F`, and unpaired surrogates. **Multiline prose exception:** `U+000A` (LF, encoded as `\n` under RFC 8785) is permitted ONLY at the exact four schema paths annotated with `"x-seallink-allow-lf": true`: `seallink-grant/1` (`payload.terms_text` / `terms_text`), `seallink-termination/1` (`payload.reason` / `reason`), `seallink-card/1` (`role`), and standalone `ClauseObject` (`text` / `terms_text`). LF at any other path, CR (`U+000D`), TAB (`U+0009`), and all other `< U+0020` code points remain FORBIDDEN everywhere. No Unicode normalization is performed; string equality is exact code-point equality. | `WIRE_STRING` |
 | `SL-WIRE-006` | `decided` | The verifier MUST re-serialize the parsed value under RFC 8785 (no insignificant whitespace; object keys sorted by UTF-16 code units; literal UTF-8 strings with ONLY `\"`, `\\`, and `\n` where permitted; canonical decimal integers) and MUST refuse unless the re-serialized octets are byte-for-byte identical to the input. A reader MUST NEVER repair non-canonical input. | `WIRE_NOT_CANONICAL` |
 
-> **Implementation note:** Standard library JSON serializers that HTML-escape `<`, `>`, `&`, or `U+2028`, or parse numbers via IEEE 754 `float64`, violate `SL-WIRE-006` and `SL-WIRE-007`. Verifiers MUST implement a dedicated strict JCS parser and serializer with explicit depth bounds (avoiding host recursion-limit crashes on hostile inputs). All regular expressions in `schemas/*.schema.json` use lookaround-free ECMA-262 syntax compatible with Draft 2020-12 JSON Schema validators across languages.
+> **Implementation note:** Standard library JSON serializers that HTML-escape `<`, `>`, `&`, or `U+2028`, or parse numbers via IEEE 754 `float64`, violate `SL-WIRE-006` and `SL-WIRE-007`. Verifiers MUST implement a dedicated strict JCS parser and serializer with explicit depth bounds (avoiding host recursion-limit crashes on hostile inputs). All regular expressions in `schemas/*.schema.json` and `registry/*.json` use lookaround-free syntax compatible with Draft 2020-12 ECMA-262, Python `re`, and Go `regexp` (RE2).
 
 ---
 
@@ -115,8 +115,8 @@ To guarantee decidable, mechanical attenuation (`child <= parent`) across all ve
 Each entry in `capabilities[]` (max `64` entries) has:
 - `action`: exact lowercase slash-separated leaf (`^[a-z0-9._-]+(/[a-z0-9._-]+)+$`). Exact string equality only; prefixes grant nothing.
 - `target`: structured resource identifier (e.g., `mailbox:id/alice:work`). Exact match unless narrowed by profile target rules.
-- `where` *(optional, max `32` keys)*: map of `arg_name -> ConstraintPredicate`. Keys combine by implicit logical `AND`.
-- `quotas` *(optional, max `32` entries)*: array of additive stateful counters (`kind, resource, unit, max, window`), strictly separated from stateless `where` predicates.
+- `where` *(optional, max `32` keys)*: map of `arg_name -> ConstraintPredicate`. Keys combine by implicit logical `AND`. An omitted `where` or empty map `where: {}` represents an unconstrained conjunction (admitting any valid invocation arguments for `action`). For any `action` registered in `registry/actions.json`, every predicate operator used in `where` MUST be listed in that action's `allowed_where_predicates` (`WIRE_CONSTRAINT` otherwise).
+- `quotas` *(optional, max `32` entries)*: array of additive stateful counters (`kind, resource, unit, max, window`), strictly separated from stateless `where` predicates. All entries within one capability's `quotas[]` MUST have pairwise distinct `(kind, resource, unit, window)` tuples (`WIRE_CONSTRAINT` on duplicate tuple).
 - `extensions` *(reserved)*: MUST NOT be present in v1.0; any presence MUST refuse with `WIRE_CONSTRAINT`.
 
 ### 6.2 The Seven Predicates and Conservative Pairwise Attenuation (`SL-WIRE-016`, `decided`)
@@ -147,20 +147,36 @@ A child capability `C` narrows a parent capability `P` iff:
 
 ## 7. Deterministic Wire Validation Pipeline
 
-Every verifier parsing any SealLink object **MUST** execute checks in this exact order and return the **first** failure (`SL-WIRE-018`, `decided`):
+Every verifier parsing any SealLink object **MUST** execute checks in this exact whole-tree order and return the **first** failure (`SL-WIRE-018`, `decided`):
 
-1. Pre-parse global size (`<= 1048576` bytes) (`SL-WIRE-001`) -> `WIRE_SIZE`
-2. Strict UTF-8 / no BOM / no leading or trailing bytes / single RFC 8259 JSON object (`SL-WIRE-002`) -> `WIRE_JSON`; container-only nesting depth `<= 16` (`SL-WIRE-001`) -> `WIRE_SIZE`
-3. Duplicate object member names (`SL-WIRE-003`) -> `WIRE_DUPLICATE`
-4. Disallowed `null` values (`SL-WIRE-004`) -> `WIRE_VALUE`
-5. Number token grammar (`SL-WIRE-007`) -> `WIRE_NUMBER`; global string scalar ranges (`SL-WIRE-005`, disallowing all controls except `U+000A` which is path-checked in Step 8) -> `WIRE_STRING`
-6. Restricted RFC 8785 byte-for-byte round-trip (`SL-WIRE-006`) -> `WIRE_NOT_CANONICAL`
-7. Registered `type` check (`SL-WIRE-010`) -> `WIRE_TYPE`
-8. Per-type `max_bytes` check (`registry/object-types.json`) -> `WIRE_SIZE`; path-scoped LF (`U+000A`) check against `"x-seallink-allow-lf": true` paths -> `WIRE_STRING`; closed Draft 2020-12 JSON Schema validation and Constraint Algebra structural checks (`SL-WIRE-010`, `SL-WIRE-015..016`). When multiple schema constraints fail simultaneously, verifiers MUST select the first applicable refusal class from the schema's `x-seallink-refusal` annotations in this fixed deterministic precedence order:
-   `WIRE_TYPE` -> `WIRE_MEMBER` -> `WIRE_INTEGER` -> `WIRE_KEY` -> `WIRE_SIGNATURE` -> `WIRE_CONSTRAINT` -> `CHAIN_SCRIPT_UNSUPPORTED`.
-   *(Schema cross-field structural bans — e.g. `executor_ref` combined with quotas, `single_use`, or `delegate`; child grants carrying `delegate`; or `guardian_context` combined with top-level `signatures` — map deterministically to `WIRE_MEMBER` at Step 8 before semantic pipeline stages run.)*
-9. Public key syntax and curve-point validation across ALL key fields present in the object (`SL-WIRE-012`) -> `WIRE_KEY`
-10. Cryptographic signature verification, strictly ascending `sigs[].pk` and `guardian_approvals[].slot` ordering, and `SignatureSet` threshold check (`SL-WIRE-013`) -> `WIRE_SIGNATURE`
+1. **Pre-parse global size (`<= 1048576` bytes)** (`SL-WIRE-001`) -> `WIRE_SIZE`.
+2. **Strict UTF-8 / JSON syntax / lexical depth** (`SL-WIRE-001`, `SL-WIRE-002`): reject UTF-8 BOM, invalid UTF-8, leading/trailing bytes (including ASCII whitespace), non-object root, or unclosed containers (`WIRE_JSON`). Reject container-only nesting depth `> 16` (`WIRE_SIZE`) via iterative lexical scan before recursive decoding. Malformed JSON numeric tokens (leading zeros such as `01`/`-01`, explicit `+1`, `.5`, `1.`) MUST map deterministically to `WIRE_NUMBER` rather than `WIRE_JSON`.
+3. **Duplicate object member names** across the entire JSON tree (`SL-WIRE-003`) -> `WIRE_DUPLICATE`.
+4. **Whole-tree value / number / string scan (strict precedence across the whole AST):**
+   - `a.` Any container depth `> 16` -> `WIRE_SIZE`.
+   - `b.` Any disallowed `null` value anywhere in the tree (`SL-WIRE-004`) -> `WIRE_VALUE` (strictly BEFORE `WIRE_NUMBER` and `WIRE_STRING`, so `{"a":"\t","b":null}` MUST return `WIRE_VALUE`).
+   - `c.` Any floating-point number, negative integer, or integer `> 9007199254740991` (`SL-WIRE-007`) -> `WIRE_NUMBER`.
+   - `d.` Any forbidden string code point (`< U+0020`, `U+007F..U+009F`, or unpaired surrogate) anywhere in keys or values, applying the exact 4-path `x-seallink-allow-lf` allowlist (`SL-WIRE-005`, keyed by root `type` / `payload.type`) -> `WIRE_STRING`.
+5. **Restricted RFC 8785 byte-for-byte round-trip** (`SL-WIRE-006`) -> `WIRE_NOT_CANONICAL`.
+6. **Registered `type` check** (`SL-WIRE-010`, `registry/object-types.json`) -> `WIRE_TYPE`.
+7. **Per-type `max_bytes` check** (`registry/object-types.json`: e.g. `65536` for `seallink-journal-entry/1` and `seallink-manifest/1`, `1048576` for `seallink-members-list/1`) -> `WIRE_SIZE`.
+8. **Closed Draft 2020-12 JSON Schema & library-independent discriminator resolution** (`SL-WIRE-010`, `SL-WIRE-015..016`):
+   - **Discriminator-first `oneOf` / `anyOf` selection:** To eliminate divergence across JSON Schema libraries (Python `jsonschema`, Rust `jsonschema`, Go validators), whenever an instance fails a `oneOf` or `anyOf` schema, verifiers MUST first narrow candidate branches using the protocol's fixed discriminator rules:
+     1. *JSON value type* (`string` vs `object`, e.g., `BranchKeySpec`, `RoleKeyOrPolicyPin`, `nostr` field).
+     2. *Scalar discriminator property* (`kind`, `template`, `mode`, `op`, `command`, `subject_kind`, `activation_mode`, `action`, `lifecycle`, `statement_kind`) matched by `const` / `enum`.
+     3. *`DeviceThresholdPolicy` `alg` presence* (omitted -> `bip340` branch; `"p256"` / `"ed25519"` -> matching branch).
+     4. *Structural presence discriminators*: `guardian_approvals` vs `signatures`, `guardian_context` vs `signatures`, `parent` vs `issuer`, `executor_ref` vs `executor`, `ward_origin_id` vs `signing_policy`.
+     5. *Single-key operator discriminator* for `ConstraintPredicate` (`eq`, `in`, `not_in`, `prefix`, `suffix`, `range`, `hash_eq`).
+   - **Leaf-wins error mapping:** Evaluate errors inside the selected branch(es) recursively. A failing leaf node's own `x-seallink-refusal` annotation overrides any enclosing parent annotation (so a malformed pubkey inside `ScriptPolicy` ALWAYS yields `WIRE_KEY`, an out-of-range integer yields `WIRE_INTEGER`, a bad predicate yields `WIRE_CONSTRAINT`, and an unrecognized/unsupported script template yields `CHAIN_SCRIPT_UNSUPPORTED`). A JSON type/form mismatch (`validator == "type"`, e.g. `uint53` vs `uint64_str` per `SL-WIRE-009`) maps to `WIRE_MEMBER` unless enclosed in a `WIRE_CONSTRAINT` subtree.
+   - **Fixed refusal precedence:** When multiple schema errors occur simultaneously, select the lowest-rank code in:
+     `WIRE_TYPE` -> `WIRE_DUPLICATE` -> `WIRE_MEMBER` -> `WIRE_STRING` -> `WIRE_INTEGER` -> `WIRE_KEY` -> `WIRE_SIGNATURE` -> `WIRE_CONSTRAINT` -> `CHAIN_SCRIPT_UNSUPPORTED`.
+   - **Post-schema structural wire invariants** (checked at Step 8):
+     - Every `ConstraintPredicate` `in`/`not_in` operand array is strictly sorted ascending in UTF-16 code units with no duplicates, `range` satisfies `int(min) <= int(max)`, and every operator used for a registered standard `action` is listed in `registry/actions.json` `allowed_where_predicates` (`WIRE_CONSTRAINT`).
+     - No `Capability.quotas[]` contains duplicate `(kind, resource, unit, window)` tuples (`WIRE_CONSTRAINT`).
+     - Every `seallink-receipt/1` with `refusal_code` uses a code registered in `registry/refusal-codes.json` (`WIRE_MEMBER`), and every entry in `settlements[]` satisfies exact integer equality `int(reserved) == int(settled) + int(released)` (`WIRE_INTEGER`).
+     - Every `ScriptPolicy` object complies with canonical pair ordering (`a < b`) and disjoint branch x-coordinates (`SPEC-02 §3.1`, `CHAIN_SCRIPT_UNSUPPORTED`).
+9. **Public key syntax, curve-point & embedded `ThresholdPolicy` validation** (`SL-WIRE-012`): validate ALL key fields and ALL embedded `ThresholdPolicy` / `DeviceThresholdPolicy` objects (`1 <= m <= len(pks) <= 32`, strictly sorted ascending unique `pks`) across the entire typed document — even if unused in the current signature subset — skipping open opaque subtrees (`Credential.claims` and `Invocation.arguments`) whose member names are domain-defined. Invalid keys or curve points refuse with `WIRE_KEY`; malformed embedded `ThresholdPolicy` (`m > len(pks)` or unsorted/duplicate `pks`) refuses with `WIRE_SIGNATURE`.
+10. **Cryptographic signature verification, strictly ascending `sigs[].pk` and `guardian_approvals[].slot` ordering, and `SignatureSet` threshold check** (`SL-WIRE-013`) -> `WIRE_SIGNATURE`.
 
 ---
 

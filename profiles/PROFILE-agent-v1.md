@@ -1,6 +1,6 @@
 # PROFILE-agent-v1: Bounded Autonomous Agent Tasks, Tool Execution, Isolated Sessions, and Guardian Intake
 
-- **Version:** `1.0.0-draft.7`
+- **Version:** `1.0.0-draft.8`
 - **Service Type:** `agent-session` (`registry/service-types.json`)
 - **Status:** `draft` (normative profile rules `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-03-delegation-pool-single-use.json`, `vectors/trace-04-agent-guardian-intake.json`, `vectors/refusal-coverage-matrix.json`)
@@ -46,7 +46,7 @@ This profile defines normative SealLink authorization for autonomous software ag
 ## 4. Target, Closed Schemas, Arguments, and `result_sha256` (`SL-AGNT-002`, `decided`)
 
 - **Target grammar and target authority:**
-  - `agent/brief`, `agent/tool`, `agent/session`: `station:<host_name>:<workspace_or_slot>` (e.g., `station:id/station-a:repo-seallink`). The host MUST verify `<host_name> == executor.name` AND that the root grant's issuer is authorized for `<workspace_or_slot>` under local host binding (`GRANT_TARGET_UNAUTHORIZED` otherwise). `resource_path` MUST conform to `NormalizedResourcePath` (forbidding `..` path traversal segments; `schemas/profile-agent.schema.json`).
+  - `agent/brief`, `agent/tool`, `agent/session`: `station:<host_name>:<workspace_or_slot>` (e.g., `station:id/station-a:repo-seallink`). The host MUST verify `<host_name> == executor.name` AND that the root grant's issuer `NamePin` is authorized for `<workspace_or_slot>` under fail-closed local host binding: either explicitly listed in `station_slot_bindings[target]` (`NamePin[]`) OR equal to the verified `<host_name>` station owner `NamePin` itself (any other issuer MUST refuse `GRANT_TARGET_UNAUTHORIZED`). `resource_path` MUST conform to `NormalizedResourcePath` (forbidding `..` path traversal segments; `schemas/profile-agent.schema.json`).
   - `agent/guardian-message`: `ward:<origin_id_64hex>`. The host MUST pin `pinned_ward_origin_id` in read-only host config (`ORIGIN_UNVERIFIED` if absent), MUST confirm `origin_id == pinned_ward_origin_id` (`GRANT_TARGET_UNAUTHORIZED` on mismatch), and MUST refuse autonomous non-ward grants (`WARD_AUTONOMOUS_FORBIDDEN`).
 - **Closed schemas:** All `invocation.arguments` and returned result objects MUST validate strictly against `schemas/profile-agent.schema.json`:
   - `agent/brief`: `AgentBriefArgs` -> `AgentBriefResult`
@@ -67,6 +67,8 @@ This profile defines normative SealLink authorization for autonomous software ag
 | `agent/tool` | `input_sha256` | `hex64` | `hash_eq` |
 | `agent/tool` | `resource_path` | `string` | `eq`, `prefix` |
 | `agent/tool` | `max_output_bytes` | `uint64_str` | `range` |
+| `agent/tool` | `max_tokens` *(optional)* | `uint64_str` (`tokens`) | `range` |
+| `agent/tool` | `max_cost` *(optional)* | `uint64_str` (atomic currency units matching `seallink/cost` quota `unit`) | `range` |
 | `agent/session` | `op` | `string` (`start \| checkpoint \| halt`) | `eq`, `in` |
 | `agent/session` | `session_slot` | `string` | `eq`, `prefix` |
 | `agent/session` | `config_sha256` | `hex64` | `hash_eq` |
@@ -98,8 +100,8 @@ An agent host or Bridge mediating incoming guardian messages for a `ward` agent 
 
 1. **`agent/session` contract requirement:** Every `agent/session` grant MUST bind `contract_id` (`GRANT_CONTRACT_REQUIRED`), and the bound `seallink-contract/1` MUST carry `config_sha256` (`SL-CONT-006`). Before executing `op = "start"`, the host MUST compute the hash of the assembled runtime profile, skills, and tool allowlist and require exact equality with both `contract.config_sha256` and `arguments.config_sha256` (`CONTRACT_CONFIG_MISMATCH`).
 2. **Quota reservation:**
-   - `agent/brief` and `agent/session` (`op = "start"`) reserve `1` unit from `{"kind":"seallink/count","resource":"<target>","unit":"starts"}`; `agent/session` with `op = "checkpoint"` or `op = "halt"` reserves **`0`** units (`registry/constraints.json`).
-   - `agent/tool` reserves `1` unit from `{"kind":"seallink/count","resource":"<target>","unit":"calls"}` (plus any `seallink/cost` or `seallink/tokens` quotas declared on the capability).
+   - `agent/brief` and `agent/session` (`op = "start"`) reserve `1` unit from `{"kind":"seallink/count","resource":"<exact target>","unit":"starts"}`; `agent/session` with `op = "checkpoint"` or `op = "halt"` reserves **`0`** units (`registry/constraints.json`).
+   - `agent/tool` reserves `1` unit from `{"kind":"seallink/count","resource":"<exact target>","unit":"calls"}` (plus `max_tokens` against any `seallink/tokens` quota and `max_cost` against any `seallink/cost` quota declared on the capability, requiring exact `quota.resource == target` for required `"{target}"` quotas -> `QUOTA_EXCEEDED` on missing or mismatched `resource`).
    - For delegated child grants, reservations debit both the child's `own` account and the parent's `row` account (`SPEC-06 §2.2`), bounded across all sibling rows by R8.5 (`SPEC-06 §3`).
 3. **Bearer sessions:** An admitted `agent/session` MAY open a short-lived (`<= 3600s`) `seallink-session-open/1` bearer slot for non-signing model SDKs (`SPEC-06 §5`), restricted strictly to compute/tool quotas inside the session ceiling; irreversible financial transfers MUST NOT use bearer sessions.
 

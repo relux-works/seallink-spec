@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/card.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.8/schemas/card.schema.json",
   "title": "SealLink v1.0 Public Entity Card",
   "type": "object",
   "additionalProperties": false,

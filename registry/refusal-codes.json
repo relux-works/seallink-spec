@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Authoritative Refusal Code Registry. No normative document may emit a refusal code absent from this file. Verifiers report the FIRST failing code in each pipeline's deterministic check order.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.7",
+  "version": "1.0.0-draft.8",
   "codes": [
     {"code": "WIRE_SIZE", "category": "wire", "owning_spec": "SPEC-01", "creates_closure": false, "retryable": false, "description": "Document exceeds type max_bytes or nesting depth > 16."},
     {"code": "WIRE_JSON", "category": "wire", "owning_spec": "SPEC-01", "creates_closure": false, "retryable": false, "description": "Invalid UTF-8, BOM present, trailing bytes, or malformed RFC 8259 JSON object."},
@@ -46,13 +46,13 @@
     {"code": "AUTH_KEY_UNPINNED", "category": "identity", "owning_spec": "SPEC-03", "creates_closure": false, "retryable": false, "description": "Manifest lacks paired auth_key/auth_seal or key mismatch."},
     {"code": "DEVICE_UNAUTHORIZED", "category": "identity", "owning_spec": "SPEC-03", "creates_closure": false, "retryable": false, "description": "Device key not in pinned device list, level ceiling insufficient, or presented to a foreign verifier."},
 
-    {"code": "ORIGIN_UNVERIFIED", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": false, "description": "Origin certificate missing, untrusted issuer policy, class mismatch, or invalid anchor."},
+    {"code": "ORIGIN_UNVERIFIED", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": false, "description": "Origin certificate missing, untrusted issuer policy, class mismatch, mismatched majority_commitment opening, or invalid anchor."},
     {"code": "ORIGIN_BINDING_INVALID", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": false, "description": "Single-use name binding seal missing, out of height order, or registration already bound."},
-    {"code": "ORIGIN_STATUS_INCOMPLETE", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": true, "description": "Origin status_seal or roster_seal was spent on chain, but the corresponding capacity/1, end/1, or guardian-roster/1 record was not presented or failed hash verification."},
+    {"code": "ORIGIN_STATUS_INCOMPLETE", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": true, "description": "Origin status_seal, roster_seal, or confirmed 0x0c recovery_seal was spent on chain (or spine walk reached depth limit / majority_commitment opening withheld) without presenting the matching committed record."},
     {"code": "WARD_AUTONOMOUS_FORBIDDEN", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": false, "description": "Subject has ward status; autonomous signature without satisfying guardian quorum is forbidden."},
     {"code": "GUARDIAN_INACTIVE", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": false, "description": "Guardianship slot is vacant, pending delay, vetoed, contested/burned, halted, expired, or closed. (When triggered by a witnessed spend of an active slot seal, the slot seal spend itself records a durable guardian_slot closure.)"},
     {"code": "GUARDIAN_QUORUM_UNMET", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": false, "description": "Valid distinct guardian slot signatures do not meet verifier-derived event_class threshold against approved revision_size."},
-    {"code": "GUARDIAN_TRANSFER_PENDING", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": true, "description": "Guardianship ended (majority or capacity/1); admission paused for both sides until confirmed name transfer and update."},
+    {"code": "GUARDIAN_TRANSFER_PENDING", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": true, "description": "Guardianship ended (calendar majority T cutoff or confirmed capacity/1); admission paused for both sides until confirmed capacity/1 subject_new_owner_policy handover transfer and subject self-update (or 0x0c recovery)."},
     {"code": "GUARDIAN_TIME_BOUNDARY", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": true, "description": "Credible wall-clock interval straddles majority boundary T or cannot be established; admission paused."},
     {"code": "SUBJECT_ENDED", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": true, "retryable": false, "description": "Verified seallink-end/1 record permanently terminates all admission for this subject."},
     {"code": "RECOVERY_FORBIDDEN", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": false, "description": "Origin sets name_recovery=none, recovery delay incomplete, or cancelled by live OwnerPolicy (0x10)."},

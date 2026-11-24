@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Structured Capability & Constraint Algebra Registry (SPEC-01, SPEC-06). All 7 predicates have linear-time decidable conservative subsumption (child <= parent) with zero Turing-completeness. Standard quota kinds define exact deterministic reservation and settlement rules.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.7",
+  "version": "1.0.0-draft.8",
   "comparison_semantics": "conservative_pairwise",
   "predicates": [
     {
@@ -47,10 +47,10 @@
     {
       "op": "range",
       "operand_types": ["[uint64_str min, uint64_str max] with 0 <= min <= max <= 2^64-1"],
-      "arg_types": ["uint64_str (canonical unsigned 64-bit decimal string)"],
-      "match_rule": "is_canonical_uint64_str(arg) and int(min) <= int(arg) <= int(max)",
+      "arg_types": ["uint64_str (canonical unsigned 64-bit decimal string) or uint53 JSON integer"],
+      "match_rule": "(isinstance(arg, int) and not isinstance(arg, bool) and 0 <= arg <= 2^53-1 or is_canonical_uint64_str(arg)) and int(min) <= int(arg) <= int(max)",
       "narrowing_rule": "(child.op == 'range' and int(parent.min) <= int(child.min) <= int(child.max) <= int(parent.max)) or (child.op == 'eq' and is_canonical_uint64_str(child.operand) and int(parent.min) <= int(child.operand) <= int(parent.max)) or (child.op == 'in' and all(is_canonical_uint64_str(v) and int(parent.min) <= int(v) <= int(parent.max) for v in child.operand))",
-      "description": "Closed unsigned 64-bit integer interval [min, max] over canonical uint64_str values (no JSON numbers, no leading zeros, no trailing newlines)."
+      "description": "Closed unsigned 64-bit integer interval [min, max] over canonical uint64_str or non-negative uint53 integer argument values (no booleans, no floats, no leading zeros, no trailing newlines)."
     },
     {
       "op": "hash_eq",

@@ -134,6 +134,12 @@
       "rule": "SL-WIRE-004"
     },
     {
+      "expected_refusal": "WIRE_VALUE",
+      "id": "neg-null-precedes-control-string",
+      "input_hex": "7b2261223a225c74222c2262223a6e756c6c7d",
+      "rule": "SL-WIRE-018"
+    },
+    {
       "expected_refusal": "WIRE_NUMBER",
       "id": "neg-float-number",
       "input_hex": "7b2261223a312e357d",
@@ -200,6 +206,13 @@
       "expected": "VALID",
       "id": "jcs-multiline-lf-allowed",
       "input_utf8": "{\"terms_text\":\"Line 1\\nLine 2\"}",
+      "rule": "SL-WIRE-005"
+    },
+    {
+      "expected": "VALID",
+      "id": "jcs-typed-card-role-lf-allowed",
+      "input_utf8": "{\"display\":\"Alice\",\"kind\":\"person\",\"name\":\"id/alice\",\"role\":\"Engineer\\nFounder\",\"type\":\"seallink-card/1\"}",
+      "notes": "LF is permitted on the exact typed path seallink-card/1 role (x-seallink-allow-lf).",
       "rule": "SL-WIRE-005"
     },
     {
@@ -894,7 +907,7 @@
         }
       },
       {
-        "expected_refusal": "WIRE_SIGNATURE",
+        "expected_refusal": "WIRE_MEMBER",
         "id": "sigset-ed25519-forbidden-on-grant",
         "object": {
           "payload": {
@@ -974,7 +987,7 @@
         }
       },
       {
-        "expected_refusal": "WIRE_SIGNATURE",
+        "expected_refusal": "WIRE_MEMBER",
         "id": "sigset-p256-forbidden-on-grant",
         "object": {
           "payload": {
@@ -1056,5 +1069,5 @@
     ],
     "rule": "SL-WIRE-011"
   },
-  "version": "1.0.0-draft.7"
+  "version": "1.0.0-draft.8"
 }

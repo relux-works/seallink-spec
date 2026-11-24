@@ -401,8 +401,8 @@
       "id": "p2wsh-either-of-2",
       "policy": {
         "keys": {
-          "a": "03b6fb5e620f4be7987ea6b240b5f731d5814691dd57429b68eb522a6bc0080b3b",
-          "b": "0369e5deb1493971e5a903489ace178570c135b0c2099e70659654915f5ada1a82"
+          "a": "0369e5deb1493971e5a903489ace178570c135b0c2099e70659654915f5ada1a82",
+          "b": "03b6fb5e620f4be7987ea6b240b5f731d5814691dd57429b68eb522a6bc0080b3b"
         },
         "kind": "branch",
         "template": "either_of_2"
@@ -415,8 +415,8 @@
       "id": "p2wsh-both-of-2",
       "policy": {
         "keys": {
-          "a": "03b6fb5e620f4be7987ea6b240b5f731d5814691dd57429b68eb522a6bc0080b3b",
-          "b": "0369e5deb1493971e5a903489ace178570c135b0c2099e70659654915f5ada1a82"
+          "a": "0369e5deb1493971e5a903489ace178570c135b0c2099e70659654915f5ada1a82",
+          "b": "03b6fb5e620f4be7987ea6b240b5f731d5814691dd57429b68eb522a6bc0080b3b"
         },
         "kind": "branch",
         "template": "both_of_2"
@@ -429,9 +429,9 @@
       "id": "p2wsh-arbiter-or-both",
       "policy": {
         "keys": {
-          "a": "03b6fb5e620f4be7987ea6b240b5f731d5814691dd57429b68eb522a6bc0080b3b",
+          "a": "0369e5deb1493971e5a903489ace178570c135b0c2099e70659654915f5ada1a82",
           "arbiter": "03adf396bd8ca79d71046b8f7c7fa70b0b001644b6120fa5ef1782c860b387db2a",
-          "b": "0369e5deb1493971e5a903489ace178570c135b0c2099e70659654915f5ada1a82"
+          "b": "03b6fb5e620f4be7987ea6b240b5f731d5814691dd57429b68eb522a6bc0080b3b"
         },
         "kind": "branch",
         "template": "arbiter_or_both"
@@ -523,7 +523,7 @@
       "id": "p2wsh-arbiter-or-both-branch-mofn",
       "policy": {
         "keys": {
-          "a": "0369e5deb1493971e5a903489ace178570c135b0c2099e70659654915f5ada1a82",
+          "a": "0249f1b247757bfa314ce4e5afdf883fe47228b183bb37efd9f33d60dcbbea44a1",
           "arbiter": {
             "m": 2,
             "pks": [
@@ -532,7 +532,7 @@
               "03adf396bd8ca79d71046b8f7c7fa70b0b001644b6120fa5ef1782c860b387db2a"
             ]
           },
-          "b": "0249f1b247757bfa314ce4e5afdf883fe47228b183bb37efd9f33d60dcbbea44a1"
+          "b": "0369e5deb1493971e5a903489ace178570c135b0c2099e70659654915f5ada1a82"
         },
         "kind": "branch",
         "template": "arbiter_or_both"
@@ -572,5 +572,5 @@
     }
   ],
   "suite": "ledger-scripts-and-opreturn",
-  "version": "1.0.0-draft.7"
+  "version": "1.0.0-draft.8"
 }

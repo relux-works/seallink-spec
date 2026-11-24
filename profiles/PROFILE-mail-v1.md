@@ -1,6 +1,6 @@
 # PROFILE-mail-v1: Sovereign Email Hosting and Delegated Mailbox Access
 
-- **Version:** `1.0.0-draft.7`
+- **Version:** `1.0.0-draft.8`
 - **Service Type:** `mail` (`registry/service-types.json`)
 - **Status:** `draft` (normative profile rules `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/refusal-coverage-matrix.json`)
@@ -59,7 +59,7 @@ All three actions are mechanical effects and MUST refuse grants carrying `terms_
 ## 4. Target, Closed Argument/Result Schemas, and `result_sha256` (`SL-MAIL-003`, `decided`)
 
 - **Target grammar and target authority:** `mailbox:<owner_name>:<label>` (e.g., `mailbox:id/alice:work`).
-  The provider MUST verify that the root grant's `issuer.name == <owner_name>` (for a ward, via its satisfied guardian quorum for `<owner_name>` -> **`GRANT_TARGET_UNAUTHORIZED`** if any foreign actor issues a grant targeting `<owner_name>`'s mailbox) AND that `<owner_name>`'s confirmed `seallink-manifest/1` binds this provider's exact `NamePin` for `("mail", <label>)` (`SERVICE_PROVIDER_UNBOUND` otherwise).
+  The provider MUST verify that the root grant's `issuer.name == <owner_name>` (for a ward, via its satisfied guardian quorum for `<owner_name>` -> **`GRANT_TARGET_UNAUTHORIZED`** if any foreign actor issues a grant targeting `<owner_name>`'s mailbox) AND — for **both `executor_ref` and concrete `executor` grants** — that `<owner_name>`'s confirmed `seallink-manifest/1` binds this provider's exact `NamePin` for `("mail", <label>)` (`SERVICE_PROVIDER_UNBOUND` if missing or mismatched).
 - **Closed argument and result schemas:** All `invocation.arguments` and returned result objects MUST validate strictly against `schemas/profile-mail.schema.json`:
   - `mail/list`: `MailListArgs` -> `MailListResult`
   - `mail/read`: `MailReadArgs` -> `MailReadResult`

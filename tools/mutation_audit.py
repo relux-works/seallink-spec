@@ -172,7 +172,7 @@ def _worker_run(args: tuple[int, list[dict[str, Any]], str]) -> list[dict[str, A
             vf.write_text(_apply_mutation(orig_lines, s), encoding="utf-8")
             try:
                 proc = subprocess.run(
-                    [py_exe, "tools/speclint.py", "--require-jsonschema"],
+                    [py_exe, "tools/speclint.py", "--require-jsonschema", "--fail-fast"],
                     cwd=str(repo_copy),
                     capture_output=True,
                     text=True,

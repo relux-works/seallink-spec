@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/profile-agent.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.8/schemas/profile-agent.schema.json",
   "title": "SealLink PROFILE-agent-v1 Action Arguments and Result Schemas",
   "$defs": {
     "NormalizedResourcePath": {
@@ -70,7 +70,9 @@
         "tool_name": { "type": "string", "pattern": "^[a-z0-9._-]+$", "maxLength": 128, "not": { "pattern": "\n" } },
         "input_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
         "resource_path": { "$ref": "#/$defs/NormalizedResourcePath" },
-        "max_output_bytes": { "$ref": "common.schema.json#/$defs/Uint64Str" }
+        "max_output_bytes": { "$ref": "common.schema.json#/$defs/Uint64Str" },
+        "max_tokens": { "$ref": "common.schema.json#/$defs/Uint64Str" },
+        "max_cost": { "$ref": "common.schema.json#/$defs/Uint64Str" }
       }
     },
     "AgentToolResult": {

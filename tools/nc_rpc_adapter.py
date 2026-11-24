@@ -7,7 +7,7 @@ Namecoin Core full node (`-txindex=1 -namehistory=1 -disablewallet=1`) cross-che
 at least one independent comparison node (`SPEC-02 §1.1`, `SL-LDGR-002`, `SL-LDGR-008`), with
 ZERO reliance on writer-side state, writer-maintained name histories, or caller-supplied spend maps.
 
-Key Tier 1 guarantees enforced here (v1.0.0-draft.7):
+Key Tier 1 guarantees enforced here (v1.0.0-draft.8):
   1. Complete `SPEC-02 §4` observation bracket: reads `(hash_0, height_0)` BEFORE all ledger
      queries and `(hash_1, height_1)` AFTER all queries, populating `rebracket_tip` and
      `observation_bracket` (optionally discarding & retrying on mid-read tip transition via
@@ -61,8 +61,16 @@ import seallink_verifier as sv  # noqa: E402
 RpcFn = Callable[..., Any]
 
 
-def make_cli_rpc(bin_dir: Path, datadir: Path, rpcport: int, *, regtest: bool = True) -> RpcFn:
-    """Create a `namecoin-cli` RPC callable for a Namecoin Core node."""
+def make_cli_rpc(
+    bin_dir: Path,
+    datadir: Path,
+    rpcport: int,
+    *,
+    regtest: bool = True,
+    rpcuser: str | None = None,
+    rpcpassword: str | None = None,
+) -> RpcFn:
+    """Create a `namecoin-cli` RPC callable for a Namecoin Core node (supports dedicated rpcwhitelist credentials, A-13/A-14)."""
     cli = str(bin_dir / "namecoin-cli")
     base = [cli] + (["-regtest"] if regtest else []) + [
         f"-datadir={datadir}",
@@ -70,6 +78,10 @@ def make_cli_rpc(bin_dir: Path, datadir: Path, rpcport: int, *, regtest: bool = 
         "-rpcconnect=127.0.0.1",
         "-stdin",
     ]
+    if rpcuser is not None:
+        base.append(f"-rpcuser={rpcuser}")
+    if rpcpassword is not None:
+        base.append(f"-rpcpassword={rpcpassword}")
 
     def _call(method: str, *args: Any, wait: bool = False) -> Any:
         cmd = list(base)
@@ -77,13 +89,16 @@ def make_cli_rpc(bin_dir: Path, datadir: Path, rpcport: int, *, regtest: bool = 
             cmd.extend(["-rpcwait", "-rpcwaittimeout=25"])
         cmd.append(method)
         vals = [v if isinstance(v, str) else json.dumps(v, separators=(",", ":")) for v in args]
-        p = subprocess.run(
-            cmd,
-            input="\n".join(vals) + ("\n" if vals else ""),
-            text=True,
-            capture_output=True,
-            timeout=30,
-        )
+        try:
+            p = subprocess.run(
+                cmd,
+                input="\n".join(vals) + ("\n" if vals else ""),
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"namecoin-cli {method} timed out") from exc
         if p.returncode != 0:
             raise RuntimeError(f"namecoin-cli {method} failed: {p.stderr.strip()[:400]}")
         out = p.stdout.strip()
@@ -457,6 +472,7 @@ class ColdNamecoinObserver:
 
         return {
             "b_info": b_info,
+            "chain_match": (str(b_info.get("chain", "")) == self.network),
             "height": tip_h,
             "hash": tip_hash,
             "header_time": hdr_time,
@@ -600,10 +616,21 @@ class ColdNamecoinObserver:
           - `(spender, False)`: spender located in live mempool or active confirmed blocks.
           - `(None, True)`: output is ABSENT from the UTXO set and no spender was found (`A-1`, fail closed!).
         """
-        # 1. Fast check: is it STILL unspent in the node's UTXO set + mempool?
-        utxo = self.read_rpc("gettxout", txid, vout, True)
+        # 1. Fast check: is it STILL unspent in the node's UTXO set + mempool? (A-13 strict shape validation!)
+        try:
+            utxo = self.read_rpc("gettxout", txid, vout, True)
+        except RuntimeError:
+            return None, True
         if utxo is not None:
-            return None, False
+            if (
+                isinstance(utxo, dict)
+                and isinstance(utxo.get("scriptPubKey"), dict)
+                and isinstance(utxo.get("confirmations"), int)
+                and not isinstance(utxo.get("confirmations"), bool)
+            ):
+                return None, False
+            # Malformed non-None gettxout response -> fail closed (A-13)!
+            return None, True
         # 2. Check live mempool first (mempool spend before mining!)
         for mtx in mempool_txs.values():
             for vin in mtx.get("vin", []):
@@ -682,13 +709,20 @@ class ColdNamecoinObserver:
         policies_by_spk: dict[str, dict[str, Any]],
         mempool_txs: dict[str, dict[str, Any]],
         collected_txs: dict[str, dict[str, Any]] | None = None,
+        *,
+        missing_mempool_txs: bool = False,
     ) -> list[dict[str, Any]]:
-        """Scan live mempool for unconfirmed `OP_NAME_UPDATE`s spending `last_confirmed` (`A-5`)."""
+        """Scan live mempool for unconfirmed `OP_NAME_UPDATE`s spending `last_confirmed` (`A-5`, `R2-A-03`).
+
+        Surfaces unparseable name outputs (or unfetchable mempool spends of `last_confirmed`) as fail-closed
+        `{"unparseable": True}` entries so `Tier1Verifier` refuses `NAME_HISTORY_UNAVAILABLE`.
+        """
         last_txid = last_confirmed.get("txid")
         last_vout = last_confirmed.get("vout")
         if not last_txid or last_vout is None:
             return []
         out_list: list[dict[str, Any]] = []
+        found_spender = False
         for mtx in mempool_txs.values():
             spent_vin = next(
                 (v for v in mtx.get("vin", []) if v.get("txid") == last_txid and int(v.get("vout", -1)) == last_vout),
@@ -696,6 +730,7 @@ class ColdNamecoinObserver:
             )
             if spent_vin is None:
                 continue
+            found_spender = True
             # Try to derive witness_policy if last_confirmed had an unknown_unspent_spk
             wit_pol = last_confirmed.get("owner_policy")
             wit = spent_vin.get("txinwitness", [])
@@ -712,6 +747,8 @@ class ColdNamecoinObserver:
                     last_confirmed["owner_policy"] = cand
                     policies_by_spk.setdefault(wit_pol["pk"], cand)
 
+            parsed_any_for_name = False
+            saw_unparseable_name_out = False
             for vo in mtx.get("vout", []):
                 m_spk_hex = vo.get("scriptPubKey", {}).get("hex", "")
                 if not m_spk_hex:
@@ -719,9 +756,13 @@ class ColdNamecoinObserver:
                 try:
                     parsed_m = sl.parse_name_output(bytes.fromhex(m_spk_hex))
                 except ValueError:
+                    # R2-A-03: Namecoin name-op prefix (OP_NAME_NEW=51 / OP_NAME_FIRSTUPDATE=52 / OP_NAME_UPDATE=53) failing parse MUST fail closed!
+                    if m_spk_hex.startswith(("51", "52", "53")):
+                        saw_unparseable_name_out = True
                     continue
                 if parsed_m.get("op") != "NAME_UPDATE" or parsed_m.get("name") != name:
                     continue
+                parsed_any_for_name = True
                 t_spk_hex = parsed_m["trailing_script_pubkey"]
                 m_owner_pol = policies_by_spk.get(t_spk_hex) or {"kind": "unknown_unspent_spk", "spk_hex": t_spk_hex}
                 mu: dict[str, Any] = {
@@ -746,6 +787,16 @@ class ColdNamecoinObserver:
                 out_list.append(mu)
                 if collected_txs is not None:
                     collected_txs[mtx["txid"]] = mtx
+            if saw_unparseable_name_out or not parsed_any_for_name:
+                out_list.append({"txid": mtx["txid"], "unparseable": True})
+        # R2-A-03: If any mempool tx failed to fetch AND last_confirmed is no longer unspent in UTXO+mempool, fail closed!
+        if missing_mempool_txs and not found_spender:
+            try:
+                u_chk = self.read_rpc("gettxout", last_txid, last_vout, True)
+            except RuntimeError:
+                u_chk = None
+            if not (isinstance(u_chk, dict) and isinstance(u_chk.get("scriptPubKey"), dict)):
+                out_list.append({"txid": last_txid, "unparseable": True})
         return out_list
 
     def _discover_name_lineages(
@@ -754,82 +805,120 @@ class ColdNamecoinObserver:
         policies_by_spk: dict[str, dict[str, Any]],
         collected_txs: dict[str, dict[str, Any]],
         mempool_txs: dict[str, dict[str, Any]],
+        *,
+        missing_mempool_txs: bool = False,
     ) -> list[dict[str, Any]]:
-        """Discover ALL historical registration lineages for `name` via `name_history` (`A-4`, `A-5`).
+        """Discover ALL historical registration lineages for `name` via `name_history` (`A-4`, `A-5`, `R2-A-01`, `R2-A-02`).
 
-        Never silently drops an unparseable or unfetched name history entry — marks `history_truncated = True`
-        so `Tier1Verifier.resolve_name` fails closed with `NAME_HISTORY_UNAVAILABLE`.
+        - R2-A-01: Distinguishes legitimate `name not found` from transient/malformed `name_history` RPC errors
+          (failing closed with `history_truncated = True` on RPC errors so hidden `0x10` cancels cannot be skipped).
+        - R2-A-02: Scopes `history_truncated` per registration lineage so a corrupt newer registration never
+          taints an unrelated clean historical registration of an expired name.
         """
         try:
             raw_hist = self.read_rpc("name_history", name)
-        except RuntimeError:
-            return []
-        if not isinstance(raw_hist, list) or not raw_hist:
+        except RuntimeError as exc:
+            msg = str(exc).lower()
+            if "name not found" in msg or "not found" in msg:
+                return []
+            # R2-A-01: Transient/RPC failure MUST fail closed with history_truncated=True!
+            return [{
+                "history_truncated": True,
+                "registration": {"txid": "0" * 64, "vout": 0},
+                "updates": [],
+            }]
+        if not isinstance(raw_hist, list):
+            return [{
+                "history_truncated": True,
+                "registration": {"txid": "0" * 64, "vout": 0},
+                "updates": [],
+            }]
+        if not raw_hist:
             return []
 
         mempool_set = set(mempool_txs.keys())
-        history_truncated = False
-        enriched: list[tuple[int, int, dict[str, Any], dict[str, Any], int, dict[str, Any]]] = []
-        for idx, item in enumerate(raw_hist):
+        # R2-A-02: Track parse/fetch errors by raw_hist index so truncation scopes to the affected lineage!
+        raw_lineages: list[list[tuple[int, int, dict[str, Any], int, dict[str, Any]]]] = []
+        lin_truncated: list[bool] = []
+        pre_lineage_error = False
+
+        # Sort raw_hist deterministically by (height if int else tip+1, original idx) while keeping unparseables in place
+        indexed_items = list(enumerate(raw_hist))
+        enriched: list[tuple[int, int, int, dict[str, Any] | None, int, dict[str, Any] | None, bool]] = []
+        for idx, item in indexed_items:
+            if not isinstance(item, dict):
+                enriched.append((10**12, idx, 0, None, 0, None, True))
+                continue
             txid = item.get("txid")
             vout_n = item.get("vout")
+            raw_h = item.get("height")
+            hint_h = int(raw_h) if isinstance(raw_h, int) and not isinstance(raw_h, bool) else 10**12
             if not isinstance(txid, str) or not isinstance(vout_n, int):
-                history_truncated = True
+                enriched.append((hint_h, idx, 0, None, 0, None, True))
                 continue
             txd = self._get_raw_tx(txid, allow_mempool=True, mempool_set=mempool_set)
             if txd is None:
-                history_truncated = True
+                enriched.append((hint_h, idx, 0, None, 0, None, True))
                 continue
             if "blockhash" not in txd:
-                # Unconfirmed mempool entry reported by name_history: handled via mempool_updates below
                 if txid in mempool_txs:
                     continue
-                history_truncated = True
+                enriched.append((hint_h, idx, 0, None, 0, None, True))
                 continue
             act = self._active_confirmed_height(txd["blockhash"], txd.get("confirmations"))
             if act is None:
-                history_truncated = True
+                enriched.append((hint_h, idx, 0, None, 0, None, True))
                 continue
-            h_conf = act[0]
+            h_conf, b_time = act
             collected_txs[txid] = txd
             out_obj = next((o for o in txd.get("vout", []) if int(o["n"]) == vout_n), None)
             if out_obj is None:
-                history_truncated = True
+                enriched.append((h_conf, idx, b_time, None, 0, None, True))
                 continue
             spk_hex = out_obj.get("scriptPubKey", {}).get("hex", "")
             try:
                 parsed = sl.parse_name_output(bytes.fromhex(spk_hex))
             except ValueError:
-                history_truncated = True
+                enriched.append((h_conf, idx, b_time, None, 0, None, True))
                 continue
-            enriched.append((h_conf, idx, item, txd, vout_n, parsed))
+            enriched.append((h_conf, idx, b_time, txd, vout_n, parsed, False))
         enriched.sort(key=lambda t: (t[0], t[1]))
 
-        raw_lineages: list[list[tuple[int, dict[str, Any], int, dict[str, Any]]]] = []
-        for h_conf, _idx, _item, txd, vout_n, parsed in enriched:
+        for h_conf, _idx, b_time, txd, vout_n, parsed, is_err in enriched:
+            if is_err or txd is None or parsed is None:
+                if raw_lineages:
+                    lin_truncated[-1] = True
+                else:
+                    pre_lineage_error = True
+                continue
             if parsed["op"] == "NAME_FIRSTUPDATE":
-                raw_lineages.append([(h_conf, txd, vout_n, parsed)])
+                raw_lineages.append([(h_conf, b_time, txd, vout_n, parsed)])
+                lin_truncated.append(pre_lineage_error and len(raw_lineages) == 1)
             elif parsed["op"] == "NAME_UPDATE" and raw_lineages:
                 in_ops = {(v.get("txid"), int(v.get("vout", -1))) for v in txd.get("vin", []) if "txid" in v}
                 attached = False
-                for lin in reversed(raw_lineages):
-                    last_txid, last_vout = lin[-1][1]["txid"], lin[-1][2]
+                for l_idx in range(len(raw_lineages) - 1, -1, -1):
+                    lin = raw_lineages[l_idx]
+                    last_txid, last_vout = lin[-1][2]["txid"], lin[-1][3]
                     if (last_txid, last_vout) in in_ops:
-                        lin.append((h_conf, txd, vout_n, parsed))
+                        lin.append((h_conf, b_time, txd, vout_n, parsed))
                         attached = True
                         break
                 if not attached:
-                    history_truncated = True
-                    raw_lineages[-1].append((h_conf, txd, vout_n, parsed))
+                    lin_truncated[-1] = True
+                    raw_lineages[-1].append((h_conf, b_time, txd, vout_n, parsed))
             else:
-                history_truncated = True
+                if raw_lineages:
+                    lin_truncated[-1] = True
+                else:
+                    pre_lineage_error = True
 
         lineages_out: list[dict[str, Any]] = []
-        for lin in raw_lineages:
+        for l_idx, lin in enumerate(raw_lineages):
             derived_pols: dict[int, dict[str, Any]] = {}
             for pos in range(len(lin) - 1):
-                _h0, prev_txd, prev_vout, prev_parsed = lin[pos]
-                _h1, next_txd, _nv, _np = lin[pos + 1]
+                _h0, _bt0, prev_txd, prev_vout, prev_parsed = lin[pos]
+                _h1, _bt1, next_txd, _nv, _np = lin[pos + 1]
                 t_spk_hex = prev_parsed["trailing_script_pubkey"]
                 spent_vin = next(
                     (v for v in next_txd.get("vin", []) if v.get("txid") == prev_txd["txid"] and int(v.get("vout", -1)) == prev_vout),
@@ -844,13 +933,14 @@ class ColdNamecoinObserver:
                             policies_by_spk.setdefault(t_spk_hex, cand)
 
             updates_v: list[dict[str, Any]] = []
-            for pos, (h_conf, txd, vout_n, parsed) in enumerate(lin):
+            for pos, (h_conf, b_time, txd, vout_n, parsed) in enumerate(lin):
                 out_spk_hex = next(o["scriptPubKey"]["hex"] for o in txd["vout"] if int(o["n"]) == vout_n)
                 t_spk_hex = parsed["trailing_script_pubkey"]
                 owner_pol = derived_pols.get(pos) or policies_by_spk.get(t_spk_hex)
                 if owner_pol is None:
                     owner_pol = {"kind": "unknown_unspent_spk", "spk_hex": t_spk_hex}
                 u_obj: dict[str, Any] = {
+                    "block_time": b_time,
                     "confirmed_height": h_conf,
                     "op": parsed["op"],
                     "output_script_hex": out_spk_hex,
@@ -881,7 +971,12 @@ class ColdNamecoinObserver:
 
             if updates_v:
                 mem_updates = self._discover_mempool_name_updates(
-                    name, updates_v[-1], policies_by_spk, mempool_txs, collected_txs
+                    name,
+                    updates_v[-1],
+                    policies_by_spk,
+                    mempool_txs,
+                    collected_txs,
+                    missing_mempool_txs=missing_mempool_txs,
                 )
                 lin_rec: dict[str, Any] = {
                     "registration": {"txid": updates_v[0]["txid"], "vout": updates_v[0]["vout"]},
@@ -889,11 +984,11 @@ class ColdNamecoinObserver:
                 }
                 if mem_updates:
                     lin_rec["mempool_updates"] = mem_updates
-                if history_truncated:
+                if lin_truncated[l_idx]:
                     lin_rec["history_truncated"] = True
                 lineages_out.append(lin_rec)
 
-        if not lineages_out and history_truncated:
+        if not lineages_out and pre_lineage_error:
             first_it = raw_hist[0] if isinstance(raw_hist[0], dict) else {}
             lineages_out.append({
                 "history_truncated": True,
@@ -956,7 +1051,7 @@ class ColdNamecoinObserver:
         retry_on_tip_change: int = 0,
         max_hint_names: int = 64,
         max_hint_txids: int = 256,
-        max_hint_outpoints: int = 512,
+        max_hint_outpoints: int = 4096,
         max_hint_blocks: int = 64,
     ) -> dict[str, Any]:
         """Build a bracket-verified SealLink `ChainView` strictly from read-only Node B + comparison peers.
@@ -1024,10 +1119,13 @@ class ColdNamecoinObserver:
             mempool_ids = list(self.read_rpc("getrawmempool"))
             mempool_set = set(mempool_ids)
             mempool_txs: dict[str, dict[str, Any]] = {}
+            missing_mempool_txs = False
             for mid in mempool_ids:
                 mtx = self._get_raw_tx(mid, allow_mempool=True, mempool_set=mempool_set)
                 if mtx is not None:
                     mempool_txs[mid] = mtx
+                else:
+                    missing_mempool_txs = True
 
             collected_txs: dict[str, dict[str, Any]] = dict(mempool_txs)
 
@@ -1035,7 +1133,9 @@ class ColdNamecoinObserver:
             names_view: dict[str, Any] = {}
             name_regs_view: dict[str, list[dict[str, Any]]] = {}
             for nm in sorted(target_names):
-                lineages = self._discover_name_lineages(nm, policies_by_spk, collected_txs, mempool_txs)
+                lineages = self._discover_name_lineages(
+                    nm, policies_by_spk, collected_txs, mempool_txs, missing_mempool_txs=missing_mempool_txs
+                )
                 if lineages:
                     names_view[nm] = lineages[-1]
                     name_regs_view[nm] = lineages
@@ -1123,7 +1223,7 @@ class ColdNamecoinObserver:
                 "name_registrations": name_regs_view,
                 "names": names_view,
                 "network": self.network,
-                "node_reachable": True,
+                "node_reachable": bool(start_s["chain_match"] and end_s["chain_match"]),
                 "now": decision_now,
                 "observation_bracket": {
                     "attempts": attempt,
@@ -1190,10 +1290,13 @@ class ColdNamecoinObserver:
         mempool_ids = list(self.read_rpc("getrawmempool"))
         mempool_set = set(mempool_ids)
         mempool_txs: dict[str, dict[str, Any]] = {}
+        missing_mempool_txs = False
         for mid in mempool_ids:
             mtx = self._get_raw_tx(mid, allow_mempool=True, mempool_set=mempool_set)
             if mtx is not None:
                 mempool_txs[mid] = mtx
+            else:
+                missing_mempool_txs = True
 
         spent_map: dict[tuple[str, int], str] = {}
         absent_outpoints: set[tuple[str, int]] = set()
@@ -1223,7 +1326,7 @@ class ColdNamecoinObserver:
                 if tx_entry and str(op_vout) in tx_entry.get("outputs", {}):
                     tx_entry["outputs"][str(op_vout)]["absent_from_utxo"] = True
 
-        # Re-check mempool OP_NAME_UPDATEs on all tracked names (A-5, A-6)
+        # Re-check mempool OP_NAME_UPDATEs on all tracked names (A-5, A-6, R2-A-03)
         policies_by_spk: dict[str, dict[str, Any]] = {}
         for pol in (extra_policies or []):
             try:
@@ -1234,15 +1337,18 @@ class ColdNamecoinObserver:
         for nm in sorted(names_to_check):
             nrec = fresh.get("names", {}).get(nm)
             if isinstance(nrec, dict) and nrec.get("updates"):
-                mem_u = self._discover_mempool_name_updates(nm, nrec["updates"][-1], policies_by_spk, mempool_txs)
+                mem_u = self._discover_mempool_name_updates(
+                    nm, nrec["updates"][-1], policies_by_spk, mempool_txs, missing_mempool_txs=missing_mempool_txs
+                )
                 if mem_u:
                     nrec["mempool_updates"] = mem_u
                 else:
                     nrec.pop("mempool_updates", None)
 
-        # Closing recheck bracket AFTER all refreshed reads (R1-B, A-6)
+        # Closing recheck bracket AFTER all refreshed reads (R1-B, A-6, R3 High #1)
         re_end = self._sample_tip()
         decision_now = re_end["now"]
+        fresh["node_reachable"] = bool(fresh.get("node_reachable", True) and re_start["chain_match"] and re_end["chain_match"])
         fresh["now"] = decision_now
         fresh["clock_watermark"] = re_end["clock_watermark"]
         fresh["clock_source"] = re_end["clock_source"]
@@ -1260,11 +1366,13 @@ class ColdNamecoinObserver:
             and re_end["hash"] == fresh["tip_hash"]
             and re_end["height"] == fresh["tip_height"]
         )
+        prev_consistent = ob.get("consistent", True)
         ob["pre_effect_rechecked"] = True
         ob["pre_effect_start"] = {"hash": re_start["hash"], "height": re_start["height"], "now": re_start["now"]}
         ob["pre_effect_end"] = {"hash": re_end["hash"], "height": re_end["height"], "now": re_end["now"]}
         ob["pre_effect_tip"] = {"hash": re_end["hash"], "height": re_end["height"], "now": re_end["now"]}
-        ob["consistent"] = recheck_consistent
+        # R3 High #1: NEVER resurrect an already-voided observation snapshot!
+        ob["consistent"] = bool(prev_consistent) and recheck_consistent
         return fresh
 
 
@@ -1312,9 +1420,9 @@ def self_test() -> None:
     chal_pk = sl.compressed_pubkey(sl.deterministic_privkey("nc-t-chal"))
     g_pk = sl.compressed_pubkey(sl.deterministic_privkey("nc-t-guard"))
     reg_sk = sl.deterministic_privkey("nc-t-reg")
-    vac_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp_pk, "b": arb_pk}}
+    vac_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(disp_pk, arb_pk)}
     pend_pol = {"kind": "branch", "template": "guardian_slot_pending", "delay_blocks": 3, "keys": {"challenger": chal_pk, "disposer": disp_pk, "guardian": g_pk}}
-    act_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp_pk, "b": g_pk}}
+    act_pol = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(disp_pk, g_pk)}
     vac_spk, _ = sl.compile_script_policy(vac_pol)
     pend_spk, _ = sl.compile_script_policy(pend_pol)
     act_spk, _ = sl.compile_script_policy(act_pol)
@@ -1404,6 +1512,16 @@ def self_test() -> None:
         "flip_on_gbi_call": None,
         "txindex_synced": True,
         "bad_name_hist": False,
+        "chain_name": "regtest",
+        "bad_gettxout": False,
+        "name_hist_rpc_err": False,
+        "corrupt_second_reg": False,
+    }
+    bad_mem_name_txid = hashlib.sha256(b"bad-mem-name").hexdigest()
+    txs[bad_mem_name_txid] = {
+        "txid": bad_mem_name_txid,
+        "vin": [{"txid": u2_txid, "vout": 0, "sequence": 0xFFFFFFFF, "scriptSig": {"hex": ""}, "txinwitness": [fake_sig, pk2]}],
+        "vout": [{"n": 0, "scriptPubKey": {"hex": "53ff"}}],
     }
 
     def mock_rpc(method: str, *args: Any) -> Any:
@@ -1421,7 +1539,7 @@ def self_test() -> None:
                 state["tip_h"] = 205
                 state["tip_hash"] = b205
             return {
-                "chain": "regtest",
+                "chain": state["chain_name"],
                 "blocks": state["tip_h"],
                 "headers": state["tip_h"],
                 "bestblockhash": state["tip_hash"],
@@ -1438,6 +1556,8 @@ def self_test() -> None:
             return txs[args[0]]
         if method == "gettxout":
             txid_q, vout_q = args[0], args[1]
+            if state["bad_gettxout"]:
+                return {}
             if txid_q == vac_txid and vout_q == 0:
                 return None
             if txid_q == pend_txid and vout_q == 2:
@@ -1446,18 +1566,25 @@ def self_test() -> None:
                 return None  # A-1: missing from UTXO set with NO spender anywhere!
             if txid_q == seal_txid and vout_q == 0 and state["seal_spent"]:
                 return None
-            return {"confirmations": 1}
+            return {"confirmations": 1, "scriptPubKey": {"hex": spk1.hex()}}
         if method == "name_history":
             nm_q = args[0]
+            if nm_q == "id/rpc-err" and state["name_hist_rpc_err"]:
+                raise RuntimeError("namecoin-cli name_history failed: connection reset by peer")
+            if nm_q == "id/missing":
+                raise RuntimeError("namecoin-cli name_history failed: error code -4: name not found")
             if nm_q == "id/corrupt" and state["bad_name_hist"]:
                 return [{"txid": bad_name_txid, "vout": 0, "height": 204}]
             if nm_q == "id/school":
-                return [
+                items = [
                     {"txid": fu1_txid, "vout": 0, "height": 150},
                     {"txid": u1_txid, "vout": 0, "height": 151},
                     {"txid": fu2_txid, "vout": 0, "height": 200},
                     {"txid": u2_txid, "vout": 0, "height": 204},
                 ]
+                if state["corrupt_second_reg"]:
+                    items.append({"txid": bad_name_txid, "vout": 0, "height": 204})
+                return items
             return []
         raise RuntimeError(f"Unexpected mock RPC: {method}")
 
@@ -1584,12 +1711,60 @@ def self_test() -> None:
     assert v_strict.check_chain_observation(sv.ChainView(cv_notx)) == "CHAIN_UNHEALTHY"
     state["txindex_synced"] = True
 
+    # Test 8 (R3 High #1): pre_effect_recheck MUST NOT resurrect a voided snapshot (`consistent=False`)!
+    state["tip_h"], state["tip_hash"], state["gbi_calls"], state["flip_on_gbi_call"] = 204, b204, 0, None
+    cv_resurrect = obs.pre_effect_recheck(cv_void, [(seal_txid, 0)])
+    assert cv_resurrect["observation_bracket"]["consistent"] is False
+    assert v_strict.check_chain_observation(sv.ChainView(cv_resurrect)) == "CHAIN_OBSERVATION_VOID"
+
+    # Test 9 (A-11): Chain network mismatch in getblockchaininfo -> node_reachable=False -> CHAIN_UNHEALTHY!
+    state["chain_name"] = "main"
+    cv_bad_chain = obs.build_chain_view(extra_names=["id/school"])
+    assert cv_bad_chain["node_reachable"] is False
+    assert v_strict.check_chain_observation(sv.ChainView(cv_bad_chain)) == "CHAIN_UNHEALTHY"
+    state["chain_name"] = "regtest"
+
+    # Test 10 (A-13): Malformed gettxout response ({}) -> absent_from_utxo=True -> SEAL_SPENT!
+    state["bad_gettxout"] = True
+    state["seal_spent"] = False
+    cv_bad_utxo = obs.build_chain_view(extra_outpoints=[(seal_txid, 0)])
+    assert cv_bad_utxo["txs"][seal_txid]["outputs"]["0"].get("absent_from_utxo") is True
+    state["bad_gettxout"] = False
+
+    # Test 11 (R2-A-01 & R2-A-02): Transient name_history RPC error -> history_truncated=True; corrupt 2nd reg does NOT taint clean 1st reg!
+    state["name_hist_rpc_err"] = True
+    state["corrupt_second_reg"] = True
+    cv_nh = obs.build_chain_view(extra_names=["id/rpc-err", "id/missing", "id/school"], extra_policies=[pol1, pol2])
+    assert cv_nh["names"]["id/rpc-err"].get("history_truncated") is True
+    assert "id/missing" not in cv_nh["names"]
+    assert v_strict.resolve_name("id/rpc-err", sv.ChainView(cv_nh))[1] == "NAME_HISTORY_UNAVAILABLE"
+    assert v_strict.resolve_name("id/missing", sv.ChainView(cv_nh))[1] == "NAME_NOT_FOUND"
+    # Second reg is tainted, while clean historical first reg still resolves at height 157!
+    assert cv_nh["names"]["id/school"].get("history_truncated") is True
+    hist_rec, hist_err = v_strict.resolve_name(
+        "id/school", sv.ChainView(cv_nh), expected_owner_policy=pol1, expected_registration={"txid": fu1_txid, "vout": 0}, at_height=157
+    )
+    assert hist_err is None and hist_rec is not None and hist_rec["_value_obj"]["link"]["cred"] == cred1
+    state["name_hist_rpc_err"] = False
+    state["corrupt_second_reg"] = False
+
+    # Test 12 (R2-A-03): Unparseable mempool OP_NAME_UPDATE spending watched name -> fail closed NAME_HISTORY_UNAVAILABLE!
+    state["mempool"] = [bad_mem_name_txid]
+    cv_bad_mem = obs.build_chain_view(extra_names=["id/school"], extra_policies=[pol1, pol2])
+    ch_bm = sv.ChainView(cv_bad_mem)
+    nrec_bm, nerr_bm = v_strict.resolve_name("id/school", ch_bm, expected_owner_policy=pol2, expected_registration={"txid": fu2_txid, "vout": 0})
+    assert nerr_bm is None and nrec_bm is not None
+    _, rerr_bm = v_strict.resolve_role_policy(nrec_bm, "cred", recent_block_height=204)
+    assert rerr_bm == "NAME_HISTORY_UNAVAILABLE"
+    state["mempool"] = []
+
 
 if __name__ == "__main__":
     self_test()
     print(
         "nc_rpc_adapter self_test PASS "
         "(multi-reg + pending_vout=2 + bracket/retry + R1-B transactional clock & recheck + "
-        "A-1 absent_from_utxo + A-2 orphan filter + A-3 cache invalidation + A-4 truncated history + "
-        "A-5 mempool name transfer + A-9 mainnet clock guard + A-11 txindex + H-23 dup SLNK)"
+        "R3-H1 no-resurrection + A-1 absent_from_utxo + A-2 orphan filter + A-3 cache invalidation + "
+        "A-4/R2-A-01/02 scoped truncated history + A-5/R2-A-03 mempool name update + A-9 mainnet clock guard + "
+        "A-11 chain/txindex + A-13 strict gettxout + H-23 dup SLNK)"
     )

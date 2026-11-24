@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Canonical Object Type Registry. Authoritative SSOT for object types, byte limits, signing roles, and schema targets. Signing domain tag equals the exact type string under SPEC-01.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.7",
+  "version": "1.0.0-draft.8",
   "reserved_internal_domains": [
     "seallink-clause/1",
     "seallink-journal/1",
@@ -13,7 +13,7 @@
       "type": "seallink-manifest/1",
       "signed": false,
       "auth_mechanism": "name_value_sha256_pin",
-      "max_bytes": 32768,
+      "max_bytes": 65536,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json",
       "description": "Name-pinned operational manifest: off-chain set heads, self-service declaration, pinned labeled providers, optional role-policy preimages (verified against on-chain link.<role> hashes), and foreign-service auth key/seal."
@@ -40,7 +40,7 @@
       "type": "seallink-members-list/1",
       "signed": false,
       "auth_mechanism": "manifest_sha256_pin",
-      "max_bytes": 524288,
+      "max_bytes": 1048576,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/MembersList",
       "description": "Manifest-pinned list of managed/member names with owner policy pins and per-entry revocation seals."
@@ -265,10 +265,10 @@
       "type": "seallink-journal-entry/1",
       "signed": false,
       "auth_mechanism": "hash_chain_and_external_cas_witness",
-      "max_bytes": 16384,
+      "max_bytes": 65536,
       "owning_spec": "SPEC-06",
       "schema": "schemas/invocation.schema.json#/$defs/JournalEntry",
-      "description": "Canonical entry in an anti-rollback hash-chained journal (closures, atomic pending reservations, atomic terminal settlements, single-use consumption, nonces, manifest heads, session-open, migration-applied, recovery boundaries)."
+      "description": "Canonical entry in an anti-rollback hash-chained journal (closures, atomic pending reservations, unified atomic terminal settlements including single-use consumption, nonces, manifest heads, session-state with token_sha256, durable session-use debits, migration-applied, recovery boundaries)."
     },
     {
       "type": "seallink-migration/1",

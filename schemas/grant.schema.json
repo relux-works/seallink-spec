@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/grant.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.8/schemas/grant.schema.json",
   "title": "SealLink v1.0 Universal Grant & Issuance Preparation",
   "oneOf": [
     {
@@ -274,10 +274,43 @@
                       }
                     }
                   }
+                },
+                "if": {
+                  "required": ["template"],
+                  "properties": {
+                    "template": {
+                      "required": ["notary_mode"],
+                      "properties": { "notary_mode": { "const": "optional_stop" } }
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "ranges": {
+                      "items": { "required": ["stop_txid", "stop_first", "stop_script_policy"] }
+                    }
+                  }
                 }
               }
             }
-          }
+          },
+          "if": {
+            "required": ["groups"],
+            "properties": {
+              "groups": {
+                "contains": {
+                  "required": ["template"],
+                  "properties": {
+                    "template": {
+                      "required": ["notary_mode"],
+                      "properties": { "notary_mode": { "enum": ["optional_stop", "required_act"] } }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": { "required": ["notaries"] }
         },
         "guardian_context": { "$ref": "common.schema.json#/$defs/GuardianContext" }
       },

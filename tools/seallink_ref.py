@@ -263,47 +263,48 @@ def jcs_encode(obj: dict[str, Any]) -> bytes:
     return _jcs_serialize(obj, _extract_root_type(obj), (), 0).encode("utf-8")
 
 
-def _check_depth_and_values(
+def _collect_depth_and_value_errors(
     val: Any,
     root_type: str | None,
     path: tuple[str, ...],
     depth: int,
-) -> str | None:
+    errs: set[str],
+) -> None:
     if val is None:
-        return "WIRE_VALUE"
+        errs.add("WIRE_VALUE")
+        return
     if isinstance(val, bool):
-        return None
+        return
     if isinstance(val, float):
-        return "WIRE_NUMBER"
+        errs.add("WIRE_NUMBER")
+        return
     if isinstance(val, int):
         if val < 0 or val > MAX_UINT53:
-            return "WIRE_NUMBER"
-        return None
+            errs.add("WIRE_NUMBER")
+        return
     if isinstance(val, str):
         if not _validate_string(val, _path_allows_lf(root_type, path)):
-            return "WIRE_STRING"
-        return None
+            errs.add("WIRE_STRING")
+        return
     if isinstance(val, list):
         next_depth = depth + 1
         if next_depth > 16:
-            return "WIRE_SIZE"
+            errs.add("WIRE_SIZE")
+            return
         for item in val:
-            err = _check_depth_and_values(item, root_type, path + ("[]",), next_depth)
-            if err:
-                return err
-        return None
+            _collect_depth_and_value_errors(item, root_type, path + ("[]",), next_depth, errs)
+        return
     if isinstance(val, dict):
         next_depth = depth + 1
         if next_depth > 16:
-            return "WIRE_SIZE"
+            errs.add("WIRE_SIZE")
+            return
         for k, v in val.items():
             if not _validate_string(k, False):
-                return "WIRE_STRING"
-            err = _check_depth_and_values(v, root_type, path + (k,), next_depth)
-            if err:
-                return err
-        return None
-    return "WIRE_VALUE"
+                errs.add("WIRE_STRING")
+            _collect_depth_and_value_errors(v, root_type, path + (k,), next_depth, errs)
+        return
+    errs.add("WIRE_VALUE")
 
 
 def _scan_container_depth(text: str) -> tuple[int, bool]:
@@ -334,22 +335,30 @@ def _scan_container_depth(text: str) -> tuple[int, bool]:
     return best, (not in_str and cur == 0)
 
 
-def _is_leading_zero_number_error(text: str, pos: int) -> bool:
-    """Detect RFC 8259 leading-zero numeric tokens like `01` so they map deterministically to WIRE_NUMBER."""
-    if pos <= 0 or pos >= len(text):
+def _is_malformed_number_error(text: str, pos: int) -> bool:
+    """Detect malformed numeric tokens (`01`, `+1`, `.5`, `1.`) so they map deterministically to WIRE_NUMBER (W-7)."""
+    if pos < 0 or pos >= len(text):
         return False
-    if text[pos - 1] == "0" and text[pos].isdigit():
-        # Ensure the `0` was not preceded by another digit or identifier/quote
-        prev = text[pos - 2] if pos >= 2 else ""
-        if prev in ("", ":", ",", "[", "{", " ", "\t", "\r", "\n", "-"):
-            return True
-    if text[pos] == "+" and pos + 1 < len(text) and text[pos + 1].isdigit():
+    prev = text[pos - 1] if pos >= 1 else ""
+    prev2 = text[pos - 2] if pos >= 2 else ""
+    ch = text[pos]
+    # Leading zero like 01, 00, -01
+    if prev == "0" and ch.isdigit() and prev2 in ("", ":", ",", "[", "{", " ", "\t", "\r", "\n", "-"):
+        return True
+    # Explicit plus sign like +1
+    if ch == "+" and pos + 1 < len(text) and text[pos + 1].isdigit():
+        return True
+    # Leading decimal point like .5
+    if ch == "." and pos + 1 < len(text) and text[pos + 1].isdigit() and prev in ("", ":", ",", "[", "{", " ", "\t", "\r", "\n", "-"):
+        return True
+    # Trailing decimal point like 1.
+    if prev == "." and pos >= 2 and text[pos - 2].isdigit() and ch in (",", "}", "]", " ", "\t", "\r", "\n"):
         return True
     return False
 
 
 def jcs_validate(raw: bytes, max_bytes: int = 1048576) -> tuple[bool, Any]:
-    """Validate raw bytes against SPEC-01 §1-2 pipeline steps 1..6. Returns (True, obj) or (False, refusal_code)."""
+    """Validate raw bytes against SPEC-01 §1-2 pipeline steps 1..6 (whole-tree precedence: WIRE_SIZE -> WIRE_JSON -> WIRE_DUPLICATE -> WIRE_VALUE -> WIRE_NUMBER -> WIRE_STRING -> WIRE_NOT_CANONICAL)."""
     if len(raw) > max_bytes:
         return False, "WIRE_SIZE"
     if raw.startswith(b"\xef\xbb\xbf"):
@@ -404,7 +413,7 @@ def jcs_validate(raw: bytes, max_bytes: int = 1048576) -> tuple[bool, Any]:
             parse_int=parse_int,
         )
     except json.JSONDecodeError as exc:
-        if _is_leading_zero_number_error(text, exc.pos):
+        if _is_malformed_number_error(text, exc.pos):
             return False, "WIRE_NUMBER"
         return False, "WIRE_JSON"
     except RecursionError:
@@ -430,13 +439,14 @@ def jcs_validate(raw: bytes, max_bytes: int = 1048576) -> tuple[bool, Any]:
     if dup_found:
         return False, "WIRE_DUPLICATE"
     root_type = _extract_root_type(obj)
-    err = _check_depth_and_values(obj, root_type, (), 0)
-    if err == "WIRE_VALUE":
-        return False, "WIRE_VALUE"
-    if bad_num or err == "WIRE_NUMBER":
-        return False, "WIRE_NUMBER"
-    if err is not None:
-        return False, err
+    val_errs: set[str] = set()
+    _collect_depth_and_value_errors(obj, root_type, (), 0, val_errs)
+    if bad_num:
+        val_errs.add("WIRE_NUMBER")
+    # Strict whole-tree precedence (SPEC-01 §7, R3 Blocker #5): WIRE_VALUE before WIRE_NUMBER before WIRE_STRING!
+    for code in ("WIRE_SIZE", "WIRE_VALUE", "WIRE_NUMBER", "WIRE_STRING"):
+        if code in val_errs:
+            return False, code
 
     try:
         reencoded = jcs_encode(obj)
@@ -1092,7 +1102,7 @@ def verify_signature_set(
     if alg not in ("bip340", "ed25519", "p256"):
         return False, "WIRE_SIGNATURE"
     if alg != "bip340" and obj_type is not None and obj_type not in DEVICE_ALG_ALLOWED_TYPES:
-        return False, "WIRE_SIGNATURE"
+        return False, "WIRE_MEMBER"
     pks = policy.get("pks", [])
     m = policy.get("m", 0)
     if not isinstance(pks, list) or not isinstance(m, int) or isinstance(m, bool):
@@ -1246,6 +1256,12 @@ def _branch_spec_sort_key(spec: Any) -> bytes:
     return _jcs_serialize(spec, None, (), 0).encode("utf-8")
 
 
+def canonical_branch_pair(spec_a: Any, spec_b: Any) -> dict[str, Any]:
+    """Return canonical sorted `{"a": lo, "b": hi}` pair for unordered ScriptPolicy pairs (SPEC-02 §3.1, Decision 4)."""
+    lo, hi = sorted([spec_a, spec_b], key=_branch_spec_sort_key)
+    return {"a": lo, "b": hi}
+
+
 def _compile_branch_clause(spec: Any, verify: bool = False) -> bytes:
     if isinstance(spec, str):
         return _push_data(bytes.fromhex(spec)) + bytes([OP_CHECKSIGVERIFY if verify else OP_CHECKSIG])
@@ -1331,22 +1347,23 @@ def compile_script_policy(policy: dict[str, Any]) -> tuple[bytes, bytes | None]:
                 raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
             if not branch_key_spec_xcoords(a_spec).isdisjoint(branch_key_spec_xcoords(b_spec)):
                 raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+            # Decision 4 / R3 Blocker #4: strict canonical input order a < b eliminates dual JCS encodings!
+            if _branch_spec_sort_key(a_spec) >= _branch_spec_sort_key(b_spec):
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
             if isinstance(a_spec, str) and isinstance(b_spec, str):
-                a, b = sorted([a_spec, b_spec])
                 op_m = 0x51 if tpl == "either_of_2" else 0x52
-                ws_b = bytes([op_m]) + _push_data(bytes.fromhex(a)) + _push_data(bytes.fromhex(b)) + bytes([0x52, OP_CHECKMULTISIG])
+                ws_b = bytes([op_m]) + _push_data(bytes.fromhex(a_spec)) + _push_data(bytes.fromhex(b_spec)) + bytes([0x52, OP_CHECKMULTISIG])
             else:
-                lo, hi = sorted([a_spec, b_spec], key=_branch_spec_sort_key)
                 if tpl == "either_of_2":
                     ws_b = (
                         bytes([OP_IF])
-                        + _compile_branch_clause(lo, verify=False)
+                        + _compile_branch_clause(a_spec, verify=False)
                         + bytes([OP_ELSE])
-                        + _compile_branch_clause(hi, verify=False)
+                        + _compile_branch_clause(b_spec, verify=False)
                         + bytes([OP_ENDIF])
                     )
                 else:
-                    ws_b = _compile_branch_clause(lo, verify=True) + _compile_branch_clause(hi, verify=False)
+                    ws_b = _compile_branch_clause(a_spec, verify=True) + _compile_branch_clause(b_spec, verify=False)
             return bytes([OP_0, 32]) + sha256(ws_b), ws_b
         if tpl == "arbiter_or_both":
             a_pk, b_pk, arb = keys.get("a"), keys.get("b"), keys.get("arbiter")
@@ -1354,13 +1371,15 @@ def compile_script_policy(policy: dict[str, Any]) -> tuple[bytes, bytes | None]:
                     and isinstance(b_pk, str) and is_valid_compressed_pubkey(b_pk)
                     and is_valid_branch_key_spec(arb)):
                 raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
-            if a_pk[2:] == b_pk[2:]:
+            if a_pk >= b_pk or a_pk[2:] == b_pk[2:]:
                 raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
-            a, b = sorted([a_pk, b_pk])
+            arb_xs = branch_key_spec_xcoords(arb)
+            if a_pk[2:] in arb_xs or b_pk[2:] in arb_xs:
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
             ws_b = (
                 bytes([OP_IF, 0x52])
-                + _push_data(bytes.fromhex(a))
-                + _push_data(bytes.fromhex(b))
+                + _push_data(bytes.fromhex(a_pk))
+                + _push_data(bytes.fromhex(b_pk))
                 + bytes([0x52, OP_CHECKMULTISIG, OP_ELSE])
                 + _compile_branch_clause(arb, verify=False)
                 + bytes([OP_ENDIF])
@@ -1388,6 +1407,10 @@ def compile_script_policy(policy: dict[str, Any]) -> tuple[bytes, bytes | None]:
                 raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
             if not (is_valid_branch_key_spec(disp) and is_valid_branch_key_spec(chal)
                     and isinstance(guard, str) and is_valid_compressed_pubkey(guard)):
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+            disp_xs = branch_key_spec_xcoords(disp)
+            chal_xs = branch_key_spec_xcoords(chal)
+            if not disp_xs.isdisjoint(chal_xs) or guard[2:] in disp_xs or guard[2:] in chal_xs:
                 raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
             ws_b = (
                 bytes([OP_IF])
@@ -1650,16 +1673,30 @@ def build_merkle_tree(item_digests: list[str]) -> tuple[str, dict[str, dict[str,
 
 
 def verify_merkle_proof(proof: dict[str, Any]) -> bool:
-    cur = merkle_leaf(proof["leaf_digest"])
-    for step in proof["steps"]:
-        sib = bytes.fromhex(step["hash"])
-        if step["side"] == "L":
-            cur = merkle_node(sib, cur)
-        elif step["side"] == "R":
-            cur = merkle_node(cur, sib)
-        else:
-            return False
-    return cur.hex() == proof["root"]
+    if not isinstance(proof, dict):
+        return False
+    steps = proof.get("steps")
+    leaf = proof.get("leaf_digest")
+    root = proof.get("root")
+    if not isinstance(steps, list) or len(steps) > 16 or not isinstance(leaf, str) or not isinstance(root, str):
+        return False
+    try:
+        cur = merkle_leaf(leaf)
+        for step in steps:
+            if not isinstance(step, dict) or not isinstance(step.get("hash"), str):
+                return False
+            sib = bytes.fromhex(step["hash"])
+            if len(sib) != 32:
+                return False
+            if step.get("side") == "L":
+                cur = merkle_node(sib, cur)
+            elif step.get("side") == "R":
+                cur = merkle_node(cur, sib)
+            else:
+                return False
+    except ValueError:
+        return False
+    return cur.hex() == root
 
 
 # ============================================================================
@@ -1856,13 +1893,21 @@ EVENT_CLASS_ORDER = {
 }
 EVENT_CLASS_BY_RANK = {v: k for k, v in EVENT_CLASS_ORDER.items()}
 
-# Actions with external_mutation=True or forced effect_grant class
-MUTATING_OR_EFFECT_ACTIONS = frozenset({
-    "mail/send",
-    "agent/tool",
-    "agent/session",
-    "agent/guardian-message",
-})
+_ACTION_EVENT_CLASSES_CACHE: dict[str, str] | None = None
+
+
+def _action_event_classes() -> dict[str, str]:
+    global _ACTION_EVENT_CLASSES_CACHE
+    if _ACTION_EVENT_CLASSES_CACHE is None:
+        from pathlib import Path
+        reg_path = Path(__file__).resolve().parent.parent / "registry" / "actions.json"
+        raw = json.loads(reg_path.read_text(encoding="utf-8"))
+        _ACTION_EVENT_CLASSES_CACHE = {
+            e["action"]: e["guardian_event_class"]
+            for e in raw.get("actions", [])
+            if isinstance(e, dict) and "action" in e and "guardian_event_class" in e
+        }
+    return _ACTION_EVENT_CLASSES_CACHE
 
 
 def required_guardian_slots(quorum: dict[str, int], revision_size: int) -> int:
@@ -1911,7 +1956,9 @@ def check_guardian_policy_consistency(
         return False, "WIRE_KEY"
     if disp == arb or not branch_key_spec_xcoords(disp).isdisjoint(branch_key_spec_xcoords(arb)):
         return False, "ORIGIN_UNVERIFIED"
-    expected_both = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp, "b": arb}}
+    if not branch_key_spec_xcoords(disp).isdisjoint(branch_key_spec_xcoords(chal)):
+        return False, "ORIGIN_UNVERIFIED"
+    expected_both = {"kind": "branch", "template": "both_of_2", "keys": canonical_branch_pair(disp, arb)}
     exp_both_spk, _ = compile_script_policy(expected_both)
     seen_outpoints: set[tuple[str, int]] = set()
     if "roster_seal" in policy:
@@ -1964,11 +2011,11 @@ def check_guardian_policy_consistency(
 
 
 def derive_guardian_event_class(payload: dict[str, Any]) -> str:
-    """Deterministically derive the required GuardianEventClass (SPEC-04 §3.1)."""
+    """Deterministically derive the required GuardianEventClass from registry/actions.json SSOT (SPEC-04 §3.1, G-2, R2G-11)."""
     obj_type = payload.get("type")
     if obj_type == "seallink-assent/1":
         target_type = payload.get("target_type")
-        if target_type == "seallink-migration/1":
+        if target_type in ("seallink-migration/1", "seallink-guardian/1"):
             return "custody_change"
         return "contract_assent"
     if obj_type == "seallink-grant/1":
@@ -1980,8 +2027,13 @@ def derive_guardian_event_class(payload: dict[str, Any]) -> str:
         rev = payload.get("revocation", {})
         if rev.get("mode") == "seal" and rev.get("kind") == "single_use":
             rank = max(rank, 1)
+        act_classes = _action_event_classes()
         for cap in payload.get("capabilities", []):
-            if cap.get("quotas") or cap.get("action") in MUTATING_OR_EFFECT_ACTIONS:
+            act = cap.get("action")
+            # Fail closed on unknown/unregistered action -> contract_assent (rank 2), never routine_read (G-2)!
+            act_cls = act_classes.get(act, "contract_assent")
+            rank = max(rank, EVENT_CLASS_ORDER.get(act_cls, 2))
+            if cap.get("quotas"):
                 rank = max(rank, 1)
         return EVENT_CLASS_BY_RANK[rank]
     raise ValueError(f"Unsupported guardian_context carrier: {obj_type}")
@@ -2051,10 +2103,20 @@ def self_test() -> None:
     p5 = compressed_pubkey(deterministic_privkey("bks-5"))
     bks_disp = {"m": 2, "pks": sorted([p1, p2, p3])}
     bks_arb = {"m": 2, "pks": sorted([p4, p5])}
-    spk_e2, ws_e2 = compile_script_policy({"kind": "branch", "template": "either_of_2", "keys": {"a": bks_disp, "b": p4}})
+    spk_e2, ws_e2 = compile_script_policy({"kind": "branch", "template": "either_of_2", "keys": canonical_branch_pair(bks_disp, p4)})
     assert len(spk_e2) == 34 and ws_e2 is not None and len(ws_e2) < 400
-    spk_b2, ws_b2 = compile_script_policy({"kind": "branch", "template": "both_of_2", "keys": {"a": bks_disp, "b": bks_arb}})
+    spk_b2, ws_b2 = compile_script_policy({"kind": "branch", "template": "both_of_2", "keys": canonical_branch_pair(bks_disp, bks_arb)})
     assert len(spk_b2) == 34 and ws_b2 is not None and len(ws_b2) < 400
+    # Unsorted pair MUST reject CHAIN_SCRIPT_UNSUPPORTED (Decision 4 / R3 Blocker #4)
+    p_lo, p_hi = sorted([p1, p4])
+    try:
+        compile_script_policy({"kind": "branch", "template": "both_of_2", "keys": {"a": p_hi, "b": p_lo}})
+        raise AssertionError("Unsorted both_of_2 MUST reject")
+    except ValueError as exc:
+        assert str(exc) == "CHAIN_SCRIPT_UNSUPPORTED"
+    # Whole-tree WIRE_VALUE before WIRE_STRING (R3 Blocker #5)
+    ok_vs, err_vs = jcs_validate(b'{"a":"\\t","b":null}')
+    assert not ok_vs and err_vs == "WIRE_VALUE", f"Expected WIRE_VALUE before WIRE_STRING, got {err_vs}"
     spk_gp, ws_gp = compile_script_policy({
         "kind": "branch", "template": "guardian_slot_pending",
         "keys": {"disposer": bks_disp, "challenger": bks_arb, "guardian": compressed_pubkey(deterministic_privkey("bks-6"))},

@@ -20,7 +20,7 @@ import seallink_ref as sl
 import seallink_verifier as sv
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = "1.0.0-draft.7"
+VERSION = "1.0.0-draft.8"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 
 
@@ -170,6 +170,7 @@ def _build_base_invocation_fixture() -> dict[str, Any]:
         "tip_height": 750010,
         "tip_hash": _h32("tip-750010"),
         "tip_header_time": 1795220000,
+        "tip_median_time_past": 1795219900,
         "tip_first_sight": 1795220005,
         "now": 1795220010,
         "clock_watermark": 1795219000,
@@ -295,9 +296,9 @@ def _build_base_origin_fixture() -> dict[str, Any]:
 
     reg_owner_pol = {"kind": "key", "pk": reg_own["comp"]}
     reg_outpoint = {"txid": _h32("oreg-tx"), "vout": 0}
-    vac_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp["comp"], "b": arb["comp"]}}
-    stat_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": stat_cap["comp"], "b": stat_end["comp"]}}
-    rec_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": rec_disp["comp"], "b": rec_arb["comp"]}}
+    vac_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(disp["comp"], arb["comp"])}
+    stat_pol = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(stat_cap["comp"], stat_end["comp"])}
+    rec_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(rec_disp["comp"], rec_arb["comp"])}
     ward_owner_pol = {"kind": "multisig", "m": 2, "pks": sorted([g1_own["comp"], g2_own["comp"], reg_own["comp"]])}
     g1_pin = {"name": "id/parent-a", "owner_policy": {"kind": "key", "pk": g1_own["comp"]}, "registration": {"txid": _h32("g1-reg"), "vout": 0}}
     g2_pin = {"name": "id/parent-b", "owner_policy": {"kind": "key", "pk": g2_own["comp"]}, "registration": {"txid": _h32("g2-reg"), "vout": 0}}
@@ -365,7 +366,7 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         "type": "seallink-name-binding/1",
     }
 
-    act_pol_1 = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp["comp"], "b": g1_seal["comp"]}}
+    act_pol_1 = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(disp["comp"], g1_seal["comp"])}
     g1_rec_p = {
         "active_policy": act_pol_1,
         "active_vout": 0,
@@ -411,7 +412,7 @@ def _build_base_origin_fixture() -> dict[str, Any]:
             {"name_pin": {"name": "id/school", "owner_policy": {"kind": "key", "pk": sch_own["comp"]}, "registration": {"txid": _h32("sch-reg"), "vout": 0}}, "party_id": "school-1", "role": "school", "signing_policy": {"m": 1, "pks": [sch_gr["xonly"]]}},
         ],
         "profile": "org.seallink/enrollment-v1",
-        "seal": {"script_policy": {"kind": "branch", "template": "either_of_2", "keys": {"a": disp["comp"], "b": sch_own["comp"]}}, "txid": _h32("ocseal-tx"), "vout": 0},
+        "seal": {"script_policy": {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(disp["comp"], sch_own["comp"])}, "txid": _h32("ocseal-tx"), "vout": 0},
         "type": "seallink-contract/1",
         "window": {"not_after_height": 790000, "not_before_height": 750000},
     }
@@ -425,6 +426,7 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         "tip_height": 750100,
         "tip_hash": _h32("otip-750100"),
         "tip_header_time": 1795220000,
+        "tip_median_time_past": 1795219900,
         "tip_first_sight": 1795220005,
         "now": 1795220010,
         "credible_utc_interval": [1795220000, 1795220020],
@@ -487,12 +489,15 @@ def _build_base_origin_fixture() -> dict[str, Any]:
 def _contract_fx() -> dict[str, Any]:
     f = _base_invocation_fixture()
     f["executor_cfg"]["name"] = "id/station-a"
+    f["executor_cfg"]["station_slot_bindings"] = {
+        "station:id/station-a:slot1": [{"name": "id/alice", "owner_policy": f["_alice_owner_pol"], "registration": f["_alice_reg"]}]
+    }
     c_salt = _h32("c0-salt")
     sess_cap = {"action": "agent/session", "target": "station:id/station-a:slot1", "quotas": [{"kind": "seallink/count", "max": "5", "resource": "station:id/station-a:slot1", "unit": "starts", "window": "term"}]}
     c0 = {"machine_terms": {"capabilities": [sess_cap]}, "text": "Isolated session terms"}
     cseal_a = _kp("cseal-a")
     cseal_b = _kp("cseal-b")
-    cseal_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": cseal_a["comp"], "b": cseal_b["comp"]}}
+    cseal_pol = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(cseal_a["comp"], cseal_b["comp"])}
     c_obj = {
         "clause_commitments": [sl.clause_commit(c_salt, c0)],
         "config_sha256": _h32("cfg-agreed"),
@@ -540,6 +545,9 @@ def _contract_fx() -> dict[str, Any]:
 def _delegation_fx(notary_mode: str = "none", with_stop: bool = False) -> dict[str, Any]:
     f = _base_invocation_fixture()
     f["executor_cfg"]["name"] = "id/station-a"
+    f["executor_cfg"]["station_slot_bindings"] = {
+        "station:id/station-a:tools": [{"name": "id/alice", "owner_policy": f["_alice_owner_pol"], "registration": f["_alice_reg"]}]
+    }
     del_k = _kp("del-key")
     cseal_iss = _kp("cseal-iss")
     row_k = _kp("row-coin")
@@ -950,7 +958,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("AUTH_CHALLENGE_EXPIRED", "SL-IDEN-010", "auth_challenge", {
         "challenge": auth_chal,
         "chain": fx_a["chain"],
-        "journal": {"journal_id": _h32("aj"), "auth_nonces": {_h32("auth-n1"): {"used": False, "service_id": "id/mail-host-a"}}},
+        "journal": {"journal_id": _h32("aj"), "auth_nonces": {_h32("auth-n1"): {"used": False, "service_id": "id/mail-host-a", "issued_at": 1795219950, "expires_at": 1795220005}}},
         "service_id": "id/mail-host-a",
         "manifests": fx_a["bundle"]["manifests"],
     })
@@ -960,7 +968,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("AUTH_CHALLENGE_INVALID", "SL-IDEN-010", "auth_challenge", {
         "challenge": auth_chal2,
         "chain": fx_a["chain"],
-        "journal": {"journal_id": _h32("aj2"), "auth_nonces": {_h32("auth-n1"): {"used": True, "service_id": "id/mail-host-a"}}},
+        "journal": {"journal_id": _h32("aj2"), "auth_nonces": {_h32("auth-n1"): {"used": True, "service_id": "id/mail-host-a", "issued_at": 1795220000, "expires_at": 1795220100}}},
         "service_id": "id/mail-host-a",
         "manifests": fx_a["bundle"]["manifests"],
     })
@@ -968,7 +976,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("AUTH_KEY_UNPINNED", "SL-IDEN-010", "auth_challenge", {
         "challenge": auth_chal2,
         "chain": fx_a["chain"],
-        "journal": {"journal_id": _h32("aj3"), "auth_nonces": {_h32("auth-n1"): {"used": False, "service_id": "id/mail-host-a"}}},
+        "journal": {"journal_id": _h32("aj3"), "auth_nonces": {_h32("auth-n1"): {"used": False, "service_id": "id/mail-host-a", "issued_at": 1795220000, "expires_at": 1795220100}}},
         "service_id": "id/mail-host-a",
         "manifests": fx_a["bundle"]["manifests"],
     })
@@ -1208,7 +1216,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         c0 = {"machine_terms": {"capabilities": [sess_cap]}, "text": "Isolated session terms"}
         cseal_a = _kp("cseal-a")
         cseal_b = _kp("cseal-b")
-        cseal_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": cseal_a["comp"], "b": cseal_b["comp"]}}
+        cseal_pol = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(cseal_a["comp"], cseal_b["comp"])}
         c_obj = {
             "clause_commitments": [sl.clause_commit(c_salt, c0)],
             "config_sha256": _h32("cfg-agreed"),

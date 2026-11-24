@@ -289,6 +289,7 @@
     "tip_hash": "6593c8af21ba5a03d7be803ecf2ce2dcc193d9fb988c5bf2bf809488d2391276",
     "tip_header_time": 1795220000,
     "tip_height": 750010,
+    "tip_median_time_past": 1795219900,
     "txs": {
       "565ecad7166da08aef0a1c3f3c2ae693f1366e34040d7a8c908868bde0deab53": {
         "confirmed_height": 749995,
@@ -844,5 +845,5 @@
     }
   ],
   "suite": "trace-01-mail-offline-revoke",
-  "version": "1.0.0-draft.7"
+  "version": "1.0.0-draft.8"
 }

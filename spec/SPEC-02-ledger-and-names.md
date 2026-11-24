@@ -1,6 +1,6 @@
 # SPEC-02: Ledger Interface, Namecoin Binding, ScriptPolicy, Merkle Batching, and UTXO Seals
 
-- **Version:** `1.0.0-draft.7`
+- **Version:** `1.0.0-draft.8`
 - **Status:** `draft` (normative rules `decided` except provisional freshness constants and Tier 2 profile marked `open` in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `vectors` (`vectors/ledger-scripts-and-opreturn.json`, `vectors/refusal-coverage-matrix.json`; two-node P2A regtest proof in `conformance/p2a-regtest/`)
 - **Registries:** `registry/opreturn-actions.json`, `registry/refusal-codes.json`
@@ -42,15 +42,39 @@ Core SealLink semantics (`SPEC-03` through `SPEC-07`) depend solely on an abstra
 - **Name registration:** Two-step flow (`OP_NAME_NEW` committing salted `HASH160(rand || name)`, followed `>= 12` blocks later by `OP_NAME_FIRSTUPDATE` revealing name and initial value, locking `0.01 NMC`). A name is live at tip height `H` iff its latest name operation confirmed at height `h` satisfies `H < h + D` (`NAME_EXPIRED` otherwise).
 - **Read-only node route:** Verifier node credentials MUST NOT expose wallet or transaction-submission RPCs (e.g., restricted via `rpcwhitelist`).
 
+### 2.2 Normative `ChainView` Snapshot Fields and Fail-Closed Defaults (`SL-LDGR-015`, `decided`)
+
+To ensure deterministic cross-language verification between Rust, Go, and reference implementations, every chain adapter populating an immutable `ChainView` snapshot MUST supply the following exact fields and units (omitted or malformed fields fail closed as indicated):
+
+| Field | Type & Unit | Fail-Closed Requirement |
+| --- | --- | --- |
+| `network`, `genesis` | `string` (`"main" \| "regtest"`), `hex64` | MUST match local verifier config AND the reading node's `getblockchaininfo()["chain"]` (`CHAIN_MISMATCH` / `CHAIN_UNHEALTHY`). |
+| `tip_height`, `tip_hash`, `tip_time` | `uint53` blocks, `hex64`, `uint53` Unix seconds | Active tip block height, hash, and header timestamp. |
+| `tip_median_time_past` | `uint53` Unix seconds (BIP-113 `mediantime`) | REQUIRED for evaluating any ward origin with `majority_commitment` (`GUARDIAN_TIME_BOUNDARY` if omitted). |
+| `best_header_height`, `ibd`, `txindex` | `uint53`, `bool`, `bool` | MUST satisfy `!ibd`, `txindex == true` (verified via `getindexinfo`), and `best_header_height - tip_height <= LAG` (`CHAIN_UNHEALTHY`). |
+| `now`, `first_sight_time`, `clock_watermark` | `uint53` Unix seconds | `now < clock_watermark` refuses `CHAIN_CLOCK_ERROR`; `tip_time - now > S` refuses `CHAIN_CLOCK_ERROR`; `first_sight_time` records durable first observation of `tip_hash`. |
+| `observation_bracket` | `{consistent: bool, open_tip: {hash, height}, close_tip: {hash, height}}` | Checked BEFORE peer comparison and downstream stages; `consistent != true` or `open_tip != close_tip` refuses `CHAIN_OBSERVATION_VOID`. During `pre_effect_recheck`, `consistent` MUST remain `prev_consistent && (recheck_open == recheck_close)` (a voided bracket MUST NEVER be resurrected). |
+| `comparison_nodes` | array of `{id, healthy, tip_height, block_hashes}` | At least one healthy peer required (`CHAIN_UNHEALTHY`); any healthy peer disagreeing at `tip_height` or ahead of `tip_height` vetoes (`CHAIN_NODE_DISAGREEMENT`). |
+| `txs`, `block_hashes` | active-chain confirmed & mempool tx maps | Every confirmed tx MUST verify `confirmations >= 1` and `block_hashes[confirmed_height] == block_hash`; `gettxout` responses MUST be strictly `null` (absent) or a valid object with `scriptPubKey` and `confirmations` (malformed/timed-out RPC fails closed `CHAIN_UNHEALTHY`). |
+| `names`, `name_histories` | confirmed registration lineages keyed by `(name, registration_txid)` | Each lineage records ordered confirmed updates (`txid, vout, op, confirmed_height, block_time, output_script_hex, owner_policy, prev_input`) plus per-registration `history_truncated: bool`. Any `name_history` RPC error or unparseable history entry fails closed (`NAME_HISTORY_UNAVAILABLE` / `CHAIN_SCRIPT_UNSUPPORTED`) — never silently skipped. |
+| `mempool_name_updates` | list of locally observed mempool `NAME_UPDATE` entries | Adapters MUST surface any unparseable or unfetchable mempool spend of a watched name with `unparseable: true` so the verifier fails closed (`NAME_ROLE_CHANGED` / `NAME_VALUE_INVALID`). |
+
 ---
 
 ## 3. Unified `ScriptPolicy` (On-Chain Ownership and Seal Scripts)
 
 SealLink uses one deterministic **`ScriptPolicy`** primitive covering **name ownership**, **contract termination seals**, **guardianship slots**, **status/roster spines**, and **single-use seals**.
 
-### 3.1 Supported Templates and `BranchKeySpec` (`SL-LDGR-004`, `decided`)
+### 3.1 Supported Templates, Canonical Pair Ordering, and `BranchKeySpec` (`SL-LDGR-004`, `decided`)
 
-Every `ScriptPolicy` deterministically compiles to an exact native SegWit v0 trailing `scriptPubKey` (`P2WPKH` 22 bytes or `P2WSH` 34 bytes). All compressed secp256k1 keys MUST be valid points on the curve (`WIRE_KEY` otherwise). Within `multisig` and unordered key pairs `(a, b)`, keys MUST be strictly sorted in ascending lexicographical hex order AND MUST have **distinct 32-byte x-coordinates** (rejecting `02X`/`03X` negated-point pairs with `CHAIN_SCRIPT_UNSUPPORTED`). Relative locktime `<D>` uses minimal Bitcoin Script `CScriptNum` encoding (`1 <= D <= 52560`, BIP-68 block-based relative locktime with bit 22 cleared: `1..16` MUST compile to single-byte `OP_1`..`OP_16` `0x51..0x60`; `D >= 17` uses minimal little-endian signed push).
+Every `ScriptPolicy` deterministically compiles to an exact native SegWit v0 trailing `scriptPubKey` (`P2WPKH` 22 bytes or `P2WSH` 34 bytes). All compressed secp256k1 keys MUST be valid points on the curve (`WIRE_KEY` otherwise).
+
+- **Strict canonical input order & distinct x-coordinates:** Within `multisig.pks[]`, `BranchKeySpec.pks[]`, and ALL unordered key pairs `(a, b)` (`either_of_2`, `both_of_2`, and `(a, b)` in `arbiter_or_both`), inputs MUST be supplied in **strict ascending canonical order** (`a < b` as lowercase hex for single keys, or `canonical_JCS(a) < canonical_JCS(b)` when either side is a `BranchKeySpec` object). Furthermore, all compressed secp256k1 keys appearing across any distinct keys or roles within the same `ScriptPolicy` MUST have **pairwise distinct 32-byte x-coordinates** (rejecting duplicate keys and `02X`/`03X` negated-point pairs with `CHAIN_SCRIPT_UNSUPPORTED`).
+- **On-chain vs. off-chain policy identity:**
+  1. *On-chain UTXO matching* compares the compiled trailing `scriptPubKey` byte-for-byte against the ledger output script.
+  2. *Off-chain policy equality* (e.g., `NamePin.owner_policy` equality, `ThresholdPolicy` equality, and `ScriptPolicy` comparisons across pins) verifies compilation and compares exact **canonical JCS bytes** (`SPEC-01 §1`). Because every supported `ScriptPolicy` template enforces a unique canonical input representation (`a < b`, sorted `pks[]`, no `1-of-1` object form), canonical JCS equality is unambiguous and unique per policy.
+- **Relative locktime `<D>`:** Uses minimal Bitcoin Script `CScriptNum` encoding (`1 <= D <= 52560`, BIP-68 block-based relative locktime with bit 22 cleared: `1..16` MUST compile to single-byte `OP_1`..`OP_16` `0x51..0x60`; `D >= 17` uses minimal little-endian signed push).
+- **Contract seal restriction:** `Contract.termination.seal.script_policy` MUST use `ContractSealScriptPolicy` (closed in `schemas/contract.schema.json` to `key`, `multisig`, `either_of_2`, `both_of_2`, or `arbiter_or_both`; `single_use_1_of_2` and `guardian_slot_pending` are forbidden on contract seals).
 
 **Institutional `BranchKeySpec` (single key OR compact `m-of-n`):** To allow institutional roles (`disposer`, `arbiter`, `challenger`, and the `arbiter` branch of `arbiter_or_both`) to use either a single key / threshold-ECDSA MPC signer OR a native offline PSBT `m-of-n` multisig without inflating single-key scripts, those branch slots accept a **`BranchKeySpec`**:
 - Either a single `CompressedPubkey66` string `pk` -> `clause(pk) = <pk> OP_CHECKSIG`, `clause_verify(pk) = <pk> OP_CHECKSIGVERIFY`;
@@ -60,11 +84,27 @@ Every `ScriptPolicy` deterministically compiles to an exact native SegWit v0 tra
 | --- | --- | --- |
 | `{"kind":"key","pk":"<66hex>"}` | `P2WPKH` (22B): `OP_0 PUSH20 HASH160(pk)`. Spent with ECDSA. *(Namecoin `P2WPKH` validates strictly ECDSA, never BIP-340 Schnorr / FROST; any single-key threshold custody MUST use qualified threshold ECDSA.)* | Individual actor name, ordinary revocable grant seal, row coin, stop coin, disposable revoke seal. |
 | `{"kind":"multisig","m":k,"pks":[...]}` | `P2WSH` (34B): `OP_0 PUSH32 SHA256(witnessScript)`, where `witnessScript = OP_k <pk_1> ... <pk_n> OP_n OP_CHECKMULTISIG`, `1 <= k <= n <= 15`. | Child name (`2-of-3`), organization name (`3-of-5`), multi-guardian agent name (`2-of-3`), signed via `namepsbt`. |
-| `{"kind":"branch","template":"either_of_2","keys":{"a","b"}}` | `P2WSH` (34B). If `a` and `b` are single keys: `OP_1 <min(a,b)> <max(a,b)> OP_2 OP_CHECKMULTISIG` (71B). If either is an `m-of-n` `BranchKeySpec`: sort `(lo, hi)` by `canonical_JCS(spec)` (requiring `lo != hi` and disjoint key sets for `a, b`) -> `OP_IF <clause(lo)> OP_ELSE <clause(hi)> OP_ENDIF`. | Contract seal (`either_party`); active guardian slot (`guardian OR disposer`); `status_seal`. |
-| `{"kind":"branch","template":"both_of_2","keys":{"a","b"}}` | `P2WSH` (34B). If `a` and `b` are single keys: `OP_2 <min(a,b)> <max(a,b)> OP_2 OP_CHECKMULTISIG` (71B). If either is an `m-of-n` `BranchKeySpec`: sort `(lo, hi)` by `canonical_JCS(spec)` (`lo != hi`) -> `<clause_verify(lo)> <clause(hi)>` (witness supplies `[hi_sigs..., lo_sigs..., witnessScript]`). | Contract seal (`both_together`); on-chain 2-party assent; vacant guardian slot (`disposer AND arbiter`); `roster_seal`; `recovery_seal`. |
-| `{"kind":"branch","template":"arbiter_or_both","keys":{"a","b","arbiter"}}` | `P2WSH` (34B): `OP_IF OP_2 <min(a,b)> <max(a,b)> OP_2 OP_CHECKMULTISIG OP_ELSE <clause(arbiter)> OP_ENDIF` (`a, b` single keys; `arbiter` is `BranchKeySpec`). | Contract seal (`arbiter` termination branch `0` or mutual termination branch `1`). |
+| `{"kind":"branch","template":"either_of_2","keys":{"a","b"}}` | `P2WSH` (34B), requiring `a < b` (single-key hex or `canonical_JCS`). If `a` and `b` are single keys: `OP_1 <a> <b> OP_2 OP_CHECKMULTISIG` (71B). If either is an `m-of-n` `BranchKeySpec`: `OP_IF <clause(a)> OP_ELSE <clause(b)> OP_ENDIF`. | Contract seal (`either_party`); active guardian slot (`guardian OR disposer`); `status_seal`. |
+| `{"kind":"branch","template":"both_of_2","keys":{"a","b"}}` | `P2WSH` (34B), requiring `a < b` (single-key hex or `canonical_JCS`). If `a` and `b` are single keys: `OP_2 <a> <b> OP_2 OP_CHECKMULTISIG` (71B). If either is an `m-of-n` `BranchKeySpec`: `<clause_verify(a)> <clause(b)>`. | Contract seal (`both_together`); on-chain 2-party assent; vacant guardian slot (`disposer AND arbiter`); `roster_seal`; `recovery_seal`. |
+| `{"kind":"branch","template":"arbiter_or_both","keys":{"a","b","arbiter"}}` | `P2WSH` (34B), requiring `a < b` (`a, b` single keys; `arbiter` is `BranchKeySpec`, all x-coords pairwise disjoint): `OP_IF OP_2 <a> <b> OP_2 OP_CHECKMULTISIG OP_ELSE <clause(arbiter)> OP_ENDIF`. | Contract seal (`arbiter` termination branch `0` or mutual termination branch `1`). |
 | `{"kind":"branch","template":"single_use_1_of_2","keys":{"issuer","grantee"}}` | `P2WSH` (34B): `OP_IF <issuer> OP_CHECKSIG OP_ELSE <grantee> OP_CHECKSIG OP_ENDIF` (`issuer, grantee` single keys with distinct x-coordinates; witness selector evaluated via Bitcoin Script `CastToBool`: non-empty truthy `0x01` = issuer revoke; empty `""` = grantee use). | Single-use UTXO grant seal (unambiguous branch attribution). |
-| `{"kind":"branch","template":"guardian_slot_pending","keys":{"disposer","challenger","guardian"},"delay_blocks":D}` | `P2WSH` (34B): `OP_IF <clause(disposer)> OP_ELSE OP_IF <clause(challenger)> OP_ELSE <D> OP_CHECKSEQUENCEVERIFY OP_DROP <guardian> OP_CHECKSIG OP_ENDIF OP_ENDIF` (`disposer, challenger` are `BranchKeySpec`; `guardian` is a single key; witness selectors evaluated via Bitcoin Script `CastToBool`). | Stage 1 pending guardian slot: disposer or challenger MAY veto during delay `D`; after `D` blocks, guardian spends to Stage 2 active `either_of_2(guardian, disposer)` (`SPEC-04 §3.3`), permanently terminating challenger veto. |
+| `{"kind":"branch","template":"guardian_slot_pending","keys":{"disposer","challenger","guardian"},"delay_blocks":D}` | `P2WSH` (34B): `OP_IF <clause(disposer)> OP_ELSE OP_IF <clause(challenger)> OP_ELSE <D> OP_CHECKSEQUENCEVERIFY OP_DROP <guardian> OP_CHECKSIG OP_ENDIF OP_ENDIF` (`disposer, challenger` are `BranchKeySpec`; `guardian` is a single key; all x-coords pairwise disjoint; witness selectors evaluated via Bitcoin Script `CastToBool`). | Stage 1 pending guardian slot: disposer or challenger MAY veto during delay `D`; after `D` blocks, guardian spends to Stage 2 active `either_of_2(guardian, disposer)` (`SPEC-04 §3.3`), permanently terminating challenger veto. |
+
+#### Normative Witness Stack Layouts (Bottom-to-Top, BIP-141)
+
+For every `m-of-n` `OP_CHECKMULTISIG` / `OP_CHECKMULTISIGVERIFY` clause (`multisig` or `m-of-n` `BranchKeySpec`), BIP-141 `NULLDUMMY` REQUIRES a leading empty byte vector `""` (`OP_0` dummy) immediately below the `m` DER+`SIGHASH_ALL` signatures (`sigs_of(spec)` denotes `[sig]` for a single key, or `["", sig_1, ..., sig_m]` for an `m-of-n` `BranchKeySpec`):
+
+| Template & Branch | Exact Witness Stack (Bottom -> Top) | Sequence / Notes |
+| --- | --- | --- |
+| `key` (`P2WPKH`) | `[sig, pk]` | `sig` ends with `0x01` (`SIGHASH_ALL`) |
+| `multisig` (`P2WSH`) | `["", sig_1, ..., sig_k, witnessScript]` | Signatures ordered matching ascending `pks[]` |
+| `either_of_2` (single keys) | `["", sig, witnessScript]` | `OP_1 <a> <b> OP_2 OP_CHECKMULTISIG` |
+| `either_of_2` (`BranchKeySpec`, branch `a` / `b`) | `[...sigs_of(a), "01", witnessScript]` / `[...sigs_of(b), "", witnessScript]` | Truthy `"01"` selects `a`; empty `""` selects `b` |
+| `both_of_2` (single keys) | `["", sig_a, sig_b, witnessScript]` | `sig_a` before `sig_b` matching `a < b` |
+| `both_of_2` (`BranchKeySpec`) | `[...sigs_of(b), ...sigs_of(a), witnessScript]` | `<clause_verify(a)>` consumes top first, then `<clause(b)>` |
+| `arbiter_or_both` (both / arbiter) | `["", sig_a, sig_b, "01", witnessScript]` / `[...sigs_of(arbiter), "", witnessScript]` | Branch `1` = both parties; branch `0` = arbiter |
+| `single_use_1_of_2` (issuer / grantee) | `[sig_issuer, "01", witnessScript]` / `[sig_grantee, "", witnessScript]` | Branch `1` = revoke; branch `0` = grantee use + `0x11` |
+| `guardian_slot_pending` (disposer / challenger / CSV guardian) | `[...sigs_of(disposer), "01", witnessScript]` / `[...sigs_of(challenger), "01", "", witnessScript]` / `[sig_guardian, "", "", witnessScript]` | CSV guardian branch MUST have exact 4-item witness with `wit[-1] == witnessScript`, `CastToBool(wit[-2]) == false`, `CastToBool(wit[-3]) == false`, `sig_guardian` ending in `0x01`, AND BIP-68 input `sequence` with bit 31 & bit 22 cleared and `(sequence & 0xffff) >= delay_blocks` |
 
 > **Namecoin Core `nc28.0` compatibility note:** In `src/script/solver.cpp:146-148`, Namecoin strips the `OP_NAME_*` prefix before evaluating `WITNESS_V0_SCRIPTHASH` (`IsWitnessProgram(true, ...)`), so native `P2WSH` name outputs pass standard relay policy up to 3,600-byte witness scripts and 100 stack items. Even a worst-case `guardian_slot_pending` with 5-of-5 `disposer` and 5-of-5 `challenger` compiles to under 400 bytes.
 
@@ -127,7 +167,7 @@ Every chain-dependent decision executes inside one **consistent observation** (`
    - preserves the initial observation snapshot for auditability;
    - advances to one unified decision clock `now_recheck >= now_initial` applied consistently to BOTH invocation expiry (`expires_at`) and refreshed `tip_age`;
    - re-verifies node sync/lag (`!IBD`, `best_header - tip <= LAG`), comparison peers, all relevant name outputs (including mempool `OP_NAME_UPDATE`), and all active seals (including mempool spends);
-   - closes the recheck bracket with a second tip read AFTER all refreshed queries and refuses `CHAIN_OBSERVATION_VOID` if the tip moved mid-recheck; and
+   - closes the recheck bracket with a second tip read AFTER all refreshed queries and preserves `consistent = prev_consistent && (recheck_open == recheck_close)` (so a previously voided snapshot is NEVER resurrected, and any tip move mid-recheck refuses `CHAIN_OBSERVATION_VOID`); and
    - persists updated operational watermark / `first_sight` records via atomic transactional read-modify-write merge.
 
 ---
@@ -136,11 +176,11 @@ Every chain-dependent decision executes inside one **consistent observation** (`
 
 ### 5.1 Witness Construction Profile (`W`) (`SL-LDGR-009`, `decided`)
 
-- **Every input** of a seal-creation transaction `T` and an anchoring transaction `A` MUST be native SegWit v0 (`P2WPKH` or `P2WSH`) with empty `scriptSig` and strict `SIGHASH_ALL` (`0x01`) on all signatures (`CHAIN_TX_CONSTRUCTION`).
+- **Every input** of a seal-creation transaction `T` and an anchoring transaction `A` MUST be non-empty and native SegWit v0 (`P2WPKH` or `P2WSH`) with empty `scriptSig` and strict `SIGHASH_ALL` (`0x01`) on all signatures (`CHAIN_TX_CONSTRUCTION`).
 - **Exact linkage output:**
-  - For an individual grant anchor (`0x01`), when `A` anchors a grant whose seal was created in `T` at `seal_vout`, `T` MUST create a native SegWit linkage output at `vout = seal_vout + 1`, and `A` MUST spend exact prevout `(seal_txid, seal_vout + 1)` (never spending the seal).
+  - For **every** individual grant anchor (`0x01`) — both root grants AND depth-2 child grants — when `A` anchors a grant whose seal was created in `T` at `seal_vout`, `T` MUST create a native SegWit linkage output at `vout = seal_vout + 1`, and `A` MUST spend exact prevout `(seal_txid, seal_vout + 1)` (never spending the seal). For a depth-2 child grant, `A` therefore spends **both** the parent's delegation `row_coin` AND the child's own `(child_seal_txid, child_seal_vout + 1)` linkage output.
   - For a Merkle batch anchor (`0x02`), **root grants ONLY** are permitted (depth-2 child grants spending a delegation row coin MUST use individual `0x01` anchors so row-coin linkage is unambiguous; `CHAIN_FRAME_INVALID` otherwise). Every root grant leaf `i` in a `0x02` batch MUST have its seal-creation tx `T_i` create linkage output `(seal_txid_i, seal_vout_i + 1)` spent directly by an input of `A`.
-  - Only the linkage output(s) may be unconfirmed when `A` is broadcast; all other funding inputs MUST be confirmed strictly below the spending transaction's block. `T` and `A` MAY confirm in the same block.
+  - Only the linkage output(s) (and for a depth-2 child grant, the parent's confirmed `row_coin`) may be spent together with `T`; all other funding inputs of `A` MUST be confirmed at a block height strictly `< anchor_height` (`CHAIN_TX_CONSTRUCTION`). `T` and `A` MAY confirm in the same block.
 - **Legacy profile (`L`):** Reserved solely for future non-SegWit UTXO chains; refused on Namecoin (`CHAIN_TX_CONSTRUCTION`).
 
 ### 5.2 Framed `OP_RETURN` Format (`SLNK`) (`SL-LDGR-010`, `decided`)
@@ -205,8 +245,9 @@ For `single_use_1_of_2` grant seals, a spend has **two distinct branches** and M
 | --- | --- | --- | --- |
 | Seal unspent (no grantee spend observed). | `awaiting_spend` | Refuse without closure (grantee must spend branch `0` first). | `SEAL_UNAVAILABLE` |
 | Spent via branch `1` (`issuer`), OR spent without valid `0x11` frame, OR absent from UTXO with unknown branch. | `revoked` | Write permanent `closure(cause="SEAL_SPENT")` to journal. | `SEAL_SPENT` |
+| Spent via branch `0` (`grantee`) with a valid `0x11` frame whose `txid` or committed `content_addr` belongs to a *different* invocation (foreign/mismatched `0x11` presentation). | `revoked` (non-closing) | Refuse **WITHOUT** writing a permanent `grant` closure (anti-DoS: a mismatched invocation presentation MUST NOT poison the legitimate `0x11` spend). | `SEAL_SPENT` |
 | Spent via branch `0` (`grantee`, `SIGHASH_ALL`) with `OP_RETURN 0x11` committing `content_addr(invocation/1)`, depth `< required_depth` (mempool or shallow block). | `pending_confirm` | Refuse without closure; retryable once depth reaches `required_depth`. | `CHAIN_DEPTH_INSUFFICIENT` |
-| Spent via branch `0` with matching `0x11`, confirmed `>= required_depth`, NOT yet in journal `single-use-consumed`. | `ready_once` | Execute at most once; durably write `single-use-consumed` + `closure(cause="SINGLE_USE_CONSUMED")` to journal. | **Admit** (`executed`) |
+| Spent via branch `0` with matching `0x11`, confirmed `>= required_depth`, NOT yet in journal `single-use-consumed`. | `ready_once` | Execute at most once; commit completion atomically in ONE `settlement` journal entry (`single_use_consumed: true`, `use_txid`, `closes_grant_id`, `SPEC-06 §6`) updating derived single-use and grant closure state with `+1` witness advance. | **Admit** (`executed`) |
 | Spent via branch `0`, already recorded in journal `single-use-consumed`. | `consumed` | Identical `invocation_id`: perform zero second effect and return cached receipt (or `INVOKE_REPLAY` if profile forbids cached return). Different `invocation_id`: refuse. | Cached receipt or `INVOKE_REPLAY` |
 
 Block and mempool scanners projecting seal candidates MUST index tracked outpoints first and parse only transactions spending tracked seals.

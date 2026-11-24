@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/origin.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.8/schemas/origin.schema.json",
   "title": "SealLink v1.0 Origin Certificate (Birth, Materialization, Incorporation)",
   "type": "object",
   "additionalProperties": false,
@@ -117,6 +117,14 @@
         {
           "if": { "required": ["origin_class"], "properties": { "origin_class": { "const": "organization" } } },
           "then": { "not": { "required": ["guardian_policy"] } }
+        },
+        {
+          "if": { "required": ["origin_class"], "properties": { "origin_class": { "enum": ["agent", "organization"] } } },
+          "then": { "properties": { "claims": { "not": { "required": ["majority_commitment"] } } } }
+        },
+        {
+          "if": { "required": ["origin_class", "guardian_policy"], "properties": { "origin_class": { "const": "person" } } },
+          "then": { "properties": { "claims": { "required": ["majority_commitment"] } } }
         },
         {
           "if": { "required": ["guardian_policy"] },

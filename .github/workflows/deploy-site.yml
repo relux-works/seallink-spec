@@ -28,6 +28,33 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Resolve and verify immutable release tag
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          elif [[ -n "${{ github.event.inputs.version }}" ]]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG=$(git tag --list 'v*' --sort=-v:refname | head -n 1 || true)
+          fi
+          if [[ -z "${TAG}" || "${TAG}" != v* ]]; then
+            echo "ERROR: deploy-site requires an existing release tag starting with 'v' (got '${TAG}')." >&2
+            exit 1
+          fi
+          TAG_COMMIT=$(git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}" || true)
+          if [[ -z "${TAG_COMMIT}" ]]; then
+            echo "ERROR: release tag 'refs/tags/${TAG}' does not exist in git history; refusing to deploy untagged commit." >&2
+            exit 1
+          fi
+          git checkout --detach "${TAG_COMMIT}"
+          HEAD_COMMIT=$(git rev-parse HEAD)
+          if [[ "${HEAD_COMMIT}" != "${TAG_COMMIT}" ]]; then
+            echo "ERROR: HEAD (${HEAD_COMMIT}) does not match refs/tags/${TAG}^{commit} (${TAG_COMMIT})." >&2
+            exit 1
+          fi
+          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -36,26 +63,11 @@ jobs:
       - name: Install JSON Schema validator
         run: python3 -m pip install --quiet "jsonschema>=4.23"
 
-      - name: Validate specification before deploy
+      - name: Validate tagged specification before deploy
         run: python3 tools/speclint.py --require-jsonschema
 
-      - name: Determine release version label
-        id: ver
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          elif [[ -n "${{ github.event.inputs.version }}" ]]; then
-            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            LATEST_TAG=$(git tag --sort=-creatordate | grep '^v' | head -n 1 || true)
-            if [[ -z "${LATEST_TAG}" ]]; then
-              LATEST_TAG="v1.0.0-draft.7"
-            fi
-            echo "version=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build static site & live schema endpoints
-        run: python3 tools/build_site.py --version "${{ steps.ver.outputs.version }}" --out site
+      - name: Build static site, archived releases & live schema endpoints
+        run: python3 tools/build_site.py --version "${{ steps.ver.outputs.version }}" --archive-tags auto --out site
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3

@@ -1,6 +1,6 @@
 # SealLink Conformance Requirements
 
-- **Version:** `1.0.0-draft.7`
+- **Version:** `1.0.0-draft.8`
 - **Status:** `draft`
 - **Normative Language:** [RFC2119], [RFC8174]
 
@@ -18,15 +18,18 @@ An implementation claiming conformance to SealLink v1.0 **MUST** declare which o
 | **Issuer / Signer** | Core Wire + `SPEC-02` (§3, §5), `SPEC-03` (§1–3, §6), `SPEC-05`, `SPEC-06` (§1, §3) | `object-types.json`, `key-roles.json`, `opreturn-actions.json`, `constraints.json`, `actions.json` | `wire-jcs-and-hashes.json`, `ledger-scripts-and-opreturn.json`, `constraints-and-schemas.json` |
 | **Institutional / Guardian Authority** | Tier 1 Verifier + Issuer + `SPEC-04` (full), `SPEC-05` (§4–5) | All `registry/*.json`, `origin.schema.json`, `guardian.schema.json`, `credential.schema.json` | `vectors/trace-02-guardian-succession-assent.json`, `vectors/trace-04-agent-guardian-intake.json` |
 
-### 1.1 Optional-Declaration v1.0 Conformance Modules
+### 1.1 Optional-Declaration v1.0 Conformance Modules & Vector Selection Tags
 
-The following three subsystems are fully specified, schema-validated, and vector-tested in SealLink v1.0, and are declared independently as **optional conformance modules**. A base service (for example, a standalone mail host) is NOT required to implement an optional module it does not advertise; any implementation that declares support for a module **MUST** implement its full specification and pass 100% of its conformance vectors:
+The following three subsystems are fully specified, schema-validated, and vector-tested in SealLink v1.0, and are declared independently as **optional conformance modules**. A base service (for example, a standalone mail host) is NOT required to implement an optional module it does not advertise; any implementation that declares support for a module **MUST** implement its full specification and pass 100% of its conformance vectors.
 
-| Optional Module | Normative Specification | Canonical Objects & Rules | Primary Refusal Code |
+- **Disabled-module refusal behavior (fail-closed):** An implementation that does **NOT** declare a given optional module MUST refuse any incoming request targeting that module's object type or operation without mutating journal state, returning **`ACTION_UNSUPPORTED`** (or **`WIRE_TYPE`** if the disabled module's object type is omitted from its parser table).
+- **Vector selection tags (`module` / `role`):** Every vector case in `vectors/` belongs to `module = "core"` unless tagged with one of the three optional module tags below (`bearer-sessions`, `service-migration`, `federated-screening`), enabling Rust/Go conformance runners to select exact suites by declared role and enabled modules.
+
+| Optional Module (`module` tag) | Normative Specification | Canonical Objects & Rules | Primary Refusal Code |
 | --- | --- | --- | --- |
-| **Bearer Sessions** | `SPEC-06 §5` (`SL-GRNT-013`) | `seallink-session-open/1` (`open`/`extend`/`close`), journal `session-state`, per-use chain/seal recheck & `session` quota accounting | `SESSION_INVALID` |
-| **Service Migration & Exclusive Cut-Over** | `SPEC-07 §2` (`SL-SERV-002`, `SL-SERV-003`) | `seallink-migration/1`, `MigrationInventory` allowlist, holder `seallink-assent/1`, `migration-accept` statement, journal `migration-applied` | `SERVICE_MIGRATION_INVALID` |
-| **Federated Screening & Progressive PII Disclosure** | `SPEC-07 §3` (`SL-SERV-004`) | Phase 1 quota-bounded screening + Phase 2 L2 `approve-pii-disclosure` owner command (`route_mode = "direct"`, pinned `sets.devices`) | `FEDERATION_POLICY_DENIED` |
+| **Bearer Sessions** (`bearer-sessions`) | `SPEC-06 §5` (`SL-GRNT-013`) | `seallink-session-open/1` (`open`/`extend`/`close`), full `§4` backing-grant open, CSPRNG 32B token, journal `session-state` & `session-use` debits across `session`/`own`/`row`, mandatory live `grant_env` recheck on `use` | `SESSION_INVALID` |
+| **Service Migration & Exclusive Cut-Over** (`service-migration`) | `SPEC-07 §2` (`SL-SERV-002`, `SL-SERV-003`) | `seallink-migration/1`, canonical `MigrationInventory` only, separated `stage` vs `activate` (4 mandatory proofs: `local_executor_pin`, `holder_assent`, confirmed holder manifest, signed `migration-accept` statement), journal `migration-applied` | `SERVICE_MIGRATION_INVALID` |
+| **Federated Screening & Progressive PII Disclosure** (`federated-screening`) | `SPEC-07 §3` (`SL-SERV-004`) | Phase 1 quota-bounded screening + Phase 2 L2 `approve-pii-disclosure` owner command (mandatory verified holder manifest + `sets.devices` + strict single direct hop `len(hops) == 1`) | `FEDERATION_POLICY_DENIED` |
 
 ---
 
@@ -48,7 +51,7 @@ A production **Tier 1 Verifier** or **Effect Executor** claiming full operationa
 1. A live read-only Namecoin Core (`txindex=1` verified via `getindexinfo`, plus `namehistory=1` or equivalent historical registration archive; reference cold-observer implementation provided in `tools/nc_rpc_adapter.py`) populating `ChainView` directly from confirmed active-chain blocks, UTXOs (`absent_from_utxo` on missing UTXOs), witnesses, multi-registration name histories, schema-driven signed continuation `*_vout` outputs, and local mempool, enforcing full `SPEC-02 §4` opening/closing observation brackets (`require_observation_bracket=True`), closed-bracket `pre_effect_recheck` with unified decision clock before side effects, and atomically merged operational `clock_watermark` / `first_sight_by_hash` state (`clock_mode="operational"` mandatory on `main`);
 2. At least one operator-controlled independent comparison node (`SPEC-02 §4`);
 3. Raw wire byte ingress prior to parsing (`SPEC-01 §7`); and
-4. Durable crash-safe local storage implementing two-phase atomic admission (`admit_and_reserve()` committing one atomic `reservation` entry binding `nonce` + `reservations[]`, followed after effect execution by `commit_result(receipt_env)` persisting verified signed receipt bytes FIRST and committing one atomic terminal `settlement` entry with exact `content_addr(receipt_env)`) and witness-verified restart replay (`replay_persisted_entries` checking `(witness_pos, witness_commitment, write_token)` against an external CAS witness outside the local backup domain, `SPEC-06 §6`, `SL-GRNT-014`).
+4. Durable crash-safe local storage implementing two-phase atomic admission (`admit_and_reserve()` committing one atomic `reservation` entry binding `nonce` + `reservations[]`, followed after effect execution by `commit_result(receipt_env)` verifying and reconciling signed `receipt.payload.settlements[]` 1-to-1 against the reservation, persisting verified signed receipt bytes FIRST, and committing ONE unified atomic terminal `settlement` entry — including `single_use_consumed: true` for single-use grants — with exact `content_addr(receipt_env)`) and mandatory witness-verified restart replay (`replay_persisted_entries(..., require_witness=True)` enforcing wire/schema validation on every entry and checking `(witness_pos, witness_commitment, write_token)` against an external CAS witness outside the local backup domain, `SPEC-06 §6`, `SL-GRNT-014`).
 
 ---
 

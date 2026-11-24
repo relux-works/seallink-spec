@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/contract.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.8/schemas/contract.schema.json",
   "title": "SealLink v1.0 Contracts, Clauses, Assent, Termination & Violation Verdicts",
   "$defs": {
     "MachineClauseTerms": {
@@ -15,6 +15,7 @@
           "maxItems": 64,
           "items": { "$ref": "common.schema.json#/$defs/Capability" }
         },
+        "config_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
         "not_before_height": { "$ref": "common.schema.json#/$defs/Uint53" },
         "not_after_height": { "$ref": "common.schema.json#/$defs/PositiveUint53" }
       }
@@ -97,7 +98,16 @@
           "description": "Strictly sorted zero-based indices into clause_commitments[] carrying machine-enforced terms; executors MUST require disclosure of every listed index."
         },
         "framework_id": { "$ref": "common.schema.json#/$defs/Hex64" },
-        "seal": { "$ref": "common.schema.json#/$defs/Seal" },
+        "seal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["txid", "vout", "script_policy"],
+          "properties": {
+            "txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "vout": { "$ref": "common.schema.json#/$defs/Vout" },
+            "script_policy": { "$ref": "common.schema.json#/$defs/ContractSealScriptPolicy" }
+          }
+        },
         "assent_output": { "$ref": "common.schema.json#/$defs/Seal" },
         "config_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
         "moderation": {

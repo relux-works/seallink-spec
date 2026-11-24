@@ -1171,9 +1171,9 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
     disp_spec = {"m": 2, "pks": sorted([d1["comp"], d2["comp"], d3["comp"]])}
     arb_spec = {"m": 2, "pks": sorted([a1["comp"], a2["comp"], a3["comp"]])}
     chal_spec = {"m": 1, "pks": sorted([c1["comp"], c2["comp"]])}
-    vac_6a = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp_spec, "b": arb_spec}}
-    rec_6a = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp_spec, "b": arb_spec}}
-    act_6a = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp_spec, "b": _kp("6a-g1-seal")["comp"]}}
+    vac_6a = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(disp_spec, arb_spec)}
+    rec_6a = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(disp_spec, arb_spec)}
+    act_6a = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(disp_spec, _kp("6a-g1-seal")["comp"])}
     op_6a = copy.deepcopy(of_6a["origin_bundle"]["origin"]["payload"])
     op_6a["name_recovery"]["disposer_pk"] = disp_spec
     op_6a["name_recovery"]["arbiter_pk"] = arb_spec
@@ -1410,7 +1410,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             "steps": [
                 {"label": "over-quota-refuse", "kind": "session_open", "chain": fx_so["chain"], "session_open": so_over, "bundle": fx_so["bundle"], "want_verdict": "REFUSE", "want_refusal": "SESSION_INVALID"},
                 {"label": "open", "kind": "session_open", "chain": fx_so["chain"], "session_open": so_open, "bundle": fx_so["bundle"], "bearer_token": tok_so, "want_verdict": "ADMIT", "want_refusal": None},
-                {"label": "use-open", "kind": "bearer_session", "chain": fx_so["chain"], "token": tok_so, "slot_binding": "tls-slot-a", "want_verdict": "ADMIT", "want_refusal": None},
+                {"label": "use-open", "kind": "bearer_session", "chain": fx_so["chain"], "grant_env": g_so, "token": tok_so, "slot_binding": "tls-slot-a", "want_verdict": "ADMIT", "want_refusal": None},
                 {"label": "extend", "kind": "session_open", "chain": fx_so["chain"], "session_open": so_ext, "bundle": fx_so["bundle"], "want_verdict": "ADMIT", "want_refusal": None},
                 {"label": "close", "kind": "session_open", "chain": fx_so["chain"], "session_open": so_cls, "bundle": fx_so["bundle"], "want_verdict": "ADMIT", "want_refusal": None},
                 {"label": "use-after-close", "kind": "bearer_session", "chain": fx_so["chain"], "token": tok_so, "slot_binding": "tls-slot-a", "want_verdict": "REFUSE", "want_refusal": "SESSION_INVALID"},
@@ -1853,7 +1853,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
     vac_pe = gp_pe["roster_seal"]["script_policy"]
     g_pe_k = _kp("d7-pe-g")
     pend_pe = {"delay_blocks": delay_pe, "keys": {"challenger": gp_pe["challenger_pk"], "disposer": gp_pe["disposer_pk"], "guardian": g_pe_k["comp"]}, "kind": "branch", "template": "guardian_slot_pending"}
-    act_pe = {"keys": {"a": gp_pe["disposer_pk"], "b": g_pe_k["comp"]}, "kind": "branch", "template": "either_of_2"}
+    act_pe = {"keys": sl.canonical_branch_pair(gp_pe["disposer_pk"], g_pe_k["comp"]), "kind": "branch", "template": "either_of_2"}
     rost_pe_p = {
         "arbiter_pk": gp_pe["arbiter_pk"], "challenger_pk": gp_pe["challenger_pk"], "disposer_pk": gp_pe["disposer_pk"],
         "effective_delay_blocks": delay_pe, "genesis": GENESIS_MAIN, "issuer": of_pe["origin_bundle"]["origin"]["payload"]["issuer"],
@@ -2563,7 +2563,9 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     )
     of_d1_ab = rm._base_origin_fixture()
     rec_s = of_d1_ab["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]
-    of_d1_ab["chain"]["txs"][rec_s["txid"]]["outputs"]["0"]["absent_from_utxo"] = True
+    mal_rec_tx = _h32("d7-d01-malformed-rec-spend")
+    of_d1_ab["chain"]["txs"][rec_s["txid"]]["outputs"]["0"]["spent_by_txid"] = mal_rec_tx
+    of_d1_ab["chain"]["txs"][mal_rec_tx] = {"confirmed_height": 749500, "outputs": {"0": {"script_pubkey_hex": "0014" + "99" * 20}}}
     add(
         "d7-d01-recovery-burned-assert-wrong-binding-refuse",
         ["SL-ORIG-013"],
@@ -2571,7 +2573,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         {"assert_binding_id": _h32("wrong-binding"), "chain": of_d1_ab["chain"], "origin_bundle": of_d1_ab["origin_bundle"], "trusted_origin_issuers": of_d1_ab["trusted_origin_issuers"]},
         "REFUSE",
         "RECOVERY_FORBIDDEN",
-        "Decision D-1: when recovery_seal is burned and assert_binding_id != active B_k, refuse RECOVERY_FORBIDDEN.",
+        "Decision D-1 / R2G-01: when recovery_seal is provably burned by a confirmed malformed spend and assert_binding_id != active B_k, refuse RECOVERY_FORBIDDEN.",
     )
 
     # 3d. Roster 0x0f depth boundary (1 vs 2) & B-15 exact h_0x0d == roster_eff_h ADMIT + slot depth boundary (1 vs 2)
@@ -2581,7 +2583,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     vac_rd = gp_rd["roster_seal"]["script_policy"]
     g_rd_k = _kp("d7-rd-g")
     pend_rd = {"delay_blocks": dly_rd, "keys": {"challenger": gp_rd["challenger_pk"], "disposer": gp_rd["disposer_pk"], "guardian": g_rd_k["comp"]}, "kind": "branch", "template": "guardian_slot_pending"}
-    act_rd = {"keys": {"a": gp_rd["disposer_pk"], "b": g_rd_k["comp"]}, "kind": "branch", "template": "either_of_2"}
+    act_rd = {"keys": sl.canonical_branch_pair(gp_rd["disposer_pk"], g_rd_k["comp"]), "kind": "branch", "template": "either_of_2"}
     rost_rd_p = {
         "arbiter_pk": gp_rd["arbiter_pk"], "challenger_pk": gp_rd["challenger_pk"], "disposer_pk": gp_rd["disposer_pk"],
         "effective_delay_blocks": dly_rd, "genesis": GENESIS_MAIN, "issuer": of_r_d["origin_bundle"]["origin"]["payload"]["issuer"],
@@ -2637,7 +2639,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     h_e_ok = h_d_ok + dly_rd  # == tip_md - 1 -> depth == 2!
     of_pe_ok["chain"]["txs"][rtx_rd] = {"confirmed_height": h_r_ok, "opreturn_hex": sl.encode_opreturn(0x0F, sl.content_addr(rost_rd)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(vac_rd)}, "1": {"script_pubkey_hex": _spk_hex(vac_rd), "spent_by_txid": dtx_rd}}}
     of_pe_ok["chain"]["txs"][dtx_rd] = {"confirmed_height": h_d_ok, "opreturn_hex": sl.encode_opreturn(0x0D, sl.content_addr(g2_rd)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(pend_rd), "spent_by_txid": etx_rd}}}
-    of_pe_ok["chain"]["txs"][etx_rd] = {"confirmed_height": h_e_ok, "opreturn_hex": sl.encode_opreturn(0x0E, sl.object_id(g2_rd_p)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(act_rd)}}}
+    of_pe_ok["chain"]["txs"][etx_rd] = {"confirmed_height": h_e_ok, "inputs": [sv.make_guardian_csv_input(dtx_rd, 0, pend_rd, sequence=dly_rd)], "opreturn_hex": sl.encode_opreturn(0x0E, sl.object_id(g2_rd_p)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(act_rd)}}}
     of_pe_ok["origin_bundle"]["guardian_records"].append(g2_rd)
     of_pe_ok["origin_bundle"]["guardian_assents"].append(g2_rd_ass)
     wa_rd = sl.sign_guardian_envelope(
@@ -3158,7 +3160,24 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     gp_cr2["capabilities"][0]["quotas"] = [{"kind": "seallink/count", "max": "5", "resource": "mailbox:id/alice:work", "unit": "reads", "window": "term"}]
     _, gid_cr2 = _reanchor(fx_cr2, gp_cr2)
     inv_id_cr2 = sl.object_id(fx_cr2["invocation"]["payload"])
-    rcpt_cr2_ok = sl.sign_envelope({"action": "mail/read", "executor_name": fx_cr2["executor_cfg"]["name"], "genesis": GENESIS_MAIN, "grant_id": gid_cr2, "invocation_id": inv_id_cr2, "network": "main", "outcome": "executed", "recorded_at": fx_cr2["chain"]["now"], "result_sha256": _h32("cr2-res"), "tip_hash": fx_cr2["chain"]["tip_hash"], "tip_height": fx_cr2["chain"]["tip_height"], "type": "seallink-receipt/1"}, [fx_cr2["_keys"]["host_rcpt"]["sk"]])
+    rcpt_cr2_ok = sl.sign_envelope(
+        {
+            "action": "mail/read",
+            "executor_name": fx_cr2["executor_cfg"]["name"],
+            "genesis": GENESIS_MAIN,
+            "grant_id": gid_cr2,
+            "invocation_id": inv_id_cr2,
+            "network": "main",
+            "outcome": "executed",
+            "recorded_at": fx_cr2["chain"]["now"],
+            "result_sha256": _h32("cr2-res"),
+            "settlements": [{"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mailbox:id/alice:work", "settled": "1", "unit": "reads", "window": "term"}],
+            "tip_hash": fx_cr2["chain"]["tip_hash"],
+            "tip_height": fx_cr2["chain"]["tip_height"],
+            "type": "seallink-receipt/1",
+        },
+        [fx_cr2["_keys"]["host_rcpt"]["sk"]],
+    )
     rcpt_cr2_bad = sl.sign_envelope({**rcpt_cr2_ok["payload"], "grant_id": _h32("wrong-gid")}, [fx_cr2["_keys"]["host_rcpt"]["sk"]])
     add("d7-r1a-commit-result-wrong-grant-id-refuse", ["SL-GRNT-014"], "two_phase_commit", {"bundle": fx_cr2["bundle"], "chain": fx_cr2["chain"], "executor_cfg": fx_cr2["executor_cfg"], "invocation": fx_cr2["invocation"], "journal_id": _h32("d7-cr2-j1"), "receipt_env": rcpt_cr2_bad}, "REFUSE", "WIRE_MEMBER", "R1-A: commit_result with receipt grant_id mismatch refuses WIRE_MEMBER.")
     add("d7-bnd-commit-result-actual-eq-reserve-admit", ["SL-GRNT-007", "SL-GRNT-014"], "two_phase_commit", {"actual_quota_usage": {"seallink/count|mailbox:id/alice:work|reads|term": 1}, "bundle": fx_cr2["bundle"], "chain": fx_cr2["chain"], "executor_cfg": fx_cr2["executor_cfg"], "invocation": fx_cr2["invocation"], "journal_id": _h32("d7-cr2-j2"), "receipt_env": rcpt_cr2_ok}, "ADMIT", None, "Exact boundary: commit_result with actual_quota_usage == reserve admits (kills > -> >=).")
@@ -3205,11 +3224,11 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
                 # Replayed identical open -> INVOKE_REPLAY!
                 {"bundle": fx_s6["bundle"], "chain": ch_s6_nb, "kind": "session_open", "label": "replay-open", "session_open": so6_ok, "want_refusal": "INVOKE_REPLAY", "want_verdict": "REFUSE"},
                 # Bearer use #1 at tip == not_before_height with live grant_env + quota (used 1 <= 2 -> ADMIT)
-                {"action": "mail/read", "arguments": {"folder": "INBOX", "message_id": "m1"}, "chain": ch_s6_nb, "grant_env": g_s6, "kind": "bearer_session", "label": "use-1-nb", "slot_binding": "tls-6", "token": tok_s6, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m1"}, "chain": ch_s6_nb, "grant_env": g_s6, "kind": "bearer_session", "label": "use-1-nb", "slot_binding": "tls-6", "token": tok_s6, "want_refusal": None, "want_verdict": "ADMIT"},
                 # Bearer use #2 at tip == not_after_height - 1 with live grant_env + quota (used 2 == max 2 -> ADMIT; kills > -> >= and < -> <=!)
-                {"action": "mail/read", "arguments": {"folder": "INBOX", "message_id": "m2"}, "chain": ch_s6_na1, "grant_env": g_s6, "kind": "bearer_session", "label": "use-2-na1", "slot_binding": "tls-6", "token": tok_s6, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": ch_s6_na1, "grant_env": g_s6, "kind": "bearer_session", "label": "use-2-na1", "slot_binding": "tls-6", "token": tok_s6, "want_refusal": None, "want_verdict": "ADMIT"},
                 # Bearer use #3 exceeds session quota (used 3 > 2 -> QUOTA_EXCEEDED!)
-                {"action": "mail/read", "arguments": {"folder": "INBOX", "message_id": "m3"}, "chain": ch_s6_na1, "grant_env": g_s6, "kind": "bearer_session", "label": "use-3-over", "slot_binding": "tls-6", "token": tok_s6, "want_refusal": "QUOTA_EXCEEDED", "want_verdict": "REFUSE"},
+                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m3"}, "chain": ch_s6_na1, "grant_env": g_s6, "kind": "bearer_session", "label": "use-3-over", "slot_binding": "tls-6", "token": tok_s6, "want_refusal": "QUOTA_EXCEEDED", "want_verdict": "REFUSE"},
                 # Bearer use at tip == not_after_height with live grant_env -> SESSION_INVALID!
                 {"chain": ch_s6_na, "grant_env": g_s6, "kind": "bearer_session", "label": "use-win-closed", "slot_binding": "tls-6", "token": tok_s6, "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
             ],

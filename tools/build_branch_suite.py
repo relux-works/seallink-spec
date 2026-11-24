@@ -3,7 +3,7 @@
 Acceptance & Exhaustive Refusal-Branch Conformance Cases for SealLink v1.0.
 
 Provides:
-  Part A: Mandatory v1.0.0-draft.7 acceptance tests:
+  Part A: Mandatory v1.0.0-draft.8 acceptance tests:
     1. Policy-scoped 0x0b compromise cutoff (4 outcomes: retired key A before h_c,
        retired key A at/after h_c, rotated successor key B surviving break on A,
        distinct role 'notary' unaffected).
@@ -216,7 +216,11 @@ def _build_delegation_base(
         "c2_spol": c2_spol,
         "make_inv": make_inv,
         "chain": chain,
-        "executor_cfg": {"key": exec_k["xonly"], "name": "id/station-a"},
+        "executor_cfg": {
+            "key": exec_k["xonly"],
+            "name": "id/station-a",
+            "station_slot_bindings": {"station:id/station-a:tools": [{"name": "id/org-treasury", "owner_policy": org_owner_pol, "registration": org_reg}]},
+        },
         "journal": {"journal_id": _h32("del-jid")},
         "keys": {"org_gr": org_gr, "del_k": del_k, "cseal_k": cseal_k, "exec_k": exec_k, "w1_k": w1_k, "w2_k": w2_k},
         "rows_tx": rows_tx,
@@ -225,7 +229,7 @@ def _build_delegation_base(
 
 
 def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
-    """Append all v1.0.0-draft.7 acceptance tests and exhaustive refusal-branch cases."""
+    """Append all v1.0.0-draft.8 acceptance tests and exhaustive refusal-branch cases."""
 
     # ========================================================================
     # PART A — MANDATORY ACCEPTANCE TESTS (Review 2 §1.1, §1.2, §2)
@@ -731,7 +735,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         [auth_k["sk"]],
     )
     add("branch-auth-challenge-wrong-service-id", ["SL-IDEN-010"], "auth_challenge",
-        {"challenge": chlg, "service_id": "other.example", "journal": {"journal_id": _h32("ac-j"), "auth_nonces": {_h32("ac-n"): {"service_id": "other.example", "used": False}}}, "chain": fx0["chain"]},
+        {"challenge": chlg, "service_id": "other.example", "journal": {"journal_id": _h32("ac-j"), "auth_nonces": {_h32("ac-n"): {"service_id": "other.example", "used": False, "issued_at": 1795220000, "expires_at": 1795220100}}}, "chain": fx0["chain"]},
         "REFUSE", "AUTH_CHALLENGE_INVALID", "Auth challenge bound to different service_id MUST refuse AUTH_CHALLENGE_INVALID.")
 
     dev1 = _kp("oc-dev1")
@@ -815,7 +819,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     of_seq2 = rm._base_origin_fixture()
     nr_s2 = of_seq2["origin_bundle"]["origin"]["payload"]["name_recovery"]
     of_seq2["origin_bundle"]["name_binding"].update({
-        "next_recovery_policy": {"kind": "branch", "template": "both_of_2", "keys": {"a": nr_s2["disposer_pk"], "b": nr_s2["arbiter_pk"]}},
+        "next_recovery_policy": {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(nr_s2["disposer_pk"], nr_s2["arbiter_pk"])},
         "next_recovery_vout": 0,
         "seq": 2,
         "supersedes_binding_id": _h32("fake-prev-binding"),
@@ -871,7 +875,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     def _rec_spend_fixture(*, bad_opret: bool = False, bad_seq: bool = False, miss_next_out: bool = False, tip_h: int = 750010) -> dict[str, Any]:
         o2 = rm._base_origin_fixture()
         nr = o2["origin_bundle"]["origin"]["payload"]["name_recovery"]
-        rec_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": nr["disposer_pk"], "b": nr["arbiter_pk"]}}
+        rec_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(nr["disposer_pk"], nr["arbiter_pk"])}
         cand = {
             **copy.deepcopy(o2["origin_bundle"]["name_binding"]),
             "name": "id/child-leo-rec",
@@ -1027,7 +1031,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     def _roster_fixture(*, miss_rout: bool = False, bad_opret: bool = False, miss_rec: bool = False, bad_prev: bool = False, miss_iss_name: bool = False, miss_nxt: bool = False) -> dict[str, Any]:
         or0 = rm._base_origin_fixture()
         disp, arb = or0["_keys"]["disp"], or0["_keys"]["arb"]
-        vac = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp["comp"], "b": arb["comp"]}}
+        vac = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(disp["comp"], arb["comp"])}
         if miss_rout:
             del or0["chain"]["txs"][or0["origin_bundle"]["origin"]["payload"]["guardian_policy"]["roster_seal"]["txid"]]
             return or0
@@ -1101,7 +1105,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             ow["chain"]["names"]["id/parent-b"] = sv.make_name_history(
                 "id/parent-b", g2_reg, g2_opol, {"link": {"grant": g2_gr["xonly"]}}, first_height=748000, update_height=749000
             )
-            g2_act_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": g2_own["comp"], "b": ow["_keys"]["disp"]["comp"]}}
+            g2_act_pol = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(g2_own["comp"], ow["_keys"]["disp"]["comp"])}
             g2_rec_p = copy.deepcopy(ow["origin_bundle"]["guardian_records"][0]["payload"])
             g2_rec_p.update({
                 "slot": 2,
@@ -1176,7 +1180,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     # Intentional fail-safe halt of old revision ward grant/assent after 0x0f roster transition!
     def _advance_roster_to_rev2(ow: dict[str, Any]) -> None:
         disp, arb = ow["_keys"]["disp"], ow["_keys"]["arb"]
-        vac = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp["comp"], "b": arb["comp"]}}
+        vac = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(disp["comp"], arb["comp"])}
         rp = {
             "arbiter_pk": arb["comp"],
             "challenger_pk": ow["origin_bundle"]["origin"]["payload"]["guardian_policy"]["challenger_pk"],
@@ -1633,7 +1637,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
 
     for cid_er, kw_er, want_er, note_er in [
         ("branch-exec-ref-single-use-forbidden", {"single_use": True}, "WIRE_MEMBER", "executor_ref on single_use grant MUST refuse WIRE_MEMBER under closed Grant schema."),
-        ("branch-exec-ref-missing-holder-name", {"drop_holder": True}, "NAME_NOT_FOUND", "executor_ref naming missing holder MUST refuse NAME_NOT_FOUND."),
+        ("branch-exec-ref-missing-holder-name", {"drop_holder": True}, "GRANT_TARGET_UNAUTHORIZED", "G7-17: executor_ref naming provider_of != root.issuer.name MUST refuse GRANT_TARGET_UNAUTHORIZED."),
         ("branch-exec-ref-missing-provider-name", {"drop_prov": True}, "NAME_NOT_FOUND", "executor_ref pointing to missing provider name MUST refuse NAME_NOT_FOUND."),
         ("branch-exec-ref-missing-provider-manifest", {"drop_prov_man": True}, "MANIFEST_UNAVAILABLE", "executor_ref whose provider manifest is unavailable MUST refuse MANIFEST_UNAVAILABLE."),
         ("branch-exec-ref-provider-key-mismatch", {"bad_prov_key": True}, "GRANT_EXECUTOR_MISMATCH", "executor_ref provider manifest receipt_key mismatching executor_cfg MUST refuse GRANT_EXECUTOR_MISMATCH."),
@@ -1839,8 +1843,16 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     add("branch-fed-pii-missing-approval-cmd", ["SL-SERV-004"], "federation",
         {"policy": {"trusted_peers": ["id/peer-good"]}, "peer_ctx": {"phase": "pii_disclosure", "route_hops": [{"actor": "id/peer-good", "role": "counterparty"}]}, "grant": fx0["bundle"]["grants"][0], "chain": fx0["chain"]},
         "REFUSE", "FEDERATION_POLICY_DENIED", "Contour A PII disclosure without L2 approval_command MUST refuse FEDERATION_POLICY_DENIED.")
+    al_man_fed_br = {**copy.deepcopy(fx0["_alice_man"]), "sets": {"devices": {"seq": 1, "sha256": sl.content_addr(dev_list_br)}}}
+    al_man_fed_br_h = sl.content_addr(al_man_fed_br)
+    ch_oc_fed = copy.deepcopy(ch_oc)
+    ch_oc_fed["names"]["id/alice"] = sv.make_name_history(
+        "id/alice", fx0["_alice_reg"], fx0["_alice_owner_pol"],
+        {"link": {"grant": fx0["_keys"]["alice_gr"]["xonly"]}, "m": {"h": al_man_fed_br_h, "s": 1}},
+        first_height=748000, update_height=749000,
+    )
     add("branch-fed-pii-level1-approval-rejected", ["SL-SERV-004"], "federation",
-        {"policy": {"trusted_peers": ["id/peer-good"]}, "peer_ctx": {"phase": "pii_disclosure", "route_hops": [{"actor": "id/peer-good", "role": "counterparty"}], "approval_command": l1_cmd, "device_list": dev_list_br}, "grant": fx0["bundle"]["grants"][0], "chain": ch_oc},
+        {"policy": {"trusted_peers": ["id/peer-good"]}, "peer_ctx": {"phase": "pii_disclosure", "route_hops": [{"actor": "id/peer-good", "role": "counterparty"}], "approval_command": l1_cmd, "device_list": dev_list_br, "manifests": {al_man_fed_br_h: al_man_fed_br}}, "grant": fx0["bundle"]["grants"][0], "chain": ch_oc_fed},
         "REFUSE", "FEDERATION_POLICY_DENIED", "Contour A PII disclosure with level=1 instead of level=2 owner command MUST refuse FEDERATION_POLICY_DENIED.")
     add("branch-fed-unknown-phase", ["SL-SERV-004"], "federation",
         {"policy": {"trusted_peers": ["id/peer-good"]}, "peer_ctx": {"phase": "unknown_phase"}, "grant": fx0["bundle"]["grants"][0], "chain": fx0["chain"]},
@@ -1952,6 +1964,30 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     adult_own_pol = {"kind": "key", "pk": _kp("leo-adult-owner")["comp"]}
     adult_spk, _ = sl.compile_script_policy(adult_own_pol)
     leo_val_b = sl.jcs_encode({"link": {"grant": of_wa["_keys"]["ward_gr"]["xonly"], "origin": of_wa["_origin_id"]}})
+    # Decision 1B: Transition to State 4 (autonomous) via confirmed seallink-capacity/1 + handover transfer + self-update
+    cap_adult_p = {
+        "basis_sha256": _h32("leo-adult-basis"),
+        "genesis": GENESIS_MAIN,
+        "issued_at": wa_adult["chain"]["now"] - 500,
+        "issuer": wa_adult["origin_bundle"]["origin"]["payload"]["issuer"],
+        "network": "main",
+        "next_status_policy": wa_adult["origin_bundle"]["origin"]["payload"]["status_seal"]["script_policy"],
+        "next_status_vout": 0,
+        "origin_id": of_wa["_origin_id"],
+        "status_prev_outpoint": {"txid": wa_adult["origin_bundle"]["origin"]["payload"]["status_seal"]["txid"], "vout": wa_adult["origin_bundle"]["origin"]["payload"]["status_seal"]["vout"]},
+        "subject_new_owner_policy": adult_own_pol,
+        "type": "seallink-capacity/1",
+    }
+    cap_adult_env = sl.sign_envelope(cap_adult_p, [of_wa["_keys"]["reg_cred"]["sk"]])
+    cap_adult_tx = _h32("leo-adult-cap-tx")
+    wa_adult["chain"]["txs"][wa_adult["origin_bundle"]["origin"]["payload"]["status_seal"]["txid"]]["outputs"]["0"]["spent_by_txid"] = cap_adult_tx
+    wa_adult["chain"]["txs"][cap_adult_tx] = {
+        "confirmed_height": 749890,
+        "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(cap_adult_env)).hex(),
+        "outputs": {"0": {"script_pubkey_hex": _spk_hex(cap_adult_p["next_status_policy"])}},
+    }
+    wa_adult["origin_bundle"]["capacity_record"] = cap_adult_env
+    wa_adult["contract"]["parties"][0]["name_pin"]["owner_policy"] = adult_own_pol
     leo_hist.append({
         "confirmed_height": 749900,
         "op": "NAME_UPDATE",

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/common.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.8/schemas/common.schema.json",
   "title": "SealLink v1.0 Shared Wire Primitives",
-  "description": "Shared primitives with normative x-seallink-refusal class annotations (SPEC-01 §7 deterministic precedence: WIRE_TYPE -> WIRE_MEMBER -> WIRE_INTEGER -> WIRE_KEY -> WIRE_SIGNATURE -> WIRE_CONSTRAINT -> CHAIN_SCRIPT_UNSUPPORTED). Regular expressions follow ECMA-262 semantics without lookaround.",
+  "description": "Shared primitives with normative x-seallink-refusal class annotations (SPEC-01 §7 deterministic leaf-wins precedence: WIRE_TYPE -> WIRE_MEMBER -> WIRE_INTEGER -> WIRE_KEY -> WIRE_SIGNATURE -> WIRE_CONSTRAINT -> CHAIN_SCRIPT_UNSUPPORTED). Regular expressions follow portable RE2 / ECMA-262 / Rust regex semantics without lookaround.",
   "$defs": {
     "SingleLine": {
       "type": "string",
@@ -112,7 +112,7 @@
       "type": "string",
       "minLength": 6,
       "maxLength": 512,
-      "pattern": "^wss?://[^\\r\\n\\u2028\\u2029]+$",
+      "pattern": "^wss?://[^\\r\\n\u2028\u2029]+$",
       "not": { "pattern": "\n" }
     },
     "Outpoint": {
@@ -125,7 +125,6 @@
       }
     },
     "BranchKeySpec": {
-      "x-seallink-refusal": "WIRE_KEY",
       "description": "Canonical ECDSA branch signer: either a single compressed secp256k1 key (including MPC/threshold-ECDSA per OQ-007) or a compact native P2WSH m-of-n multisig (2 <= n <= 5, 1 <= m <= n, strictly sorted pks; single-key object form forbidden to prevent dual encoding).",
       "oneOf": [
         { "$ref": "#/$defs/CompressedPubkey66" },
@@ -140,6 +139,7 @@
               "minItems": 2,
               "maxItems": 5,
               "uniqueItems": true,
+              "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED",
               "items": { "$ref": "#/$defs/CompressedPubkey66" }
             }
           }
@@ -151,7 +151,7 @@
       "additionalProperties": false,
       "required": ["kind", "pk"],
       "properties": {
-        "kind": { "const": "key" },
+        "kind": { "const": "key", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
         "pk": { "$ref": "#/$defs/CompressedPubkey66" }
       }
     },
@@ -160,8 +160,8 @@
       "additionalProperties": false,
       "required": ["kind", "template", "keys"],
       "properties": {
-        "kind": { "const": "branch" },
-        "template": { "const": "single_use_1_of_2" },
+        "kind": { "const": "branch", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
+        "template": { "const": "single_use_1_of_2", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
         "keys": {
           "type": "object",
           "additionalProperties": false,
@@ -173,8 +173,8 @@
         }
       }
     },
-    "ScriptPolicy": {
-      "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED",
+    "ContractSealScriptPolicy": {
+      "description": "Allowed ScriptPolicy templates for contract termination seals (forbids single_use_1_of_2 and guardian_slot_pending).",
       "oneOf": [
         { "$ref": "#/$defs/P2wpkhScriptPolicy" },
         {
@@ -182,15 +182,15 @@
           "additionalProperties": false,
           "required": ["kind", "m", "pks"],
           "properties": {
-            "kind": { "const": "multisig" },
+            "kind": { "const": "multisig", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
             "m": { "type": "integer", "minimum": 1, "maximum": 15, "x-seallink-refusal": "WIRE_INTEGER" },
             "pks": {
               "type": "array",
               "minItems": 1,
               "maxItems": 15,
               "uniqueItems": true,
-              "items": { "$ref": "#/$defs/CompressedPubkey66" },
-              "description": "Strictly sorted in ascending lexicographical hex order; verifier MUST also enforce 1 <= m <= len(pks) and distinct x-coordinates."
+              "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED",
+              "items": { "$ref": "#/$defs/CompressedPubkey66" }
             }
           }
         },
@@ -199,8 +199,8 @@
           "additionalProperties": false,
           "required": ["kind", "template", "keys"],
           "properties": {
-            "kind": { "const": "branch" },
-            "template": { "enum": ["either_of_2", "both_of_2"] },
+            "kind": { "const": "branch", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
+            "template": { "enum": ["either_of_2", "both_of_2"], "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
             "keys": {
               "type": "object",
               "additionalProperties": false,
@@ -217,8 +217,68 @@
           "additionalProperties": false,
           "required": ["kind", "template", "keys"],
           "properties": {
-            "kind": { "const": "branch" },
-            "template": { "const": "arbiter_or_both" },
+            "kind": { "const": "branch", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
+            "template": { "const": "arbiter_or_both", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
+            "keys": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["a", "b", "arbiter"],
+              "properties": {
+                "a": { "$ref": "#/$defs/CompressedPubkey66" },
+                "b": { "$ref": "#/$defs/CompressedPubkey66" },
+                "arbiter": { "$ref": "#/$defs/BranchKeySpec" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ScriptPolicy": {
+      "oneOf": [
+        { "$ref": "#/$defs/P2wpkhScriptPolicy" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "m", "pks"],
+          "properties": {
+            "kind": { "const": "multisig", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
+            "m": { "type": "integer", "minimum": 1, "maximum": 15, "x-seallink-refusal": "WIRE_INTEGER" },
+            "pks": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 15,
+              "uniqueItems": true,
+              "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED",
+              "items": { "$ref": "#/$defs/CompressedPubkey66" },
+              "description": "Strictly sorted in ascending lexicographical hex order; verifier MUST also enforce 1 <= m <= len(pks) and distinct x-coordinates."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "template", "keys"],
+          "properties": {
+            "kind": { "const": "branch", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
+            "template": { "enum": ["either_of_2", "both_of_2"], "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
+            "keys": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["a", "b"],
+              "properties": {
+                "a": { "$ref": "#/$defs/BranchKeySpec" },
+                "b": { "$ref": "#/$defs/BranchKeySpec" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "template", "keys"],
+          "properties": {
+            "kind": { "const": "branch", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
+            "template": { "const": "arbiter_or_both", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
             "keys": {
               "type": "object",
               "additionalProperties": false,
@@ -237,8 +297,8 @@
           "additionalProperties": false,
           "required": ["kind", "template", "keys", "delay_blocks"],
           "properties": {
-            "kind": { "const": "branch" },
-            "template": { "const": "guardian_slot_pending" },
+            "kind": { "const": "branch", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
+            "template": { "const": "guardian_slot_pending", "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED" },
             "keys": {
               "type": "object",
               "additionalProperties": false,

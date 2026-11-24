@@ -1,6 +1,6 @@
 # SPEC-03: Identity, Name Value, Manifest, Key Taxonomy, Authentication, and Owner Control
 
-- **Version:** `1.0.0-draft.7`
+- **Version:** `1.0.0-draft.8`
 - **Status:** `draft` (normative rules `decided`; domain-binding verification and FIDO2/SSH device extensions tracked `open` in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/service-types.json`, `registry/refusal-codes.json`
@@ -14,7 +14,7 @@ An actor's ledger name (conventionally `id/<label>`, which MAY be a human-readab
 
 ### 1.1 Top-Level Members (`SL-IDEN-002`, `decided`)
 
-A SealLink reader MUST match top-level keys `link`, `m`, and `nostr` strictly — refusing duplicate keys and all 71 Unicode simple case-fold aliases of `link`, `m`, and `nostr` (explicitly enumerated in `schemas/name-value.schema.json`) with `WIRE_DUPLICATE` / `WIRE_MEMBER` — and MUST ignore unknown owner-defined top-level members.
+A SealLink reader MUST match top-level keys `link`, `m`, and `nostr` strictly — refusing duplicate keys and all 71 Unicode simple case-fold aliases of `link`, `m`, and `nostr` (explicitly enumerated in `schemas/name-value.schema.json`) with `WIRE_DUPLICATE` (other malformed name values refuse with `NAME_VALUE_INVALID`) — and MUST ignore unknown owner-defined top-level members.
 
 | Top-Level Key | Optional | Structure & Purpose | Closes Grants on Edit? |
 | --- | :-: | --- | :-: |
@@ -37,8 +37,8 @@ One `id/` name MAY publish distinct, strictly isolated role keys or threshold ro
 - **Byte budget:** With three roles (even with `{"p":...}` pins) + `origin` + `m`, the value is ~405 bytes — well within the 520-byte protocol limit.
 - **Per-role history isolation:** Rotating or removing `link.notary` or `link.cred` MUST NOT close live grants bound to `link.grant`. Rotating or removing `link.grant` closes active grants (`NAME_ROLE_CHANGED`), while leaving eternal credentials and notary acts intact unless closed by `0x0b` (`h_c`).
 - **Privacy-preserving `origin` pin:** Every origin-certified actor (child, adult, organization, or materialized agent) writes the identical field name `link.origin = "<origin_id_64hex>"`. Public chain observers cannot distinguish subject class or capacity from the name value alone (`SL-ARCH-012`).
-- **Role key disjointness:** Within one name, every public key appearing in `link.grant`, `link.cred`, `link.notary` (whether direct `xonly_64hex` or expanded via `{"p":...}` `role_policies`), `nostr` (direct 64-hex string OR NIP-05 `names._`), and `manifest.auth_key` MUST be pairwise disjoint (`NAME_VALUE_INVALID` if any key is reused across roles).
-- **Name history walk (`SL-IDEN-004`, `decided`):** To verify an issuer's `grant` role policy for an active grant, the verifier resolves the name (refusing `NAME_NOT_FOUND` if absent on the active chain) and walks the name's confirmed update chain back to `issuer.registration`: `owner_policy` and `link.grant` MUST remain unchanged across every step from the grant's `recent_block` through the tip (detecting even `K1 -> K2 -> K1` rotations; renewals, `m` updates, `nostr` updates, and unrelated role changes close nothing). Every update MUST pass writer verification against the pinned `owner_policy` (`SL-LDGR-007`). An owner-signed (`SIGHASH_ALL`) change or removal of `link.grant` (in mempool or block) writes a durable `NAME_ROLE_CHANGED` closure.
+- **Role key & policy-pin disjointness:** Within one name, every public key appearing in `link.grant`, `link.cred`, `link.notary` (whether direct `xonly_64hex` or expanded via `{"p":...}` `role_policies`), `nostr` (direct 64-hex string OR NIP-05 `names._`), and `manifest.auth_key` MUST be pairwise disjoint, AND no two distinct roles in `{link.grant, link.cred, link.notary}` MAY share the same on-chain policy-hash pin `{"p": ...}` (`NAME_VALUE_INVALID` on any collision).
+- **Name history walk (`SL-IDEN-004`, `decided`):** To verify an issuer's `grant` role policy for an active grant, the verifier resolves the name (refusing `NAME_NOT_FOUND` if absent on the active chain) and walks the name's confirmed update chain back to `issuer.registration`: `owner_policy` and `link.grant` MUST remain unchanged across every step from the grant's `recent_block` through the tip (detecting even `K1 -> K2 -> K1` rotations; renewals, `m` updates, `nostr` updates, and unrelated role changes close nothing). Every historical update MUST parse cleanly under the exact Namecoin prefix grammar and 520-byte JCS rules (unparseable historical updates fail closed with `CHAIN_SCRIPT_UNSUPPORTED` / `NAME_VALUE_INVALID`, never silently skipped) and MUST pass writer verification against the pinned `owner_policy` (`SL-LDGR-007`). An owner-signed (`SIGHASH_ALL`) change or removal of `link.grant` (in mempool or block) — or an unparseable/unfetchable mempool update for the watched name — writes a durable `NAME_ROLE_CHANGED` closure.
 
 ---
 
@@ -61,15 +61,21 @@ All 22 key roles, curves, derivation accounts, and permitted signing domains are
 
 ## 3. Unified Manifest (`seallink-manifest/1`) and Off-Chain Sets
 
-The single `m` pin in the name value authenticates one canonical JCS `seallink-manifest/1` object (`<= 32768` bytes, `schemas/manifest.schema.json`) (`SL-IDEN-006`, `decided`).
+The single `m` pin in the name value authenticates one canonical JCS `seallink-manifest/1` object (`<= 65536` bytes, `schemas/manifest.schema.json`) (`SL-IDEN-006`, `decided`).
 
 ### 3.1 Manifest Members
 
 1. **`sets`** *(optional)*: Hash + monotonic `seq` pins for up to four off-chain JCS sets:
-   - `card` (`seallink-card/1`): Public entity metadata card (`person | agent | organization | service`, display name, transports, relays, role, contact). Self-declared `kind` carries zero authority; if an `origin/1` is verified, `card.kind` MUST match `origin_class`.
+   - `card` (`seallink-card/1`): Public entity metadata card (`person | agent | organization | service`, display name, transports, relays, role, contact). Self-declared `kind` carries zero authority; if an `origin/1` is verified, `card.kind` MUST match `origin_class` and `card.name` MUST match the verified name.
    - `devices` (`seallink-device-list/1`): Owner control-plane devices (`label, alg ∈ {bip340, p256, ed25519}, key, presence, ceiling ∈ {0,1,2}, seal`).
-   - `members` (`seallink-members-list/1`): Up to 1,024 managed/member actor pins `(name, registration, owner_policy, seal)`. Pinning `registration` prevents an expired member name string from being hijacked upon re-registration. Verifiers MUST bound per-issuer journaled entries to prevent unbounded state growth.
-   - `certs` (`seallink-certset-head/1`): Head committing to an actor's active self-signed `seallink-statement/1` records (`config-section`, `transport-binding`, `root-rotate`, `root-cancel`, `migration-accept`, each with a closed `subject` schema). Normative commitment formula: `set_sha256 = SHA256(canonical_JCS(sorted_content_addrs))` where `sorted_content_addrs` is the strictly ascending array of `content_addr` hex digests of the active statements (`count == len(sorted_content_addrs)`).
+   - `members` (`seallink-members-list/1`, `<= 1048576` bytes): Up to 1,024 managed/member actor pins `(name, registration, owner_policy, seal)`. Pinning `registration` prevents an expired member name string from being hijacked upon re-registration. Verifiers MUST bound per-issuer journaled entries to prevent unbounded state growth.
+   - `certs` (`seallink-certset-head/1`): Head committing to an actor's active self-signed `seallink-statement/1` records. Every `seallink-statement/1` payload carries closed members `(type, network, genesis, issuer: NamePin, statement_kind, subject, seq, not_before, not_after)` (plus `body_sha256` on `config-section`), where `statement_kind` discriminates the exact closed `subject` schema:
+     - `"config-section"`: `{host_id, section}` (paired with `body_sha256`);
+     - `"transport-binding"`: `{transport ∈ {"https-tls-spki","nostr","matrix","xmpp","ssh"}, endpoint, key_alg, key_hex}`;
+     - `"root-rotate"`: `{host_id, new_role_policy: ThresholdPolicy}`;
+     - `"root-cancel"`: `{host_id, override_id: Hex64}`;
+     - `"migration-accept"`: `{migration_id: Hex64, holder: NamePin, source_executor: NamePin, inventory_sha256: Hex64}`.
+     Normative commitment formula: `set_sha256 = SHA256(canonical_JCS(sorted_content_addrs))` where `sorted_content_addrs` is the strictly ascending array of `content_addr` hex digests of the active statements (`count == len(sorted_content_addrs)`).
 2. **`service`** *(optional)*: Self-declaration when this actor operates a service (`service_type, actions, receipt_key, endpoint`, optional `tls_spki_sha256` pin). Discovery only; never substitutes for a pinned grant executor key.
 3. **`providers`** *(optional, `SL-IDEN-007`, `decided`)*: Labeled bindings declaring which external service actors host this actor's resources. Each entry binds `(service_type, label)` to a full **`provider: NamePin`** (`{name, registration, owner_policy}`) plus optional `transport_key`:
    ```json
