@@ -391,6 +391,18 @@
       },
       "53ec90f525e5fe6aac85ecce04f32ff245ceb66577780d30ea16a99c8ea97a91": {
         "confirmed_height": 749260,
+        "inputs": [
+          {
+            "prev_txid": "9887486c4b1fcf189237303e76edd2dfd10972d10f42900a79b19b323abe6e4b",
+            "prev_vout": 0,
+            "script_sig_hex": "",
+            "sequence": 144,
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          }
+        ],
         "opreturn_hex": "6a05534c4e4b0e220177eb0020b6d05325f4716663c97fb2c23695f609bd25b2172ff1f121badca72e00",
         "outputs": {
           "0": {
@@ -450,8 +462,28 @@
       },
       "dbe284fec8d4c6dcfd941fc253f2355b3e9abc671ede537f9a07d82bc851ba88": {
         "confirmed_height": 749010,
+        "inputs": [
+          {
+            "prev_txid": "e3bd4b24c971cbf49b45abbcbd98d29f241ba634c44e7b95001541556e6ffccc",
+            "prev_vout": 0,
+            "script_sig_hex": "",
+            "witness": [
+              "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+              "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ]
+          }
+        ],
         "opreturn_hex": "6a05534c4e4b0c2201ba15224933a67b09daf3a9ff0efacb003608565e137d1020ccc48ebed04dcfe200",
         "outputs": {}
+      },
+      "e3bd4b24c971cbf49b45abbcbd98d29f241ba634c44e7b95001541556e6ffccc": {
+        "confirmed_height": 749000,
+        "outputs": {
+          "0": {
+            "script_pubkey_hex": "0014ef7a38ecf3b55bc9003ef7360cc735bc1cce8bda",
+            "spent_by_txid": "dbe284fec8d4c6dcfd941fc253f2355b3e9abc671ede537f9a07d82bc851ba88"
+          }
+        }
       },
       "fa0d0c0a6191a1e223a785593c71d61e0491250956afa1d007d36a9fbd51e93a": {
         "confirmed_height": 749000,
@@ -1055,6 +1087,18 @@
           },
           "53ec90f525e5fe6aac85ecce04f32ff245ceb66577780d30ea16a99c8ea97a91": {
             "confirmed_height": 749260,
+            "inputs": [
+              {
+                "prev_txid": "9887486c4b1fcf189237303e76edd2dfd10972d10f42900a79b19b323abe6e4b",
+                "prev_vout": 0,
+                "script_sig_hex": "",
+                "sequence": 144,
+                "witness": [
+                  "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                  "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                ]
+              }
+            ],
             "opreturn_hex": "6a05534c4e4b0e220177eb0020b6d05325f4716663c97fb2c23695f609bd25b2172ff1f121badca72e00",
             "outputs": {
               "0": {
@@ -1124,8 +1168,28 @@
           },
           "dbe284fec8d4c6dcfd941fc253f2355b3e9abc671ede537f9a07d82bc851ba88": {
             "confirmed_height": 749010,
+            "inputs": [
+              {
+                "prev_txid": "e3bd4b24c971cbf49b45abbcbd98d29f241ba634c44e7b95001541556e6ffccc",
+                "prev_vout": 0,
+                "script_sig_hex": "",
+                "witness": [
+                  "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                  "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                ]
+              }
+            ],
             "opreturn_hex": "6a05534c4e4b0c2201ba15224933a67b09daf3a9ff0efacb003608565e137d1020ccc48ebed04dcfe200",
             "outputs": {}
+          },
+          "e3bd4b24c971cbf49b45abbcbd98d29f241ba634c44e7b95001541556e6ffccc": {
+            "confirmed_height": 749000,
+            "outputs": {
+              "0": {
+                "script_pubkey_hex": "0014ef7a38ecf3b55bc9003ef7360cc735bc1cce8bda",
+                "spent_by_txid": "dbe284fec8d4c6dcfd941fc253f2355b3e9abc671ede537f9a07d82bc851ba88"
+              }
+            }
           },
           "fa0d0c0a6191a1e223a785593c71d61e0491250956afa1d007d36a9fbd51e93a": {
             "confirmed_height": 749000,
@@ -1412,6 +1476,18 @@
           },
           "53ec90f525e5fe6aac85ecce04f32ff245ceb66577780d30ea16a99c8ea97a91": {
             "confirmed_height": 749260,
+            "inputs": [
+              {
+                "prev_txid": "9887486c4b1fcf189237303e76edd2dfd10972d10f42900a79b19b323abe6e4b",
+                "prev_vout": 0,
+                "script_sig_hex": "",
+                "sequence": 144,
+                "witness": [
+                  "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                  "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                ]
+              }
+            ],
             "opreturn_hex": "6a05534c4e4b0e220177eb0020b6d05325f4716663c97fb2c23695f609bd25b2172ff1f121badca72e00",
             "outputs": {
               "0": {
@@ -1482,12 +1558,32 @@
           },
           "dbe284fec8d4c6dcfd941fc253f2355b3e9abc671ede537f9a07d82bc851ba88": {
             "confirmed_height": 749010,
+            "inputs": [
+              {
+                "prev_txid": "e3bd4b24c971cbf49b45abbcbd98d29f241ba634c44e7b95001541556e6ffccc",
+                "prev_vout": 0,
+                "script_sig_hex": "",
+                "witness": [
+                  "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                  "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                ]
+              }
+            ],
             "opreturn_hex": "6a05534c4e4b0c2201ba15224933a67b09daf3a9ff0efacb003608565e137d1020ccc48ebed04dcfe200",
             "outputs": {}
           },
+          "e3bd4b24c971cbf49b45abbcbd98d29f241ba634c44e7b95001541556e6ffccc": {
+            "confirmed_height": 749000,
+            "outputs": {
+              "0": {
+                "script_pubkey_hex": "0014ef7a38ecf3b55bc9003ef7360cc735bc1cce8bda",
+                "spent_by_txid": "dbe284fec8d4c6dcfd941fc253f2355b3e9abc671ede537f9a07d82bc851ba88"
+              }
+            }
+          },
           "ed07edf77799f0cc37d99c563add0e48634d6d9a8ec641de2fde4f83e4fdcceb": {
             "confirmed_height": 751000,
-            "opreturn_hex": "6a05534c4e4b0c2201baf297d0c4abbacdcf826fd8b7f9a51d9b9bdee48288462586b07b31910fcd8e00",
+            "opreturn_hex": "6a05534c4e4b0c22015341d4fcf0066a1e15b1faeb50566ffced1e7d773405acf71addec6031403c6800",
             "outputs": {
               "0": {
                 "script_pubkey_hex": "0020372af4d26098f7358820a31c5c117e65af7847cfe62ef98c8ac41f36554ff7c6"
@@ -1504,7 +1600,7 @@
           }
         }
       },
-      "expected_active_binding_id": "baf297d0c4abbacdcf826fd8b7f9a51d9b9bdee48288462586b07b31910fcd8e",
+      "expected_active_binding_id": "5341d4fcf0066a1e15b1faeb50566ffced1e7d773405acf71addec6031403c68",
       "expected_active_recovery_seal": {
         "txid": "ed07edf77799f0cc37d99c563add0e48634d6d9a8ec641de2fde4f83e4fdcceb",
         "vout": 0
@@ -1549,8 +1645,8 @@
       "schema": "schemas/guardian.schema.json#/$defs/NameBinding"
     },
     "candidate_b3": {
-      "canonical_jcs": "{\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"name\":\"id/child-leo-recovered-final\",\"network\":\"main\",\"next_recovery_policy\":{\"keys\":{\"a\":\"03bc32f6fc90cf62ecb14e3efef14e993d1cd7328dfab12e3014bdf8e8f5f906a6\",\"b\":\"02f4c6e44a4cf772c45b7e98b05bbb80de25092246224964800e636f9f63872311\"},\"kind\":\"branch\",\"template\":\"both_of_2\"},\"next_recovery_vout\":0,\"origin_id\":\"3ddcc22a5bcd240d4512ec0092cab7bbd37c7c3e49f6ed460c933c54033dfe49\",\"owner_policy\":{\"kind\":\"key\",\"pk\":\"0354764cd4811f673edc325484d18767df188d3d1119a0e33842c1c50909157f35\"},\"registration\":{\"txid\":\"0bb758905eeaa0e870a10c1c76500b6c08baaab252953989a8202299a956eec2\",\"vout\":0},\"seq\":3,\"supersedes_binding_id\":\"ba15224933a67b09daf3a9ff0efacb003608565e137d1020ccc48ebed04dcfe2\",\"type\":\"seallink-name-binding/1\"}",
-      "content_addr": "baf297d0c4abbacdcf826fd8b7f9a51d9b9bdee48288462586b07b31910fcd8e",
+      "canonical_jcs": "{\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"name\":\"id/child-leo-recovered-final\",\"network\":\"main\",\"next_recovery_policy\":{\"keys\":{\"a\":\"03bc32f6fc90cf62ecb14e3efef14e993d1cd7328dfab12e3014bdf8e8f5f906a6\",\"b\":\"02f4c6e44a4cf772c45b7e98b05bbb80de25092246224964800e636f9f63872311\"},\"kind\":\"branch\",\"template\":\"both_of_2\"},\"next_recovery_vout\":0,\"origin_id\":\"3ddcc22a5bcd240d4512ec0092cab7bbd37c7c3e49f6ed460c933c54033dfe49\",\"owner_policy\":{\"kind\":\"key\",\"pk\":\"0354764cd4811f673edc325484d18767df188d3d1119a0e33842c1c50909157f35\"},\"registration\":{\"txid\":\"0bb758905eeaa0e870a10c1c76500b6c08baaab252953989a8202299a956eec2\",\"vout\":0},\"seq\":2,\"supersedes_binding_id\":\"ba15224933a67b09daf3a9ff0efacb003608565e137d1020ccc48ebed04dcfe2\",\"type\":\"seallink-name-binding/1\"}",
+      "content_addr": "5341d4fcf0066a1e15b1faeb50566ffced1e7d773405acf71addec6031403c68",
       "object": {
         "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
         "name": "id/child-leo-recovered-final",
@@ -1573,11 +1669,11 @@
           "txid": "0bb758905eeaa0e870a10c1c76500b6c08baaab252953989a8202299a956eec2",
           "vout": 0
         },
-        "seq": 3,
+        "seq": 2,
         "supersedes_binding_id": "ba15224933a67b09daf3a9ff0efacb003608565e137d1020ccc48ebed04dcfe2",
         "type": "seallink-name-binding/1"
       },
-      "object_id": "baf297d0c4abbacdcf826fd8b7f9a51d9b9bdee48288462586b07b31910fcd8e",
+      "object_id": "5341d4fcf0066a1e15b1faeb50566ffced1e7d773405acf71addec6031403c68",
       "schema": "schemas/guardian.schema.json#/$defs/NameBinding"
     }
   },
@@ -2129,5 +2225,5 @@
   "trusted_origin_issuers": [
     "id/civil-registry"
   ],
-  "version": "1.0.0-draft.6"
+  "version": "1.0.0-draft.7"
 }

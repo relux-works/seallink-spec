@@ -1,6 +1,6 @@
 # PROFILE-mail-v1: Sovereign Email Hosting and Delegated Mailbox Access
 
-- **Version:** `1.0.0-draft.6`
+- **Version:** `1.0.0-draft.7`
 - **Service Type:** `mail` (`registry/service-types.json`)
 - **Status:** `draft` (normative profile rules `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/refusal-coverage-matrix.json`)
@@ -58,8 +58,8 @@ All three actions are mechanical effects and MUST refuse grants carrying `terms_
 
 ## 4. Target, Closed Argument/Result Schemas, and `result_sha256` (`SL-MAIL-003`, `decided`)
 
-- **Target grammar:** `mailbox:<owner_name>:<label>` (e.g., `mailbox:id/alice:work`).
-  The provider MUST verify that `<owner_name>`'s confirmed `seallink-manifest/1` binds this provider's exact `NamePin` for `("mail", <label>)` (`SERVICE_PROVIDER_UNBOUND` otherwise) AND that the root grant was issued by `<owner_name>` (or its satisfied guardian quorum if `<owner_name>` is a `ward`).
+- **Target grammar and target authority:** `mailbox:<owner_name>:<label>` (e.g., `mailbox:id/alice:work`).
+  The provider MUST verify that the root grant's `issuer.name == <owner_name>` (for a ward, via its satisfied guardian quorum for `<owner_name>` -> **`GRANT_TARGET_UNAUTHORIZED`** if any foreign actor issues a grant targeting `<owner_name>`'s mailbox) AND that `<owner_name>`'s confirmed `seallink-manifest/1` binds this provider's exact `NamePin` for `("mail", <label>)` (`SERVICE_PROVIDER_UNBOUND` otherwise).
 - **Closed argument and result schemas:** All `invocation.arguments` and returned result objects MUST validate strictly against `schemas/profile-mail.schema.json`:
   - `mail/list`: `MailListArgs` -> `MailListResult`
   - `mail/read`: `MailReadArgs` -> `MailReadResult`
@@ -80,15 +80,15 @@ All three actions are mechanical effects and MUST refuse grants carrying `terms_
 | `mail/send` | `body_sha256` | `hex64` | `hash_eq` |
 | `mail/send` | `size_bytes` | `uint64_str` | `range` |
 
-- **Server-side verification for `mail/read`:** If the grant constrains `folder`, `sender_domain`, or `max_bytes`, the provider MUST verify the actual stored message's folder, `From` domain, and byte length satisfy every `where` predicate before returning bytes (`INVOKE_CONSTRAINT_FAILED`). A caller MUST NOT bypass a `folder` predicate by passing a `message_id` belonging to another folder.
-- **Quota reservation for `mail/send`:** MUST reserve `1` unit from `{"kind":"seallink/count","resource":"mailbox:<owner>:<label>","unit":"messages"}` atomically in the fenced journal (`SPEC-06 §6`) before SMTP submission, retaining the reservation if handoff outcome is `uncertain`.
+- **Server-side verification for `mail/read`:** If the grant constrains `folder`, `sender_domain`, or `max_bytes`, the provider MUST load `actual_message_meta` from its own message store and verify the actual stored message's folder, `From` domain, and byte length satisfy every `where` predicate before returning bytes (`INVOKE_CONSTRAINT_FAILED` if `actual_message_meta` is missing or violates any predicate). A caller MUST NOT bypass a `folder` predicate by passing a `message_id` belonging to another folder or supplying a forged `arguments.folder`.
+- **Mandatory quota reservation for `mail/send`:** Every `mail/send` capability MUST carry a matching `{"kind":"seallink/count","resource":"mailbox:<owner>:<label>","unit":"messages"}` quota (refusing `QUOTA_EXCEEDED` if omitted); the provider MUST reserve `1` unit atomically in the fenced journal (`SPEC-06 §6`) before SMTP submission, retaining the reservation if handoff outcome is `uncertain`.
 
 ---
 
 ## 5. Snapshot Pagination and Provider Cut-Over (`SL-MAIL-005`, `decided`)
 
 1. A `mail/list` request with `page = 0` and no `snapshot_id` establishes a provider-local immutable snapshot (`snapshot_id`, TTL `<= 300s`, frozen to matching messages present at that invocation's observation).
-2. Subsequent pages (`page > 0`) MUST pass `snapshot_id` in a newly signed `seallink-invocation/1`, re-running the full `SPEC-06 §4` pipeline (including live UTXO seal check).
+2. Subsequent pages (`page >= 1`) MUST include `snapshot_id` (enforced structurally by `schemas/profile-mail.schema.json` -> `WIRE_MEMBER`) in a newly signed `seallink-invocation/1`, re-running the full `SPEC-06 §4` pipeline (including live UTXO seal check).
 3. Messages arriving after snapshot creation do NOT appear in pages of that `snapshot_id`. If the grant's seal is spent between page 0 and page 1, page 1 refuses `GRANT_CLOSED` (if already journaled) or `SEAL_SPENT` (if first witnessed on page 1) and discards the snapshot.
 4. **Provider switch:** Snapshots are strictly local to the issuing provider and are NOT exported during `seallink-migration/1`. Presenting an old provider's `snapshot_id` to a new provider refuses `INVOKE_CONSTRAINT_FAILED`; the caller restarts at `page = 0` on the new provider.
 

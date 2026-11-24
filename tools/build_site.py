@@ -12,8 +12,9 @@ ready directory (`site/` by default) containing:
   - Exact single-file Markdown bundle + SHA-256 (`/releases/<tag>/seallink-spec-<tag>.md{,.sha256}`)
   - Exact live `$id` endpoints for all 12 Draft 2020-12 JSON Schemas:
       /releases/<tag>/schemas/<name>.schema.json (plus /schemas/<name>.schema.json)
-  - All 6 registries and 9 executable vector suites under /releases/<tag>/{registry,vectors}/
+  - All 7 registries and 9 executable vector suites under /releases/<tag>/{registry,vectors}/
   - Optional SealLink Channel 2 /.well-known/ assets copied verbatim from well-known/ if present
+  - Explicit `/404.html` (disables Cloudflare Pages SPA fallback so missing schema/artifact paths return HTTP 404)
   - Cloudflare Pages `_headers` (CORS, application/schema+json, immutable caching)
 """
 
@@ -868,7 +869,22 @@ def build_site(version: str, out_dir: Path) -> dict[str, Any]:
 """
     (out_dir / "_headers").write_text(headers_txt, encoding="utf-8")
 
-    # 8. Also write _redirects (canonicalize www -> apex) and robots.txt
+    # 8. Also write explicit 404.html (prevents Cloudflare Pages SPA 200 fallback on missing paths),
+    # _redirects (canonicalize www -> apex), and robots.txt
+    not_found_body = (
+        '<section class="hero">'
+        '<span class="badge">HTTP 404</span>'
+        '<h1>Resource Not Found</h1>'
+        '<p class="lead">The requested SealLink specification document, schema, registry, or vector artifact does not exist at this path.</p>'
+        '<div class="btn-row">'
+        '<a class="btn btn-primary" href="/">Return to SealLink Home</a>'
+        f'<a class="btn" href="/releases/{html.escape(version)}/seallink-spec-{html.escape(version)}.html">Current Specification ({html.escape(version)})</a>'
+        '</div>'
+        '</section>'
+    )
+    (out_dir / "404.html").write_text(
+        render_page("404 Not Found", version, not_found_body), encoding="utf-8"
+    )
     (out_dir / "_redirects").write_text("https://www.seallink.org/* https://seallink.org/:splat 301\n", encoding="utf-8")
     (out_dir / "robots.txt").write_text("User-agent: *\nAllow: /\n", encoding="utf-8")
 
@@ -878,7 +894,7 @@ def build_site(version: str, out_dir: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build static website & live schema host for seallink.org.")
-    parser.add_argument("--version", default="v1.0.0-draft.6", help="Release version label (e.g. v1.0.0-draft.6)")
+    parser.add_argument("--version", default="v1.0.0-draft.7", help="Release version label (e.g. v1.0.0-draft.7)")
     parser.add_argument("--out", default=str(ROOT / "site"), help="Output directory for generated static site")
     args = parser.parse_args()
 

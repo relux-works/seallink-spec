@@ -19,7 +19,7 @@ import build_refusal_matrix as rm
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.6"
+VERSION = "1.0.0-draft.7"
 GENESIS_MAIN = rm.GENESIS_MAIN
 
 
@@ -57,10 +57,18 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         if err is not None:
             return "REFUSE", err
         assert st is not None
+        if "expect_recovery_burned" in inp and bool(st.get("recovery_burned")) != bool(inp["expect_recovery_burned"]):
+            return "REFUSE", f"RECOVERY_BURNED_MISMATCH:{st.get('recovery_burned')}"
         return ("ADMIT_AUTONOMOUS" if st["capacity"] == "autonomous" else "ADMIT_WARD"), None
     if runner == "assent":
         chain = sv.ChainView(inp["chain"])
-        res = v.verify_assent(inp["assent"], inp["contract"], inp.get("origin_bundle"), chain)
+        res = v.verify_assent(
+            inp["assent"],
+            inp["contract"],
+            inp.get("origin_bundle"),
+            chain,
+            anchor_time=inp.get("anchor_time"),
+        )
         return res.verdict, res.refusal_code
     if runner == "invocation":
         chain = sv.ChainView(inp["chain"])
@@ -75,16 +83,32 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             use_txid=inp.get("use_txid"),
             raw_message_bytes=raw_msg,
             actual_quota_usage=inp.get("actual_quota_usage"),
+            actual_message_meta=inp.get("actual_message_meta"),
         )
         return res.verdict, res.refusal_code
     if runner == "migration":
         chain = sv.ChainView(inp["chain"]) if inp.get("chain") is not None else None
         journal = sv.FencedJournal.from_dict(inp["journal"])
-        res = v.verify_migration(inp["migration"], inp["export_bundle"], journal, chain, inp.get("manifests"))
+        res = v.verify_migration(
+            inp["migration"],
+            inp["export_bundle"],
+            journal,
+            chain,
+            inp.get("manifests"),
+            holder_assent=inp.get("holder_assent"),
+            dest_accept_stmt=inp.get("dest_accept_stmt"),
+            origin_bundle=inp.get("origin_bundle"),
+        )
         return res.verdict, res.refusal_code
     if runner == "owner_command":
         chain = sv.ChainView(inp["chain"])
-        res = v.verify_owner_command(inp["command"], inp["device_list"], inp["is_foreign_service"], chain)
+        res = v.verify_owner_command(
+            inp["command"],
+            inp["device_list"],
+            inp["is_foreign_service"],
+            chain,
+            owner_manifest=inp.get("owner_manifest"),
+        )
         return res.verdict, res.refusal_code
     if runner == "federation":
         chain = sv.ChainView(inp["chain"]) if inp.get("chain") is not None else None
@@ -93,7 +117,14 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
     if runner == "credential":
         chain = sv.ChainView(inp["chain"])
         sk = set(inp["supported_kinds"]) if inp.get("supported_kinds") is not None else None
-        res = v.verify_credential(inp["credential"], inp.get("anchor_txid"), chain, supported_kinds=sk)
+        res = v.verify_credential(
+            inp["credential"],
+            inp.get("anchor_txid"),
+            chain,
+            supported_kinds=sk,
+            withdrawal_doc=inp.get("withdrawal_doc"),
+            origin_bundle=inp.get("origin_bundle"),
+        )
         return res.verdict, res.refusal_code
     if runner == "issuer_role":
         chain = sv.ChainView(inp["chain"])
@@ -212,12 +243,28 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         return res.verdict, res.refusal_code
     if runner == "contract_assents":
         chain = sv.ChainView(inp["chain"])
-        res = v.verify_contract_assents(inp["contract"], inp["assents"], inp.get("origin_bundles", {}), chain)
+        res = v.verify_contract_assents(
+            inp["contract"],
+            inp["assents"],
+            inp.get("origin_bundle"),
+            chain,
+            origin_bundles_by_oid=inp.get("origin_bundles_by_oid") or inp.get("origin_bundles"),
+            anchor_time=inp.get("anchor_time"),
+            anchor_height=inp.get("anchor_height"),
+        )
         return res.verdict, res.refusal_code
     if runner == "bearer_session":
         chain = sv.ChainView(inp["chain"])
         journal = sv.FencedJournal.from_dict(inp["journal"])
-        res = v.verify_bearer_session(inp["token"], inp["slot_binding"], chain, journal)
+        res = v.verify_bearer_session(
+            inp["token"],
+            inp["slot_binding"],
+            chain,
+            journal,
+            grant_env=inp.get("grant_env"),
+            action=inp.get("action"),
+            arguments=inp.get("arguments"),
+        )
         return res.verdict, res.refusal_code
     if runner == "restart_recovery":
         # Full executor restart verification: pre-restart admit -> persist entries + receipt_store ->
@@ -301,6 +348,173 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             if (r_exp.verdict, r_exp.refusal_code) != ("REFUSE", "NAME_EXPIRED"):
                 return "REFUSE", f"POST_EXPIRY_CRED_WRONG:{(r_exp.verdict, r_exp.refusal_code)}"
         return "ADMIT", None
+    if runner == "auth_upgrade":
+        ch = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal.from_dict(inp.get("journal", {"journal_id": _h32("au-j")}))
+        res = v.verify_auth_upgrade(
+            inp["upgrade"],
+            inp["expected_service_id"],
+            inp["expected_provisional_auth_pubkey"],
+            ch,
+            j,
+            inp.get("manifests", {}),
+        )
+        return res.verdict, res.refusal_code
+    if runner == "notary_act":
+        ch = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+        res = v.verify_notary_act(
+            inp["notary"],
+            inp.get("anchor_txid"),
+            ch,
+            journal=j,
+            allowed_notaries=inp.get("allowed_notaries"),
+            expected_notary_name=inp.get("expected_notary_name"),
+            expected_child_binding=inp.get("expected_child_binding"),
+        )
+        return res.verdict, res.refusal_code
+    if runner == "verdict":
+        ch = sv.ChainView(inp["chain"])
+        res = v.verify_verdict(
+            inp["verdict"],
+            inp["contract"],
+            ch,
+            prev_verdict_env=inp.get("prev_verdict"),
+            anchor_txid=inp.get("anchor_txid"),
+        )
+        return res.verdict, res.refusal_code
+    if runner == "termination":
+        ch = sv.ChainView(inp["chain"])
+        res = v.verify_termination(inp["termination"], inp["contract"], ch, spend_txid=inp.get("spend_txid"))
+        return res.verdict, res.refusal_code
+    if runner == "certset_head":
+        res = v.verify_certset_head(inp["head"], inp["statements"], inp["owner_manifest"])
+        return res.verdict, res.refusal_code
+    if runner == "statement":
+        ch = sv.ChainView(inp["chain"])
+        res = v.verify_statement(
+            inp["statement"],
+            ch,
+            expected_policy=inp.get("expected_policy"),
+            device_list=inp.get("device_list"),
+        )
+        return res.verdict, res.refusal_code
+    if runner == "session_lifecycle":
+        j = sv.FencedJournal.from_dict(inp.get("journal", {"journal_id": _h32("sl-j")}))
+        for step in inp["steps"]:
+            ch = sv.ChainView(step["chain"])
+            op_kind = step["kind"]
+            if op_kind == "session_open":
+                res = v.verify_session_open(
+                    step["session_open"],
+                    step["bundle"],
+                    ch,
+                    j,
+                    inp["executor_cfg"],
+                    bearer_token=step.get("bearer_token"),
+                )
+            elif op_kind == "bearer_session":
+                res = v.verify_bearer_session(
+                    step["token"],
+                    step["slot_binding"],
+                    ch,
+                    j,
+                    grant_env=step.get("grant_env"),
+                    action=step.get("action"),
+                    arguments=step.get("arguments"),
+                )
+            else:
+                raise ValueError(f"Unknown session_lifecycle step kind: {op_kind}")
+            if (res.verdict, res.refusal_code) != (step["want_verdict"], step.get("want_refusal")):
+                return "REFUSE", f"SESSION_STEP_MISMATCH:{step['label']}:{(res.verdict, res.refusal_code)}"
+        return "ADMIT", None
+    if runner == "two_phase_commit":
+        # Exercises R1-A atomic admit_and_reserve() -> optional retry while unsettled (UNCERTAIN) ->
+        # commit_result(real_receipt_env) -> restart -> replay idempotency OR missing-blob INVOKE_REPLAY!
+        j = sv.FencedJournal(inp["journal_id"])
+        ch = sv.ChainView(inp["chain"])
+        raw_msg = bytes.fromhex(inp["raw_message_hex"]) if "raw_message_hex" in inp else None
+        p1 = v.admit_and_reserve(
+            inp["invocation"],
+            inp["bundle"],
+            ch,
+            j,
+            inp["executor_cfg"],
+            use_txid=inp.get("use_txid"),
+            raw_message_bytes=raw_msg,
+            actual_message_meta=inp.get("actual_message_meta"),
+        )
+        if p1.verdict != "ADMIT":
+            return p1.verdict, p1.refusal_code
+        if inp.get("retry_before_commit"):
+            before_n = len(j.entries)
+            r_un = v.admit_and_reserve(
+                inp["invocation"],
+                inp["bundle"],
+                ch,
+                j,
+                inp["executor_cfg"],
+                use_txid=inp.get("use_txid"),
+                raw_message_bytes=raw_msg,
+            )
+            if len(j.entries) != before_n:
+                return "REFUSE", "UNEXPECTED_WRITE_ON_UNCERTAIN_RETRY"
+            return r_un.verdict, r_un.refusal_code
+        p2 = v.commit_result(
+            inp["receipt_env"],
+            j,
+            inp["executor_cfg"],
+            invocation_id=p1.details["invocation_id"],
+            grant_id=p1.details["grant_id"],
+            reserved_ops=p1.details["reserved_ops"],
+            actual_quota_usage=inp.get("actual_quota_usage"),
+            single_use=p1.details["single_use"],
+            use_txid=p1.details["use_txid"],
+            recorded_at=p1.details["recorded_at"],
+            tip_height=p1.details["tip_height"],
+        )
+        if p2.verdict != "ADMIT":
+            return p2.verdict, p2.refusal_code
+        persisted_entries = json.loads(json.dumps(j.entries))
+        persisted_store = {} if inp.get("drop_receipt_blob_on_restart") else json.loads(json.dumps(j.receipt_store))
+        restarted = sv.FencedJournal.replay_persisted_entries(
+            j.journal_id,
+            persisted_entries,
+            receipt_store=persisted_store,
+            witness_pos=j.witness_pos,
+            witness_commitment=j.witness_commitment,
+            write_token_active=True,
+        )
+        rep_err = restarted.check_continuity()
+        if rep_err is not None:
+            return "REFUSE", rep_err
+        before_n = len(restarted.entries)
+        retry_res = v.admit_and_reserve(
+            inp["invocation"],
+            inp["bundle"],
+            ch,
+            restarted,
+            inp["executor_cfg"],
+            use_txid=inp.get("use_txid"),
+            raw_message_bytes=raw_msg,
+        )
+        if len(restarted.entries) != before_n:
+            return "REFUSE", "UNEXPECTED_WRITE_ON_POST_RESTART_RETRY"
+        if "expect_cached_receipt_ca" in inp and retry_res.verdict == "ADMIT":
+            if retry_res.cached_receipt_content_addr != inp["expect_cached_receipt_ca"]:
+                return "REFUSE", f"CACHED_RECEIPT_MISMATCH:{retry_res.cached_receipt_content_addr}"
+        return retry_res.verdict, retry_res.refusal_code
+    if runner == "replay_journal_tamper":
+        restarted = sv.FencedJournal.replay_persisted_entries(
+            inp["journal_id"],
+            inp["entries"],
+            receipt_store=inp.get("receipt_store"),
+            witness_pos=inp.get("witness_pos"),
+            witness_commitment=inp.get("witness_commitment"),
+            write_token_active=inp.get("write_token_active", True),
+        )
+        rep_err = restarted.check_continuity()
+        return ("REFUSE", rep_err) if rep_err else ("ADMIT", None)
     raise ValueError(f"Unknown security runner: {runner}")
 
 
@@ -858,10 +1072,27 @@ def build_security_conformance_suite() -> dict[str, Any]:
     )
 
     # 22. Positive Contour A federation disclosure with verified L2 P-256 OwnerCommand -> ADMIT
+    fx_fed_pos = copy.deepcopy(fx_dev)
+    al_man_fed = copy.deepcopy(fx_fed_pos["_alice_man"])
+    al_man_fed["seq"] = 2
+    al_man_fed["sets"] = {"devices": {"seq": 1, "sha256": sl.content_addr(dev_list)}}
+    al_man_fed_h = sl.content_addr(al_man_fed)
+    fx_fed_pos["chain"]["manifests"][al_man_fed_h] = al_man_fed
+    fx_fed_pos["chain"]["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx_fed_pos["_alice_reg"],
+        fx_fed_pos["_alice_owner_pol"],
+        {"link": {"grant": fx_fed_pos["_keys"]["alice_gr"]["xonly"]}, "m": {"h": al_man_fed_h, "s": 2}},
+    )
     l2_fed_cmd = sl.sign_envelope(
         {
-            "arguments": {"config_sha256": _h32("contour-a-cfg"), "statement_id": _h32("contour-a-stmt")},
-            "command": "policy-apply",
+            "arguments": {
+                "fields_sha256": _h32("contour-a-pii-fields"),
+                "grant_id": sl.object_id(fx_fed_pos["bundle"]["grants"][0]["payload"]),
+                "recipient_name": "id/peer-b",
+                "route_mode": "direct",
+            },
+            "command": "approve-pii-disclosure",
             "exp": 1795220300,
             "genesis": GENESIS_MAIN,
             "iat": 1795220000,
@@ -886,19 +1117,23 @@ def build_security_conformance_suite() -> dict[str, Any]:
                 "route_hops": [{"actor": "id/peer-b", "role": "counterparty"}],
                 "approval_command": l2_fed_cmd,
                 "device_list": dev_list,
+                "fields_sha256": _h32("contour-a-pii-fields"),
+                "manifests": {al_man_fed_h: al_man_fed},
             },
-            "grant": fx_dev["bundle"]["grants"][0],
-            "chain": fx_dev["chain"],
+            "grant": fx_fed_pos["bundle"]["grants"][0],
+            "chain": fx_fed_pos["chain"],
         },
         "ADMIT",
         None,
-        "Direct Contour A routing (no screening_agent hop) backed by verified L2 P-256 owner command admits PII disclosure.",
+        "Direct Contour A routing (no screening_agent hop) backed by manifest-pinned L2 P-256 approve-pii-disclosure owner command admits PII disclosure.",
     )
 
     import build_branch_suite as bbs
     bbs.add_acceptance_and_branch_cases(add)
     import build_boundary_suite as bbs2
     bbs2.add_boundary_and_recovery_cases(add)
+    import build_draft7_suite as bd7
+    bd7.add_draft7_conformance_cases(add)
 
     return {
         "suite": "security-conformance",

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Executable 84/84 Refusal Code Coverage Matrix Builder for SealLink v1.0.
+Executable 85/85 Refusal Code Coverage Matrix Builder for SealLink v1.0.
 
-Builds `vectors/refusal-coverage-matrix.json`, where every single one of the 84
+Builds `vectors/refusal-coverage-matrix.json`, where every single one of the 85
 registered refusal codes in `registry/refusal-codes.json` has a concrete,
 self-contained, Draft 2020-12 schema-valid (for all non-WIRE_* cases) executable
 test case driven through `tools/seallink_verifier.py` and `tools/seallink_ref.py`
@@ -20,7 +20,7 @@ import seallink_ref as sl
 import seallink_verifier as sv
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = "1.0.0-draft.6"
+VERSION = "1.0.0-draft.7"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 
 
@@ -442,7 +442,8 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         },
         "txs": {
             origin_txid: {"confirmed_height": 749000, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(origin_env)).hex(), "outputs": {}},
-            bind_txid: {"confirmed_height": 749010, "opreturn_hex": sl.encode_opreturn(0x0C, sl.object_id(binding)).hex(), "outputs": {}},
+            _h32("obind-tx"): {"confirmed_height": 749000, "outputs": {"0": {"script_pubkey_hex": _spk_hex({"kind": "key", "pk": bind_seal["comp"]}), "spent_by_txid": bind_txid}}},
+            bind_txid: {"confirmed_height": 749010, "inputs": [sv.make_segwit_input(_h32("obind-tx"), 0)], "opreturn_hex": sl.encode_opreturn(0x0C, sl.object_id(binding)).hex(), "outputs": {}},
             _h32("ostat-tx"): {"confirmed_height": 749000, "outputs": {"0": {"script_pubkey_hex": _spk_hex(stat_pol)}}},
             _h32("oroster-tx"): {"confirmed_height": 749000, "outputs": {"0": {"script_pubkey_hex": _spk_hex(vac_pol)}}},
             _h32("orecov-tx"): {"confirmed_height": 749000, "outputs": {"0": {"script_pubkey_hex": _spk_hex(rec_pol)}}},
@@ -481,6 +482,151 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         "_maj_unix": maj_unix,
         "_rec_pol": rec_pol,
     }
+
+
+def _contract_fx() -> dict[str, Any]:
+    f = _base_invocation_fixture()
+    f["executor_cfg"]["name"] = "id/station-a"
+    c_salt = _h32("c0-salt")
+    sess_cap = {"action": "agent/session", "target": "station:id/station-a:slot1", "quotas": [{"kind": "seallink/count", "max": "5", "resource": "station:id/station-a:slot1", "unit": "starts", "window": "term"}]}
+    c0 = {"machine_terms": {"capabilities": [sess_cap]}, "text": "Isolated session terms"}
+    cseal_a = _kp("cseal-a")
+    cseal_b = _kp("cseal-b")
+    cseal_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": cseal_a["comp"], "b": cseal_b["comp"]}}
+    c_obj = {
+        "clause_commitments": [sl.clause_commit(c_salt, c0)],
+        "config_sha256": _h32("cfg-agreed"),
+        "contract_salt": _h32("cs-root"),
+        "genesis": GENESIS_MAIN,
+        "machine_clause_indices": [0],
+        "network": "main",
+        "parties": [
+            {"party_id": "client-1", "role": "client", "signing_policy": {"m": 1, "pks": [f["_keys"]["alice_gr"]["xonly"]]}},
+            {"party_id": "worker-1", "role": "worker", "signing_policy": {"m": 1, "pks": [f["_keys"]["agent_req"]["xonly"]]}},
+        ],
+        "profile": "org.seallink/agent-session-v1",
+        "seal": {"script_policy": cseal_pol, "txid": _h32("cseal-tx"), "vout": 0},
+        "type": "seallink-contract/1",
+        "window": {"not_after_height": 770000, "not_before_height": 749000},
+    }
+    cid = sl.object_id(c_obj)
+    a1 = sl.sign_envelope({
+        "expires_at": 1795400000, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main",
+        "nonce": _h32("ca-1"), "party_id": "client-1", "party_role": "client", "target_id": cid, "target_type": "seallink-contract/1", "type": "seallink-assent/1",
+    }, [f["_keys"]["alice_gr"]["sk"]])
+    a2 = sl.sign_envelope({
+        "expires_at": 1795400000, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main",
+        "nonce": _h32("ca-2"), "party_id": "worker-1", "party_role": "worker", "target_id": cid, "target_type": "seallink-contract/1", "type": "seallink-assent/1",
+    }, [f["_keys"]["agent_req"]["sk"]])
+    gp = copy.deepcopy(f["bundle"]["grants"][0]["payload"])
+    gp["executor"] = {"key": f["_keys"]["host_rcpt"]["xonly"], "name": "id/station-a"}
+    gp["contract_id"] = cid
+    gp["capabilities"] = [sess_cap]
+    _reanchor_grant(f, gp)
+    inv_p = copy.deepcopy(f["invocation"]["payload"])
+    inv_p["action"] = "agent/session"
+    inv_p["executor"] = gp["executor"]
+    inv_p["target"] = "station:id/station-a:slot1"
+    inv_p["arguments"] = {"config_sha256": _h32("cfg-agreed"), "op": "start", "session_slot": "slot1"}
+    f["invocation"] = sl.sign_envelope(inv_p, [f["_keys"]["agent_req"]["sk"]])
+    f["bundle"]["contract"] = c_obj
+    f["bundle"]["contract_assents"] = [a1, a2]
+    f["bundle"]["disclosed_clauses"] = {"0": {"salt_hex": c_salt, "clause": c0}}
+    f["chain"]["txs"][_h32("cseal-tx")] = {"confirmed_height": 749500, "outputs": {"0": {"script_pubkey_hex": _spk_hex(cseal_pol)}}}
+    f["executor_cfg"]["runtime_config_sha256"] = _h32("cfg-agreed")
+    return f
+
+
+def _delegation_fx(notary_mode: str = "none", with_stop: bool = False) -> dict[str, Any]:
+    f = _base_invocation_fixture()
+    f["executor_cfg"]["name"] = "id/station-a"
+    del_k = _kp("del-key")
+    cseal_iss = _kp("cseal-iss")
+    row_k = _kp("row-coin")
+    stop_k = _kp("stop-coin")
+    pool_q = {"kind": "seallink/count", "max": "10", "resource": "station:id/station-a:tools", "unit": "calls", "window": "term"}
+    row_q = {"kind": "seallink/count", "max": "2", "resource": "station:id/station-a:tools", "unit": "calls", "window": "term"}
+    rng: dict[str, Any] = {"count": 2, "first": 0, "script_policy": {"kind": "key", "pk": row_k["comp"]}, "txid": _h32("row-tx")}
+    if with_stop:
+        rng["stop_txid"] = _h32("stop-tx")
+        rng["stop_first"] = 0
+        rng["stop_script_policy"] = {"kind": "key", "pk": stop_k["comp"]}
+    parent_p = copy.deepcopy(f["bundle"]["grants"][0]["payload"])
+    parent_p["executor"] = {"key": f["_keys"]["host_rcpt"]["xonly"], "name": "id/station-a"}
+    parent_p["capabilities"] = [{"action": "agent/tool", "quotas": [pool_q], "target": "station:id/station-a:tools"}]
+    tpl_obj: dict[str, Any] = {
+        "capabilities": [{"action": "agent/tool", "quotas": [row_q], "target": "station:id/station-a:tools", "where": {"tool_name": {"in": ["pytest"]}}}],
+        "executor": parent_p["executor"],
+        "notary_mode": notary_mode,
+        "recipient_rule": {"key": f["_keys"]["agent_req"]["xonly"], "mode": "exact_key"},
+    }
+    del_obj: dict[str, Any] = {
+        "child_seal_key": cseal_iss["comp"],
+        "groups": [{
+            "ranges": [rng],
+            "template": tpl_obj,
+        }],
+        "key": del_k["xonly"],
+        "pools": [pool_q],
+    }
+    if notary_mode in ("optional_stop", "required_act"):
+        not_own = _kp("notary-own")
+        tpl_obj["notary_name"] = "id/notary-1"
+        del_obj["notaries"] = [{
+            "name": "id/notary-1",
+            "owner_policy": {"kind": "key", "pk": not_own["comp"]},
+            "registration": {"txid": _h32("notary-reg"), "vout": 0},
+        }]
+    parent_p["delegate"] = del_obj
+    parent_env = sl.sign_envelope(parent_p, [f["_keys"]["alice_gr"]["sk"]])
+    pid = sl.object_id(parent_p)
+    cseal_pol = {"kind": "key", "pk": cseal_iss["comp"]}
+    child_p = {
+        "capabilities": [{"action": "agent/tool", "quotas": [row_q], "target": "station:id/station-a:tools", "where": {"tool_name": {"eq": "pytest"}}}],
+        "executor": parent_p["executor"],
+        "genesis": GENESIS_MAIN,
+        "network": "main",
+        "not_after_height": 755000,
+        "not_before_height": 750000,
+        "parent": {"grant_id": pid, "ordinal": 1},
+        "recent_block": parent_p["recent_block"],
+        "recipient": {"key": f["_keys"]["agent_req"]["xonly"], "mode": "key"},
+        "revocation": {"construction": "W", "kind": "revocable", "mode": "seal", "seal": {"script_policy": cseal_pol, "txid": _h32("child-seal-tx"), "vout": 0}},
+        "type": "seallink-grant/1",
+    }
+    child_env = sl.sign_envelope(child_p, [del_k["sk"]])
+    cid = sl.object_id(child_p)
+    p_itx = _h32("p-iss-tx")
+    c_itx = _h32("c-iss-tx")
+    f["chain"]["txs"][p_itx] = {
+        "confirmed_height": 749998,
+        "inputs": [sv.make_segwit_input(_h32("alice-seal-tx"), 1)],
+        "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(parent_env), "grant_id": pid, "type": "seallink-issuance/1"}).hex()).hex(),
+        "outputs": {},
+    }
+    f["chain"]["txs"][c_itx] = {
+        "confirmed_height": 749999,
+        "inputs": [sv.make_segwit_input(_h32("row-tx"), 0), sv.make_segwit_input(_h32("child-seal-tx"), 1)],
+        "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(child_env), "grant_id": cid, "type": "seallink-issuance/1"}).hex()).hex(),
+        "outputs": {},
+    }
+    f["chain"]["txs"][_h32("child-seal-tx")] = {
+        "confirmed_height": 749995,
+        "inputs": [sv.make_segwit_input(_h32("cseal-fund"), 0)],
+        "outputs": {"0": {"script_pubkey_hex": _spk_hex(cseal_pol)}, "1": {"script_pubkey_hex": _spk_hex(cseal_pol)}},
+    }
+    if with_stop:
+        f["chain"]["txs"][_h32("stop-tx")] = {"confirmed_height": 749990, "outputs": {"0": {"script_pubkey_hex": _spk_hex({"kind": "key", "pk": stop_k["comp"]})}}}
+    inv_p = copy.deepcopy(f["invocation"]["payload"])
+    inv_p["action"] = "agent/tool"
+    inv_p["executor"] = parent_p["executor"]
+    inv_p["target"] = "station:id/station-a:tools"
+    inv_p["arguments"] = {"input_sha256": _h32("in1"), "max_output_bytes": "1024", "tool_name": "pytest"}
+    inv_p["proof_path"] = [{"grant_id": pid, "issuance_txid": p_itx}, {"grant_id": cid, "issuance_txid": c_itx}]
+    f["invocation"] = sl.sign_envelope(inv_p, [f["_keys"]["agent_req"]["sk"]])
+    f["bundle"]["grants"] = [parent_env, child_env]
+    f["_del_k"] = del_k
+    return f
 
 
 def _strip_private(obj: Any) -> Any:
@@ -598,7 +744,12 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("WIRE_STRING", "SL-WIRE-005", "wire_raw", {"raw_hex": b'{"a":"bad\x7fstr"}'.hex()})
     add("WIRE_NOT_CANONICAL", "SL-WIRE-006", "wire_raw", {"raw_hex": b'{"b":1,"a":2}'.hex()})
     add("WIRE_TYPE", "SL-WIRE-010", "wire_raw", {"raw_hex": b'{"type":"seallink-unknown/99"}'.hex()})
-    add("WIRE_MEMBER", "SL-WIRE-010", "wire_raw", {"raw_hex": b'{"signatures":{"policy":{"m":1,"pks":[]},"sigs":[]}}'.hex()})
+    # WIRE_MEMBER: single-defect unknown member on valid typed object (W-9: missing type is WIRE_TYPE)
+    fx_wm = _base_invocation_fixture()
+    gp_wm = copy.deepcopy(fx_wm["bundle"]["grants"][0]["payload"])
+    gp_wm["unknown_field"] = 1
+    g_wm = sl.sign_envelope(gp_wm, [fx_wm["_keys"]["alice_gr"]["sk"]])
+    add("WIRE_MEMBER", "SL-WIRE-010", "wire_raw", {"raw_hex": sl.jcs_encode(g_wm).hex()})
     # WIRE_KEY: invalid x-only pubkey (not on secp256k1)
     bad_pk = None
     for cand in range(1, 200):
@@ -1051,8 +1202,10 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     # ---- 5. CONTRACT_*, CRED_*, NOTARY_* (11 codes) ----
     def _contract_fx() -> dict[str, Any]:
         f = _base_invocation_fixture()
+        f["executor_cfg"]["name"] = "id/station-a"
         c_salt = _h32("c0-salt")
-        c0 = {"action": "agent/session", "text": "Isolated session terms"}
+        sess_cap = {"action": "agent/session", "target": "station:id/station-a:slot1", "quotas": [{"kind": "seallink/count", "max": "5", "resource": "station:id/station-a:slot1", "unit": "starts", "window": "term"}]}
+        c0 = {"machine_terms": {"capabilities": [sess_cap]}, "text": "Isolated session terms"}
         cseal_a = _kp("cseal-a")
         cseal_b = _kp("cseal-b")
         cseal_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": cseal_a["comp"], "b": cseal_b["comp"]}}
@@ -1082,11 +1235,13 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             "nonce": _h32("ca-2"), "party_id": "worker-1", "party_role": "worker", "target_id": cid, "target_type": "seallink-contract/1", "type": "seallink-assent/1",
         }, [f["_keys"]["agent_req"]["sk"]])
         gp = copy.deepcopy(f["bundle"]["grants"][0]["payload"])
+        gp["executor"] = {"key": f["_keys"]["host_rcpt"]["xonly"], "name": "id/station-a"}
         gp["contract_id"] = cid
-        gp["capabilities"] = [{"action": "agent/session", "target": "station:id/station-a:slot1", "quotas": [{"kind": "seallink/count", "max": "5", "resource": "station:id/station-a:slot1", "unit": "starts", "window": "term"}]}]
+        gp["capabilities"] = [sess_cap]
         _reanchor_grant(f, gp)
         inv_p = copy.deepcopy(f["invocation"]["payload"])
         inv_p["action"] = "agent/session"
+        inv_p["executor"] = gp["executor"]
         inv_p["target"] = "station:id/station-a:slot1"
         inv_p["arguments"] = {"config_sha256": _h32("cfg-agreed"), "op": "start", "session_slot": "slot1"}
         f["invocation"] = sl.sign_envelope(inv_p, [f["_keys"]["agent_req"]["sk"]])
@@ -1233,8 +1388,10 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("CRED_REVOKED_FOR_CAUSE", "SL-CONT-010", "credential", cf)
 
     # ---- 6. GRANT_*, INVOKE_*, QUOTA_*, SESSION_*, JOURNAL_* (20 codes) + NOTARY_REQUIRED ----
+    # Fix _delegation_fx executor_cfg to match target station:id/station-a:tools!
     def _delegation_fx(notary_mode: str = "none", with_stop: bool = False) -> dict[str, Any]:
         f = _base_invocation_fixture()
+        f["executor_cfg"]["name"] = "id/station-a"
         del_k = _kp("del-key")
         cseal_iss = _kp("cseal-iss")
         row_k = _kp("row-coin")
@@ -1247,21 +1404,32 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             rng["stop_first"] = 0
             rng["stop_script_policy"] = {"kind": "key", "pk": stop_k["comp"]}
         parent_p = copy.deepcopy(f["bundle"]["grants"][0]["payload"])
+        parent_p["executor"] = {"key": f["_keys"]["host_rcpt"]["xonly"], "name": "id/station-a"}
         parent_p["capabilities"] = [{"action": "agent/tool", "quotas": [pool_q], "target": "station:id/station-a:tools"}]
-        parent_p["delegate"] = {
+        tpl_obj: dict[str, Any] = {
+            "capabilities": [{"action": "agent/tool", "quotas": [row_q], "target": "station:id/station-a:tools", "where": {"tool_name": {"in": ["pytest"]}}}],
+            "executor": parent_p["executor"],
+            "notary_mode": notary_mode,
+            "recipient_rule": {"key": f["_keys"]["agent_req"]["xonly"], "mode": "exact_key"},
+        }
+        del_obj: dict[str, Any] = {
             "child_seal_key": cseal_iss["comp"],
             "groups": [{
                 "ranges": [rng],
-                "template": {
-                    "capabilities": [{"action": "agent/tool", "quotas": [row_q], "target": "station:id/station-a:tools", "where": {"tool_name": {"in": ["pytest"]}}}],
-                    "executor": parent_p["executor"],
-                    "notary_mode": notary_mode,
-                    "recipient_rule": {"key": f["_keys"]["agent_req"]["xonly"], "mode": "exact_key"},
-                },
+                "template": tpl_obj,
             }],
             "key": del_k["xonly"],
             "pools": [pool_q],
         }
+        if notary_mode in ("optional_stop", "required_act"):
+            not_own = _kp("notary-own")
+            tpl_obj["notary_name"] = "id/notary-1"
+            del_obj["notaries"] = [{
+                "name": "id/notary-1",
+                "owner_policy": {"kind": "key", "pk": not_own["comp"]},
+                "registration": {"txid": _h32("notary-reg"), "vout": 0},
+            }]
+        parent_p["delegate"] = del_obj
         parent_env = sl.sign_envelope(parent_p, [f["_keys"]["alice_gr"]["sk"]])
         pid = sl.object_id(parent_p)
         cseal_pol = {"kind": "key", "pk": cseal_iss["comp"]}
@@ -1303,6 +1471,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             f["chain"]["txs"][_h32("stop-tx")] = {"confirmed_height": 749990, "outputs": {"0": {"script_pubkey_hex": _spk_hex({"kind": "key", "pk": stop_k["comp"]})}}}
         inv_p = copy.deepcopy(f["invocation"]["payload"])
         inv_p["action"] = "agent/tool"
+        inv_p["executor"] = parent_p["executor"]
         inv_p["target"] = "station:id/station-a:tools"
         inv_p["arguments"] = {"input_sha256": _h32("in1"), "max_output_bytes": "1024", "tool_name": "pytest"}
         inv_p["proof_path"] = [{"grant_id": pid, "issuance_txid": p_itx}, {"grant_id": cid, "issuance_txid": c_itx}]
@@ -1343,17 +1512,21 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     _reanchor_grant(fx, gp_erf)
     inv_p_erf = copy.deepcopy(fx["invocation"]["payload"])
     inv_p_erf["action"] = "mail/send"
-    inv_p_erf["arguments"] = {"body_sha256": _h32("b"), "size_bytes": "10", "subject": "hi", "to": "b@example"}
+    inv_p_erf["arguments"] = {"body_sha256": _h32("b"), "size_bytes": "10", "subject": "hi", "to": "b@example.org"}
     fx["invocation"] = sl.sign_envelope(inv_p_erf, [fx["_keys"]["agent_req"]["sk"]])
     add("GRANT_EXECUTOR_REF_FORBIDDEN", "SL-GRNT-003", "invocation", fx)
 
     fx = _base_invocation_fixture()
     gp_cr = copy.deepcopy(fx["bundle"]["grants"][0]["payload"])
-    gp_cr["capabilities"] = [{"action": "agent/session", "target": "station:id/station-a:s1"}]
+    gp_cr["capabilities"] = [{
+        "action": "agent/session",
+        "quotas": [{"kind": "seallink/count", "max": "1", "resource": "station:id/mail-host-a:s1", "unit": "starts", "window": "term"}],
+        "target": "station:id/mail-host-a:s1",
+    }]
     _reanchor_grant(fx, gp_cr)
     inv_p_cr = copy.deepcopy(fx["invocation"]["payload"])
     inv_p_cr["action"] = "agent/session"
-    inv_p_cr["target"] = "station:id/station-a:s1"
+    inv_p_cr["target"] = "station:id/mail-host-a:s1"
     inv_p_cr["arguments"] = {"config_sha256": _h32("c"), "op": "start", "session_slot": "s1"}
     fx["invocation"] = sl.sign_envelope(inv_p_cr, [fx["_keys"]["agent_req"]["sk"]])
     add("GRANT_CONTRACT_REQUIRED", "SL-CONT-001", "invocation", fx)
@@ -1363,6 +1536,20 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     gp_tf["terms_text"] = "Read politely."
     _reanchor_grant(fx, gp_tf)
     add("GRANT_TEXT_FORBIDDEN", "SL-GRNT-005", "invocation", fx)
+
+    # GRANT_TARGET_UNAUTHORIZED (B-1): foreign issuer id/mallory issuing a grant targeting mailbox:id/alice:work!
+    fx = _base_invocation_fixture()
+    mal_own = _kp("mallory-own")
+    mal_gr = _kp("mallory-gr")
+    mal_opol = {"kind": "key", "pk": mal_own["comp"]}
+    mal_reg = {"txid": _h32("mallory-reg"), "vout": 0}
+    fx["chain"]["names"]["id/mallory"] = sv.make_name_history(
+        "id/mallory", mal_reg, mal_opol, {"link": {"grant": mal_gr["xonly"]}}, first_height=748000, update_height=749000
+    )
+    gp_tu = copy.deepcopy(fx["bundle"]["grants"][0]["payload"])
+    gp_tu["issuer"] = {"name": "id/mallory", "owner_policy": mal_opol, "registration": mal_reg, "role_policy": {"m": 1, "pks": [mal_gr["xonly"]]}}
+    _reanchor_grant(fx, gp_tu, signer_sk=mal_gr["sk"])
+    add("GRANT_TARGET_UNAUTHORIZED", "SL-MAIL-003", "invocation", fx)
 
     fx = _delegation_fx()
     p_nodel = copy.deepcopy(fx["bundle"]["grants"][0]["payload"])
@@ -1529,8 +1716,13 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     }
     l2_cmd = sl.sign_envelope(
         {
-            "arguments": {"config_sha256": _h32("contour-a-cfg"), "statement_id": _h32("contour-a-stmt")},
-            "command": "policy-apply",
+            "arguments": {
+                "fields_sha256": _h32("pii-fields"),
+                "grant_id": sl.object_id(fx_fed["bundle"]["grants"][0]["payload"]),
+                "recipient_name": "id/peer-b",
+                "route_mode": "direct",
+            },
+            "command": "approve-pii-disclosure",
             "exp": 1795220300,
             "genesis": GENESIS_MAIN,
             "iat": 1795220000,
@@ -1582,7 +1774,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     return {
         "suite": "refusal-coverage-matrix",
         "version": VERSION,
-        "description": "Executable 84/84 refusal-code conformance matrix with Draft 2020-12 schema-validated semantic fixtures and derived ChainView evidence.",
+        "description": "Executable 85/85 refusal-code conformance matrix with Draft 2020-12 schema-validated semantic fixtures and derived ChainView evidence.",
         "total_registered_codes": len(reg_codes),
         "total_covered_codes": len(built_codes),
         "cases": sorted(cases, key=lambda c: c["code"]),

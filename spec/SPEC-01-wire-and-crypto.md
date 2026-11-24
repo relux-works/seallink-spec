@@ -1,6 +1,6 @@
 # SPEC-01: Wire Format, Cryptography, Thresholds, and Constraint Algebra
 
-- **Version:** `1.0.0-draft.6`
+- **Version:** `1.0.0-draft.7`
 - **Status:** `draft` (normative rules `decided`; see `OPEN-QUESTIONS.md` for deferred algorithm extensions)
 - **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/constraints-and-schemas.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/refusal-codes.json`, `registry/constraints.json`
@@ -14,14 +14,14 @@ Every canonical SealLink document — signed or unsigned, including manifests, c
 
 | Rule ID | State | Requirement | Refusal |
 | --- | --- | --- | --- |
-| `SL-WIRE-001` | `decided` | Document octets MUST NOT exceed `max_bytes` registered for its `type` in `registry/object-types.json`. JSON object/array nesting depth MUST NOT exceed `16` (the root object is depth `1`). | `WIRE_SIZE` |
-| `SL-WIRE-002` | `decided` | Input MUST be valid UTF-8 with no BOM and no leading or trailing bytes, parsing as exactly one RFC 8259 JSON object. | `WIRE_JSON` |
+| `SL-WIRE-001` | `decided` | Every input MUST NOT exceed the global pre-parse ceiling of `1048576` bytes (`1 MiB`) and, once `type` is identified, MUST NOT exceed `max_bytes` registered for its `type` in `registry/object-types.json`. Container nesting depth MUST NOT exceed `16` (the root JSON object has depth `1`; each nested JSON object `{...}` or array `[...]` increments depth by `1`; scalar values do not increment depth). | `WIRE_SIZE` |
+| `SL-WIRE-002` | `decided` | Input MUST be valid UTF-8 with no BOM and no leading or trailing bytes (including leading or trailing ASCII whitespace), parsing as exactly one RFC 8259 JSON object. | `WIRE_JSON` |
 | `SL-WIRE-003` | `decided` | No JSON object at any nesting level MAY contain duplicate member names (compared after escape decoding). | `WIRE_DUPLICATE` |
 | `SL-WIRE-004` | `decided` | Allowed JSON values are objects, arrays, strings, number-form integers (`SL-WIRE-007`), and booleans (`true`, `false`). The literal `null` is FORBIDDEN everywhere: optional fields MUST be omitted rather than set to `null`. | `WIRE_VALUE` |
-| `SL-WIRE-005` | `decided` | Every string (including member names) MUST consist solely of Unicode scalar values `>= U+0020`, excluding `U+007F` (DEL), the C1 control block `U+0080..U+009F`, and unpaired surrogates. **Multiline prose exception:** `U+000A` (LF, encoded as `\n` under RFC 8785) is permitted ONLY in designated multiline prose fields (`terms_text`, contract clause `text`, `termination.reason`, `card.role`); CR (`U+000D`), TAB (`U+0009`), and all other `< U+0020` code points remain FORBIDDEN everywhere. No Unicode normalization is performed; string equality is exact code-point equality. | `WIRE_STRING` |
+| `SL-WIRE-005` | `decided` | Every string (including member names) MUST consist solely of Unicode scalar values `>= U+0020`, excluding `U+007F` (DEL), the C1 control block `U+0080..U+009F`, and unpaired surrogates. **Multiline prose exception:** `U+000A` (LF, encoded as `\n` under RFC 8785) is permitted ONLY at the exact four schema paths annotated with `"x-seallink-allow-lf": true` (`GrantPayload.terms_text`, `ClauseObject.text`, `TerminationStatement.reason`, `card.role`); LF at any other path, CR (`U+000D`), TAB (`U+0009`), and all other `< U+0020` code points remain FORBIDDEN everywhere. No Unicode normalization is performed; string equality is exact code-point equality. | `WIRE_STRING` |
 | `SL-WIRE-006` | `decided` | The verifier MUST re-serialize the parsed value under RFC 8785 (no insignificant whitespace; object keys sorted by UTF-16 code units; literal UTF-8 strings with ONLY `\"`, `\\`, and `\n` where permitted; canonical decimal integers) and MUST refuse unless the re-serialized octets are byte-for-byte identical to the input. A reader MUST NEVER repair non-canonical input. | `WIRE_NOT_CANONICAL` |
 
-> **Implementation note:** Standard library JSON serializers that HTML-escape `<`, `>`, `&`, or `U+2028`, or parse numbers via IEEE 754 `float64`, violate `SL-WIRE-006` and `SL-WIRE-007`. Verifiers MUST implement a dedicated strict JCS parser and serializer.
+> **Implementation note:** Standard library JSON serializers that HTML-escape `<`, `>`, `&`, or `U+2028`, or parse numbers via IEEE 754 `float64`, violate `SL-WIRE-006` and `SL-WIRE-007`. Verifiers MUST implement a dedicated strict JCS parser and serializer with explicit depth bounds (avoiding host recursion-limit crashes on hostile inputs). All regular expressions in `schemas/*.schema.json` use lookaround-free ECMA-262 syntax compatible with Draft 2020-12 JSON Schema validators across languages.
 
 ---
 
@@ -60,10 +60,10 @@ SealLink v1.0 specifies three exact off-chain signature algorithms plus one on-c
 | --- | --- | --- | --- |
 | `bip340` (default for all protocol objects) | 64 lowercase hex (`xonly_64hex`): valid secp256k1 x-coordinate (even Y). | 128 lowercase hex (64B BIP-340 Schnorr over `digest`). | [BIP-340] |
 | `p256` (device keys ONLY) | 66 lowercase hex (`02`/`03` + 32B X): valid compressed SEC 1 point on NIST P-256. | 128 lowercase hex (64B raw `r \|\| s`, strict low-S `s <= n/2`, over pre-hashed `e = big_endian_uint256(digest)` without double-hashing). | [SEC1] |
-| `ed25519` (device keys ONLY) | 64 lowercase hex: valid compressed Ed25519 point. | 128 lowercase hex (64B RFC 8032 PureEdDSA signature with message `M = digest`). | [RFC8032] |
+| `ed25519` (device keys ONLY) | 64 lowercase hex: strictly canonical compressed Ed25519 point (`y < p`, canonical sign bit) that is NOT one of the 8 small-order points (including the identity point). | 128 lowercase hex (64B strict non-small-order cofactorless PureEdDSA over `M = digest`: canonical non-small-order `R`, `0 <= S < L`, strict equation `[S]B == R + [k]A`). | [RFC8032] (strict cofactorless profile) |
 | Ledger `ScriptPolicy` keys (`SPEC-02`) | 66 lowercase hex (`compressed_66hex`, `02`/`03` + 32B X): valid secp256k1 point. | DER ECDSA + `0x01` (`SIGHASH_ALL`) inside SegWit v0 witness. | [BIP-141], [BIP-143] |
 
-Invalid curve points, non-lowercase hex, wrong byte lengths, or high-S `p256` signatures MUST refuse with `WIRE_KEY` (key defect) or `WIRE_SIGNATURE` (signature defect).
+Invalid curve points, small-order or non-canonical Ed25519 points (`A` or `R`), non-lowercase hex, wrong byte lengths, or high-S `p256` signatures MUST refuse with `WIRE_KEY` (key defect, checked across ALL key fields present in the object even if unused in the current signature subset) or `WIRE_SIGNATURE` (signature defect).
 
 ### 4.2 Signed Envelope, `SignatureSet`, `guardian_approvals`, and Authoritative Policy Binding (`SL-WIRE-013`, `decided`)
 
@@ -80,9 +80,9 @@ Every signed SealLink object has one of two exact top-level shapes:
 
 Verification rules over `digest = H_tag(payload.type, canonical_JCS(payload))`:
 
-1. **Structural validity (`SignatureSet`):** `policy.m` MUST satisfy `1 <= m <= len(policy.pks) <= 32`. `policy.pks` MUST be strictly sorted in ascending lexicographical hex order with no duplicates. Each entry in `sigs` carries strictly `{"pk","sig"}`.
-2. **Algorithm restriction:** `policy.alg` defaults to `"bip340"` when omitted. Non-`bip340` algorithms (`p256`, `ed25519`) are permitted **ONLY** on `seallink-owner-command/1` and `seallink-statement/1` when signed by a registered `device` key (`SPEC-03 §6`). All other signed objects (including every `guardian_approvals[i].signatures`) MUST use `"bip340"`.
-3. **Cryptographic verification (`SignatureSet`):** Each entry in `sigs` MUST name a `pk` present in `policy.pks`, MUST appear at most once per `pk`, and MUST verify strictly against `digest` under `policy.alg`. Verified distinct entries in `sigs` MUST number `>= policy.m`.
+1. **Structural validity (`SignatureSet`):** `policy.m` MUST satisfy `1 <= m <= len(policy.pks) <= 32`. `policy.pks` MUST be strictly sorted in ascending lexicographical hex order with no duplicates. Each entry in `sigs` carries strictly `{"pk","sig"}`, and `sigs` MUST be ordered by strictly ascending lexicographical `pk` with no duplicate `pk` (`WIRE_SIGNATURE` otherwise).
+2. **Canonical algorithm restriction (single encoding):** Standard `ThresholdPolicy` MUST omit `policy.alg` (implicitly `"bip340"`; supplying `"alg": "bip340"` is forbidden and refuses with `WIRE_MEMBER` so every policy has a single canonical encoding). `DeviceThresholdPolicy` (permitted **ONLY** on `seallink-owner-command/1` and `seallink-statement/1` when signed by a registered `device` key, `SPEC-03 §6`) either omits `policy.alg` (`"bip340"`, `xonly_64hex` keys) or sets `"alg": "p256"` (`compressed_66hex` keys) or `"alg": "ed25519"` (`ed25519_64hex` keys). All other signed objects (including every `guardian_approvals[i].signatures`) MUST omit `policy.alg` and use `"bip340"`.
+3. **Cryptographic verification (`SignatureSet`):** Each entry in `sigs` MUST name a `pk` present in `policy.pks`, MUST appear strictly once in ascending `pk` order, and MUST verify strictly against `digest` under the effective algorithm. Verified distinct entries in `sigs` MUST number `>= policy.m`.
 4. **Universal authoritative policy binding (ALL object types without exception):** Because `signatures.policy` lies outside `payload`, `signatures.policy` is NEVER trusted on its own. Every verifier MUST independently derive the **expected signing policy** from authoritative state (e.g., on-chain `link.<role>` for `grant`/`cred`/`notary`, `contract.parties[i].signing_policy`, `grant.recipient`, `grant.delegate.key`, `service.receipt_key`, `manifest.auth_key`, `seallink-device-list/1`, or each active slot guardian's resolved `link.grant` policy for `guardian_approvals[i].signatures`) and MUST require exact equality between `signatures.policy` and the derived expected policy. Any mismatch refuses with `WIRE_SIGNATURE`.
 5. **Guardian quorum approvals (`guardian_approvals[]`, `SPEC-04`):** When `payload.guardian_context` is present (permitted ONLY on `seallink-grant/1` and `seallink-assent/1`), the payload cryptographically binds `(origin_id, ward_name, revision, event_class)` and the envelope MUST use `guardian_approvals[]` (and MUST NOT carry top-level `signatures`). Entries in `guardian_approvals[]` (`1..32` items) MUST be ordered by strictly ascending `slot` (`1..32`, no duplicate slots; `WIRE_SIGNATURE` otherwise), and every entry's `revision` MUST equal `payload.guardian_context.revision` (`GUARDIAN_QUORUM_UNMET` otherwise). For each entry, the verifier resolves slot `slot` at the active roster revision: if the slot is not `active` or its active guardian's name does not equal `entry.guardian_name`, refuse `GUARDIAN_INACTIVE`; otherwise derive that guardian's current `link.grant` policy at tip and verify `entry.signatures` under rules 1–4 with exact policy equality (`WIRE_SIGNATURE` on policy or signature mismatch). Because each slot carries its own independent `SignatureSet`, multi-key guardians cannot pool keys across slots or double-count. All approving slots MUST resolve to distinct `(name, registration)` guardians (`GUARDIAN_INACTIVE` on conflict), and the count of distinct satisfied slots MUST satisfy `required(derived_event_class)` against `revision_size` (`GUARDIAN_QUORUM_UNMET` on shortfall).
 
@@ -125,13 +125,13 @@ For an invocation argument value `v` (a missing constrained argument ALWAYS fail
 
 | Op | Operand Form | Invocation Match (`arg v`) | Conservative Attenuation (`child <= parent`) |
 | --- | --- | --- | --- |
-| `eq` | `string \| bool` | `v == op` | `child` is `eq(op)` |
-| `in` | sorted unique nonempty array `<= 256` | `v in op` | `child` is `in(S')` with `S' ⊆ op`, OR `eq(x)` with `x in op` |
-| `not_in` | sorted unique nonempty array `<= 256` | `v not in op` | `child` is `not_in(S')` with `op ⊆ S'`, OR `in(S')` with `S' ∩ op = ∅`, OR `eq(x)` with `x not in op` |
-| `prefix` | nonempty `string` | `v.starts_with(op)` | `child` is `prefix(p')` with `p'.starts_with(op)`, OR `eq(x)` / `in(S')` where every element starts with `op` |
-| `suffix` | nonempty `string` | `v.ends_with(op)` | `child` is `suffix(s')` with `s'.ends_with(op)`, OR `eq(x)` / `in(S')` where every element ends with `op` |
-| `range` | `[uint64_str min, uint64_str max]`, `min <= max` | `min <= int(v) <= max` | `child` is `range([a,b])` with `min <= a <= b <= max`, OR `eq(x)` / `in(S')` where every integer lies in `[min, max]` |
-| `hash_eq` | `hex64` | `v == op` or `SHA256(bytes(v)) == op` (per profile) | `child` is `hash_eq(op)` |
+| `eq` | `string \| bool` | `type(v) == type(op)` and `v == op` | `child` is `eq(op)` |
+| `in` | sorted unique nonempty array `<= 256` of `string` | `v` is `string` and `v in op` | `child` is `in(S')` with `S' ⊆ op`, OR `eq(x)` (`x` is `string`) with `x in op` |
+| `not_in` | sorted unique nonempty array `<= 256` of `string` | `v` is `string` and `v not in op` | `child` is `not_in(S')` with `op ⊆ S'`, OR `in(S')` with `S' ∩ op = ∅`, OR `eq(x)` (`x` is `string`) with `x not in op` |
+| `prefix` | nonempty `string` | `v` is `string` and `v.starts_with(op)` | `child` is `prefix(p')` with `p'.starts_with(op)`, OR `eq(x)` / `in(S')` where every element is a `string` starting with `op` |
+| `suffix` | nonempty `string` | `v` is `string` and `v.ends_with(op)` | `child` is `suffix(s')` with `s'.ends_with(op)`, OR `eq(x)` / `in(S')` where every element is a `string` ending with `op` |
+| `range` | `[uint64_str min, uint64_str max]`, `0 <= min <= max <= 2^64-1` | `v` is canonical `uint64_str` (exact grammar, `<= 2^64-1`, no leading zeros/newlines) or schema-typed `uint53` integer with `min <= int(v) <= max` | `child` is `range([a,b])` with `min <= a <= b <= max`, OR `eq(x)` / `in(S')` where every element is a canonical `uint64_str` with `min <= int(x) <= max` |
+| `hash_eq` | `hex64` | `v` is `string` and (`v == op` OR `SHA256(UTF8(v)) == op`) | `child` is `hash_eq(op)` |
 
 > **Conservative comparison semantics:** The table above is intentionally conservative and performs no syntactic rewriting. For example, a parent using `eq("Invoices")` rejects a child using singleton `in(["Invoices"])`; to narrow `eq(x)`, a child MUST emit `eq(x)`.
 
@@ -149,16 +149,18 @@ A child capability `C` narrows a parent capability `P` iff:
 
 Every verifier parsing any SealLink object **MUST** execute checks in this exact order and return the **first** failure (`SL-WIRE-018`, `decided`):
 
-1. Size (`<= max_bytes`) and nesting depth (`<= 16`) (`SL-WIRE-001`) -> `WIRE_SIZE`
-2. UTF-8 / no BOM / trailing bytes / RFC 8259 JSON object (`SL-WIRE-002`) -> `WIRE_JSON`
+1. Pre-parse global size (`<= 1048576` bytes) (`SL-WIRE-001`) -> `WIRE_SIZE`
+2. Strict UTF-8 / no BOM / no leading or trailing bytes / single RFC 8259 JSON object (`SL-WIRE-002`) -> `WIRE_JSON`; container-only nesting depth `<= 16` (`SL-WIRE-001`) -> `WIRE_SIZE`
 3. Duplicate object member names (`SL-WIRE-003`) -> `WIRE_DUPLICATE`
 4. Disallowed `null` values (`SL-WIRE-004`) -> `WIRE_VALUE`
-5. Number token grammar (`SL-WIRE-007`) -> `WIRE_NUMBER`; string scalar ranges (`SL-WIRE-005`) -> `WIRE_STRING`
+5. Number token grammar (`SL-WIRE-007`) -> `WIRE_NUMBER`; global string scalar ranges (`SL-WIRE-005`, disallowing all controls except `U+000A` which is path-checked in Step 8) -> `WIRE_STRING`
 6. Restricted RFC 8785 byte-for-byte round-trip (`SL-WIRE-006`) -> `WIRE_NOT_CANONICAL`
 7. Registered `type` check (`SL-WIRE-010`) -> `WIRE_TYPE`
-8. Closed schema member check (`SL-WIRE-010`) -> `WIRE_MEMBER`; integer bounds (`SL-WIRE-007..009`) -> `WIRE_INTEGER`; Constraint Algebra sorting, range ordering, and `extensions` check (`SL-WIRE-015..016`) -> `WIRE_CONSTRAINT`
-9. Public key syntax and curve-point validation (`SL-WIRE-012`) -> `WIRE_KEY`
-10. Cryptographic signature verification, strictly ascending `guardian_approvals[]` slot order (where applicable), and `SignatureSet` threshold check (`SL-WIRE-013`) -> `WIRE_SIGNATURE`
+8. Per-type `max_bytes` check (`registry/object-types.json`) -> `WIRE_SIZE`; path-scoped LF (`U+000A`) check against `"x-seallink-allow-lf": true` paths -> `WIRE_STRING`; closed Draft 2020-12 JSON Schema validation and Constraint Algebra structural checks (`SL-WIRE-010`, `SL-WIRE-015..016`). When multiple schema constraints fail simultaneously, verifiers MUST select the first applicable refusal class from the schema's `x-seallink-refusal` annotations in this fixed deterministic precedence order:
+   `WIRE_TYPE` -> `WIRE_MEMBER` -> `WIRE_INTEGER` -> `WIRE_KEY` -> `WIRE_SIGNATURE` -> `WIRE_CONSTRAINT` -> `CHAIN_SCRIPT_UNSUPPORTED`.
+   *(Schema cross-field structural bans — e.g. `executor_ref` combined with quotas, `single_use`, or `delegate`; child grants carrying `delegate`; or `guardian_context` combined with top-level `signatures` — map deterministically to `WIRE_MEMBER` at Step 8 before semantic pipeline stages run.)*
+9. Public key syntax and curve-point validation across ALL key fields present in the object (`SL-WIRE-012`) -> `WIRE_KEY`
+10. Cryptographic signature verification, strictly ascending `sigs[].pk` and `guardian_approvals[].slot` ordering, and `SignatureSet` threshold check (`SL-WIRE-013`) -> `WIRE_SIGNATURE`
 
 ---
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.6.
+Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.7.
 
 Executes five end-to-end SealLink protocol traces on two fresh loopback-only
 Namecoin Core 28 regtest nodes under strict standard policy (`-acceptnonstdtxn=0`,
@@ -47,6 +47,7 @@ repository `tools/seallink_ref.py`, `tools/seallink_verifier.py`, and `tools/nc_
 from __future__ import annotations
 
 import argparse
+import copy
 from decimal import Decimal
 import hashlib
 import hmac
@@ -218,6 +219,36 @@ def build_signed_tx(
             sh = _bip143_sighash(version, inputs, outputs, locktime, idx, ws, inp["value_sat"])
             sig = ecdsa_sign_der_low_s(sh, inp["signer"]["sk"])
             witnesses.append([sig] + list(inp.get("selectors", [])) + [ws])
+        elif kind == "p2wsh_branch_both":
+            # Native P2WSH both_of_2(a_spec, b_spec) supporting 1-key OR m-of-n BranchKeySpec (Decision 6A)
+            ws = inp["witness_script"]
+            sh = _bip143_sighash(version, inputs, outputs, locktime, idx, ws, inp["value_sat"])
+            a_spec, b_spec = inp["a_spec"], inp["b_spec"]
+            lo, hi = sorted([a_spec, b_spec], key=sl._branch_spec_sort_key)
+            def _clause_items(spec: Any, signers_for: list[dict[str, Any]]) -> list[bytes]:
+                if isinstance(spec, str):
+                    return [ecdsa_sign_der_low_s(sh, signers_for[0]["sk"])]
+                ordered = sorted(signers_for, key=lambda x: x["comp"])
+                return [b""] + [ecdsa_sign_der_low_s(sh, k["sk"]) for k in ordered]
+            lo_signers = inp["a_signers"] if lo == a_spec else inp["b_signers"]
+            hi_signers = inp["b_signers"] if lo == a_spec else inp["a_signers"]
+            # Script executes lo (VERIFY) then hi -> witness pushes hi first, then lo on top!
+            witnesses.append(_clause_items(hi, hi_signers) + _clause_items(lo, lo_signers) + [ws])
+        elif kind == "p2wsh_branch_either":
+            # Native P2WSH either_of_2(a_spec, b_spec) with BranchKeySpec (OP_IF lo OP_ELSE hi OP_ENDIF)
+            ws = inp["witness_script"]
+            sh = _bip143_sighash(version, inputs, outputs, locktime, idx, ws, inp["value_sat"])
+            a_spec, b_spec = inp["a_spec"], inp["b_spec"]
+            lo, _hi = sorted([a_spec, b_spec], key=sl._branch_spec_sort_key)
+            chosen_spec = inp["chosen_spec"]
+            chosen_signers = inp["signers"]
+            if isinstance(chosen_spec, str):
+                items = [ecdsa_sign_der_low_s(sh, chosen_signers[0]["sk"])]
+            else:
+                ordered = sorted(chosen_signers, key=lambda x: x["comp"])
+                items = [b""] + [ecdsa_sign_der_low_s(sh, k["sk"]) for k in ordered]
+            selector = b"\x01" if chosen_spec == lo else b""
+            witnesses.append(items + [selector, ws])
         elif kind == "p2a":
             witnesses.append([])
         else:
@@ -745,18 +776,27 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
         "type": "seallink-manifest/1",
     }
     alice_man_ca = sl.content_addr(alice_man)
+    mal_own, mal_gr = kp("t1-mal-own"), kp("t1-mal-gr")
+    mal_pol = {"kind": "key", "pk": mal_own["comp"]}
     names_b = cl.register_names_batch([
         {"name": "id/t1-alice", "owner_policy": alice_pol, "owner_kp": alice_own, "value_obj": {"link": {"grant": alice_gr["xonly"]}, "m": {"h": alice_man_ca, "s": 1}}, "rand_label": "t1-alice"},
+        {"name": "id/t1-mallory", "owner_policy": mal_pol, "owner_kp": mal_own, "value_obj": {"link": {"grant": mal_gr["xonly"]}}, "rand_label": "t1-mallory"},
     ])
     names = {**names_a, **names_b}
     upd_txid, upd_raw = names["id/t1-alice"]["update_txid"], names["id/t1-alice"]["update_raw"]
 
-    # Create Alice's P2WPKH seal UTXO (vout=0) + issuance funding output (vout=1)
-    f = cl.split_funding(1, each_sat=3_000_000)[0]
+    # Create Alice's P2WPKH seal UTXO (vout=0) + linkage (vout=1), plus Mallory's seal (vout=2) + linkage (vout=3)
+    f = cl.split_funding(1, each_sat=5_000_000)[0]
     seal_spk, _ = sl.compile_script_policy(seal_pol)
     seal_txid, seal_raw = build_signed_tx(
         [f],
-        [(SEAL_SAT, seal_spk), (SEAL_SAT, seal_spk), (f["value_sat"] - 2 * SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+        [
+            (SEAL_SAT, seal_spk),
+            (SEAL_SAT, seal_spk),
+            (SEAL_SAT, seal_spk),
+            (SEAL_SAT, seal_spk),
+            (f["value_sat"] - 4 * SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
+        ],
     )
     cl.broadcast_and_wait_peer(seal_raw)
     recent_blk = cl.mine(1)[0]
@@ -777,21 +817,36 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
         "not_after_height": tip_h + 25,
         "not_before_height": tip_h - 1,
         "recent_block": recent_blk,
-        "recipient": {"mode": "name", "name": "id/t1-bob", "owner_policy": bob_pol},
+        "recipient": {"mode": "name", "name": "id/t1-bob", "owner_policy": bob_pol, "registration": names["id/t1-bob"]["registration"]},
         "revocation": {"construction": "W", "kind": "revocable", "mode": "seal", "seal": {"script_policy": seal_pol, "txid": seal_txid, "vout": 0}},
         "type": "seallink-grant/1",
     }
     grant_env = sl.sign_envelope(grant_p, [alice_gr["sk"]])
     gid = sl.object_id(grant_p)
 
-    # Broadcast real 0x01 OP_RETURN issuance tx spending seal_txid:1 (Witness Profile W!)
+    # Foreign-issuer B-1 attack grant: id/t1-mallory targeting mailbox:id/t1-alice:work
+    mal_grant_p = {
+        **copy.deepcopy(grant_p),
+        "issuer": {"name": "id/t1-mallory", "owner_policy": mal_pol, "registration": names["id/t1-mallory"]["registration"], "role_policy": {"m": 1, "pks": [mal_gr["xonly"]]}},
+        "revocation": {"construction": "W", "kind": "revocable", "mode": "seal", "seal": {"script_policy": seal_pol, "txid": seal_txid, "vout": 2}},
+    }
+    mal_grant_env = sl.sign_envelope(mal_grant_p, [mal_gr["sk"]])
+    mal_gid = sl.object_id(mal_grant_p)
+
+    # Broadcast real 0x01 OP_RETURN issuance txs spending (seal_txid, seal_vout + 1) (Witness Profile W + R3-H1!)
     iss_prep = {"genesis": cl.genesis_hash, "grant_content_addr": sl.content_addr(grant_env), "grant_id": gid, "type": "seallink-issuance/1"}
     iss_digest_hex = sl.signing_digest(iss_prep).hex()
     iss_txid, iss_raw = build_signed_tx(
         [{"txid": seal_txid, "vout": 1, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": alice_seal}],
         [(0, op_return_spk(0x01, iss_digest_hex)), (SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
     )
+    mal_iss_digest = sl.signing_digest({"genesis": cl.genesis_hash, "grant_content_addr": sl.content_addr(mal_grant_env), "grant_id": mal_gid, "type": "seallink-issuance/1"}).hex()
+    mal_iss_txid, mal_iss_raw = build_signed_tx(
+        [{"txid": seal_txid, "vout": 3, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": alice_seal}],
+        [(0, op_return_spk(0x01, mal_iss_digest)), (SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+    )
     cl.broadcast_and_wait_peer(iss_raw)
+    cl.broadcast_and_wait_peer(mal_iss_raw)
     cl.mine(1)
 
     manifests = {alice_man_ca: alice_man, host_man_ca: host_man}
@@ -799,7 +854,7 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
     v = sv.Tier1Verifier(pinned_network="regtest", pinned_genesis=cl.genesis_hash, require_jsonschema=True, require_observation_bracket=True)
     journal = sv.FencedJournal(sl.sha256(b"t1-regtest-j").hex())
 
-    def _mk_inv(tag: str, now_s: int) -> dict[str, Any]:
+    def _mk_inv(tag: str, now_s: int, use_gid: str = gid, use_itx: str = iss_txid) -> dict[str, Any]:
         return sl.sign_envelope(
             {
                 "action": "mail/read",
@@ -810,7 +865,7 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
                 "iat": now_s - 10,
                 "network": "regtest",
                 "nonce": sl.sha256(f"t1-n-{tag}".encode()).hex(),
-                "proof_path": [{"grant_id": gid, "issuance_txid": iss_txid}],
+                "proof_path": [{"grant_id": use_gid, "issuance_txid": use_itx}],
                 "target": "mailbox:id/t1-alice:work",
                 "type": "seallink-invocation/1",
             },
@@ -821,12 +876,14 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
     t1_ctr: dict[str, int] = {}
     obs1 = cl.new_cold_observer(rpc_counter=t1_ctr)
     inv_step1 = _mk_inv("step1", int(cl.rpc(1, "getblockheader", cl.rpc(1, "getbestblockhash"))["time"]) + 30)
-    ch1_dict = obs1.build_chain_view(wire_objects=[grant_env, inv_step1], manifests=manifests)
+    inv_mal = _mk_inv("mal-b1", int(cl.rpc(1, "getblockheader", cl.rpc(1, "getbestblockhash"))["time"]) + 30, use_gid=mal_gid, use_itx=mal_iss_txid)
+    ch1_dict = obs1.build_chain_view(wire_objects=[grant_env, mal_grant_env, inv_step1, inv_mal], manifests=manifests)
     assert t1_ctr.get("getblockchaininfo", 0) >= 2 and ch1_dict["observation_bracket"]["consistent"] is True
     ch1_pre_dict = obs1.pre_effect_recheck(ch1_dict, [(seal_txid, 0)])
     assert ch1_pre_dict["observation_bracket"]["pre_effect_rechecked"] is True
     ch1 = sv.ChainView(ch1_pre_dict)
-    res_admit = v.verify_invocation(
+    # Two-phase R1-A execution: admit_and_reserve() -> execute -> commit_result(late real receipt) -> idempotent retry!
+    p1_admit = v.admit_and_reserve(
         inv_step1,
         {"grants": [grant_env], "manifests": manifests},
         ch1,
@@ -834,7 +891,46 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
         exec_cfg,
         actual_message_meta={"folder": "Invoices", "sender_domain": "billing.example"},
     )
-    assert res_admit.verdict == "ADMIT", f"Trace 01 step 1 failed: {res_admit}"
+    assert p1_admit.verdict == "ADMIT", f"Trace 01 step 1 admit_and_reserve failed: {p1_admit}"
+    rcpt_step1 = sl.sign_envelope(
+        {
+            "action": "mail/read",
+            "executor_name": exec_cfg["name"],
+            "genesis": cl.genesis_hash,
+            "grant_id": gid,
+            "invocation_id": sl.object_id(inv_step1["payload"]),
+            "network": "regtest",
+            "outcome": "executed",
+            "recorded_at": p1_admit.details["recorded_at"],
+            "result_sha256": sl.sha256(b"t1-step1-mime-result").hex(),
+            "tip_hash": ch1.tip_hash,
+            "tip_height": ch1.tip_height,
+            "type": "seallink-receipt/1",
+        },
+        [host_rcpt["sk"]],
+    )
+    res_admit = v.commit_result(
+        rcpt_step1,
+        journal,
+        exec_cfg,
+        invocation_id=p1_admit.details["invocation_id"],
+        grant_id=p1_admit.details["grant_id"],
+        reserved_ops=p1_admit.details["reserved_ops"],
+        recorded_at=p1_admit.details["recorded_at"],
+        tip_height=p1_admit.details["tip_height"],
+    )
+    assert res_admit.verdict == "ADMIT" and res_admit.cached_receipt_content_addr == sl.content_addr(rcpt_step1), f"Trace 01 commit_result failed: {res_admit}"
+
+    # B-1 foreign-issuer mailbox attack MUST refuse GRANT_TARGET_UNAUTHORIZED on live regtest!
+    res_mal_b1 = v.verify_invocation(
+        inv_mal,
+        {"grants": [mal_grant_env], "manifests": manifests},
+        ch1,
+        journal,
+        exec_cfg,
+        actual_message_meta={"folder": "Invoices", "sender_domain": "billing.example"},
+    )
+    assert (res_mal_b1.verdict, res_mal_b1.refusal_code) == ("REFUSE", "GRANT_TARGET_UNAUTHORIZED"), f"Trace 01 B-1 foreign issuer got {res_mal_b1}"
 
     # Server MIME metadata mismatch negative control (spoofed sender_domain in MIME headers!)
     inv_mime_bad = _mk_inv("mime-bad", ch1.now)
@@ -905,6 +1001,7 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
         "revoke_seen_in_peer_b_mempool_before_mining": seen_mempool_b,
         "verdicts": {
             "initial_mail_read_executor_ref_named_recipient": {"verdict": res_admit.verdict, "outcome": res_admit.outcome},
+            "foreign_issuer_b1_mailbox_target": {"verdict": res_mal_b1.verdict, "refusal_code": res_mal_b1.refusal_code},
             "mime_metadata_mismatch": {"verdict": res_mime_bad.verdict, "refusal_code": res_mime_bad.refusal_code},
             "mempool_revocation": {"verdict": res_mempool_revoke.verdict, "refusal_code": res_mempool_revoke.refusal_code},
             "subsequent_invocation": {"verdict": res_closed.verdict, "refusal_code": res_closed.refusal_code},
@@ -918,7 +1015,9 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     0x0f roster transition, 0x10 RECOVERY_CANCEL, and live Tier1Verifier.verify_assent!"""
     reg_own = kp("t2-reg-own")
     reg_cred = kp("t2-reg-cred")
-    disp = kp("t2-disp")
+    # Decision 6A (OQ-007): Native P2WSH 2-of-3 BranchKeySpec for institutional disposer_pk LIVE on nc28.0!
+    disp1, disp2, disp3 = kp("t2-disp-1"), kp("t2-disp-2"), kp("t2-disp-3")
+    disp_spec = {"m": 2, "pks": sorted([disp1["comp"], disp2["comp"], disp3["comp"]])}
     arb = kp("t2-arb")
     chal = kp("t2-chal")
     bind_seal = kp("t2-bind")
@@ -941,18 +1040,18 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     g1_pol = {"kind": "key", "pk": g1_own["comp"]}
     g2_pol = {"kind": "key", "pk": g2_own["comp"]}
 
-    vac_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp["comp"], "b": arb["comp"]}}
+    vac_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp_spec, "b": arb["comp"]}}
     stat_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": stat_cap["comp"], "b": stat_end["comp"]}}
     rec_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": rec_disp["comp"], "b": rec_arb["comp"]}}
     bind_pol = {"kind": "key", "pk": bind_seal["comp"]}
-    g1_act_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp["comp"], "b": g1_seal["comp"]}}
-    g2_act_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp["comp"], "b": g2_seal["comp"]}}
+    g1_act_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp_spec, "b": g1_seal["comp"]}}
+    g2_act_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp_spec, "b": g2_seal["comp"]}}
     delay_blocks = 3
     pend_pol = {
         "kind": "branch",
         "template": "guardian_slot_pending",
         "delay_blocks": delay_blocks,
-        "keys": {"disposer": disp["comp"], "challenger": chal["comp"], "guardian": g2_seal["comp"]},
+        "keys": {"disposer": disp_spec, "challenger": chal["comp"], "guardian": g2_seal["comp"]},
     }
 
     vac_spk, vac_ws = sl.compile_script_policy(vac_pol)
@@ -964,15 +1063,14 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     pend_spk, pend_ws = sl.compile_script_policy(pend_pol)
     assert vac_ws and rec_ws and g1_act_ws and pend_ws
 
-    # Register all 4 identities on-chain (id/t2-child-leo directly with P2WSH 2-of-3 multisig!)
-    names = cl.register_names_batch([
+    # Register registry & guardians BEFORE origin 0x09 (ward name registered STRICTLY AFTER 0x09 per R3-B3!)
+    names_pre = cl.register_names_batch([
         {"name": "id/t2-civil-registry", "owner_policy": reg_pol, "owner_kp": reg_own, "value_obj": {"link": {"cred": reg_cred["xonly"]}}, "rand_label": "t2-reg"},
         {"name": "id/t2-parent-a", "owner_policy": g1_pol, "owner_kp": g1_own, "value_obj": {"link": {"grant": g1_gr["xonly"]}}, "rand_label": "t2-g1"},
         {"name": "id/t2-carol", "owner_policy": g2_pol, "owner_kp": g2_own, "value_obj": {"link": {"grant": g2_gr["xonly"]}}, "rand_label": "t2-g2"},
-        {"name": "id/t2-child-leo", "owner_policy": ward_ms_pol, "value_obj": {"link": {"grant": ward_gr["xonly"]}}, "rand_label": "t2-ward"},
     ])
 
-    # Pre-fund origin seals in a single confirmed setup tx (binding=0, status=1, recovery=2, roster=3, slot1_vacant=4, extra_fee=5..9)
+    # Pre-fund origin seals in a single confirmed setup tx (binding=0, status=1, recovery=2, roster=3, slot1_vacant=4)
     f_orig = cl.split_funding(6, each_sat=5_000_000)
     seals_txid, seals_raw = build_signed_tx(
         [f_orig[0]],
@@ -992,8 +1090,8 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     maj_unix = tip_time + 100_000_000
     maj_salt = sl.sha256(b"t2-maj-salt").hex()
     g1_salt = sl.sha256(b"t2-g1-salt").hex()
-    g1_pin = {"name": "id/t2-parent-a", "owner_policy": g1_pol, "registration": names["id/t2-parent-a"]["registration"]}
-    g2_pin = {"name": "id/t2-carol", "owner_policy": g2_pol, "registration": names["id/t2-carol"]["registration"]}
+    g1_pin = {"name": "id/t2-parent-a", "owner_policy": g1_pol, "registration": names_pre["id/t2-parent-a"]["registration"]}
+    g2_pin = {"name": "id/t2-carol", "owner_policy": g2_pol, "registration": names_pre["id/t2-carol"]["registration"]}
 
     origin_p = {
         "binding_seal": {"script_policy": bind_pol, "txid": seals_txid, "vout": 0},
@@ -1007,7 +1105,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
             "appointment_delay_blocks": delay_blocks,
             "arbiter_pk": arb["comp"],
             "challenger_pk": chal["comp"],
-            "disposer_pk": disp["comp"],
+            "disposer_pk": disp_spec,
             "quorums": {
                 "contract_assent": {"den": 1, "min": 1, "num": 1},
                 "custody_change": {"den": 1, "min": 1, "num": 1},
@@ -1025,7 +1123,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
                 }
             ],
         },
-        "issuer": {"name": "id/t2-civil-registry", "owner_policy": reg_pol, "registration": names["id/t2-civil-registry"]["registration"], "role_policy": {"m": 1, "pks": [reg_cred["xonly"]]}},
+        "issuer": {"name": "id/t2-civil-registry", "owner_policy": reg_pol, "registration": names_pre["id/t2-civil-registry"]["registration"], "role_policy": {"m": 1, "pks": [reg_cred["xonly"]]}},
         "name_recovery": {
             "arbiter_pk": rec_arb["comp"],
             "delay_blocks": 144,
@@ -1043,13 +1141,23 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     origin_env = sl.sign_envelope(origin_p, [reg_cred["sk"]])
     origin_id = sl.object_id(origin_p)
 
-    # Anchor 0x09 Origin on-chain!
+    # Anchor 0x09 Origin on-chain FIRST (h_origin < h_firstupdate per R3-B3)!
     anc09_txid, anc09_raw = build_signed_tx(
         [f_orig[1]],
         [(0, op_return_spk(0x09, sl.content_addr(origin_env))), (f_orig[1]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
     )
     cl.broadcast_and_wait_peer(anc09_raw)
     cl.mine(1)
+
+    # Register id/t2-child-leo (P2WSH 2-of-3 multisig!) strictly AFTER 0x09 origin anchor (R3-B3)!
+    names_ward = cl.register_names_batch([
+        {"name": "id/t2-child-leo", "owner_policy": ward_ms_pol, "value_obj": {"link": {"grant": ward_gr["xonly"]}}, "rand_label": "t2-ward"},
+    ])
+    names = {**names_pre, **names_ward}
+    # Renew pre-registered names once so none approach regtest's 30-block TTL during the trace!
+    cl.update_name_p2wpkh(names["id/t2-civil-registry"], "id/t2-civil-registry", reg_own, {"link": {"cred": reg_cred["xonly"]}})
+    cl.update_name_p2wpkh(names["id/t2-parent-a"], "id/t2-parent-a", g1_own, {"link": {"grant": g1_gr["xonly"]}})
+    cl.update_name_p2wpkh(names["id/t2-carol"], "id/t2-carol", g2_own, {"link": {"grant": g2_gr["xonly"]}})
 
     # Update id/t2-child-leo (P2WSH 2-of-3 multisig!) via REAL `createpsbt` + `namepsbt` + BIP-143 P2WSH 2-of-3 witness to bind origin_id!
     p2wsh_psbt_proof = cl.update_name_p2wsh_multisig_via_namepsbt(
@@ -1059,7 +1167,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         {"link": {"grant": ward_gr["xonly"], "origin": origin_id}},
     )
 
-    # Anchor 0x0c Name Binding strictly AFTER 0x09 height, spending origin.binding_seal!
+    # Anchor 0x0c Name Binding strictly AFTER 0x09 height & FIRSTUPDATE, spending origin.binding_seal!
     binding = {
         "genesis": cl.genesis_hash,
         "name": "id/t2-child-leo",
@@ -1080,7 +1188,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     cl.broadcast_and_wait_peer(anc0c_raw)
     cl.mine(1)
 
-    # 0x12 Initial activation of slot 1 (spending both_of_2 P2WSH vacant_slot_seal -> either_of_2 active seal!)
+    # 0x12 Initial activation of slot 1 (spending both_of_2(2-of-3 disposer, arbiter) P2WSH -> either_of_2 active seal!)
     g1_rec_p = {
         "activation_mode": "initial",
         "active_policy": g1_act_pol,
@@ -1115,7 +1223,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     )
     init12_txid, init12_raw = build_signed_tx(
         [
-            {"txid": seals_txid, "vout": 4, "value_sat": SEAL_SAT, "kind": "p2wsh_multisig", "witness_script": vac_ws, "signers": [disp, arb]},
+            {"txid": seals_txid, "vout": 4, "value_sat": SEAL_SAT, "kind": "p2wsh_branch_both", "witness_script": vac_ws, "a_spec": disp_spec, "b_spec": arb["comp"], "a_signers": [disp1, disp2], "b_signers": [arb]},
             f_orig[3],
         ],
         [
@@ -1127,10 +1235,10 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     cl.broadcast_and_wait_peer(init12_raw)
     cl.mine(1)
 
-    # Halt spend of slot 1's active either_of_2 seal (disposer key) -> creates new vacant slot 1 seal at vout=0!
+    # Halt spend of slot 1's active either_of_2(2-of-3 disposer, g1_seal) seal using 2-of-3 disposer branch -> vacant!
     halt_txid, halt_raw = build_signed_tx(
         [
-            {"txid": init12_txid, "vout": 0, "value_sat": SEAL_SAT, "kind": "p2wsh_multisig", "witness_script": g1_act_ws, "signers": [disp]},
+            {"txid": init12_txid, "vout": 0, "value_sat": SEAL_SAT, "kind": "p2wsh_branch_either", "witness_script": g1_act_ws, "a_spec": disp_spec, "b_spec": g1_seal["comp"], "chosen_spec": disp_spec, "signers": [disp1, disp3]},
             f_orig[4],
         ],
         [(SEAL_SAT, vac_spk), (f_orig[4]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
@@ -1138,13 +1246,13 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     cl.broadcast_and_wait_peer(halt_raw)
     cl.mine(1)
 
-    # 0x0f Roster transition to revision 2 creating a fresh vacant slot 1 seal (vout=1) & next roster seal (vout=0)
+    # 0x0f Roster transition to revision 2 (effective_delay_blocks == appointment_delay_blocks per B-15!)
     f_more = cl.split_funding(6, each_sat=2_000_000)
     roster2_p = {
         "arbiter_pk": arb["comp"],
         "challenger_pk": chal["comp"],
-        "disposer_pk": disp["comp"],
-        "effective_delay_blocks": 1,
+        "disposer_pk": disp_spec,
+        "effective_delay_blocks": delay_blocks,
         "genesis": cl.genesis_hash,
         "issuer": origin_p["issuer"],
         "network": "regtest",
@@ -1162,7 +1270,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     roster2 = sl.sign_envelope(roster2_p, [reg_cred["sk"]])
     rost0f_txid, rost0f_raw = build_signed_tx(
         [
-            {"txid": seals_txid, "vout": 3, "value_sat": SEAL_SAT, "kind": "p2wsh_multisig", "witness_script": vac_ws, "signers": [disp, arb]},
+            {"txid": seals_txid, "vout": 3, "value_sat": SEAL_SAT, "kind": "p2wsh_branch_both", "witness_script": vac_ws, "a_spec": disp_spec, "b_spec": arb["comp"], "a_signers": [disp2, disp3], "b_signers": [arb]},
             f_more[0],
         ],
         [
@@ -1173,10 +1281,9 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         ],
     )
     cl.broadcast_and_wait_peer(rost0f_raw)
-    cl.mine(1)
+    cl.mine(delay_blocks + 1)  # Wait for roster effective_delay_blocks to elapse BEFORE 0x0d on new_vacant (B-15)!
 
     # 0x0d Pending appointment of Carol on rev 2 slot 1 -> places guardian_slot_pending CSV P2WSH at lawful pending_vout=2!
-    # (vout 0 = OP_RETURN 0x0d, vout 1 = non-continuation change output, vout 2 = signed pending_vout!)
     g2_rec_p = {
         "activation_mode": "appointed",
         "active_policy": g2_act_pol,
@@ -1213,7 +1320,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     )
     pend0d_txid, pend0d_raw = build_signed_tx(
         [
-            {"txid": rost0f_txid, "vout": 1, "value_sat": SEAL_SAT, "kind": "p2wsh_multisig", "witness_script": vac_ws, "signers": [disp, arb]},
+            {"txid": rost0f_txid, "vout": 1, "value_sat": SEAL_SAT, "kind": "p2wsh_branch_both", "witness_script": vac_ws, "a_spec": disp_spec, "b_spec": arb["comp"], "a_signers": [disp1, disp2], "b_signers": [arb]},
             f_more[1],
         ],
         [
@@ -1388,6 +1495,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     assert r_new.verdict == "ADMIT", f"Trace 02 new Carol got {r_new}"
 
     return {
+        "decision_6a_branch_key_spec_2of3_verified": True,
         "p2wsh_2of3_namepsbt_update": p2wsh_psbt_proof,
         "origin_seals_txid": seals_txid,
         "origin_0x09_txid": anc09_txid,
@@ -1475,18 +1583,24 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         {"name": "id/t3-mail-host", "owner_policy": host_pol, "owner_kp": host_own, "value_obj": {"m": {"h": host_man_ca, "s": 1}}, "rand_label": "t3-host"},
     ])
 
-    f = cl.split_funding(8, each_sat=5_000_000)
-    # Tx 1: seals for TRUC P2A + single_use #1/#2 + depth-2 parent seal + child seals
+    f = cl.split_funding(8, each_sat=10_000_000)
+    # Tx 1: Even vouts = seals, Odd vouts = companion linkage coins (seal_vout + 1 per R3-H1!)
     seals_txid, seals_raw = build_signed_tx(
         [f[0]],
         [
-            (1_500_000, pseal_spk),  # vout 0: revocable seal for TRUC v3 P2A revocation test!
-            (SEAL_SAT, su1_spk),     # vout 1: single_use_1_of_2 #1 (grantee branch 0 + 0x11)
-            (SEAL_SAT, su2_spk),     # vout 2: single_use_1_of_2 #2 (issuer branch 1 revoke)
-            (SEAL_SAT, pseal_spk),   # vout 3: depth-2 parent grant seal
-            (SEAL_SAT, cseal_spk),   # vout 4: child #1 (row 1) seal
-            (SEAL_SAT, cseal_spk),   # vout 5: child #2 (row 2) seal
-            (f[0]["value_sat"] - 1_500_000 - 5 * SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
+            (1_500_000, pseal_spk),          # vout 0: revocable seal for TRUC v3 P2A revocation
+            (SEAL_SAT, cl.fund_key["p2wpkh_spk"]),  # vout 1: linkage for grev
+            (SEAL_SAT, su1_spk),             # vout 2: single_use_1_of_2 #1 (grantee branch 0 + 0x11)
+            (SEAL_SAT, cl.fund_key["p2wpkh_spk"]),  # vout 3: linkage for su1
+            (SEAL_SAT, su2_spk),             # vout 4: single_use_1_of_2 #2 (issuer branch 1 revoke)
+            (SEAL_SAT, cl.fund_key["p2wpkh_spk"]),  # vout 5: linkage for su2
+            (SEAL_SAT, pseal_spk),           # vout 6: depth-2 parent grant seal
+            (SEAL_SAT, cl.fund_key["p2wpkh_spk"]),  # vout 7: linkage for parent
+            (SEAL_SAT, cseal_spk),           # vout 8: child #1 (row 1) seal
+            (SEAL_SAT, cl.fund_key["p2wpkh_spk"]),  # vout 9: linkage for child #1
+            (SEAL_SAT, cseal_spk),           # vout 10: child #2 (row 2) seal
+            (SEAL_SAT, cl.fund_key["p2wpkh_spk"]),  # vout 11: linkage for child #2
+            (f[0]["value_sat"] - 1_500_000 - 11 * SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
         ],
     )
     cl.broadcast_and_wait_peer(seals_raw)
@@ -1509,20 +1623,20 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
 
     # --- Part A: Real Depth-2 Delegation + Sibling row_ordinal (1 & 2) + Crash/Restart Recovery ---
     parent_gp = {
-        "capabilities": [{"action": "mail/read", "quotas": [{"kind": "count", "max": "10", "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
+        "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": "10", "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
         "delegate": {
             "child_seal_key": cseal_k["comp"],
             "groups": [{
                 "ranges": [{"count": 2, "first": 0, "script_policy": row_pol, "txid": rows_txid}],
                 "template": {
-                    "capabilities": [{"action": "mail/read", "quotas": [{"kind": "count", "max": "2", "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
+                    "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": "2", "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
                     "executor": exec_cfg,
                     "notary_mode": "none",
                     "recipient_rule": {"key": child_req["xonly"], "mode": "exact_key"},
                 },
             }],
             "key": del_k["xonly"],
-            "pools": [{"kind": "count", "max": "4", "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}],
+            "pools": [{"kind": "seallink/count", "max": "4", "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}],
         },
         "executor": exec_cfg,
         "genesis": cl.genesis_hash,
@@ -1532,7 +1646,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         "not_before_height": tip_h - 1,
         "recent_block": recent_blk,
         "recipient": {"key": agent_req["xonly"], "mode": "key"},
-        "revocation": {"construction": "W", "kind": "revocable", "mode": "seal", "seal": {"script_policy": pseal_pol, "txid": seals_txid, "vout": 3}},
+        "revocation": {"construction": "W", "kind": "revocable", "mode": "seal", "seal": {"script_policy": pseal_pol, "txid": seals_txid, "vout": 6}},
         "type": "seallink-grant/1",
     }
     parent_env = sl.sign_envelope(parent_gp, [alice_gr["sk"]])
@@ -1540,7 +1654,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
 
     def _mk_child(ordinal: int, seal_vout: int, row_max: str) -> tuple[dict[str, Any], str]:
         cp = {
-            "capabilities": [{"action": "mail/read", "quotas": [{"kind": "count", "max": row_max, "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
+            "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": row_max, "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
             "executor": exec_cfg,
             "genesis": cl.genesis_hash,
             "network": "regtest",
@@ -1554,12 +1668,18 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         }
         return sl.sign_envelope(cp, [del_k["sk"]]), sl.object_id(cp)
 
-    c1_env, c1_gid = _mk_child(1, 4, "2")
-    c2_env, c2_gid = _mk_child(2, 5, "2")
+    c1_env, c1_gid = _mk_child(1, 8, "2")
+    c2_env, c2_gid = _mk_child(2, 10, "2")
 
     def _mk_su_grant(vout: int, pol: dict[str, Any], tag: str) -> tuple[dict[str, Any], str]:
+        tgt = f"mailbox:id/t3-alice:{tag}"
         gp = {
-            "capabilities": [{"action": "mail/send", "target": f"mailbox:{tag}", "where": {}}],
+            "capabilities": [{
+                "action": "mail/send",
+                "quotas": [{"kind": "seallink/count", "max": "5", "resource": tgt, "unit": "messages", "window": "term"}],
+                "target": tgt,
+                "where": {},
+            }],
             "executor": exec_cfg,
             "genesis": cl.genesis_hash,
             "issuer": {"name": "id/t3-alice", "owner_policy": alice_pol, "registration": names["id/t3-alice"]["registration"], "role_policy": {"m": 1, "pks": [alice_gr["xonly"]]}},
@@ -1573,10 +1693,15 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         }
         return sl.sign_envelope(gp, [alice_gr["sk"]]), sl.object_id(gp)
 
-    g1_env, g1_id = _mk_su_grant(1, su1_pol, "su1")
-    g2_env, g2_id = _mk_su_grant(2, su2_pol, "su2")
+    g1_env, g1_id = _mk_su_grant(2, su1_pol, "su1")
+    g2_env, g2_id = _mk_su_grant(4, su2_pol, "su2")
     gp_rev = {
-        "capabilities": [{"action": "mail/send", "target": "mailbox:p2a", "where": {}}],
+        "capabilities": [{
+            "action": "mail/send",
+            "quotas": [{"kind": "seallink/count", "max": "5", "resource": "mailbox:id/t3-alice:p2a", "unit": "messages", "window": "term"}],
+            "target": "mailbox:id/t3-alice:p2a",
+            "where": {},
+        }],
         "executor": exec_cfg,
         "genesis": cl.genesis_hash,
         "issuer": {"name": "id/t3-alice", "owner_policy": alice_pol, "registration": names["id/t3-alice"]["registration"], "role_policy": {"m": 1, "pks": [alice_gr["xonly"]]}},
@@ -1591,27 +1716,33 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
     grev_env = sl.sign_envelope(gp_rev, [alice_gr["sk"]])
     grev_id = sl.object_id(gp_rev)
 
-    def _issue(g_env: dict[str, Any], gid: str, fund_u: dict[str, Any]) -> tuple[str, str]:
+    def _issue(g_env: dict[str, Any], gid: str, link_vout: int) -> tuple[str, str]:
         d_hex = sl.signing_digest({"genesis": cl.genesis_hash, "grant_content_addr": sl.content_addr(g_env), "grant_id": gid, "type": "seallink-issuance/1"}).hex()
-        txid, raw_h = build_signed_tx([fund_u], [(0, op_return_spk(0x01, d_hex)), (fund_u["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"])])
-        cl.broadcast_and_wait_peer(raw_h)
-        return txid, raw_h
-
-    def _issue_child_spending_row(c_env: dict[str, Any], c_gid: str, row_vout: int) -> tuple[str, str]:
-        d_hex = sl.signing_digest({"genesis": cl.genesis_hash, "grant_content_addr": sl.content_addr(c_env), "grant_id": c_gid, "type": "seallink-issuance/1"}).hex()
         txid, raw_h = build_signed_tx(
-            [{"txid": rows_txid, "vout": row_vout, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": row_k}],
+            [{"txid": seals_txid, "vout": link_vout, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": cl.fund_key}],
             [(0, op_return_spk(0x01, d_hex)), (SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
         )
         cl.broadcast_and_wait_peer(raw_h)
         return txid, raw_h
 
-    iss_par_txid, iss_par_raw = _issue(parent_env, parent_gid, f[7])
-    iss_c1_txid, iss_c1_raw = _issue_child_spending_row(c1_env, c1_gid, 0)
-    iss_c2_txid, iss_c2_raw = _issue_child_spending_row(c2_env, c2_gid, 1)
-    iss1_txid, iss1_raw = _issue(g1_env, g1_id, f[1])
-    iss2_txid, iss2_raw = _issue(g2_env, g2_id, f[2])
-    issr_txid, issr_raw = _issue(grev_env, grev_id, f[3])
+    def _issue_child_spending_row(c_env: dict[str, Any], c_gid: str, row_vout: int, link_vout: int) -> tuple[str, str]:
+        d_hex = sl.signing_digest({"genesis": cl.genesis_hash, "grant_content_addr": sl.content_addr(c_env), "grant_id": c_gid, "type": "seallink-issuance/1"}).hex()
+        txid, raw_h = build_signed_tx(
+            [
+                {"txid": rows_txid, "vout": row_vout, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": row_k},
+                {"txid": seals_txid, "vout": link_vout, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": cl.fund_key},
+            ],
+            [(0, op_return_spk(0x01, d_hex)), (2 * SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+        )
+        cl.broadcast_and_wait_peer(raw_h)
+        return txid, raw_h
+
+    iss_par_txid, iss_par_raw = _issue(parent_env, parent_gid, 7)
+    iss_c1_txid, iss_c1_raw = _issue_child_spending_row(c1_env, c1_gid, 0, 9)
+    iss_c2_txid, iss_c2_raw = _issue_child_spending_row(c2_env, c2_gid, 1, 11)
+    iss1_txid, iss1_raw = _issue(g1_env, g1_id, 3)
+    iss2_txid, iss2_raw = _issue(g2_env, g2_id, 5)
+    issr_txid, issr_raw = _issue(grev_env, grev_id, 1)
     cl.mine(1)
 
     # Child #1 single_use: Grantee spends single_use_1_of_2 via BRANCH 0 (selector=b"") + 0x11 OP_RETURN!
@@ -1626,14 +1757,14 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
             "network": "regtest",
             "nonce": sl.sha256(b"t3-su1-n").hex(),
             "proof_path": [{"grant_id": g1_id, "issuance_txid": iss1_txid}],
-            "target": "mailbox:su1",
+            "target": "mailbox:id/t3-alice:su1",
             "type": "seallink-invocation/1",
         },
         [agent_req["sk"]],
     )
     use1_txid, use1_raw = build_signed_tx(
         [
-            {"txid": seals_txid, "vout": 1, "value_sat": SEAL_SAT, "kind": "p2wsh_single_key_branch", "witness_script": su1_ws, "signer": su_gr1, "selectors": [b""]},
+            {"txid": seals_txid, "vout": 2, "value_sat": SEAL_SAT, "kind": "p2wsh_single_key_branch", "witness_script": su1_ws, "signer": su_gr1, "selectors": [b""]},
             f[4],
         ],
         [
@@ -1645,7 +1776,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
 
     # Child #2 single_use: Issuer revokes single_use_1_of_2 via BRANCH 1 (selector=b"\x01", NO 0x11)!
     rev2_txid, rev2_raw = build_signed_tx(
-        [{"txid": seals_txid, "vout": 2, "value_sat": SEAL_SAT, "kind": "p2wsh_single_key_branch", "witness_script": su2_ws, "signer": su_iss, "selectors": [b"\x01"]}],
+        [{"txid": seals_txid, "vout": 4, "value_sat": SEAL_SAT, "kind": "p2wsh_single_key_branch", "witness_script": su2_ws, "signer": su_iss, "selectors": [b"\x01"]}],
         [(SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
     )
     cl.broadcast_and_wait_peer(rev2_raw)
@@ -1714,9 +1845,10 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
             "network": "regtest",
             "outcome": "executed",
             "recorded_at": ch.now,
+            "result_sha256": sl.sha256(b"t3-r1-1-res").hex(),
             "settlements": [
-                {"account": "own", "kind": "count", "released": "0", "reserved": "1", "resource": "mail/read", "settled": "1", "unit": "calls", "window": "seconds:3600"},
-                {"account": "row", "kind": "count", "released": "0", "reserved": "1", "resource": "mail/read", "row_ordinal": 1, "settled": "1", "unit": "calls", "window": "seconds:3600"},
+                {"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mail/read", "settled": "1", "unit": "calls", "window": "seconds:3600"},
+                {"account": "row", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mail/read", "row_ordinal": 1, "settled": "1", "unit": "calls", "window": "seconds:3600"},
             ],
             "tip_hash": ch.tip_hash,
             "tip_height": ch.tip_height,
@@ -1726,28 +1858,50 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
     )
     r_d_r1 = v.verify_invocation(inv_r1_1, del_bundle, ch, journal, exec_cfg, receipt_env_for_cache=rcpt_r1_1)
     assert r_d_r1.verdict == "ADMIT", f"Trace 03 depth-2 row 1 failed: {r_d_r1}"
-    r_d_r2_1 = v.verify_invocation(_mk_del_inv(c2_gid, iss_c2_txid, "r2-1"), del_bundle, ch, journal, exec_cfg)
-    r_d_r2_2 = v.verify_invocation(_mk_del_inv(c2_gid, iss_c2_txid, "r2-2"), del_bundle, ch, journal, exec_cfg)
+    inv_r2_1 = _mk_del_inv(c2_gid, iss_c2_txid, "r2-1")
+    rcpt_r2_1 = sl.sign_envelope(
+        {**rcpt_r1_1["payload"], "grant_id": c2_gid, "invocation_id": sl.object_id(inv_r2_1["payload"]), "result_sha256": sl.sha256(b"t3-r2-1-res").hex(),
+         "settlements": [{"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mail/read", "settled": "1", "unit": "calls", "window": "seconds:3600"},
+                         {"account": "row", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mail/read", "row_ordinal": 2, "settled": "1", "unit": "calls", "window": "seconds:3600"}]},
+        [host_rcpt["sk"]],
+    )
+    inv_r2_2 = _mk_del_inv(c2_gid, iss_c2_txid, "r2-2")
+    rcpt_r2_2 = sl.sign_envelope({**rcpt_r2_1["payload"], "invocation_id": sl.object_id(inv_r2_2["payload"]), "result_sha256": sl.sha256(b"t3-r2-2-res").hex()}, [host_rcpt["sk"]])
+    r_d_r2_1 = v.verify_invocation(inv_r2_1, del_bundle, ch, journal, exec_cfg, receipt_env_for_cache=rcpt_r2_1)
+    r_d_r2_2 = v.verify_invocation(inv_r2_2, del_bundle, ch, journal, exec_cfg, receipt_env_for_cache=rcpt_r2_2)
     assert r_d_r2_1.verdict == "ADMIT" and r_d_r2_2.verdict == "ADMIT", f"Trace 03 row 2 calls failed: {r_d_r2_1}, {r_d_r2_2}"
-    # Parent pool now 1 (row 1) + 2 (row 2) = 3/3 -> next call MUST refuse QUOTA_EXCEEDED with 0 writes!
+    # Row 2 now at 2/2 -> next call on row 2 MUST refuse QUOTA_EXCEEDED with 0 writes!
     before_over = len(journal.entries)
     r_d_over = v.verify_invocation(_mk_del_inv(c2_gid, iss_c2_txid, "r2-over"), del_bundle, ch, journal, exec_cfg)
     assert (r_d_over.verdict, r_d_over.refusal_code) == ("REFUSE", "QUOTA_EXCEEDED") and len(journal.entries) == before_over
 
-    # Persist journal + receipt_store to JSON, reconstruct fresh FencedJournal via replay_persisted_entries!
+    # Persist journal + receipt_store to JSON, reconstruct fresh FencedJournal via witness-verified replay_persisted_entries!
     persisted_entries = json.loads(json.dumps(journal.entries))
     persisted_store = json.loads(json.dumps(journal.receipt_store))
-    restarted_j = sv.FencedJournal.replay_persisted_entries(journal.journal_id, persisted_entries, receipt_store=persisted_store)
+    restarted_j = sv.FencedJournal.replay_persisted_entries(
+        journal.journal_id, persisted_entries, receipt_store=persisted_store,
+        witness_pos=journal.witness_pos, witness_commitment=journal.witness_commitment,
+    )
+    assert restarted_j.check_continuity() is None
     assert restarted_j.commitment == journal.commitment and restarted_j.quotas_used == journal.quotas_used
     assert restarted_j.quota_watermarks == journal.quota_watermarks
+    # H-8: truncated rollback relative to witness_pos MUST refuse JOURNAL_LOST!
+    rollback_j = sv.FencedJournal.replay_persisted_entries(
+        journal.journal_id, persisted_entries[:-1], receipt_store=persisted_store,
+        witness_pos=journal.witness_pos, witness_commitment=journal.witness_commitment,
+    )
+    assert rollback_j.check_continuity() == "JOURNAL_LOST", f"Expected JOURNAL_LOST on rollback, got {rollback_j.check_continuity()}"
     # Check distinct row_ordinal accounts preserved!
     r1_scopes = [v_u for (sc, _q, _b), v_u in restarted_j.quotas_used.items() if sc == f"row:{parent_gid}:1"]
     r2_scopes = [v_u for (sc, _q, _b), v_u in restarted_j.quotas_used.items() if sc == f"row:{parent_gid}:2"]
     assert r1_scopes == [1] and r2_scopes == [2], f"Distinct row_ordinal accounts failed: r1={r1_scopes}, r2={r2_scopes}"
 
-    # Post-restart clock rollback MUST refuse QUOTA_CLOCK_REGRESSION!
+    # Post-restart clock rollback (fresh observer clock starting 1s behind persisted journal watermark) MUST refuse QUOTA_CLOCK_REGRESSION!
     ch_back_dict = json.loads(json.dumps(ch_dict))
     ch_back_dict["now"] = ch.now - 1
+    ch_back_dict["clock_watermark"] = ch.now - 1
+    if isinstance(ch_back_dict.get("rebracket_tip"), dict):
+        ch_back_dict["rebracket_tip"]["now"] = ch.now - 1
     r_d_back = v.verify_invocation(_mk_del_inv(c1_gid, iss_c1_txid, "r1-back"), del_bundle, sv.ChainView(ch_back_dict), restarted_j, exec_cfg)
     assert (r_d_back.verdict, r_d_back.refusal_code) == ("REFUSE", "QUOTA_CLOCK_REGRESSION"), f"Post-restart clock rollback got {r_d_back}"
 
@@ -1763,8 +1917,26 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
     r_d_crash = v.verify_invocation(inv_crash, del_bundle, ch, crash_j, exec_cfg, simulate_crash_before_settlement=True)
     assert r_d_crash.verdict == "UNCERTAIN"
 
-    # 2. Single-use #1 branch-0 0x11 -> ADMIT, then new-nonce replay -> INVOKE_REPLAY
-    r_su1 = v.verify_invocation(inv1_env, {"grants": [g1_env], "manifests": {host_man_ca: host_man}}, ch, restarted_j, exec_cfg, use_txid=use1_txid)
+    # 2. Single-use #1 branch-0 0x11 -> two-phase ADMIT + commit_result(real receipt), then new-nonce replay -> INVOKE_REPLAY
+    rcpt_su1 = sl.sign_envelope(
+        {
+            "action": "mail/send",
+            "executor_name": exec_cfg["name"],
+            "genesis": cl.genesis_hash,
+            "grant_id": g1_id,
+            "invocation_id": sl.object_id(inv1_env["payload"]),
+            "network": "regtest",
+            "outcome": "executed",
+            "recorded_at": ch.now,
+            "result_sha256": sl.sha256(b"t3-su1-res").hex(),
+            "settlements": [{"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mailbox:id/t3-alice:su1", "settled": "1", "unit": "messages", "window": "term"}],
+            "tip_hash": ch.tip_hash,
+            "tip_height": ch.tip_height,
+            "type": "seallink-receipt/1",
+        },
+        [host_rcpt["sk"]],
+    )
+    r_su1 = v.verify_invocation(inv1_env, {"grants": [g1_env], "manifests": {host_man_ca: host_man}}, ch, restarted_j, exec_cfg, use_txid=use1_txid, receipt_env_for_cache=rcpt_su1)
     assert r_su1.verdict == "ADMIT", f"Trace 03 su1 failed: {r_su1}"
     inv1_replay = sl.sign_envelope({**inv1_env["payload"], "nonce": sl.sha256(b"t3-su1-replay").hex()}, [agent_req["sk"]])
     r_su1_rep = v.verify_invocation(inv1_replay, {"grants": [g1_env], "manifests": {host_man_ca: host_man}}, ch, restarted_j, exec_cfg, use_txid=use1_txid)
@@ -1782,7 +1954,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
             "network": "regtest",
             "nonce": sl.sha256(b"t3-su2-n1").hex(),
             "proof_path": [{"grant_id": g2_id, "issuance_txid": iss2_txid}],
-            "target": "mailbox:su2",
+            "target": "mailbox:id/t3-alice:su2",
             "type": "seallink-invocation/1",
         },
         [agent_req["sk"]],
@@ -1805,7 +1977,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
             "network": "regtest",
             "nonce": sl.sha256(b"t3-p2a-n").hex(),
             "proof_path": [{"grant_id": grev_id, "issuance_txid": issr_txid}],
-            "target": "mailbox:p2a",
+            "target": "mailbox:id/t3-alice:p2a",
             "type": "seallink-invocation/1",
         },
         [agent_req["sk"]],
@@ -1874,6 +2046,7 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
     bind_pol = {"kind": "key", "pk": bind_seal["comp"]}
     ga_act_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp["comp"], "b": ga_seal["comp"]}}
     gb_act_pol = {"kind": "branch", "template": "either_of_2", "keys": {"a": disp["comp"], "b": gb_seal["comp"]}}
+    rec_pol = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp["comp"], "b": arb["comp"]}}
     gseal_pol = {"kind": "key", "pk": gseal_k["comp"]}
 
     vac_spk, vac_ws = sl.compile_script_policy(vac_pol)
@@ -1881,28 +2054,32 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
     bind_spk, _ = sl.compile_script_policy(bind_pol)
     ga_act_spk, _ = sl.compile_script_policy(ga_act_pol)
     gb_act_spk, _ = sl.compile_script_policy(gb_act_pol)
+    rec_spk, _ = sl.compile_script_policy(rec_pol)
     gseal_spk, _ = sl.compile_script_policy(gseal_pol)
     assert vac_ws
 
-    names = cl.register_names_batch([
+    # Register registry & guardians BEFORE origin 0x09 (id/t4-ward registered strictly AFTER 0x09 per R3-B3!)
+    names_pre = cl.register_names_batch([
         {"name": "id/t4-civil-registry", "owner_policy": reg_pol, "owner_kp": reg_own, "value_obj": {"link": {"cred": reg_cred["xonly"]}}, "rand_label": "t4-reg"},
         {"name": "id/t4-guardian-a", "owner_policy": ga_pol, "owner_kp": ga_own, "value_obj": {"link": {"grant": ga_gr["xonly"]}}, "rand_label": "t4-ga"},
         {"name": "id/t4-guardian-b", "owner_policy": gb_pol, "owner_kp": gb_own, "value_obj": {"link": {"grant": gb_gr["xonly"]}}, "rand_label": "t4-gb"},
-        {"name": "id/t4-ward", "owner_policy": ward_pol, "owner_kp": ward_own, "value_obj": {"link": {"grant": ga_gr["xonly"]}}, "rand_label": "t4-ward"},
     ])
 
-    f = cl.split_funding(7, each_sat=5_000_000)
+    f = cl.split_funding(7, each_sat=10_000_000)
     seals_txid, seals_raw = build_signed_tx(
         [f[0]],
         [
-            (SEAL_SAT, bind_spk),   # 0: binding_seal
-            (SEAL_SAT, stat_spk),   # 1: status_seal
-            (SEAL_SAT, vac_spk),    # 2: roster_seal
-            (SEAL_SAT, vac_spk),    # 3: slot 1 vacant
-            (SEAL_SAT, vac_spk),    # 4: slot 2 vacant
-            (SEAL_SAT, gseal_spk),  # 5: grant seal
-            (SEAL_SAT, gseal_spk),  # 6: issuance input
-            (f[0]["value_sat"] - 7 * SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
+            (SEAL_SAT, bind_spk),                    # 0: binding_seal
+            (SEAL_SAT, stat_spk),                    # 1: status_seal
+            (SEAL_SAT, vac_spk),                     # 2: roster_seal
+            (SEAL_SAT, vac_spk),                     # 3: slot 1 vacant
+            (SEAL_SAT, vac_spk),                     # 4: slot 2 vacant
+            (SEAL_SAT, rec_spk),                     # 5: recovery_seal (D-2)
+            (SEAL_SAT, gseal_spk),                   # 6: g_2of2 grant seal
+            (SEAL_SAT, cl.fund_key["p2wpkh_spk"]),   # 7: g_2of2 linkage (R3-H1)
+            (SEAL_SAT, gseal_spk),                   # 8: g_1of2 grant seal
+            (SEAL_SAT, cl.fund_key["p2wpkh_spk"]),   # 9: g_1of2 linkage (R3-H1)
+            (f[0]["value_sat"] - 10 * SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
         ],
     )
     cl.broadcast_and_wait_peer(seals_raw)
@@ -1913,8 +2090,8 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
     maj_salt = sl.sha256(b"t4-maj-salt").hex()
     sa = sl.sha256(b"t4-sa").hex()
     sb = sl.sha256(b"t4-sb").hex()
-    ga_pin = {"name": "id/t4-guardian-a", "owner_policy": ga_pol, "registration": names["id/t4-guardian-a"]["registration"]}
-    gb_pin = {"name": "id/t4-guardian-b", "owner_policy": gb_pol, "registration": names["id/t4-guardian-b"]["registration"]}
+    ga_pin = {"name": "id/t4-guardian-a", "owner_policy": ga_pol, "registration": names_pre["id/t4-guardian-a"]["registration"]}
+    gb_pin = {"name": "id/t4-guardian-b", "owner_policy": gb_pol, "registration": names_pre["id/t4-guardian-b"]["registration"]}
 
     origin_p = {
         "binding_seal": {"script_policy": bind_pol, "txid": seals_txid, "vout": 0},
@@ -1943,8 +2120,14 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
                 {"initial_guardian_commitment": sl.clause_commit(sb, gb_pin), "slot": 2, "vacant_utxo": {"txid": seals_txid, "vout": 4}},
             ],
         },
-        "issuer": {"name": "id/t4-civil-registry", "owner_policy": reg_pol, "registration": names["id/t4-civil-registry"]["registration"], "role_policy": {"m": 1, "pks": [reg_cred["xonly"]]}},
-        "name_recovery": {"mode": "none"},
+        "issuer": {"name": "id/t4-civil-registry", "owner_policy": reg_pol, "registration": names_pre["id/t4-civil-registry"]["registration"], "role_policy": {"m": 1, "pks": [reg_cred["xonly"]]}},
+        "name_recovery": {
+            "arbiter_pk": arb["comp"],
+            "delay_blocks": 144,
+            "disposer_pk": disp["comp"],
+            "mode": "dual_party_delayed",
+            "recovery_seal": {"script_policy": rec_pol, "txid": seals_txid, "vout": 5},
+        },
         "network": "regtest",
         "origin_class": "person",
         "request_sha256": sl.sha256(b"t4-origin-req").hex(),
@@ -1962,7 +2145,18 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
     cl.broadcast_and_wait_peer(anc09_raw)
     cl.mine(1)
 
-    upd_w_txid, _ = cl.update_name_p2wpkh(names["id/t4-ward"], "id/t4-ward", ward_own, {"link": {"grant": ga_gr["xonly"], "origin": origin_id}})
+    # Register id/t4-ward strictly AFTER 0x09 origin anchor (R3-B3), and renew pre-registered names once!
+    names_ward = cl.register_names_batch([
+        {"name": "id/t4-ward", "owner_policy": ward_pol, "owner_kp": ward_own, "value_obj": {"link": {"grant": ga_gr["xonly"], "origin": origin_id}}, "rand_label": "t4-ward"},
+    ])
+    names = {**names_pre, **names_ward}
+    cl.update_name_p2wpkh(names["id/t4-civil-registry"], "id/t4-civil-registry", reg_own, {"link": {"cred": reg_cred["xonly"]}})
+    cl.update_name_p2wpkh(names["id/t4-guardian-a"], "id/t4-guardian-a", ga_own, {"link": {"grant": ga_gr["xonly"]}})
+    cl.update_name_p2wpkh(names["id/t4-guardian-b"], "id/t4-guardian-b", gb_own, {"link": {"grant": gb_gr["xonly"]}})
+    recent_blk = cl.rpc(1, "getbestblockhash")
+    tip_h = cl.rpc(1, "getblockcount")
+    tip_time = int(cl.rpc(1, "getblockheader", recent_blk)["time"])
+
     binding = {
         "genesis": cl.genesis_hash,
         "name": "id/t4-ward",
@@ -2037,7 +2231,7 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
     raw_msg = b"Homework reminder: math worksheet by 18:00."
     msg_sha = sl.sha256(raw_msg).hex()
 
-    def _mk_ward_grant(ev_cls: str, approvs: list[dict[str, Any]], f_u: dict[str, Any]):
+    def _mk_ward_grant(ev_cls: str, approvs: list[dict[str, Any]], seal_vout: int, link_vout: int):
         gp = {
             "capabilities": [{"action": "agent/guardian-message", "target": f"ward:{origin_id}", "where": {}}],
             "executor": {"key": station_rcpt["xonly"], "name": "id/t4-station"},
@@ -2045,17 +2239,20 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
             "guardian_context": {"event_class": ev_cls, "origin_id": origin_id, "revision": 1, "ward_name": "id/t4-ward"},
             "issuer": {"name": "id/t4-ward", "owner_policy": ward_pol, "registration": names["id/t4-ward"]["registration"]},
             "network": "regtest",
-            "not_after_height": tip_h + 25,
+            "not_after_height": tip_h + 15,
             "not_before_height": tip_h - 1,
             "recent_block": recent_blk,
             "recipient": {"key": bridge_req["xonly"], "mode": "key"},
-            "revocation": {"construction": "W", "kind": "revocable", "mode": "seal", "seal": {"script_policy": gseal_pol, "txid": seals_txid, "vout": 5}},
+            "revocation": {"construction": "W", "kind": "revocable", "mode": "seal", "seal": {"script_policy": gseal_pol, "txid": seals_txid, "vout": seal_vout}},
             "type": "seallink-grant/1",
         }
         genv = sl.sign_guardian_envelope(gp, approvs)
         gid = sl.object_id(gp)
         d_hex = sl.signing_digest({"genesis": cl.genesis_hash, "grant_content_addr": sl.content_addr(genv), "grant_id": gid, "type": "seallink-issuance/1"}).hex()
-        itx, iraw = build_signed_tx([f_u], [(0, op_return_spk(0x01, d_hex)), (f_u["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"])])
+        itx, iraw = build_signed_tx(
+            [{"txid": seals_txid, "vout": link_vout, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": cl.fund_key}],
+            [(0, op_return_spk(0x01, d_hex)), (SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+        )
         cl.broadcast_and_wait_peer(iraw)
         return genv, gid, itx, iraw
 
@@ -2065,12 +2262,14 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
             {"slot": 1, "revision": 1, "guardian_name": "id/t4-guardian-a", "signers": [ga_gr["sk"]]},
             {"slot": 2, "revision": 1, "guardian_name": "id/t4-guardian-b", "signers": [gb_gr["sk"]]},
         ],
-        f[5],
+        6,
+        7,
     )
     g_1of2, gid_1of2, iss_bad_txid, iss_bad_raw = _mk_ward_grant(
         "routine_read",
         [{"slot": 1, "revision": 1, "guardian_name": "id/t4-guardian-a", "signers": [ga_gr["sk"]]}],
-        f[6],
+        8,
+        9,
     )
     cl.mine(1)
 
@@ -2154,19 +2353,33 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
     )
     rcpt_ok_ca = sl.content_addr(rcpt_ok)
 
+    # R1-A: True two-phase execution! Phase 1 admit_and_reserve() WITHOUT upfront receipt ->
+    # execute effect -> sign real receipt -> Phase 2 commit_result(rcpt_ok) -> separate-process restart!
     r_bad = v.verify_invocation(inv_bad, {"grants": [g_1of2], "origin_bundle": origin_bundle}, ch, journal, exec_cfg, raw_message_bytes=raw_msg)
-    r_ok = v.verify_invocation(inv_ok, {"grants": [g_2of2], "origin_bundle": origin_bundle}, ch, journal, exec_cfg, receipt_env_for_cache=rcpt_ok, raw_message_bytes=raw_msg)
+    p1_t4 = v.admit_and_reserve(inv_ok, {"grants": [g_2of2], "origin_bundle": origin_bundle}, ch, journal, exec_cfg, raw_message_bytes=raw_msg)
     assert (r_bad.verdict, r_bad.refusal_code) == ("REFUSE", "GUARDIAN_QUORUM_UNMET"), f"Trace 04 downgrade got {r_bad}"
-    assert r_ok.verdict == "ADMIT" and len(r_ok.journal_writes) == 2, f"Trace 04 2-of-2 ADMIT got {r_ok}"
-    assert r_ok.journal_writes[1]["entry"]["kind"] == "settlement"
+    assert p1_t4.verdict == "ADMIT" and len(p1_t4.journal_writes) == 1, f"Trace 04 Phase 1 failed: {p1_t4}"
+    r_ok = v.commit_result(
+        rcpt_ok,
+        journal,
+        exec_cfg,
+        invocation_id=p1_t4.details["invocation_id"],
+        grant_id=p1_t4.details["grant_id"],
+        reserved_ops=p1_t4.details["reserved_ops"],
+        recorded_at=p1_t4.details["recorded_at"],
+        tip_height=p1_t4.details["tip_height"],
+    )
+    assert r_ok.verdict == "ADMIT" and len(r_ok.journal_writes) == 1 and r_ok.journal_writes[0]["entry"]["kind"] == "settlement", f"Trace 04 Phase 2 commit_result failed: {r_ok}"
 
-    # Separate-process restart recovery proof for quota-free agent/guardian-message (SL-GRNT-014, SL-AGNT-003)!
+    # Separate-process witness-verified restart recovery proof for quota-free late-receipt commit (R1-A, SL-GRNT-014, SL-AGNT-003)!
     restart_file = cl.work_dir / "t4-quota-free-restart.json"
     restart_file.write_text(
         json.dumps(
             {
                 "journal_id": journal.journal_id,
                 "commitment": journal.commitment,
+                "witness_pos": journal.witness_pos,
+                "witness_commitment": journal.witness_commitment,
                 "entries": journal.entries,
                 "receipt_store": journal.receipt_store,
                 "chain": ch_dict,
@@ -2187,7 +2400,8 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
         f"sys.path.insert(0, {str(REPO_ROOT / 'tools')!r}); "
         "import seallink_ref as sl, seallink_verifier as sv; "
         "d = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8')); "
-        "rj = sv.FencedJournal.replay_persisted_entries(d['journal_id'], d['entries'], receipt_store=d['receipt_store']); "
+        "rj = sv.FencedJournal.replay_persisted_entries(d['journal_id'], d['entries'], receipt_store=d['receipt_store'], witness_pos=d['witness_pos'], witness_commitment=d['witness_commitment']); "
+        "assert rj.check_continuity() is None; "
         "assert rj.commitment == d['commitment']; "
         "assert len(rj.receipts) == 1, f'Expected 1 indexed receipt after restart, got {len(rj.receipts)}'; "
         "inv_id = sl.object_id(d['inv_ok']['payload']); "
@@ -2367,6 +2581,34 @@ def run_trace_05(cl: RegtestCluster) -> dict[str, Any]:
     r_mid_tip_retry = v.verify_credential(dip_ok, dip_ok_txid, sv.ChainView(ch_retry_dict))
     assert r_mid_tip_retry.verdict == "ADMIT", f"Expected ADMIT after bracket retry on new tip, got {r_mid_tip_retry}"
 
+    # 8. Live B-9 transfer-written value check on REAL nc28.0:
+    #    Outgoing Owner #2 transfers id/t5-school to Owner #3 while writing Owner #3's value -> NAME_WRITER_UNVERIFIED!
+    #    Then Owner #3 signs its own OP_NAME_UPDATE -> ADMIT!
+    sch3_own, sch3_cred = kp("t5-sch3-own"), kp("t5-sch3-cred")
+    sch3_pol = {"kind": "key", "pk": sch3_own["comp"]}
+    xfer_txid, _ = cl.update_name_p2wpkh(
+        n2["id/t5-school"], "id/t5-school", sch2_own, {"link": {"cred": sch3_cred["xonly"]}}, new_owner_policy=sch3_pol
+    )
+    ch_xfer = sv.ChainView(cl.new_cold_observer().build_chain_view(wire_objects=[], extra_names=["id/t5-school"], extra_policies=[sch3_pol]))
+    _, err_xfer_b9 = v.resolve_name("id/t5-school", ch_xfer, expected_owner_policy=sch3_pol, expected_registration=reg2)
+    assert err_xfer_b9 == "NAME_WRITER_UNVERIFIED", f"Live B-9 transfer-written value expected NAME_WRITER_UNVERIFIED, got {err_xfer_b9}"
+    self_upd_txid, _ = cl.update_name_p2wpkh(
+        n2["id/t5-school"], "id/t5-school", sch3_own, {"link": {"cred": sch3_cred["xonly"]}}
+    )
+    ch_self = sv.ChainView(cl.new_cold_observer().build_chain_view(wire_objects=[], extra_names=["id/t5-school"], extra_policies=[sch3_pol]))
+    _, err_self_ok = v.resolve_name("id/t5-school", ch_self, expected_owner_policy=sch3_pol, expected_registration=reg2)
+    assert err_self_ok is None, f"Live B-9 post-self-update expected ADMIT, got {err_self_ok}"
+
+    # 9. Live A-2 invalidateblock active-chain reorg check on Node B:
+    #    Disconnect Node B's tip block (orphan), verify ColdNamecoinObserver refuses peer divergence / non-active block,
+    #    then reconsiderblock to restore full Node A <-> Node B sync!
+    reorg_blk = cl.mine(1)[0]
+    cl.rpc(1, "invalidateblock", reorg_blk)
+    ch_reorg_dict = cl.new_cold_observer().build_chain_view(wire_objects=[], extra_txids=[self_upd_txid], extra_block_hashes=[reorg_blk])
+    assert reorg_blk not in ch_reorg_dict.get("blocks", {}), "Orphaned block after invalidateblock must NOT appear in active-chain blocks map!"
+    cl.rpc(1, "reconsiderblock", reorg_blk)
+    assert cl.until(lambda: cl.rpc(1, "getbestblockhash") == reorg_blk, limit=60.0)
+
     return {
         "cold_observer_adapter": "tools/nc_rpc_adapter.py:ColdNamecoinObserver",
         "name": "id/t5-school",
@@ -2380,6 +2622,9 @@ def run_trace_05(cl: RegtestCluster) -> dict[str, Any]:
         "post_expiry_forgery_anchor_height": h_dip_exp,
         "reg2_firstupdate_txid": reg2["txid"],
         "reg2_update_txid": n2["id/t5-school"]["update_txid"],
+        "b9_transfer_txid": xfer_txid,
+        "b9_owner3_self_update_txid": self_upd_txid,
+        "a2_invalidated_reorg_block_excluded": True,
         "cold_discovered_registration_lineages": len(ch_final_dict["name_registrations"]["id/t5-school"]),
         "live_mid_read_tip_change_retry_attempts": ch_retry_dict["observation_bracket"]["attempts"],
         "verdicts": {
@@ -2391,6 +2636,8 @@ def run_trace_05(cl: RegtestCluster) -> dict[str, Any]:
             "same_chainview_post_expiry_forgery": {"verdict": r_post_exp_forgery.verdict, "refusal_code": r_post_exp_forgery.refusal_code},
             "live_mid_read_tip_change_no_retry": {"verdict": r_mid_tip_void.verdict, "refusal_code": r_mid_tip_void.refusal_code},
             "live_mid_read_tip_change_with_retry": {"verdict": r_mid_tip_retry.verdict, "outcome": r_mid_tip_retry.outcome},
+            "live_b9_transfer_written_value": {"verdict": "REFUSE", "refusal_code": err_xfer_b9},
+            "live_b9_new_owner_self_update": {"verdict": "ADMIT", "refusal_code": err_self_ok},
         },
     }
 
@@ -2414,7 +2661,7 @@ def main() -> int:
         elapsed = round(time.monotonic() - t0, 2)
         report = {
             "suite": "seallink-nc28-live-traces-regtest",
-            "spec_version": "1.0.0-draft.6",
+            "spec_version": "1.0.0-draft.7",
             "chain": "regtest",
             "policy": "standard (-acceptnonstdtxn=0 -txindex=1 -namehistory=1), two loopback-only nodes (node A writer outbound -> node B read-only cold observer with -disablewallet=1)",
             "observer_adapter": "tools/nc_rpc_adapter.py:ColdNamecoinObserver",

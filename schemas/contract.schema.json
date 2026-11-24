@@ -1,8 +1,35 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.6/schemas/contract.schema.json",
-  "title": "SealLink v1.0 Contracts, Assent, Termination & Violation Verdicts",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/contract.schema.json",
+  "title": "SealLink v1.0 Contracts, Clauses, Assent, Termination & Violation Verdicts",
   "$defs": {
+    "MachineClauseTerms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capabilities"],
+      "description": "Closed machine-enforced terms carried inside any clause listed in contract.machine_clause_indices[]. Every bound grant capability MUST narrow (<=) at least one declared clause capability via the 7-predicate Constraint Algebra and quota ceilings (SPEC-05 §2.1).",
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "common.schema.json#/$defs/Capability" }
+        },
+        "not_before_height": { "$ref": "common.schema.json#/$defs/Uint53" },
+        "not_after_height": { "$ref": "common.schema.json#/$defs/PositiveUint53" }
+      }
+    },
+    "ClauseObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "description": "Canonical disclosed contract clause committed via H_tag('seallink-clause/1', salt_32B || JCS(clause_obj)). Clauses listed in machine_clause_indices[] MUST contain machine_terms.",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 256, "not": { "pattern": "\n" } },
+        "text": { "type": "string", "minLength": 1, "maxLength": 16384, "x-seallink-allow-lf": true },
+        "machine_terms": { "$ref": "#/$defs/MachineClauseTerms" }
+      }
+    },
     "Contract": {
       "type": "object",
       "additionalProperties": false,
@@ -11,7 +38,7 @@
         "type": { "const": "seallink-contract/1" },
         "network": { "$ref": "common.schema.json#/$defs/Network" },
         "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
-        "profile": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "profile": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z0-9._-]+(/[a-z0-9._-]+)*$", "not": { "pattern": "\n" } },
         "contract_salt": { "$ref": "common.schema.json#/$defs/Hex64" },
         "parties": {
           "type": "array",
@@ -26,7 +53,7 @@
                 "required": ["party_id", "role", "signing_policy"],
                 "properties": {
                   "party_id": { "$ref": "common.schema.json#/$defs/PartyId" },
-                  "role": { "type": "string", "minLength": 1, "maxLength": 64 },
+                  "role": { "type": "string", "minLength": 1, "maxLength": 64, "not": { "pattern": "\n" } },
                   "name_pin": { "$ref": "common.schema.json#/$defs/NamePin" },
                   "signing_policy": { "$ref": "common.schema.json#/$defs/ThresholdPolicy" }
                 }
@@ -37,7 +64,7 @@
                 "required": ["party_id", "role", "ward_origin_id", "name_pin"],
                 "properties": {
                   "party_id": { "$ref": "common.schema.json#/$defs/PartyId" },
-                  "role": { "type": "string", "minLength": 1, "maxLength": 64 },
+                  "role": { "type": "string", "minLength": 1, "maxLength": 64, "not": { "pattern": "\n" } },
                   "ward_origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
                   "name_pin": { "$ref": "common.schema.json#/$defs/NamePin" }
                 }
@@ -60,7 +87,7 @@
           "minItems": 1,
           "maxItems": 256,
           "items": { "$ref": "common.schema.json#/$defs/Hex64" },
-          "description": "Ordered H_tag('seallink-clause/1', salt_32B || canonical_JCS(clause_obj)) per SPEC-01 §5 using independent 32-byte CSPRNG salts."
+          "description": "Ordered H_tag('seallink-clause/1', salt_32B || canonical_JCS(ClauseObject)) per SPEC-01 §5 using independent 32-byte CSPRNG salts."
         },
         "machine_clause_indices": {
           "type": "array",
@@ -80,7 +107,7 @@
           "properties": {
             "rules_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
             "moderator_key": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" },
-            "moderator_kind": { "type": "string", "enum": ["person", "agent"] }
+            "moderator_kind": { "type": "string", "enum": ["person", "agent", "organization"] }
           }
         }
       }
@@ -95,17 +122,23 @@
         "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
         "target_type": {
           "type": "string",
-          "enum": ["seallink-contract/1", "seallink-guardian/1", "seallink-guardian-roster/1", "seallink-migration/1"]
+          "enum": ["seallink-contract/1", "seallink-guardian/1", "seallink-migration/1"]
         },
         "target_id": { "$ref": "common.schema.json#/$defs/Hex64" },
         "party_id": { "$ref": "common.schema.json#/$defs/PartyId" },
-        "party_role": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "party_role": { "type": "string", "minLength": 1, "maxLength": 64, "not": { "pattern": "\n" } },
         "party_name": { "$ref": "common.schema.json#/$defs/NameStr" },
         "guardian_context": { "$ref": "common.schema.json#/$defs/GuardianContext" },
         "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
         "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
         "nonce": { "$ref": "common.schema.json#/$defs/Hex64" }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["target_type"], "properties": { "target_type": { "enum": ["seallink-guardian/1", "seallink-migration/1"] } } },
+          "then": { "required": ["party_name"] }
+        }
+      ]
     },
     "Assent": {
       "oneOf": [
@@ -154,7 +187,7 @@
             "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
             "contract_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "termination_branch": { "type": "string", "enum": ["issuer_only", "either_party", "both_together", "arbiter"] },
-            "reason": { "type": "string", "minLength": 1, "maxLength": 2048 },
+            "reason": { "type": "string", "minLength": 1, "maxLength": 2048, "x-seallink-allow-lf": true },
             "verdict_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" }
           }
@@ -178,13 +211,23 @@
             "grant_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "contract_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "rules_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
-            "violated_rule": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "violated_rule": { "type": "string", "minLength": 1, "maxLength": 128, "not": { "pattern": "\n" } },
             "request_salted_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
             "response_salted_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
             "ordinal": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
             "prev_verdict_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "tip_height": { "$ref": "common.schema.json#/$defs/Uint53" }
-          }
+          },
+          "allOf": [
+            {
+              "if": { "required": ["ordinal"], "properties": { "ordinal": { "type": "integer", "const": 1 } } },
+              "then": { "not": { "required": ["prev_verdict_id"] } }
+            },
+            {
+              "if": { "required": ["ordinal"], "properties": { "ordinal": { "type": "integer", "minimum": 2 } } },
+              "then": { "required": ["prev_verdict_id"] }
+            }
+          ]
         },
         "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
       }

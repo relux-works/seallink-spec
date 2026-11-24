@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 OP_RETURN Commitment Framing Registry (SPEC-02). All standard frames fit strictly within Bitcoin/Namecoin MAX_OP_RETURN_RELAY = 83 bytes.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.6",
+  "version": "1.0.0-draft.7",
   "magic_ascii": "SLNK",
   "magic_hex": "534c4e4b",
   "max_relay_script_bytes": 83,
@@ -46,7 +46,7 @@
       "commitment": "typed_digest(seallink-issuance/1)",
       "allowed_locators": ["0x00", "0x01", "0x05"],
       "owning_spec": "SPEC-06",
-      "description": "Anchors a root or child grant issuance (unilateral or contract-bound)."
+      "description": "Anchors a root or child grant issuance (unilateral or contract-bound). Mandatory for every depth-2 child grant spending a delegation row coin."
     },
     {
       "code": "0x02",
@@ -56,7 +56,7 @@
       "commitment": "seallink_merkle_root_sha256",
       "allowed_locators": ["0x00", "0x01", "0x02", "0x05"],
       "owning_spec": "SPEC-02",
-      "description": "Anchors a domain-separated SHA-256 Merkle root (SPEC-02 §5.3: sorted unique 32B digests, tagged leaves/nodes, odd-node promotion without duplication)."
+      "description": "Anchors a domain-separated SHA-256 Merkle root of typed_digest(seallink-issuance/1) leaves for ROOT grants ONLY (SPEC-02 §5.3: sorted unique 32B digests, tagged leaves/nodes, odd-node promotion without duplication; FORBIDDEN for depth-2 child grants spending delegation row coins)."
     },
     {
       "code": "0x03",
@@ -83,10 +83,10 @@
       "name": "NOTARY_WITHDRAWAL_FOR_CAUSE",
       "status": "decided",
       "version": "0x01",
-      "commitment": "sha256_cause_commitment",
+      "commitment": "typed_digest(seallink-credential-withdrawal/1)",
       "allowed_locators": ["0x00", "0x01", "0x05"],
       "owning_spec": "SPEC-05",
-      "description": "Authenticated by spending the notary seal or row stop coin; records withdrawal for cause."
+      "description": "Authenticated by spending the notary seal or row stop coin; commits typed_digest(seallink-credential-withdrawal/1) referencing the withdrawn notary act or row."
     },
     {
       "code": "0x06",

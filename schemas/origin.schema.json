@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.6/schemas/origin.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/origin.schema.json",
   "title": "SealLink v1.0 Origin Certificate (Birth, Materialization, Incorporation)",
   "type": "object",
   "additionalProperties": false,
@@ -35,7 +35,7 @@
             "intended_owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
             "majority_commitment": {
               "$ref": "common.schema.json#/$defs/Hex64",
-              "description": "Salted selective-disclosure commitment H_tag('seallink-clause/1', salt_32B || JCS({majority_unix: T})) with an independent 32-byte CSPRNG salt."
+              "description": "Salted selective-disclosure commitment H_tag('seallink-clause/1', salt_32B || JCS({majority_unix: T})) with an independent 32-byte CSPRNG salt. Mandatory for minor person origins; off-chain disclosure MUST accompany guardianship verification."
             },
             "config_sha256": { "$ref": "common.schema.json#/$defs/Hex64" }
           }
@@ -45,25 +45,25 @@
           "additionalProperties": false,
           "required": ["revision", "revision_size", "disposer_pk", "arbiter_pk", "challenger_pk", "roster_seal", "appointment_delay_blocks", "quorums", "slots"],
           "properties": {
-            "revision": { "const": 1 },
-            "revision_size": { "type": "integer", "minimum": 1, "maximum": 32 },
+            "revision": { "type": "integer", "const": 1 },
+            "revision_size": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
             "disposer_pk": {
-              "$ref": "common.schema.json#/$defs/CompressedPubkey66",
-              "description": "Single compressed ECDSA key for disposer branch of both_of_2/either_of_2/guardian_slot_pending seals (institutions use threshold ECDSA per OQ-007)."
+              "$ref": "common.schema.json#/$defs/BranchKeySpec",
+              "description": "Disposer ECDSA key or native P2WSH m-of-n multisig (2<=n<=5) for both_of_2/either_of_2/guardian_slot_pending seals."
             },
             "arbiter_pk": {
-              "$ref": "common.schema.json#/$defs/CompressedPubkey66",
-              "description": "Independent arbiter compressed ECDSA key for both_of_2 vacant/roster seals (MUST differ from disposer_pk)."
+              "$ref": "common.schema.json#/$defs/BranchKeySpec",
+              "description": "Independent arbiter ECDSA key or native P2WSH m-of-n multisig (2<=n<=5) for both_of_2 vacant/roster seals (MUST differ from disposer_pk)."
             },
             "challenger_pk": {
-              "$ref": "common.schema.json#/$defs/CompressedPubkey66",
-              "description": "Designated pre-activation challenger compressed ECDSA key checked against guardian_slot_pending.keys.challenger."
+              "$ref": "common.schema.json#/$defs/BranchKeySpec",
+              "description": "Designated pre-activation challenger ECDSA key or native P2WSH m-of-n multisig (2<=n<=5) checked against guardian_slot_pending.keys.challenger."
             },
             "roster_seal": {
               "$ref": "common.schema.json#/$defs/Seal",
               "description": "both_of_2(disposer_pk, arbiter_pk) seal spent with action 0x0f to advance guardianship revision."
             },
-            "appointment_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560 },
+            "appointment_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" },
             "quorums": { "$ref": "common.schema.json#/$defs/QuorumMap" },
             "slots": {
               "type": "array",
@@ -74,7 +74,7 @@
                 "additionalProperties": false,
                 "required": ["slot", "initial_guardian_commitment", "vacant_utxo"],
                 "properties": {
-                  "slot": { "type": "integer", "minimum": 1, "maximum": 32 },
+                  "slot": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
                   "initial_guardian_commitment": {
                     "$ref": "common.schema.json#/$defs/Hex64",
                     "description": "Salted selective-disclosure commitment H_tag('seallink-clause/1', salt_i || JCS(initial_guardian_NamePin)) using an independent 32-byte CSPRNG salt."
@@ -86,6 +86,10 @@
           }
         },
         "capacity_authority": { "$ref": "common.schema.json#/$defs/NamePin" },
+        "end_authority": {
+          "$ref": "common.schema.json#/$defs/NamePin",
+          "description": "Optional designated authority for seallink-end/1 (defaults to origin.issuer when omitted)."
+        },
         "name_recovery": {
           "oneOf": [
             {
@@ -100,15 +104,32 @@
               "required": ["mode", "disposer_pk", "arbiter_pk", "delay_blocks", "recovery_seal"],
               "properties": {
                 "mode": { "const": "dual_party_delayed" },
-                "disposer_pk": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" },
-                "arbiter_pk": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" },
-                "delay_blocks": { "type": "integer", "minimum": 144, "maximum": 52560 },
+                "disposer_pk": { "$ref": "common.schema.json#/$defs/BranchKeySpec" },
+                "arbiter_pk": { "$ref": "common.schema.json#/$defs/BranchKeySpec" },
+                "delay_blocks": { "type": "integer", "minimum": 144, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" },
                 "recovery_seal": { "$ref": "common.schema.json#/$defs/Seal" }
               }
             }
           ]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["origin_class"], "properties": { "origin_class": { "const": "organization" } } },
+          "then": { "not": { "required": ["guardian_policy"] } }
+        },
+        {
+          "if": { "required": ["guardian_policy"] },
+          "then": {
+            "properties": {
+              "name_recovery": {
+                "required": ["mode"],
+                "properties": { "mode": { "const": "dual_party_delayed" } }
+              }
+            }
+          }
+        }
+      ]
     },
     "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
   }

@@ -1,70 +1,109 @@
 {
-  "$comment": "SealLink v1.0 Structured Capability & Constraint Algebra Registry (SPEC-01, SPEC-06). All 7 predicates have linear-time decidable conservative subsumption (child <= parent) with zero Turing-completeness.",
+  "$comment": "SealLink v1.0 Structured Capability & Constraint Algebra Registry (SPEC-01, SPEC-06). All 7 predicates have linear-time decidable conservative subsumption (child <= parent) with zero Turing-completeness. Standard quota kinds define exact deterministic reservation and settlement rules.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.6",
+  "version": "1.0.0-draft.7",
   "comparison_semantics": "conservative_pairwise",
   "predicates": [
     {
       "op": "eq",
       "operand_types": ["string", "uint64_str", "boolean"],
-      "match_rule": "arg == operand",
-      "narrowing_rule": "child.op == 'eq' and child.operand == parent.operand",
-      "description": "Exact equality against a scalar argument value."
+      "arg_types": ["string", "boolean"],
+      "match_rule": "type(arg) == type(operand) and arg == operand",
+      "narrowing_rule": "child.op == 'eq' and type(child.operand) == type(parent.operand) and child.operand == parent.operand",
+      "description": "Exact equality against a scalar argument value (no int/bool/string coercion)."
     },
     {
       "op": "in",
       "operand_types": ["array<string | uint64_str> (nonempty, sorted, distinct, max 256)"],
-      "match_rule": "arg in operand",
-      "narrowing_rule": "(child.op == 'in' and set(child.operand) <= set(parent.operand)) or (child.op == 'eq' and child.operand in set(parent.operand))",
-      "description": "Finite allowlist of exact permitted values."
+      "arg_types": ["string"],
+      "match_rule": "isinstance(arg, str) and arg in operand",
+      "narrowing_rule": "(child.op == 'in' and set(child.operand) <= set(parent.operand)) or (child.op == 'eq' and isinstance(child.operand, str) and child.operand in set(parent.operand))",
+      "description": "Finite allowlist of exact permitted string values."
     },
     {
       "op": "not_in",
       "operand_types": ["array<string | uint64_str> (nonempty, sorted, distinct, max 256)"],
-      "match_rule": "arg not in operand",
-      "narrowing_rule": "(child.op == 'not_in' and set(parent.operand) <= set(child.operand)) or (child.op == 'in' and set(child.operand).isdisjoint(set(parent.operand))) or (child.op == 'eq' and child.operand not in set(parent.operand))",
-      "description": "Finite denylist of forbidden values."
+      "arg_types": ["string"],
+      "match_rule": "isinstance(arg, str) and arg not in operand",
+      "narrowing_rule": "(child.op == 'not_in' and set(parent.operand) <= set(child.operand)) or (child.op == 'in' and set(child.operand).isdisjoint(set(parent.operand))) or (child.op == 'eq' and isinstance(child.operand, str) and child.operand not in set(parent.operand))",
+      "description": "Finite denylist of forbidden string values (rejects non-string arguments)."
     },
     {
       "op": "prefix",
-      "operand_types": ["string (nonempty)"],
-      "match_rule": "arg.startswith(operand)",
-      "narrowing_rule": "(child.op == 'prefix' and child.operand.startswith(parent.operand)) or (child.op == 'eq' and child.operand.startswith(parent.operand)) or (child.op == 'in' and all(v.startswith(parent.operand) for v in child.operand))",
-      "description": "Exact code-point prefix match (paths, git refs, URI hierarchies)."
+      "operand_types": ["string (nonempty, max 512)"],
+      "arg_types": ["string"],
+      "match_rule": "isinstance(arg, str) and arg.startswith(operand)",
+      "narrowing_rule": "(child.op == 'prefix' and child.operand.startswith(parent.operand)) or (child.op == 'eq' and isinstance(child.operand, str) and child.operand.startswith(parent.operand)) or (child.op == 'in' and all(v.startswith(parent.operand) for v in child.operand))",
+      "description": "Exact code-point prefix match (canonical normalized paths, git refs, URI hierarchies)."
     },
     {
       "op": "suffix",
-      "operand_types": ["string (nonempty)"],
-      "match_rule": "arg.endswith(operand)",
-      "narrowing_rule": "(child.op == 'suffix' and child.operand.endswith(parent.operand)) or (child.op == 'eq' and child.operand.endswith(parent.operand)) or (child.op == 'in' and all(v.endswith(parent.operand) for v in child.operand))",
-      "description": "Exact code-point suffix match (DNS domains, email/XMPP addresses)."
+      "operand_types": ["string (nonempty, max 512)"],
+      "arg_types": ["string"],
+      "match_rule": "isinstance(arg, str) and arg.endswith(operand)",
+      "narrowing_rule": "(child.op == 'suffix' and child.operand.endswith(parent.operand)) or (child.op == 'eq' and isinstance(child.operand, str) and child.operand.endswith(parent.operand)) or (child.op == 'in' and all(v.endswith(parent.operand) for v in child.operand))",
+      "description": "Exact code-point suffix match (lowercase DNS domains, single addr-spec email/XMPP addresses)."
     },
     {
       "op": "range",
-      "operand_types": ["[uint64_str min, uint64_str max] with min <= max"],
-      "match_rule": "min <= int(arg) <= max",
-      "narrowing_rule": "(child.op == 'range' and parent.min <= child.min <= child.max <= parent.max) or (child.op == 'eq' and parent.min <= int(child.operand) <= parent.max) or (child.op == 'in' and all(parent.min <= int(v) <= parent.max for v in child.operand))",
-      "description": "Closed unsigned 64-bit integer interval [min, max] (per-request amounts, sizes, hours, depths)."
+      "operand_types": ["[uint64_str min, uint64_str max] with 0 <= min <= max <= 2^64-1"],
+      "arg_types": ["uint64_str (canonical unsigned 64-bit decimal string)"],
+      "match_rule": "is_canonical_uint64_str(arg) and int(min) <= int(arg) <= int(max)",
+      "narrowing_rule": "(child.op == 'range' and int(parent.min) <= int(child.min) <= int(child.max) <= int(parent.max)) or (child.op == 'eq' and is_canonical_uint64_str(child.operand) and int(parent.min) <= int(child.operand) <= int(parent.max)) or (child.op == 'in' and all(is_canonical_uint64_str(v) and int(parent.min) <= int(v) <= int(parent.max) for v in child.operand))",
+      "description": "Closed unsigned 64-bit integer interval [min, max] over canonical uint64_str values (no JSON numbers, no leading zeros, no trailing newlines)."
     },
     {
       "op": "hash_eq",
       "operand_types": ["hex64 (lowercase SHA-256)"],
-      "match_rule": "SHA256(arg_bytes) == operand or arg == operand",
+      "arg_types": ["string (lowercase Hex64 digest OR raw UTF-8 string whose SHA-256 equals operand)"],
+      "match_rule": "isinstance(arg, str) and ((is_hex64(arg) and arg == operand) or SHA256(arg.encode('utf-8')).hex() == operand)",
       "narrowing_rule": "child.op == 'hash_eq' and child.operand == parent.operand",
-      "description": "Exact 32-byte SHA-256 commitment match (config manifests, document payloads, templates)."
+      "description": "Exact 32-byte SHA-256 commitment match: matches either a precomputed lowercase Hex64 digest argument (e.g., body_sha256, config_sha256) or raw UTF-8 bytes hashing to operand."
     }
   ],
   "reserved_extension_field": "extensions",
   "reserved_extension_policy": "fail_closed_WIRE_CONSTRAINT",
   "quota_windows": [
-    {"pattern": "^term$", "description": "Cumulative ceiling across the entire grant validity window."},
-    {"pattern": "^blocks:[1-9][0-9]{0,8}$", "description": "Half-open block windows anchored at grant not_before_height."},
-    {"pattern": "^seconds:[1-9][0-9]{0,9}$", "description": "UTC epoch-aligned fixed clock windows with durable regression watermark."}
+    {"pattern": "^term$", "bucket_id_format": "term", "description": "Cumulative ceiling across the entire grant validity window."},
+    {"pattern": "^blocks:[1-9][0-9]{0,8}$", "bucket_id_format": "blk:<bucket_start_height>", "description": "Half-open block windows [anchor + k*N, anchor + (k+1)*N) where own account uses leaf grant not_before_height and row account uses parent grant not_before_height."},
+    {"pattern": "^seconds:[1-9][0-9]{0,9}$", "bucket_id_format": "sec:<epoch_bucket_start>", "description": "UTC epoch-aligned fixed clock windows with durable regression watermark."}
   ],
   "standard_quota_kinds": [
-    {"kind": "seallink/coins", "unit": "atomic", "settlement": "actual_release_remainder"},
-    {"kind": "seallink/cost", "unit": "<currency>/<scale>", "settlement": "actual_release_remainder"},
-    {"kind": "seallink/tokens", "unit": "input-token | output-token", "settlement": "actual_release_remainder"},
-    {"kind": "seallink/count", "unit": "requests | messages | bytes | operations | starts | calls", "settlement": "actual_release_remainder"}
+    {
+      "kind": "seallink/count",
+      "units": ["requests", "messages", "operations", "starts", "calls"],
+      "reserve_formula": "0 if (action == 'agent/session' and unit == 'starts' and arguments.get('op') in ('checkpoint', 'halt')) else 1",
+      "settlement": "actual_release_remainder (0 <= actual <= reserve; actual > reserve refuses QUOTA_EXCEEDED)"
+    },
+    {
+      "kind": "seallink/bytes",
+      "units": ["bytes"],
+      "reserve_formula": "parse_uint64_str(arguments['size_bytes'] or arguments['max_output_bytes'] or arguments['max_bytes'] or '1')",
+      "settlement": "actual_release_remainder (0 <= actual <= reserve; actual > reserve refuses QUOTA_EXCEEDED)"
+    },
+    {
+      "kind": "seallink/duration",
+      "units": ["seconds"],
+      "reserve_formula": "parse_uint64_str(arguments['max_duration_sec'] or arguments['max_wall_sec'] or '1')",
+      "settlement": "actual_release_remainder (0 <= actual <= reserve; actual > reserve refuses QUOTA_EXCEEDED)"
+    },
+    {
+      "kind": "seallink/coins",
+      "units": ["atomic"],
+      "reserve_formula": "parse_uint64_str(arguments['amount'])",
+      "settlement": "actual_release_remainder (0 <= actual <= reserve; actual > reserve refuses QUOTA_EXCEEDED)"
+    },
+    {
+      "kind": "seallink/cost",
+      "units": ["<currency>/<scale>"],
+      "reserve_formula": "parse_uint64_str(arguments['max_cost'])",
+      "settlement": "actual_release_remainder (0 <= actual <= reserve; actual > reserve refuses QUOTA_EXCEEDED)"
+    },
+    {
+      "kind": "seallink/tokens",
+      "units": ["input-token", "output-token"],
+      "reserve_formula": "parse_uint64_str(arguments['max_tokens'])",
+      "settlement": "actual_release_remainder (0 <= actual <= reserve; actual > reserve refuses QUOTA_EXCEEDED)"
+    }
   ]
 }

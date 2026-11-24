@@ -137,7 +137,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     gp_sec["capabilities"] = [
         {
             "action": "mail/read",
-            "quotas": [{"kind": "count", "max": "5", "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}],
+            "quotas": [{"kind": "seallink/count", "max": "5", "resource": "mail/read", "unit": "calls", "window": "seconds:3600"}],
             "target": "mailbox:id/alice:work",
             "where": {},
         }
@@ -178,7 +178,8 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
             "network": "main",
             "outcome": "executed",
             "recorded_at": 1795220010,
-            "settlements": [{"account": "own", "kind": "count", "released": "0", "reserved": "1", "resource": "mail/read", "settled": "1", "unit": "calls", "window": "seconds:3600"}],
+            "result_sha256": _h32("rr-sec-res"),
+            "settlements": [{"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mail/read", "settled": "1", "unit": "calls", "window": "seconds:3600"}],
             "tip_hash": fx_rr["chain"]["tip_hash"],
             "tip_height": fx_rr["chain"]["tip_height"],
             "type": "seallink-receipt/1",
@@ -205,10 +206,10 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
         [fx_rr["_keys"]["agent_req"]["sk"]],
     )
     use_su_tx = _h32("rr-su-use-tx")
-    fx_rr["chain"]["txs"][su_seal_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": su_spk.hex(), "spent_by_txid": use_su_tx}}}
+    fx_rr["chain"]["txs"][su_seal_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": su_spk.hex(), "spent_by_txid": use_su_tx}, "1": {"script_pubkey_hex": _spk_hex(fx_rr["_alice_owner_pol"])}}}
     fx_rr["chain"]["txs"][itx_su] = {
         "confirmed_height": orig_itx_h,
-        "inputs": [sv.make_segwit_input(gp_sec["revocation"]["seal"]["txid"], 1)],
+        "inputs": [sv.make_segwit_input(su_seal_tx, 1)],
         "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(g_su), "grant_id": gid_su, "type": "seallink-issuance/1"}).hex()).hex(),
         "outputs": {},
     }
@@ -228,7 +229,8 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
             "network": "main",
             "outcome": "executed",
             "recorded_at": 1795220010,
-            "settlements": [{"account": "own", "kind": "count", "released": "0", "reserved": "1", "resource": "mail/read", "settled": "1", "unit": "calls", "window": "seconds:3600"}],
+            "result_sha256": _h32("rr-sec-res"),
+            "settlements": [{"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mail/read", "settled": "1", "unit": "calls", "window": "seconds:3600"}],
             "tip_hash": fx_rr["chain"]["tip_hash"],
             "tip_height": fx_rr["chain"]["tip_height"],
             "type": "seallink-receipt/1",
@@ -326,7 +328,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
 
     # 3b. Exact MAX_UINT64 quota string ("18446744073709551615") -> ADMIT (kills L702 > -> >=)
     gp_u64 = copy.deepcopy(fx0["bundle"]["grants"][0]["payload"])
-    gp_u64["capabilities"][0]["quotas"] = [{"kind": "count", "max": str(sl.MAX_UINT64), "resource": "mail/read", "unit": "calls", "window": "term"}]
+    gp_u64["capabilities"][0]["quotas"] = [{"kind": "seallink/count", "max": str(sl.MAX_UINT64), "resource": "mail/read", "unit": "calls", "window": "term"}]
     g_u64 = sl.sign_envelope(gp_u64, [fx0["_keys"]["alice_gr"]["sk"]])
     add("bnd-quota-exact-max-uint64-admit", ["SL-WIRE-004"], "raw_wire",
         {"object": g_u64}, "ADMIT", None,
@@ -583,6 +585,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     # Guardian incoming assent expires_at == issued_at -> slot fails (kills L1396 <= -> <!)
     of_ga_eq = rm._base_origin_fixture()
     op_1of2_b = copy.deepcopy(of_ga_eq["origin_bundle"]["origin"]["payload"])
+    op_1of2_b["guardian_policy"]["quorums"]["effect_grant"] = {"den": 2, "min": 1, "num": 1}
     op_1of2_b["guardian_policy"]["quorums"]["contract_assent"] = {"den": 2, "min": 1, "num": 1}
     o_1of2_b = sl.sign_envelope(op_1of2_b, [of_ga_eq["_keys"]["reg_cred"]["sk"]])
     oid_1of2_b = sl.object_id(op_1of2_b)
@@ -638,7 +641,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     quorums_1 = {k: {"den": 1, "min": 1, "num": 1} for k in gp_orig_pr["quorums"]}
     rost_p_pr = {
         "arbiter_pk": gp_orig_pr["arbiter_pk"], "challenger_pk": gp_orig_pr["challenger_pk"], "disposer_pk": gp_orig_pr["disposer_pk"],
-        "effective_delay_blocks": 10, "genesis": GENESIS_MAIN, "issuer": of_pr["origin_bundle"]["origin"]["payload"]["issuer"],
+        "effective_delay_blocks": delay_pr, "genesis": GENESIS_MAIN, "issuer": of_pr["origin_bundle"]["origin"]["payload"]["issuer"],
         "network": "main", "next_roster_policy": vac_pol_pr, "next_roster_vout": 0, "origin_id": of_pr["_origin_id"],
         "prev_revision": 1, "prev_roster_outpoint": {"txid": gp_orig_pr["roster_seal"]["txid"], "vout": 0},
         "quorums": quorums_1,
@@ -659,7 +662,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     g2_pr = sl.sign_envelope(g2_pr_p, [of_pr["_keys"]["reg_cred"]["sk"]])
     g2_ass_pr = sl.sign_envelope({"expires_at": 1795400000, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main", "nonce": _h32("bnd-pr-ga"), "party_id": "g-pr", "party_name": "id/parent-a", "party_role": "guardian", "target_id": sl.object_id(g2_pr_p), "target_type": "seallink-guardian/1", "type": "seallink-assent/1"}, [of_pr["_keys"]["g1_gr"]["sk"]])
     of_pr["chain"]["txs"][gp_orig_pr["roster_seal"]["txid"]]["outputs"]["0"]["spent_by_txid"] = rtx_pr
-    of_pr["chain"]["txs"][rtx_pr] = {"confirmed_height": tip_pr - 200, "opreturn_hex": sl.encode_opreturn(0x0F, sl.content_addr(rost_pr)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(vac_pol_pr)}, "1": {"script_pubkey_hex": _spk_hex(vac_pol_pr), "spent_by_txid": dtx_pr}}}
+    of_pr["chain"]["txs"][rtx_pr] = {"confirmed_height": tip_pr - (2 * delay_pr + 20), "opreturn_hex": sl.encode_opreturn(0x0F, sl.content_addr(rost_pr)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(vac_pol_pr)}, "1": {"script_pubkey_hex": _spk_hex(vac_pol_pr), "spent_by_txid": dtx_pr}}}
     of_pr["chain"]["txs"][dtx_pr] = {"confirmed_height": tip_pr - delay_pr, "opreturn_hex": sl.encode_opreturn(0x0D, sl.content_addr(g2_pr)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(pend_pol_pr), "spent_by_txid": etx_pr}}}
     of_pr["chain"]["txs"][etx_pr] = {"confirmed_height": tip_pr, "opreturn_hex": sl.encode_opreturn(0x0E, sl.object_id(g2_pr_p)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(act_pol_pr)}}}
     of_pr["origin_bundle"]["roster_records"] = [rost_pr]
@@ -675,7 +678,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
         {"assent": wa_pr, "contract": of_pr["contract"], "origin_bundle": of_pr["origin_bundle"], "chain": of_pr["chain"], "trusted_origin_issuers": of_pr["trusted_origin_issuers"]},
         "ADMIT", None, "Stage-2 0x0e activation at exact confirmed_height == pending_height + delay_blocks MUST activate guardian.")
 
-    # Exact roster effective_delay_blocks (rtx at tip - 10, delay=10, tip == rtx + delay, retain_active slot 1 -> rev 2 active at exact tip == rtx + delay!)
+    # Exact roster effective_delay_blocks (rtx at tip - 144, delay=144, tip == rtx + delay, retain_active slot 1 -> rev 2 active at exact tip == rtx + delay!)
     of_re = rm._base_origin_fixture()
     tip_re = of_re["chain"]["tip_height"]  # 750010
     gp_re = of_re["origin_bundle"]["origin"]["payload"]["guardian_policy"]
@@ -689,7 +692,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     rost_re = sl.sign_envelope(rost_re_p, [of_re["_keys"]["reg_cred"]["sk"]])
     rtx_re = _h32("bnd-re-rtx")
     of_re["chain"]["txs"][gp_re["roster_seal"]["txid"]]["outputs"]["0"]["spent_by_txid"] = rtx_re
-    of_re["chain"]["txs"][rtx_re] = {"confirmed_height": tip_re - 10, "opreturn_hex": sl.encode_opreturn(0x0F, sl.content_addr(rost_re)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(gp_re["roster_seal"]["script_policy"])}}}
+    of_re["chain"]["txs"][rtx_re] = {"confirmed_height": tip_re - delay_pr, "opreturn_hex": sl.encode_opreturn(0x0F, sl.content_addr(rost_re)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(gp_re["roster_seal"]["script_policy"])}}}
     of_re["origin_bundle"]["roster_records"] = [rost_re]
     wa_re = sl.sign_guardian_envelope(
         {"expires_at": 1795400000, "genesis": GENESIS_MAIN, "guardian_context": {"event_class": "contract_assent", "origin_id": of_re["_origin_id"], "revision": 2, "ward_name": "id/child-leo"},
@@ -728,7 +731,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     inv_eq_iat = sl.sign_envelope({**fx_inv_b["invocation"]["payload"], "iat": now_i, "nonce": _h32("bi-iat")}, [fx_inv_b["_keys"]["agent_req"]["sk"]])
     add("bnd-inv-now-eq-iat-and-settle-eq-0-admit", ["SL-GRNT-004", "SL-GRNT-007"], "invocation",
         {"invocation": inv_eq_iat, "bundle": fx_inv_b["bundle"], "chain": fx_inv_b["chain"], "journal": {"journal_id": _h32("bi-j1")}, "executor_cfg": fx_inv_b["executor_cfg"],
-         "actual_quota_usage": {"count|mail/read|calls|term": 0}},
+         "actual_quota_usage": {"seallink/count|mail/read|calls|term": 0}},
         "ADMIT", None, "Invocation at exact now == iat with settle == 0 (full release) MUST admit.")
     inv_eq_exp = sl.sign_envelope({**fx_inv_b["invocation"]["payload"], "exp": now_i, "iat": now_i - 60, "nonce": _h32("bi-exp")}, [fx_inv_b["_keys"]["agent_req"]["sk"]])
     add("bnd-inv-now-eq-exp-refuse", ["SL-GRNT-007"], "invocation",
@@ -820,18 +823,18 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
         "groups": [{
             "ranges": [{"count": 2, "first": 0, "script_policy": row_pol, "txid": row_tx}],
             "template": {
-                "capabilities": [{"action": "mail/read", "quotas": [{"kind": "count", "max": "5", "resource": "mail/read", "unit": "calls", "window": "term"}], "target": "mailbox:id/alice:work", "where": {}}],
+                "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": "5", "resource": "mail/read", "unit": "calls", "window": "term"}], "target": "mailbox:id/alice:work", "where": {}}],
                 "executor": exec_wire_d, "notary_mode": "none", "recipient_rule": {"key": child_rcpt["xonly"], "mode": "exact_key"},
             },
         }],
         "key": del_k["xonly"],
-        "pools": [{"kind": "count", "max": "10", "resource": "mail/read", "unit": "calls", "window": "term"}],
+        "pools": [{"kind": "seallink/count", "max": "10", "resource": "mail/read", "unit": "calls", "window": "term"}],
     }
     pg_env = sl.sign_envelope(pg_p, [fx_d["_keys"]["alice_gr"]["sk"]])
     pg_id = sl.object_id(pg_p)
     pitx = _h32("bd-pitx")
     cg_p = {
-        "capabilities": [{"action": "mail/read", "quotas": [{"kind": "count", "max": "5", "resource": "mail/read", "unit": "calls", "window": "term"}], "target": "mailbox:id/alice:work", "where": {}}],
+        "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": "5", "resource": "mail/read", "unit": "calls", "window": "term"}], "target": "mailbox:id/alice:work", "where": {}}],
         "executor": exec_wire_d, "genesis": GENESIS_MAIN, "network": "main",
         "not_after_height": 760000,   # == root.not_after_height!
         "not_before_height": 749000,  # == root.not_before_height!
@@ -956,7 +959,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     #     - L353 (`settle < 0`): max="1" grant where call 1 settles 0 (full release) so call 2 succeeds!
     fx_s0 = rm._base_invocation_fixture()
     gp_s0 = copy.deepcopy(fx_s0["bundle"]["grants"][0]["payload"])
-    gp_s0["capabilities"][0]["quotas"] = [{"kind": "count", "max": "1", "resource": "mail/read", "unit": "calls", "window": "term"}]
+    gp_s0["capabilities"][0]["quotas"] = [{"kind": "seallink/count", "max": "1", "resource": "mail/read", "unit": "calls", "window": "term"}]
     g_s0 = sl.sign_envelope(gp_s0, [fx_s0["_keys"]["alice_gr"]["sk"]])
     gid_s0 = sl.object_id(gp_s0)
     itx_s0 = _h32("bnd-s0-itx")
@@ -968,12 +971,30 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     }
     inv_s0_1 = sl.sign_envelope({**fx_s0["invocation"]["payload"], "nonce": _h32("s0-n1"), "proof_path": [{"grant_id": gid_s0, "issuance_txid": itx_s0}]}, [fx_s0["_keys"]["agent_req"]["sk"]])
     inv_s0_2 = sl.sign_envelope({**fx_s0["invocation"]["payload"], "nonce": _h32("s0-n2"), "proof_path": [{"grant_id": gid_s0, "issuance_txid": itx_s0}]}, [fx_s0["_keys"]["agent_req"]["sk"]])
+    rcpt_s0_1 = sl.sign_envelope(
+        {
+            "action": "mail/read",
+            "executor_name": fx_s0["executor_cfg"]["name"],
+            "genesis": GENESIS_MAIN,
+            "grant_id": gid_s0,
+            "invocation_id": sl.object_id(inv_s0_1["payload"]),
+            "network": "main",
+            "outcome": "executed",
+            "recorded_at": fx_s0["chain"]["now"],
+            "result_sha256": _h32("s0-res-1"),
+            "settlements": [{"account": "own", "kind": "seallink/count", "released": "1", "reserved": "1", "resource": "mail/read", "settled": "0", "unit": "calls", "window": "term"}],
+            "tip_hash": fx_s0["chain"]["tip_hash"],
+            "tip_height": fx_s0["chain"]["tip_height"],
+            "type": "seallink-receipt/1",
+        },
+        [fx_s0["_keys"]["host_rcpt"]["sk"]],
+    )
     add("bnd-quota-settle-zero-releases-full-reservation-admit", ["SL-GRNT-004"], "restart_recovery",
         {
             "journal_id": _h32("s0-jid"),
             "executor_cfg": fx_s0["executor_cfg"],
             "pre_restart_steps": [
-                {"label": "call1-settle-zero", "chain": fx_s0["chain"], "invocation": inv_s0_1, "bundle": {**fx_s0["bundle"], "grants": [g_s0]}, "actual_quota_usage": {"count|mail/read|calls|term": 0}, "want_verdict": "ADMIT", "want_refusal": None},
+                {"label": "call1-settle-zero", "chain": fx_s0["chain"], "invocation": inv_s0_1, "bundle": {**fx_s0["bundle"], "grants": [g_s0]}, "receipt_env": rcpt_s0_1, "actual_quota_usage": {"seallink/count|mail/read|calls|term": 0}, "want_verdict": "ADMIT", "want_refusal": None},
             ],
             "post_restart_steps": [
                 {"label": "call2-after-full-release", "chain": fx_s0["chain"], "invocation": inv_s0_2, "bundle": {**fx_s0["bundle"], "grants": [g_s0]}, "want_verdict": "ADMIT", "want_refusal": None},

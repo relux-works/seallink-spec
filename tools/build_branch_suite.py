@@ -3,7 +3,7 @@
 Acceptance & Exhaustive Refusal-Branch Conformance Cases for SealLink v1.0.
 
 Provides:
-  Part A: Mandatory v1.0.0-draft.6 acceptance tests:
+  Part A: Mandatory v1.0.0-draft.7 acceptance tests:
     1. Policy-scoped 0x0b compromise cutoff (4 outcomes: retired key A before h_c,
        retired key A at/after h_c, rotated successor key B surviving break on A,
        distinct role 'notary' unaffected).
@@ -71,8 +71,8 @@ def _build_delegation_base(
         "capabilities": [
             {
                 "action": "agent/tool",
-                "quotas": [{"kind": "seallink/count", "max": str(pool_calls), "resource": "station:fleet:tools", "unit": "calls", "window": "term"}],
-                "target": "station:fleet:tools",
+                "quotas": [{"kind": "seallink/count", "max": str(pool_calls), "resource": "station:id/station-a:tools", "unit": "calls", "window": "term"}],
+                "target": "station:id/station-a:tools",
                 "where": {"tool_name": {"in": ["lint", "pytest"]}},
             }
         ],
@@ -85,8 +85,8 @@ def _build_delegation_base(
                         "capabilities": [
                             {
                                 "action": "agent/tool",
-                                "quotas": [{"kind": "seallink/count", "max": str(row_cap_calls), "resource": "station:fleet:tools", "unit": "calls", "window": "term"}],
-                                "target": "station:fleet:tools",
+                                "quotas": [{"kind": "seallink/count", "max": str(row_cap_calls), "resource": "station:id/station-a:tools", "unit": "calls", "window": "term"}],
+                                "target": "station:id/station-a:tools",
                                 "where": {"tool_name": {"in": ["lint", "pytest"]}},
                             }
                         ],
@@ -97,7 +97,7 @@ def _build_delegation_base(
                 }
             ],
             "key": del_k["xonly"],
-            "pools": [{"kind": "seallink/count", "max": str(pool_calls), "resource": "station:fleet:tools", "unit": "calls", "window": "term"}],
+            "pools": [{"kind": "seallink/count", "max": str(pool_calls), "resource": "station:id/station-a:tools", "unit": "calls", "window": "term"}],
         },
         "executor": {"key": exec_k["xonly"], "name": "id/station-a"},
         "genesis": GENESIS_MAIN,
@@ -127,8 +127,8 @@ def _build_delegation_base(
             "capabilities": [
                 {
                     "action": "agent/tool",
-                    "quotas": [{"kind": "seallink/count", "max": str(max_calls), "resource": "station:fleet:tools", "unit": "calls", "window": "term"}],
-                    "target": "station:fleet:tools",
+                    "quotas": [{"kind": "seallink/count", "max": str(max_calls), "resource": "station:id/station-a:tools", "unit": "calls", "window": "term"}],
+                    "target": "station:id/station-a:tools",
                     "where": {"tool_name": {"eq": "pytest"}},
                 }
             ],
@@ -163,7 +163,7 @@ def _build_delegation_base(
                 "network": "main",
                 "nonce": _h32(f"nonce-{nonce_lbl}"),
                 "proof_path": [{"grant_id": p_id, "issuance_txid": p_iss_tx}, {"grant_id": cid, "issuance_txid": itx}],
-                "target": "station:fleet:tools",
+                "target": "station:id/station-a:tools",
                 "type": "seallink-invocation/1",
             },
             [rec_k["sk"]],
@@ -225,7 +225,7 @@ def _build_delegation_base(
 
 
 def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
-    """Append all v1.0.0-draft.6 acceptance tests and exhaustive refusal-branch cases."""
+    """Append all v1.0.0-draft.7 acceptance tests and exhaustive refusal-branch cases."""
 
     # ========================================================================
     # PART A — MANDATORY ACCEPTANCE TESTS (Review 2 §1.1, §1.2, §2)
@@ -365,7 +365,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     inv_r2_1 = db["make_inv"](db["c2_id"], db["c2_itx"], db["keys"]["w1_k"], "sib-r2-1")
     inv_r2_2 = db["make_inv"](db["c2_id"], db["c2_itx"], db["keys"]["w1_k"], "sib-r2-2")
     inv_r2_3 = db["make_inv"](db["c2_id"], db["c2_itx"], db["keys"]["w1_k"], "sib-r2-3")
-    q_calls_k = "seallink/count|station:fleet:tools|calls|term"
+    q_calls_k = "seallink/count|station:id/station-a:tools|calls|term"
     add(
         "accept-sibling-rows-isolated-accounting-and-replay",
         ["SL-GRNT-007", "SL-GRNT-009", "SL-GRNT-014"],
@@ -402,7 +402,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             "kind": "seallink/count",
             "released": "0",
             "reserved": "1",
-            "resource": "station:fleet:tools",
+            "resource": "station:id/station-a:tools",
             "settled": "1",
             "unit": "calls",
             "window": win,
@@ -412,7 +412,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             "kind": "seallink/count",
             "released": "0",
             "reserved": "1",
-            "resource": "station:fleet:tools",
+            "resource": "station:id/station-a:tools",
             "row_ordinal": 1,
             "settled": "1",
             "unit": "calls",
@@ -504,8 +504,8 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         {"raw_bytes_utf8": '{"payload":1,"signatures":{}}'}, "REFUSE", "WIRE_MEMBER",
         "Non-object payload member MUST refuse WIRE_MEMBER.")
     add("branch-wire-missing-type-with-signatures", ["SL-WIRE-010"], "raw_wire",
-        {"raw_bytes_utf8": '{"signatures":{}}'}, "REFUSE", "WIRE_MEMBER",
-        "Envelope with signatures but missing type MUST refuse WIRE_MEMBER.")
+        {"raw_bytes_utf8": '{"signatures":{}}'}, "REFUSE", "WIRE_TYPE",
+        "Envelope with signatures but missing type MUST refuse WIRE_TYPE (W-9).")
     big_card = {"bio": "x" * 17000, "display_name": "Big", "kind": "person", "type": "seallink-card/1"}
     add("branch-wire-exceeds-type-max-bytes", ["SL-WIRE-001"], "raw_wire",
         {"raw_bytes_utf8": sl.jcs_encode(big_card).decode("utf-8")}, "REFUSE", "WIRE_SIZE",
@@ -813,7 +813,13 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         {"origin_bundle": of_nb["origin_bundle"], "chain": of_nb["chain"], "trusted_origin_issuers": of_nb["trusted_origin_issuers"]},
         "REFUSE", "ORIGIN_BINDING_INVALID", "Missing name_binding MUST refuse ORIGIN_BINDING_INVALID.")
     of_seq2 = rm._base_origin_fixture()
-    of_seq2["origin_bundle"]["name_binding"]["seq"] = 2
+    nr_s2 = of_seq2["origin_bundle"]["origin"]["payload"]["name_recovery"]
+    of_seq2["origin_bundle"]["name_binding"].update({
+        "next_recovery_policy": {"kind": "branch", "template": "both_of_2", "keys": {"a": nr_s2["disposer_pk"], "b": nr_s2["arbiter_pk"]}},
+        "next_recovery_vout": 0,
+        "seq": 2,
+        "supersedes_binding_id": _h32("fake-prev-binding"),
+    })
     add("branch-origin-initial-binding-seq-not-1", ["SL-ORIG-003"], "origin_status",
         {"origin_bundle": of_seq2["origin_bundle"], "chain": of_seq2["chain"], "trusted_origin_issuers": of_seq2["trusted_origin_issuers"]},
         "REFUSE", "ORIGIN_BINDING_INVALID", "Initial name_binding with seq != 1 MUST refuse ORIGIN_BINDING_INVALID.")
@@ -826,17 +832,23 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     # Recovery branches
     of_rnone = rm._base_origin_fixture()
     op_none = copy.deepcopy(of_rnone["origin_bundle"]["origin"]["payload"])
+    op_none.pop("guardian_policy", None)
+    op_none["claims"].pop("majority_commitment", None)
     op_none["name_recovery"] = {"mode": "none"}
     o_none = sl.sign_envelope(op_none, [of_rnone["_keys"]["reg_cred"]["sk"]])
     oid_none = sl.object_id(op_none)
     of_rnone["origin_bundle"]["origin"] = o_none
+    of_rnone["origin_bundle"].pop("guardian_records", None)
+    of_rnone["origin_bundle"].pop("guardian_assents", None)
+    of_rnone["origin_bundle"].pop("initial_guardian_disclosures", None)
+    of_rnone["origin_bundle"].pop("opened_majority_unix", None)
     of_rnone["origin_bundle"]["name_binding"]["origin_id"] = oid_none
     of_rnone["chain"]["txs"][of_rnone["origin_bundle"]["origin_anchor_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x09, sl.content_addr(o_none)).hex()
     of_rnone["chain"]["txs"][of_rnone["origin_bundle"]["name_binding_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x0C, sl.object_id(of_rnone["origin_bundle"]["name_binding"])).hex()
     of_rnone["origin_bundle"]["recovery_bindings"] = [copy.deepcopy(of_rnone["origin_bundle"]["name_binding"])]
     add("branch-recovery-forbidden-under-mode-none", ["SL-ORIG-013"], "origin_status",
         {"origin_bundle": of_rnone["origin_bundle"], "chain": of_rnone["chain"], "trusted_origin_issuers": of_rnone["trusted_origin_issuers"]},
-        "REFUSE", "RECOVERY_FORBIDDEN", "Presenting recovery_bindings under name_recovery.mode='none' MUST refuse RECOVERY_FORBIDDEN.")
+        "REFUSE", "RECOVERY_FORBIDDEN", "Presenting recovery_bindings under autonomous name_recovery.mode='none' MUST refuse RECOVERY_FORBIDDEN.")
 
     of_rs = rm._base_origin_fixture()
     op_rs = copy.deepcopy(of_rs["origin_bundle"]["origin"]["payload"])
@@ -863,7 +875,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         cand = {
             **copy.deepcopy(o2["origin_bundle"]["name_binding"]),
             "name": "id/child-leo-rec",
-            "seq": 1 if bad_seq else 2,
+            "seq": 3 if bad_seq else 2,
             "supersedes_binding_id": sl.object_id(o2["origin_bundle"]["name_binding"]),
             "next_recovery_vout": 0,
             "next_recovery_policy": rec_pol,
@@ -881,16 +893,23 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         o2["origin_bundle"]["recovery_bindings"] = [cand]
         return o2
 
-    for cid_r, kw_r, want_r, note_r in [
-        ("branch-recovery-bad-0x0c-tx", {"bad_opret": True}, "ORIGIN_STATUS_INCOMPLETE", "Recovery spend without valid 0x0c OP_RETURN MUST refuse ORIGIN_STATUS_INCOMPLETE."),
-        ("branch-recovery-bad-candidate-seq", {"bad_seq": True}, "ORIGIN_STATUS_INCOMPLETE", "Recovery candidate with non-increasing seq MUST refuse ORIGIN_STATUS_INCOMPLETE."),
-        ("branch-recovery-missing-next-seal", {"miss_next_out": True}, "ORIGIN_STATUS_INCOMPLETE", "Recovery spend missing continuation recovery output MUST refuse ORIGIN_STATUS_INCOMPLETE."),
-        ("branch-recovery-delay-not-elapsed", {"tip_h": 750010}, "RECOVERY_FORBIDDEN", "Un-cancelled recovery before h_rec + delay_blocks MUST refuse RECOVERY_FORBIDDEN."),
+    # Decision D-1: malformed recovery_seal spend burns ONLY the recovery line (`recovery_burned=True`)
+    # while preserving confirmed binding B_k; asserting the malformed candidate itself refuses RECOVERY_FORBIDDEN.
+    for cid_r, kw_r, note_r in [
+        ("branch-recovery-bad-0x0c-tx", {"bad_opret": True}, "Malformed recovery spend without 0x0c OP_RETURN burns recovery line while preserving active binding B_1 (D-1)."),
+        ("branch-recovery-bad-candidate-seq", {"bad_seq": True}, "Recovery candidate with non-increasing seq burns recovery line while preserving active binding B_1 (D-1)."),
+        ("branch-recovery-missing-next-seal", {"miss_next_out": True}, "Recovery spend missing continuation output burns recovery line while preserving active binding B_1 (D-1)."),
     ]:
         orf = _rec_spend_fixture(**kw_r)
+        b1_id = sl.object_id(orf["origin_bundle"]["name_binding"])
         add(cid_r, ["SL-ORIG-014"], "origin_status",
-            {"origin_bundle": orf["origin_bundle"], "chain": orf["chain"], "trusted_origin_issuers": orf["trusted_origin_issuers"]},
-            "REFUSE", want_r, note_r)
+            {"origin_bundle": orf["origin_bundle"], "chain": orf["chain"], "trusted_origin_issuers": orf["trusted_origin_issuers"],
+             "assert_binding_id": b1_id, "expect_recovery_burned": True},
+            "ADMIT_WARD", None, note_r)
+    orf_del = _rec_spend_fixture(tip_h=750010)
+    add("branch-recovery-delay-not-elapsed", ["SL-ORIG-014"], "origin_status",
+        {"origin_bundle": orf_del["origin_bundle"], "chain": orf_del["chain"], "trusted_origin_issuers": orf_del["trusted_origin_issuers"]},
+        "REFUSE", "RECOVERY_FORBIDDEN", "Un-cancelled recovery before h_rec + delay_blocks MUST refuse RECOVERY_FORBIDDEN.")
 
     # Status spine branches
     of_sm = rm._base_origin_fixture()
@@ -1088,6 +1107,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
                 "slot": 2,
                 "active_policy": g2_act_pol,
                 "guardian": {"name": "id/parent-b", "owner_policy": g2_opol, "registration": g2_reg},
+                "prev_outpoint": copy.deepcopy(ow["origin_bundle"]["origin"]["payload"]["guardian_policy"]["slots"][1]["vacant_utxo"]),
             })
             g2_rec = sl.sign_envelope(g2_rec_p, [ow["_keys"]["reg_cred"]["sk"]])
             g2_assent = sl.sign_envelope(
@@ -1626,7 +1646,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     bob_own = _kp("nr-bob-own")
     bob_opol = {"kind": "key", "pk": bob_own["comp"]}
     bob_reg = {"txid": _h32("nr-bob-reg"), "vout": 0}
-    gp_nr["recipient"] = {"mode": "name", "name": "id/bob-rcpt", "owner_policy": bob_opol}
+    gp_nr["recipient"] = {"mode": "name", "name": "id/bob-rcpt", "owner_policy": bob_opol, "registration": bob_reg}
     g_nr = sl.sign_envelope(gp_nr, [fx_nr["_keys"]["alice_gr"]["sk"]])
     gid_nr = sl.object_id(gp_nr)
     fx_nr["bundle"]["grants"] = [g_nr]
@@ -1662,7 +1682,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             "executor": {"key": exec_k["xonly"], "name": "id/agent-host"},
             "genesis": GENESIS_MAIN,
             "guardian_context": {"event_class": "effect_grant", "origin_id": oid, "revision": 1, "ward_name": "id/child-leo"},
-            "issuer": {"name": "id/child-leo", "owner_policy": ow["origin_bundle"]["name_binding"]["owner_policy"], "registration": ow["origin_bundle"]["name_binding"]["registration"], "role_policy": {"m": 1, "pks": [ow["_keys"]["g1_gr"]["xonly"]]}},
+            "issuer": {"name": "id/child-leo", "owner_policy": ow["origin_bundle"]["name_binding"]["owner_policy"], "registration": ow["origin_bundle"]["name_binding"]["registration"]},
             "network": "main",
             "not_after_height": 760000,
             "not_before_height": 749000,
@@ -1687,7 +1707,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         ow["chain"]["txs"][rm._h32("og1-init-0x12")]["opreturn_hex"] = sl.encode_opreturn(0x12, sl.content_addr(grec_q)).hex()
         ow["chain"]["names"]["id/child-leo"] = sv.make_name_history(
             "id/child-leo", ow["origin_bundle"]["name_binding"]["registration"], ow["origin_bundle"]["name_binding"]["owner_policy"],
-            {"link": {"grant": ow["_keys"]["g1_gr"]["xonly"], "origin": oid_q}}, first_height=748000, update_height=749000,
+            {"link": {"grant": ow["_keys"]["g1_gr"]["xonly"], "origin": oid_q}}, first_height=749005, update_height=749010,
         )
         tgt_q = f"ward:{_h32('other-ward')}" if wrong_target else f"ward:{oid_q}"
         gp["capabilities"][0]["target"] = tgt_q
@@ -1733,8 +1753,8 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             out["raw_message_hex"] = b"tampered bytes".hex()
         return out
 
-    add("branch-agm-wrong-ward-target", ["SL-AGNT-004"], "invocation", _agm_fx(wrong_target=True), "REFUSE", "INVOKE_CONSTRAINT_FAILED",
-        "agent/guardian-message target mismatching pinned ward origin MUST refuse INVOKE_CONSTRAINT_FAILED.")
+    add("branch-agm-wrong-ward-target", ["SL-AGNT-004"], "invocation", _agm_fx(wrong_target=True), "REFUSE", "GRANT_TARGET_UNAUTHORIZED",
+        "agent/guardian-message target mismatching pinned ward origin MUST refuse GRANT_TARGET_UNAUTHORIZED (B-3).")
     add("branch-agm-wrong-args-revision", ["SL-AGNT-004"], "invocation", _agm_fx(wrong_rev=True), "REFUSE", "GUARDIAN_QUORUM_UNMET",
         "agent/guardian-message args.revision mismatching verified roster revision MUST refuse GUARDIAN_QUORUM_UNMET.")
     add("branch-agm-raw-message-hash-mismatch", ["SL-AGNT-004"], "invocation", _agm_fx(wrong_raw_msg=True), "REFUSE", "INVOKE_CONSTRAINT_FAILED",
@@ -1829,8 +1849,8 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     # --- Final 10 razor-sharp refusal branch tests targeting 100% verifier mutation kill rate ---
     # 1. Bare envelope missing `payload` and `type` (verify_wire_bytes)
     add("branch-wire-bare-signatures-no-payload", ["SL-WIRE-002"], "raw_wire",
-        {"object": {"signatures": {}}}, "REFUSE", "WIRE_MEMBER",
-        "Object carrying signatures without payload or type MUST refuse WIRE_MEMBER.")
+        {"object": {"signatures": {}}}, "REFUSE", "WIRE_TYPE",
+        "Object carrying signatures without payload or type MUST refuse WIRE_TYPE (W-9).")
 
     # 2. Uncompilable script_policy on evaluate_single_use_seal
     add("branch-single-use-bad-script-policy", ["SL-LDGR-011"], "single_use_seal",
@@ -1868,6 +1888,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     # 6. Guardian approval item revision disagrees with guardian_context.revision (with 1-of-2 quorum so ONLY item.revision refuses!)
     wa_item_rev = rm._base_origin_fixture()
     op_1of2 = copy.deepcopy(wa_item_rev["origin_bundle"]["origin"]["payload"])
+    op_1of2["guardian_policy"]["quorums"]["effect_grant"] = {"den": 2, "min": 1, "num": 1}
     op_1of2["guardian_policy"]["quorums"]["contract_assent"] = {"den": 2, "min": 1, "num": 1}
     o_1of2 = sl.sign_envelope(op_1of2, [wa_item_rev["_keys"]["reg_cred"]["sk"]])
     oid_1of2 = sl.object_id(op_1of2)
@@ -1892,7 +1913,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         },
         [{"slot": 1, "revision": 2, "guardian_name": "id/parent-a", "signers": [wa_item_rev["_keys"]["g1_gr"]["sk"]]}],
     )
-    add("branch-ward-approval-item-revision-mismatch", ["SL-ORIG-005"], "assent",
+    add("branch-ward-approval-item-revision-mismatch-1of2", ["SL-ORIG-005"], "assent",
         {"assent": assent_item_rev, "contract": c_1of2, "origin_bundle": wa_item_rev["origin_bundle"],
          "chain": wa_item_rev["chain"], "trusted_origin_issuers": wa_item_rev["trusted_origin_issuers"]},
         "REFUSE", "GUARDIAN_QUORUM_UNMET",
@@ -1914,11 +1935,11 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         "txid": _h32("g1-xfer-tx"),
         "vout": 0,
     })
-    add("branch-ward-approval-guardian-owner-changed-at-tip", ["SL-ORIG-005"], "assent",
+    add("branch-ward-approval-guardian-owner-changed-at-tip", ["SL-ORIG-005", "SL-ORIG-006"], "assent",
         {"assent": wa_gmiss["assent"], "contract": wa_gmiss["contract"], "origin_bundle": wa_gmiss["origin_bundle"],
          "chain": wa_gmiss["chain"], "trusted_origin_issuers": of_wa["trusted_origin_issuers"]},
-        "REFUSE", "NAME_OWNER_MISMATCH",
-        "Active guardian whose Namecoin owner_policy changed after activation MUST refuse NAME_OWNER_MISMATCH at tip.")
+        "REFUSE", "GUARDIAN_INACTIVE",
+        "Active guardian whose Namecoin owner_policy changed after activation MUST refuse GUARDIAN_INACTIVE at tip (SL-ORIG-006 / H-35).")
 
     # 8. Post-majority adult (after majority handover NAME_UPDATE) assenting a ward-only contract party lacking signing_policy
     wa_adult = copy.deepcopy(wa_ok)
@@ -2030,7 +2051,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         "id/bob-no-nostr", bob_reg, bob_pol, {"link": {"grant": _kp("bob-nonostr-gr")["xonly"]}}, first_height=748000, update_height=749000
     )
     gp_nn = copy.deepcopy(fx_nn["bundle"]["grants"][0]["payload"])
-    gp_nn["recipient"] = {"mode": "name", "name": "id/bob-no-nostr", "owner_policy": bob_pol}
+    gp_nn["recipient"] = {"mode": "name", "name": "id/bob-no-nostr", "owner_policy": bob_pol, "registration": bob_reg}
     g_nn = sl.sign_envelope(gp_nn, [fx_nn["_keys"]["alice_gr"]["sk"]])
     gid_nn = sl.object_id(gp_nn)
     itx_nn = _h32("itx-rcpt-nonostr")

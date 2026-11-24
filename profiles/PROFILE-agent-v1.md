@@ -1,6 +1,6 @@
 # PROFILE-agent-v1: Bounded Autonomous Agent Tasks, Tool Execution, Isolated Sessions, and Guardian Intake
 
-- **Version:** `1.0.0-draft.6`
+- **Version:** `1.0.0-draft.7`
 - **Service Type:** `agent-session` (`registry/service-types.json`)
 - **Status:** `draft` (normative profile rules `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-03-delegation-pool-single-use.json`, `vectors/trace-04-agent-guardian-intake.json`, `vectors/refusal-coverage-matrix.json`)
@@ -45,9 +45,9 @@ This profile defines normative SealLink authorization for autonomous software ag
 
 ## 4. Target, Closed Schemas, Arguments, and `result_sha256` (`SL-AGNT-002`, `decided`)
 
-- **Target grammar:**
-  - `agent/brief`, `agent/tool`, `agent/session`: `station:<host_name>:<workspace_or_slot>` (e.g., `station:id/station-a:repo-seallink`).
-  - `agent/guardian-message`: `ward:<origin_id_64hex>`.
+- **Target grammar and target authority:**
+  - `agent/brief`, `agent/tool`, `agent/session`: `station:<host_name>:<workspace_or_slot>` (e.g., `station:id/station-a:repo-seallink`). The host MUST verify `<host_name> == executor.name` AND that the root grant's issuer is authorized for `<workspace_or_slot>` under local host binding (`GRANT_TARGET_UNAUTHORIZED` otherwise). `resource_path` MUST conform to `NormalizedResourcePath` (forbidding `..` path traversal segments; `schemas/profile-agent.schema.json`).
+  - `agent/guardian-message`: `ward:<origin_id_64hex>`. The host MUST pin `pinned_ward_origin_id` in read-only host config (`ORIGIN_UNVERIFIED` if absent), MUST confirm `origin_id == pinned_ward_origin_id` (`GRANT_TARGET_UNAUTHORIZED` on mismatch), and MUST refuse autonomous non-ward grants (`WARD_AUTONOMOUS_FORBIDDEN`).
 - **Closed schemas:** All `invocation.arguments` and returned result objects MUST validate strictly against `schemas/profile-agent.schema.json`:
   - `agent/brief`: `AgentBriefArgs` -> `AgentBriefResult`
   - `agent/tool`: `AgentToolArgs` -> `AgentToolResult`
@@ -83,14 +83,14 @@ This profile defines normative SealLink authorization for autonomous software ag
 
 An agent host or Bridge mediating incoming guardian messages for a `ward` agent (`origin_class = "agent"`, `guardian_policy` present) MUST distinguish between **guardian grant authorization** (the ward's `seallink-grant/1` carrying `guardian_context` and `guardian_approvals[]`) and **invocation delivery** (the signed `seallink-invocation/1` signed by the grant's recipient — either the guardian's own delivery key or an authorized Bridge relay key — carrying `AgentGuardianMessageArgs`), and MUST execute the following deterministic check before delivering any privileged instruction into an agent session's Authority Frame:
 
-1. **Read-only origin pin:** Load the agent's locally pinned `seallink-origin/1` and `(network, genesis)` from read-only host storage outside agent write reach (`SPEC-03 §6`).
+1. **Read-only origin pin (mandatory):** Load the agent's locally pinned `pinned_ward_origin_id`, `seallink-origin/1`, and `(network, genesis)` from read-only host storage outside agent write reach (`SPEC-03 §6`; refuse `ORIGIN_UNVERIFIED` if unpinned). Autonomous grants (lacking `guardian_context` / `guardian_approvals[]`) MUST refuse `WARD_AUTONOMOUS_FORBIDDEN`.
 2. **Event class assignment (`effect_grant`):** Because guardian messages direct privileged agent behavior, `agent/guardian-message` MUST be classified as **`event_class = "effect_grant"`** (NEVER `routine_read`; `SPEC-04 §3.1`). A ward grant claiming `event_class = "routine_read"` for `agent/guardian-message` MUST refuse with `GUARDIAN_QUORUM_UNMET`.
 3. **Full admission pipeline & ward checks:** Execute `SPEC-06 §4` on the `seallink-invocation/1` and its ward `seallink-grant/1`:
    - Confirm `status_seal` is unspent (`ORIGIN_STATUS_INCOMPLETE`, `SUBJECT_ENDED`, `GUARDIAN_TRANSFER_PENDING`) and the latest effective `roster_seal` revision matches both `grant.payload.guardian_context.revision` and `arguments.revision` (`ORIGIN_STATUS_INCOMPLETE`, `GUARDIAN_QUORUM_UNMET`).
    - Verify `grant.guardian_approvals[]` per `SL-WIRE-013` and `SL-ORIG-006`: every cited slot seal is `active` and unspent on the host's Tier 1 node (`GUARDIAN_INACTIVE`), every `guardian_approvals[i].signatures` matches that guardian's live `link.grant` policy (`WIRE_SIGNATURE`), all approving slots belong to distinct `(name, registration)` guardians, and the count meets `required("effect_grant")` against `revision_size` (`GUARDIAN_QUORUM_UNMET`).
-   - Confirm `invocation.target == "ward:" + origin_id`, `arguments.origin_id == origin_id`, `arguments.subject_ward_name == ward_name`, and `SHA256(raw_message_bytes) == arguments.message_sha256` (and satisfies any `where.message_sha256` `hash_eq` predicate when the grant pins one exact message) (`INVOKE_CONSTRAINT_FAILED`).
+   - Confirm `invocation.target == "ward:" + pinned_ward_origin_id` (`GRANT_TARGET_UNAUTHORIZED`), `arguments.origin_id == pinned_ward_origin_id`, `arguments.subject_ward_name == ward_name`, AND require raw message bytes `raw_message_bytes` to be supplied and satisfy `SHA256(raw_message_bytes) == arguments.message_sha256` (plus any `where.message_sha256` `hash_eq` predicate when the grant pins one exact message) (`INVOKE_CONSTRAINT_FAILED`).
 4. **Normative default `delivery_mode = "strict_drop"`:** For ward agents, **`strict_drop` is the normative default** (`AgentGuardianMessageArgs.delivery_mode`): any unauthenticated, malformed, or refused external message MUST be dropped at the Bridge/host boundary before entering the model context. Hosts MAY permit `untrusted_fallback` ONLY when explicitly enabled by local administrator policy and strictly isolated outside the Authority Frame.
-5. **Authority Frame & receipt:** Only after steps 1–3 succeed MAY the host wrap the verified message (`message_sha256`) inside a structured read-only Authority Frame, compute `frame_sha256`, and emit `AgentGuardianMessageResult` (`delivered = true`, `verified_slots`, `verified_guardians`, `message_sha256`, `frame_sha256`, `recorded_at`) + signed `seallink-receipt/1` (`vectors/trace-04-agent-guardian-intake.json`).
+5. **Canonical `AuthorityFrame` & receipt:** Only after steps 1–3 succeed MAY the host construct the canonical JCS `AuthorityFrame` (`schemas/profile-agent.schema.json#/$defs/AuthorityFrame`), compute `frame_sha256 = SHA256(canonical_JCS(AuthorityFrame))`, and emit `AgentGuardianMessageResult` (`delivered = true`, `verified_slots`, `verified_guardians`, `message_sha256`, `frame_sha256`, `recorded_at`) + signed `seallink-receipt/1` (`vectors/trace-04-agent-guardian-intake.json`).
 
 ---
 
@@ -98,7 +98,7 @@ An agent host or Bridge mediating incoming guardian messages for a `ward` agent 
 
 1. **`agent/session` contract requirement:** Every `agent/session` grant MUST bind `contract_id` (`GRANT_CONTRACT_REQUIRED`), and the bound `seallink-contract/1` MUST carry `config_sha256` (`SL-CONT-006`). Before executing `op = "start"`, the host MUST compute the hash of the assembled runtime profile, skills, and tool allowlist and require exact equality with both `contract.config_sha256` and `arguments.config_sha256` (`CONTRACT_CONFIG_MISMATCH`).
 2. **Quota reservation:**
-   - `agent/brief` and `agent/session` (`op = "start"`) reserve `1` unit from `{"kind":"seallink/count","resource":"<target>","unit":"starts"}`.
+   - `agent/brief` and `agent/session` (`op = "start"`) reserve `1` unit from `{"kind":"seallink/count","resource":"<target>","unit":"starts"}`; `agent/session` with `op = "checkpoint"` or `op = "halt"` reserves **`0`** units (`registry/constraints.json`).
    - `agent/tool` reserves `1` unit from `{"kind":"seallink/count","resource":"<target>","unit":"calls"}` (plus any `seallink/cost` or `seallink/tokens` quotas declared on the capability).
    - For delegated child grants, reservations debit both the child's `own` account and the parent's `row` account (`SPEC-06 §2.2`), bounded across all sibling rows by R8.5 (`SPEC-06 §3`).
 3. **Bearer sessions:** An admitted `agent/session` MAY open a short-lived (`<= 3600s`) `seallink-session-open/1` bearer slot for non-signing model SDKs (`SPEC-06 §5`), restricted strictly to compute/tool quotas inside the session ceiling; irreversible financial transfers MUST NOT use bearer sessions.

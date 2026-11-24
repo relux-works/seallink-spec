@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.6/schemas/guardian.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/guardian.schema.json",
   "title": "SealLink v1.0 Name Binding, Guardianship, Roster Transition, Capacity & Subject End",
   "$defs": {
     "NameBinding": {
@@ -26,7 +26,25 @@
       "dependentRequired": {
         "next_recovery_vout": ["next_recovery_policy"],
         "next_recovery_policy": ["next_recovery_vout"]
-      }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["seq"], "properties": { "seq": { "type": "integer", "const": 1 } } },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["supersedes_binding_id"] },
+                { "required": ["next_recovery_vout"] },
+                { "required": ["next_recovery_policy"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": { "required": ["seq"], "properties": { "seq": { "type": "integer", "minimum": 2 } } },
+          "then": { "required": ["supersedes_binding_id", "next_recovery_vout", "next_recovery_policy"] }
+        }
+      ]
     },
     "GuardianTerm": {
       "oneOf": [
@@ -69,8 +87,8 @@
                 "activation_mode": { "const": "initial" },
                 "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
-                "slot": { "type": "integer", "minimum": 1, "maximum": 32 },
-                "revision": { "const": 1 },
+                "slot": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
+                "revision": { "type": "integer", "const": 1 },
                 "guardian": { "$ref": "common.schema.json#/$defs/NamePin" },
                 "prev_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
                 "active_vout": {
@@ -99,7 +117,7 @@
                 "activation_mode": { "const": "appointed" },
                 "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
-                "slot": { "type": "integer", "minimum": 1, "maximum": 32 },
+                "slot": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
                 "revision": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
                 "guardian": { "$ref": "common.schema.json#/$defs/NamePin" },
                 "prev_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
@@ -116,7 +134,7 @@
                   "description": "MUST be either_of_2(guardian_seal_pk, disposer_pk) created at vout 0 by Stage 2 activation (0x0e)."
                 },
                 "term": { "$ref": "#/$defs/GuardianTerm" },
-                "effective_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560 }
+                "effective_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" }
               }
             }
           ]
@@ -145,15 +163,15 @@
             "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
             "prev_revision": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
-            "revision": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
-            "revision_size": { "type": "integer", "minimum": 1, "maximum": 32 },
-            "disposer_pk": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" },
-            "arbiter_pk": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" },
-            "challenger_pk": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" },
+            "revision": { "type": "integer", "minimum": 2, "maximum": 9007199254740991, "x-seallink-refusal": "WIRE_INTEGER" },
+            "revision_size": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
+            "disposer_pk": { "$ref": "common.schema.json#/$defs/BranchKeySpec" },
+            "arbiter_pk": { "$ref": "common.schema.json#/$defs/BranchKeySpec" },
+            "challenger_pk": { "$ref": "common.schema.json#/$defs/BranchKeySpec" },
             "prev_roster_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
             "next_roster_vout": { "$ref": "common.schema.json#/$defs/Vout" },
             "next_roster_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
-            "effective_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560 },
+            "effective_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" },
             "quorums": { "$ref": "common.schema.json#/$defs/QuorumMap" },
             "slots": {
               "type": "array",
@@ -167,7 +185,7 @@
                     "additionalProperties": false,
                     "required": ["slot", "action", "active_outpoint", "guardian_id"],
                     "properties": {
-                      "slot": { "type": "integer", "minimum": 1, "maximum": 32 },
+                      "slot": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
                       "action": { "const": "retain_active" },
                       "active_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
                       "guardian_id": { "$ref": "common.schema.json#/$defs/Hex64" }
@@ -178,7 +196,7 @@
                     "additionalProperties": false,
                     "required": ["slot", "action", "vacant_outpoint"],
                     "properties": {
-                      "slot": { "type": "integer", "minimum": 1, "maximum": 32 },
+                      "slot": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
                       "action": { "const": "retain_vacant" },
                       "vacant_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" }
                     }
@@ -188,7 +206,7 @@
                     "additionalProperties": false,
                     "required": ["slot", "action", "new_vacant_vout", "new_vacant_policy"],
                     "properties": {
-                      "slot": { "type": "integer", "minimum": 1, "maximum": 32 },
+                      "slot": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
                       "action": { "const": "new_vacant" },
                       "new_vacant_vout": { "$ref": "common.schema.json#/$defs/Vout" },
                       "new_vacant_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }

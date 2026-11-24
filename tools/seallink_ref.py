@@ -154,10 +154,34 @@ def journal_commit_step(prev_commit_hex: str, entry_obj: dict[str, Any]) -> str:
 # 3. Restricted RFC 8785 JCS (SPEC-01 §1-2)
 # ============================================================================
 
-MULTILINE_FIELDS = frozenset({"terms_text", "text", "reason", "role"})
+# Exact schema paths annotated with "x-seallink-allow-lf": true (SPEC-01 §1 SL-WIRE-005)
+ALLOW_LF_BY_TYPE: dict[str | None, frozenset[tuple[str, ...]]] = {
+    "seallink-grant/1": frozenset({("payload", "terms_text"), ("terms_text",)}),
+    "seallink-termination/1": frozenset({("reason",), ("payload", "reason")}),
+    "seallink-card/1": frozenset({("role",)}),
+    None: frozenset({("text",), ("terms_text",)}),  # Standalone ClauseObject / untyped JCS snippet
+}
 MAX_UINT53 = 9007199254740991
 MAX_UINT64 = 18446744073709551615
-UINT64_STR_RE = re.compile(r"^(0|[1-9][0-9]{0,19})$")
+UINT64_STR_RE = re.compile(r"\A(0|[1-9][0-9]{0,19})\Z")
+HEX64_RE = re.compile(r"\A[0-9a-f]{64}\Z")
+
+
+def _extract_root_type(obj: Any) -> str | None:
+    if not isinstance(obj, dict):
+        return None
+    t = obj.get("type")
+    if isinstance(t, str):
+        return t
+    p = obj.get("payload")
+    if isinstance(p, dict) and isinstance(p.get("type"), str):
+        return p["type"]
+    return None
+
+
+def _path_allows_lf(root_type: str | None, path: tuple[str, ...]) -> bool:
+    allowed = ALLOW_LF_BY_TYPE.get(root_type)
+    return bool(allowed and path in allowed)
 
 
 def _utf16_sort_key(s: str) -> bytes:
@@ -193,9 +217,12 @@ def _encode_jcs_str(s: str) -> str:
     return "".join(out)
 
 
-def _jcs_serialize(val: Any, field_name: str | None = None, depth: int = 1) -> str:
-    if depth > 16:
-        raise ValueError("WIRE_SIZE")
+def _jcs_serialize(
+    val: Any,
+    root_type: str | None = None,
+    path: tuple[str, ...] = (),
+    depth: int = 0,
+) -> str:
     if val is None:
         raise ValueError("WIRE_VALUE")
     if isinstance(val, bool):
@@ -207,19 +234,25 @@ def _jcs_serialize(val: Any, field_name: str | None = None, depth: int = 1) -> s
     if isinstance(val, float):
         raise ValueError("WIRE_NUMBER")
     if isinstance(val, str):
-        allow_lf = field_name in MULTILINE_FIELDS
+        allow_lf = _path_allows_lf(root_type, path)
         if not _validate_string(val, allow_lf):
             raise ValueError("WIRE_STRING")
         return _encode_jcs_str(val)
     if isinstance(val, list):
-        return "[" + ",".join(_jcs_serialize(x, None, depth + 1) for x in val) + "]"
+        next_depth = depth + 1
+        if next_depth > 16:
+            raise ValueError("WIRE_SIZE")
+        return "[" + ",".join(_jcs_serialize(x, root_type, path + ("[]",), next_depth) for x in val) + "]"
     if isinstance(val, dict):
+        next_depth = depth + 1
+        if next_depth > 16:
+            raise ValueError("WIRE_SIZE")
         items = sorted(val.items(), key=lambda kv: _utf16_sort_key(kv[0]))
         parts = []
         for k, v in items:
             if not isinstance(k, str) or not _validate_string(k, False):
                 raise ValueError("WIRE_STRING")
-            parts.append(f"{_encode_jcs_str(k)}:{_jcs_serialize(v, k, depth + 1)}")
+            parts.append(f"{_encode_jcs_str(k)}:{_jcs_serialize(v, root_type, path + (k,), next_depth)}")
         return "{" + ",".join(parts) + "}"
     raise ValueError("WIRE_VALUE")
 
@@ -227,12 +260,15 @@ def _jcs_serialize(val: Any, field_name: str | None = None, depth: int = 1) -> s
 def jcs_encode(obj: dict[str, Any]) -> bytes:
     if not isinstance(obj, dict):
         raise ValueError("WIRE_JSON")
-    return _jcs_serialize(obj, None, 1).encode("utf-8")
+    return _jcs_serialize(obj, _extract_root_type(obj), (), 0).encode("utf-8")
 
 
-def _check_depth_and_values(val: Any, field_name: str | None, depth: int) -> str | None:
-    if depth > 16:
-        return "WIRE_SIZE"
+def _check_depth_and_values(
+    val: Any,
+    root_type: str | None,
+    path: tuple[str, ...],
+    depth: int,
+) -> str | None:
     if val is None:
         return "WIRE_VALUE"
     if isinstance(val, bool):
@@ -244,24 +280,72 @@ def _check_depth_and_values(val: Any, field_name: str | None, depth: int) -> str
             return "WIRE_NUMBER"
         return None
     if isinstance(val, str):
-        if not _validate_string(val, field_name in MULTILINE_FIELDS):
+        if not _validate_string(val, _path_allows_lf(root_type, path)):
             return "WIRE_STRING"
         return None
     if isinstance(val, list):
+        next_depth = depth + 1
+        if next_depth > 16:
+            return "WIRE_SIZE"
         for item in val:
-            err = _check_depth_and_values(item, None, depth + 1)
+            err = _check_depth_and_values(item, root_type, path + ("[]",), next_depth)
             if err:
                 return err
         return None
     if isinstance(val, dict):
+        next_depth = depth + 1
+        if next_depth > 16:
+            return "WIRE_SIZE"
         for k, v in val.items():
             if not _validate_string(k, False):
                 return "WIRE_STRING"
-            err = _check_depth_and_values(v, k, depth + 1)
+            err = _check_depth_and_values(v, root_type, path + (k,), next_depth)
             if err:
                 return err
         return None
     return "WIRE_VALUE"
+
+
+def _scan_container_depth(text: str) -> tuple[int, bool]:
+    """Iterative O(n) string-aware lexical container depth scan (guards json.loads against RecursionError)."""
+    cur = 0
+    best = 0
+    in_str = False
+    esc = False
+    for ch in text:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            cur += 1
+            if cur > best:
+                best = cur
+        elif ch in "}]":
+            cur -= 1
+            if cur < 0:
+                return best, False
+    return best, (not in_str and cur == 0)
+
+
+def _is_leading_zero_number_error(text: str, pos: int) -> bool:
+    """Detect RFC 8259 leading-zero numeric tokens like `01` so they map deterministically to WIRE_NUMBER."""
+    if pos <= 0 or pos >= len(text):
+        return False
+    if text[pos - 1] == "0" and text[pos].isdigit():
+        # Ensure the `0` was not preceded by another digit or identifier/quote
+        prev = text[pos - 2] if pos >= 2 else ""
+        if prev in ("", ":", ",", "[", "{", " ", "\t", "\r", "\n", "-"):
+            return True
+    if text[pos] == "+" and pos + 1 < len(text) and text[pos + 1].isdigit():
+        return True
+    return False
 
 
 def jcs_validate(raw: bytes, max_bytes: int = 1048576) -> tuple[bool, Any]:
@@ -274,6 +358,15 @@ def jcs_validate(raw: bytes, max_bytes: int = 1048576) -> tuple[bool, Any]:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
         return False, "WIRE_JSON"
+
+    # SL-WIRE-002: single RFC 8259 JSON object with no leading or trailing bytes (including whitespace)
+    if not text or text[0] in " \t\r\n" or text[-1] in " \t\r\n":
+        return False, "WIRE_JSON"
+
+    # Iterative depth guard prevents RecursionError on deeply nested hostile JSON (H-20)
+    lex_depth, lex_balanced = _scan_container_depth(text)
+    if lex_depth > 64:
+        return False, ("WIRE_SIZE" if lex_balanced else "WIRE_JSON")
 
     dup_found = False
     bad_num = False
@@ -310,25 +403,34 @@ def jcs_validate(raw: bytes, max_bytes: int = 1048576) -> tuple[bool, Any]:
             parse_float=parse_float,
             parse_int=parse_int,
         )
+    except json.JSONDecodeError as exc:
+        if _is_leading_zero_number_error(text, exc.pos):
+            return False, "WIRE_NUMBER"
+        return False, "WIRE_JSON"
+    except RecursionError:
+        return False, "WIRE_SIZE"
     except Exception:
         return False, "WIRE_JSON"
 
     if not isinstance(obj, dict):
         return False, "WIRE_JSON"
 
-    # Depth check (SL-WIRE-001) runs before duplicate/value checks per §7 step 1
-    def max_depth(v: Any, cur: int = 1) -> int:
+    # Container-only depth check (SL-WIRE-001): root object = 1, only dict/list increment depth
+    def max_container_depth(v: Any, cur: int = 1) -> int:
         if isinstance(v, dict):
-            return max([cur] + [max_depth(x, cur + 1) for x in v.values()])
+            sub = [max_container_depth(x, cur + 1) for x in v.values() if isinstance(x, (dict, list))]
+            return max([cur] + sub)
         if isinstance(v, list):
-            return max([cur] + [max_depth(x, cur + 1) for x in v])
+            sub = [max_container_depth(x, cur + 1) for x in v if isinstance(x, (dict, list))]
+            return max([cur] + sub)
         return cur
 
-    if max_depth(obj) > 16:
+    if max_container_depth(obj) > 16:
         return False, "WIRE_SIZE"
     if dup_found:
         return False, "WIRE_DUPLICATE"
-    err = _check_depth_and_values(obj, None, 1)
+    root_type = _extract_root_type(obj)
+    err = _check_depth_and_values(obj, root_type, (), 0)
     if err == "WIRE_VALUE":
         return False, "WIRE_VALUE"
     if bad_num or err == "WIRE_NUMBER":
@@ -614,6 +716,19 @@ def _ed_encode_point(pt: tuple[int, int, int, int]) -> bytes:
     return bytes(b)
 
 
+def _ed_is_identity(pt: tuple[int, int, int, int]) -> bool:
+    x, y, z, _ = pt
+    return x % _ED_P == 0 and (y - z) % _ED_P == 0
+
+
+def _ed_is_small_order(pt: tuple[int, int, int, int]) -> bool:
+    """Return True iff pt is one of the 8 Ed25519 small-order points (order dividing cofactor 8)."""
+    p2 = _ed_add(pt, pt)
+    p4 = _ed_add(p2, p2)
+    p8 = _ed_add(p4, p4)
+    return _ed_is_identity(p8)
+
+
 def _ed_decode_point(b: bytes) -> tuple[int, int, int, int] | None:
     if len(b) != 32:
         return None
@@ -641,13 +756,15 @@ def ed25519_pubkey(seed32: bytes) -> str:
 
 
 def is_valid_ed25519_pubkey(hex_pk: str) -> bool:
+    """Strict canonical non-small-order Ed25519 public key check (SPEC-01 §4.1)."""
     if len(hex_pk) != 64 or hex_pk != hex_pk.lower():
         return False
     try:
         raw = bytes.fromhex(hex_pk)
     except ValueError:
         return False
-    return _ed_decode_point(raw) is not None
+    pt = _ed_decode_point(raw)
+    return pt is not None and not _ed_is_small_order(pt)
 
 
 def ed25519_sign(msg: bytes, seed32: bytes) -> str:
@@ -669,6 +786,7 @@ def ed25519_sign(msg: bytes, seed32: bytes) -> str:
 
 
 def ed25519_verify(msg: bytes, pubkey_hex: str, sig_hex: str) -> bool:
+    """Strict canonical non-small-order cofactorless Ed25519 verification (SPEC-01 §4.1)."""
     if len(pubkey_hex) != 64 or len(sig_hex) != 128:
         return False
     if pubkey_hex != pubkey_hex.lower() or sig_hex != sig_hex.lower():
@@ -680,7 +798,7 @@ def ed25519_verify(msg: bytes, pubkey_hex: str, sig_hex: str) -> bool:
         return False
     a_pt = _ed_decode_point(pub_b)
     r_pt = _ed_decode_point(sig_b[:32])
-    if a_pt is None or r_pt is None:
+    if a_pt is None or r_pt is None or _ed_is_small_order(a_pt) or _ed_is_small_order(r_pt):
         return False
     s = int.from_bytes(sig_b[32:], "little")
     if s >= _ED_L:
@@ -688,7 +806,7 @@ def ed25519_verify(msg: bytes, pubkey_hex: str, sig_hex: str) -> bool:
     k = int.from_bytes(hashlib.sha512(sig_b[:32] + pub_b + msg).digest(), "little") % _ED_L
     lhs = _ed_mul(_ED_B, s)
     rhs = _ed_add(r_pt, _ed_mul(a_pt, k))
-    # Strict non-cofactor comparison in projective coordinates: X1*Z2 == X2*Z1 and Y1*Z2 == Y2*Z1
+    # Strict un-cofactored comparison in projective coordinates: X1*Z2 == X2*Z1 and Y1*Z2 == Y2*Z1
     return (lhs[0] * rhs[2] - rhs[0] * lhs[2]) % _ED_P == 0 and (lhs[1] * rhs[2] - rhs[1] * lhs[2]) % _ED_P == 0
 
 
@@ -960,11 +1078,16 @@ def verify_signature_set(
     obj_type: str | None = None,
 ) -> tuple[bool, str]:
     """Verify a SignatureSet (bip340, ed25519, or low-S p256) over `digest`, enforcing SL-WIRE-013."""
-    if not isinstance(sigset, dict) or "policy" not in sigset or "sigs" not in sigset:
+    if not isinstance(sigset, dict) or set(sigset.keys()) != {"policy", "sigs"}:
         return False, "WIRE_SIGNATURE"
     policy = sigset["policy"]
     if not isinstance(policy, dict):
         return False, "WIRE_SIGNATURE"
+    if not set(policy.keys()).issubset({"m", "pks", "alg"}):
+        return False, "WIRE_MEMBER"
+    # Canonical single encoding: "alg": "bip340" MUST be omitted (S-1 / SPEC-01 §4.2)
+    if "alg" in policy and policy["alg"] == "bip340":
+        return False, "WIRE_MEMBER"
     alg = policy.get("alg", "bip340")
     if alg not in ("bip340", "ed25519", "p256"):
         return False, "WIRE_SIGNATURE"
@@ -998,13 +1121,15 @@ def verify_signature_set(
     if not isinstance(sigs, list):
         return False, "WIRE_SIGNATURE"
     seen: set[str] = set()
+    prev_pk: str = ""
     valid = 0
     for entry in sigs:
         if not isinstance(entry, dict) or set(entry.keys()) != {"pk", "sig"}:
             return False, "WIRE_SIGNATURE"
         pk = entry["pk"]
-        if pk not in pks or pk in seen:
+        if not isinstance(pk, str) or pk not in pks or pk in seen or pk <= prev_pk:
             return False, "WIRE_SIGNATURE"
+        prev_pk = pk
         seen.add(pk)
         if not isinstance(entry["sig"], str) or not ver_fn(digest, pk, entry["sig"]):
             return False, "WIRE_SIGNATURE"
@@ -1063,10 +1188,75 @@ OP_ENDIF = 0x68
 OP_2DROP = 0x6D
 OP_DROP = 0x75
 OP_CHECKSIG = 0xAC
+OP_CHECKSIGVERIFY = 0xAD
 OP_CHECKMULTISIG = 0xAE
+OP_CHECKMULTISIGVERIFY = 0xAF
 OP_CHECKSEQUENCEVERIFY = 0xB2
 
 P2A_SCRIPTPUBKEY = bytes.fromhex("51024e73")
+
+
+def cast_to_bool(elem: bytes) -> bool:
+    """Exact Bitcoin Script CastToBool (SPEC-02 §3.1, L-12)."""
+    if not elem:
+        return False
+    for i, b in enumerate(elem):
+        if b != 0:
+            # Negative zero (0x80 in final byte with all preceding bytes 0) is FALSE
+            if i == len(elem) - 1 and b == 0x80:
+                return False
+            return True
+    return False
+
+
+def _distinct_xcoords(pks: list[str]) -> bool:
+    return len({pk[2:] for pk in pks}) == len(pks)
+
+
+def is_valid_branch_key_spec(spec: Any) -> bool:
+    """Validate BranchKeySpec: single CompressedPubkey66 OR compact m-of-n (2 <= n <= 5, 1 <= m <= n)."""
+    if isinstance(spec, str):
+        return is_valid_compressed_pubkey(spec)
+    if isinstance(spec, dict) and set(spec.keys()) == {"m", "pks"}:
+        m = spec["m"]
+        pks = spec["pks"]
+        if not isinstance(m, int) or isinstance(m, bool) or not isinstance(pks, list):
+            return False
+        if not (2 <= len(pks) <= 5 and 1 <= m <= len(pks)):
+            return False
+        if not all(isinstance(pk, str) and is_valid_compressed_pubkey(pk) for pk in pks):
+            return False
+        return pks == sorted(set(pks)) and _distinct_xcoords(pks)
+    return False
+
+
+def branch_key_spec_pks(spec: Any) -> list[str]:
+    if isinstance(spec, str):
+        return [spec]
+    if isinstance(spec, dict) and isinstance(spec.get("pks"), list):
+        return list(spec["pks"])
+    return []
+
+
+def branch_key_spec_xcoords(spec: Any) -> set[str]:
+    return {pk[2:] for pk in branch_key_spec_pks(spec) if isinstance(pk, str) and len(pk) == 66}
+
+
+def _branch_spec_sort_key(spec: Any) -> bytes:
+    return _jcs_serialize(spec, None, (), 0).encode("utf-8")
+
+
+def _compile_branch_clause(spec: Any, verify: bool = False) -> bytes:
+    if isinstance(spec, str):
+        return _push_data(bytes.fromhex(spec)) + bytes([OP_CHECKSIGVERIFY if verify else OP_CHECKSIG])
+    m = spec["m"]
+    pks = spec["pks"]
+    out = bytearray([0x50 + m])
+    for pk_hex in pks:
+        out.extend(_push_data(bytes.fromhex(pk_hex)))
+    out.append(0x50 + len(pks))
+    out.append(OP_CHECKMULTISIGVERIFY if verify else OP_CHECKMULTISIG)
+    return bytes(out)
 
 
 def _push_data(data: bytes) -> bytes:
@@ -1099,24 +1289,31 @@ def _encode_script_num(n: int) -> bytes:
 
 
 def compile_script_policy(policy: dict[str, Any]) -> tuple[bytes, bytes | None]:
-    """Compile ScriptPolicy -> (scriptPubKey, witnessScript_or_None)."""
-    kind = policy["kind"]
+    """Compile ScriptPolicy (incl. BranchKeySpec m-of-n) -> (scriptPubKey, witnessScript_or_None)."""
+    if not isinstance(policy, dict):
+        raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+    kind = policy.get("kind")
     if kind == "key":
-        pk = bytes.fromhex(policy["pk"])
-        if len(pk) != 33 or not is_valid_compressed_pubkey(policy["pk"]):
+        pk_hex = policy.get("pk")
+        if not isinstance(pk_hex, str) or not is_valid_compressed_pubkey(pk_hex):
             raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+        pk = bytes.fromhex(pk_hex)
         spk = bytes([OP_0, 20]) + hash160(pk)
         return spk, None
 
     if kind == "multisig":
-        m = policy["m"]
-        pks = policy["pks"]
+        m = policy.get("m")
+        pks = policy.get("pks")
+        if not isinstance(m, int) or isinstance(m, bool) or not isinstance(pks, list):
+            raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
         if not (1 <= m <= len(pks) <= 15) or pks != sorted(set(pks)):
+            raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+        if not all(isinstance(pk_hex, str) and is_valid_compressed_pubkey(pk_hex) for pk_hex in pks):
+            raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+        if not _distinct_xcoords(pks):
             raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
         ws = bytearray([0x50 + m])
         for pk_hex in pks:
-            if not is_valid_compressed_pubkey(pk_hex):
-                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
             ws.extend(_push_data(bytes.fromhex(pk_hex)))
         ws.append(0x50 + len(pks))
         ws.append(OP_CHECKMULTISIG)
@@ -1124,47 +1321,83 @@ def compile_script_policy(policy: dict[str, Any]) -> tuple[bytes, bytes | None]:
         return bytes([OP_0, 32]) + sha256(ws_b), ws_b
 
     if kind == "branch":
-        tpl = policy["template"]
-        keys = policy["keys"]
+        tpl = policy.get("template")
+        keys = policy.get("keys")
+        if not isinstance(keys, dict):
+            raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
         if tpl in ("either_of_2", "both_of_2"):
-            a, b = sorted([keys["a"], keys["b"]])
-            op_m = 0x51 if tpl == "either_of_2" else 0x52
-            ws_b = bytes([op_m]) + _push_data(bytes.fromhex(a)) + _push_data(bytes.fromhex(b)) + bytes([0x52, OP_CHECKMULTISIG])
+            a_spec, b_spec = keys.get("a"), keys.get("b")
+            if not (is_valid_branch_key_spec(a_spec) and is_valid_branch_key_spec(b_spec)):
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+            if not branch_key_spec_xcoords(a_spec).isdisjoint(branch_key_spec_xcoords(b_spec)):
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+            if isinstance(a_spec, str) and isinstance(b_spec, str):
+                a, b = sorted([a_spec, b_spec])
+                op_m = 0x51 if tpl == "either_of_2" else 0x52
+                ws_b = bytes([op_m]) + _push_data(bytes.fromhex(a)) + _push_data(bytes.fromhex(b)) + bytes([0x52, OP_CHECKMULTISIG])
+            else:
+                lo, hi = sorted([a_spec, b_spec], key=_branch_spec_sort_key)
+                if tpl == "either_of_2":
+                    ws_b = (
+                        bytes([OP_IF])
+                        + _compile_branch_clause(lo, verify=False)
+                        + bytes([OP_ELSE])
+                        + _compile_branch_clause(hi, verify=False)
+                        + bytes([OP_ENDIF])
+                    )
+                else:
+                    ws_b = _compile_branch_clause(lo, verify=True) + _compile_branch_clause(hi, verify=False)
             return bytes([OP_0, 32]) + sha256(ws_b), ws_b
         if tpl == "arbiter_or_both":
-            a, b = sorted([keys["a"], keys["b"]])
-            arb = keys["arbiter"]
+            a_pk, b_pk, arb = keys.get("a"), keys.get("b"), keys.get("arbiter")
+            if not (isinstance(a_pk, str) and is_valid_compressed_pubkey(a_pk)
+                    and isinstance(b_pk, str) and is_valid_compressed_pubkey(b_pk)
+                    and is_valid_branch_key_spec(arb)):
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+            if a_pk[2:] == b_pk[2:]:
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+            a, b = sorted([a_pk, b_pk])
             ws_b = (
                 bytes([OP_IF, 0x52])
                 + _push_data(bytes.fromhex(a))
                 + _push_data(bytes.fromhex(b))
                 + bytes([0x52, OP_CHECKMULTISIG, OP_ELSE])
-                + _push_data(bytes.fromhex(arb))
-                + bytes([OP_CHECKSIG, OP_ENDIF])
+                + _compile_branch_clause(arb, verify=False)
+                + bytes([OP_ENDIF])
             )
             return bytes([OP_0, 32]) + sha256(ws_b), ws_b
         if tpl == "single_use_1_of_2":
+            iss_pk, gr_pk = keys.get("issuer"), keys.get("grantee")
+            if not (isinstance(iss_pk, str) and is_valid_compressed_pubkey(iss_pk)
+                    and isinstance(gr_pk, str) and is_valid_compressed_pubkey(gr_pk)):
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+            if iss_pk[2:] == gr_pk[2:]:
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
             ws_b = (
                 bytes([OP_IF])
-                + _push_data(bytes.fromhex(keys["issuer"]))
+                + _push_data(bytes.fromhex(iss_pk))
                 + bytes([OP_CHECKSIG, OP_ELSE])
-                + _push_data(bytes.fromhex(keys["grantee"]))
+                + _push_data(bytes.fromhex(gr_pk))
                 + bytes([OP_CHECKSIG, OP_ENDIF])
             )
             return bytes([OP_0, 32]) + sha256(ws_b), ws_b
         if tpl == "guardian_slot_pending":
-            delay = policy["delay_blocks"]
-            if not (1 <= delay <= 52560):
+            delay = policy.get("delay_blocks")
+            disp, chal, guard = keys.get("disposer"), keys.get("challenger"), keys.get("guardian")
+            if not isinstance(delay, int) or isinstance(delay, bool) or not (1 <= delay <= 52560):
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+            if not (is_valid_branch_key_spec(disp) and is_valid_branch_key_spec(chal)
+                    and isinstance(guard, str) and is_valid_compressed_pubkey(guard)):
                 raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
             ws_b = (
                 bytes([OP_IF])
-                + _push_data(bytes.fromhex(keys["disposer"]))
-                + bytes([OP_CHECKSIG, OP_ELSE, OP_IF])
-                + _push_data(bytes.fromhex(keys["challenger"]))
-                + bytes([OP_CHECKSIG, OP_ELSE])
+                + _compile_branch_clause(disp, verify=False)
+                + bytes([OP_ELSE, OP_IF])
+                + _compile_branch_clause(chal, verify=False)
+                + bytes([OP_ELSE])
                 + _encode_script_num(delay)
                 + bytes([OP_CHECKSEQUENCEVERIFY, OP_DROP])
-                + _push_data(bytes.fromhex(keys["guardian"]))
+                + _push_data(bytes.fromhex(guard))
                 + bytes([OP_CHECKSIG, OP_ENDIF, OP_ENDIF])
             )
             return bytes([OP_0, 32]) + sha256(ws_b), ws_b
@@ -1197,11 +1430,13 @@ def encode_name_output(op: str, trailing_spk: bytes, **kwargs: bytes) -> bytes:
     raise ValueError(f"Unknown op {op}")
 
 
-def _read_push(script: bytes, pos: int) -> tuple[bytes, int]:
+def _read_push(script: bytes, pos: int, allow_empty: bool = False) -> tuple[bytes, int]:
     if pos >= len(script):
         raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
     op = script[pos]
     pos += 1
+    if op == 0x00 and allow_empty:
+        return b"", pos
     if 1 <= op < 0x4C:
         end = pos + op
         if end > len(script):
@@ -1233,34 +1468,37 @@ def _read_push(script: bytes, pos: int) -> tuple[bytes, int]:
 
 
 def parse_name_output(script: bytes) -> dict[str, Any]:
-    """Parse Namecoin output script per SPEC-02 SL-LDGR-005."""
+    """Parse Namecoin output script per SPEC-02 SL-LDGR-005 (supports OP_0 empty values & 01 xx data pushes)."""
     if not script:
         raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
     op = script[0]
     pos = 1
-    if op == OP_NAME_NEW:
-        h20, pos = _read_push(script, pos)
-        if len(h20) != 20 or script[pos : pos + 1] != bytes([OP_2DROP]):
+    try:
+        if op == OP_NAME_NEW:
+            h20, pos = _read_push(script, pos)
+            if len(h20) != 20 or script[pos : pos + 1] != bytes([OP_2DROP]):
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+            tail = script[pos + 1 :]
+            result: dict[str, Any] = {"op": "NAME_NEW", "hash20": h20.hex()}
+        elif op == OP_NAME_FIRSTUPDATE:
+            name, pos = _read_push(script, pos)
+            rand, pos = _read_push(script, pos, allow_empty=True)
+            val, pos = _read_push(script, pos, allow_empty=True)
+            if script[pos : pos + 2] != bytes([OP_2DROP, OP_2DROP]):
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+            tail = script[pos + 2 :]
+            result = {"op": "NAME_FIRSTUPDATE", "name": name.decode("utf-8"), "rand": rand.hex(), "value": val.decode("utf-8")}
+        elif op == OP_NAME_UPDATE:
+            name, pos = _read_push(script, pos)
+            val, pos = _read_push(script, pos, allow_empty=True)
+            if script[pos : pos + 2] != bytes([OP_2DROP, OP_DROP]):
+                raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+            tail = script[pos + 2 :]
+            result = {"op": "NAME_UPDATE", "name": name.decode("utf-8"), "value": val.decode("utf-8")}
+        else:
             raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
-        tail = script[pos + 1 :]
-        result: dict[str, Any] = {"op": "NAME_NEW", "hash20": h20.hex()}
-    elif op == OP_NAME_FIRSTUPDATE:
-        name, pos = _read_push(script, pos)
-        rand, pos = _read_push(script, pos)
-        val, pos = _read_push(script, pos)
-        if script[pos : pos + 2] != bytes([OP_2DROP, OP_2DROP]):
-            raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
-        tail = script[pos + 2 :]
-        result = {"op": "NAME_FIRSTUPDATE", "name": name.decode("utf-8"), "rand": rand.hex(), "value": val.decode("utf-8")}
-    elif op == OP_NAME_UPDATE:
-        name, pos = _read_push(script, pos)
-        val, pos = _read_push(script, pos)
-        if script[pos : pos + 2] != bytes([OP_2DROP, OP_DROP]):
-            raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
-        tail = script[pos + 2 :]
-        result = {"op": "NAME_UPDATE", "name": name.decode("utf-8"), "value": val.decode("utf-8")}
-    else:
-        raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
+    except UnicodeDecodeError as exc:
+        raise ValueError("CHAIN_SCRIPT_UNSUPPORTED") from exc
 
     # Trailing scriptPubKey MUST be native SegWit v0 P2WPKH (22B) or P2WSH (34B)
     if not ((len(tail) == 22 and tail[:2] == b"\x00\x14") or (len(tail) == 34 and tail[:2] == b"\x00\x20")):
@@ -1275,6 +1513,27 @@ def parse_name_output(script: bytes) -> dict[str, Any]:
 
 SLNK_MAGIC = b"SLNK"
 
+# Exact per-action allowed locators matching registry/opreturn-actions.json (H-23, R3 M2)
+ACTION_ALLOWED_LOCATORS: dict[int, frozenset[int]] = {
+    0x01: frozenset({0x00, 0x01, 0x05}),
+    0x02: frozenset({0x00, 0x01, 0x02, 0x05}),
+    0x03: frozenset({0x00, 0x01, 0x05}),
+    0x04: frozenset({0x00, 0x01, 0x05}),
+    0x05: frozenset({0x00, 0x01, 0x05}),
+    0x07: frozenset({0x00, 0x01, 0x05}),
+    0x08: frozenset({0x00, 0x01, 0x05}),
+    0x09: frozenset({0x00, 0x01, 0x05}),
+    0x0A: frozenset({0x00, 0x01, 0x05}),
+    0x0B: frozenset({0x00}),
+    0x0C: frozenset({0x00, 0x01, 0x05}),
+    0x0D: frozenset({0x00, 0x01, 0x05}),
+    0x0E: frozenset({0x00}),
+    0x0F: frozenset({0x00, 0x01, 0x05}),
+    0x10: frozenset({0x00}),
+    0x11: frozenset({0x00}),
+    0x12: frozenset({0x00, 0x01, 0x05}),
+}
+
 
 def encode_opreturn(
     action: int,
@@ -1283,7 +1542,8 @@ def encode_opreturn(
     pointer_hex: str | None = None,
     h_c: int | None = None,
 ) -> bytes:
-    if action == 0x06 or not (0x01 <= action <= 0x12):
+    allowed = ACTION_ALLOWED_LOCATORS.get(action)
+    if allowed is None or loc_type not in allowed:
         raise ValueError("CHAIN_FRAME_INVALID")
     comm = bytes.fromhex(commitment_hex)
     if len(comm) != 32:
@@ -1316,7 +1576,8 @@ def decode_opreturn(script: bytes) -> dict[str, Any]:
     if len(script) < 8 or len(script) > 83 or script[0] != 0x6A or script[1] != 0x05 or script[2:6] != SLNK_MAGIC:
         raise ValueError("CHAIN_FRAME_INVALID")
     action = script[6]
-    if action == 0x06 or not (0x01 <= action <= 0x12):
+    allowed = ACTION_ALLOWED_LOCATORS.get(action)
+    if allowed is None:
         raise ValueError("CHAIN_FRAME_INVALID")
     payload, end = _read_push(script, 7)
     if end != len(script) or len(payload) < 34 or payload[0] != 0x01:
@@ -1328,6 +1589,8 @@ def decode_opreturn(script: bytes) -> dict[str, Any]:
         h_c = struct.unpack("<Q", payload[33:41])[0]
         return {"action": f"0x{action:02x}", "version": 1, "commitment": comm, "h_c": h_c, "loc_type": "0x00"}
     loc = payload[33]
+    if loc not in allowed:
+        raise ValueError("CHAIN_FRAME_INVALID")
     if loc == 0x00 and len(payload) == 34:
         return {"action": f"0x{action:02x}", "version": 1, "commitment": comm, "loc_type": "0x00"}
     if loc in (0x01, 0x02, 0x05) and len(payload) == 66:
@@ -1425,11 +1688,13 @@ def validate_predicate(pred: dict[str, Any]) -> bool:
         lo, hi = int(val[0]), int(val[1])
         return 0 <= lo <= hi <= MAX_UINT64
     if op == "hash_eq":
-        return isinstance(val, str) and bool(re.match(r"^[0-9a-f]{64}$", val))
+        return isinstance(val, str) and bool(HEX64_RE.match(val))
     return False
 
 
 def match_predicate(pred: dict[str, Any], arg: Any) -> bool:
+    if not validate_predicate(pred):
+        return False
     op, val = next(iter(pred.items()))
     if op == "eq":
         return type(arg) is type(val) and arg == val
@@ -1442,9 +1707,14 @@ def match_predicate(pred: dict[str, Any], arg: Any) -> bool:
     if op == "suffix":
         return isinstance(arg, str) and arg.endswith(val)
     if op == "range":
-        if not (isinstance(arg, str) and UINT64_STR_RE.match(arg)):
+        if isinstance(arg, int) and not isinstance(arg, bool):
+            v = arg
+        elif isinstance(arg, str) and UINT64_STR_RE.match(arg):
+            v = int(arg)
+        else:
             return False
-        v = int(arg)
+        if v < 0 or v > MAX_UINT64:
+            return False
         return int(val[0]) <= v <= int(val[1])
     if op == "hash_eq":
         if not isinstance(arg, str):
@@ -1498,21 +1768,33 @@ def narrows_predicate(child: dict[str, Any], parent: dict[str, Any]) -> bool:
             clo, chi = int(cval[0]), int(cval[1])
             return plo <= clo <= chi <= phi
         if cop == "eq":
-            return isinstance(cval, str) and bool(UINT64_STR_RE.match(cval)) and plo <= int(cval) <= phi
+            return isinstance(cval, str) and bool(UINT64_STR_RE.match(cval)) and 0 <= int(cval) <= MAX_UINT64 and plo <= int(cval) <= phi
         if cop == "in":
-            return all(bool(UINT64_STR_RE.match(v)) and plo <= int(v) <= phi for v in cval)
+            return all(bool(UINT64_STR_RE.match(v)) and 0 <= int(v) <= MAX_UINT64 and plo <= int(v) <= phi for v in cval)
         return False
     if pop == "hash_eq":
         return cop == "hash_eq" and cval == pval
     return False
 
 
-def check_whole_parent_budget_r85(delegate: dict[str, Any]) -> tuple[bool, dict[str, int]]:
-    """Verify R8.5 aggregate budget across all groups: sum_g(rows(g) * cap(g, q)) <= pool_max(q)."""
+def check_whole_parent_budget_r85(
+    delegate: dict[str, Any],
+    parent_capabilities: list[dict[str, Any]] | None = None,
+) -> tuple[bool, dict[str, int]]:
+    """Verify R8.5 aggregate budget across all groups: sum_g(rows(g) * cap(g, q)) <= pool_max(q) (and <= root cap if present)."""
     pools = {
         (q["kind"], q["resource"], q["unit"], q["window"]): int(q["max"])
         for q in delegate.get("pools", [])
     }
+    if parent_capabilities is not None:
+        root_caps: dict[tuple[str, str, str, str], int] = {}
+        for cap in parent_capabilities:
+            for q in cap.get("quotas", []):
+                key = (q["kind"], q["resource"], q["unit"], q["window"])
+                root_caps[key] = max(root_caps.get(key, 0), int(q["max"]))
+        for key, pmax in pools.items():
+            if key in root_caps and pmax > root_caps[key]:
+                return False, {}
     totals: dict[tuple[str, str, str, str], int] = {}
     for g in delegate["groups"]:
         rows = sum(r["count"] for r in g["ranges"])
@@ -1532,7 +1814,7 @@ def check_whole_parent_budget_r85(delegate: dict[str, Any]) -> tuple[bool, dict[
 
 
 def check_disjoint_ranges_r86(parent_payload: dict[str, Any]) -> bool:
-    """Verify R8.6 pairwise disjointness of all row coins, stop coins, parent seal, and linkage output."""
+    """Verify R8.6 pairwise disjointness & bounds of all row coins, stop coins, parent seal, and linkage output."""
     seen: set[tuple[str, int]] = set()
     rev = parent_payload.get("revocation", {})
     if rev.get("mode") == "seal":
@@ -1541,13 +1823,20 @@ def check_disjoint_ranges_r86(parent_payload: dict[str, Any]) -> bool:
         seen.add((seal["txid"], seal["vout"] + 1))  # linkage output
     for g in parent_payload["delegate"]["groups"]:
         for r in g["ranges"]:
-            for v in range(r["first"], r["first"] + r["count"]):
+            cnt = r["count"]
+            if not isinstance(cnt, int) or isinstance(cnt, bool) or not (1 <= cnt <= 2048):
+                return False
+            if r["first"] < 0 or r["first"] + cnt > 0x100000000:
+                return False
+            for v in range(r["first"], r["first"] + cnt):
                 op = (r["txid"], v)
                 if op in seen:
                     return False
                 seen.add(op)
             if "stop_txid" in r:
-                for v in range(r["stop_first"], r["stop_first"] + r["count"]):
+                if r["stop_first"] < 0 or r["stop_first"] + cnt > 0x100000000:
+                    return False
+                for v in range(r["stop_first"], r["stop_first"] + cnt):
                     op = (r["stop_txid"], v)
                     if op in seen:
                         return False
@@ -1600,6 +1889,13 @@ def check_guardian_policy_consistency(
         num, den, mn = q.get("num", 0), q.get("den", 0), q.get("min", 0)
         if not (1 <= num <= den <= 32) or not (1 <= mn <= rev_size):
             return False, "WIRE_INTEGER"
+    # SL-ORIG-016 monotonic QuorumMap (H-7): required(routine_read) <= effect_grant <= contract_assent <= custody_change
+    req_order = [
+        required_guardian_slots(quorums[cname], rev_size)
+        for cname in ("routine_read", "effect_grant", "contract_assent", "custody_change")
+    ]
+    if req_order != sorted(req_order):
+        return False, "WIRE_INTEGER"
     slots = policy.get("slots", [])
     if not isinstance(slots, list) or len(slots) != rev_size:
         return False, "WIRE_INTEGER"
@@ -1611,15 +1907,18 @@ def check_guardian_policy_consistency(
     chal = policy.get("challenger_pk")
     if not (disp and arb and chal):
         return False, "WIRE_MEMBER"
-    if not (is_valid_compressed_pubkey(disp) and is_valid_compressed_pubkey(arb) and is_valid_compressed_pubkey(chal)):
+    if not (is_valid_branch_key_spec(disp) and is_valid_branch_key_spec(arb) and is_valid_branch_key_spec(chal)):
         return False, "WIRE_KEY"
-    if disp == arb:
+    if disp == arb or not branch_key_spec_xcoords(disp).isdisjoint(branch_key_spec_xcoords(arb)):
         return False, "ORIGIN_UNVERIFIED"
     expected_both = {"kind": "branch", "template": "both_of_2", "keys": {"a": disp, "b": arb}}
     exp_both_spk, _ = compile_script_policy(expected_both)
+    seen_outpoints: set[tuple[str, int]] = set()
     if "roster_seal" in policy:
         try:
-            got_spk, _ = compile_script_policy(policy["roster_seal"]["script_policy"])
+            rs = policy["roster_seal"]
+            got_spk, _ = compile_script_policy(rs["script_policy"])
+            seen_outpoints.add((rs["txid"], rs["vout"]))
         except (ValueError, KeyError, TypeError):
             return False, "CHAIN_SCRIPT_UNSUPPORTED"
         if got_spk != exp_both_spk:
@@ -1646,6 +1945,21 @@ def check_guardian_policy_consistency(
                 return False, "CHAIN_SCRIPT_UNSUPPORTED"
             if got_vac_spk != exp_both_spk:
                 return False, "CHAIN_SCRIPT_UNSUPPORTED"
+        if "vacant_utxo" in s:
+            vu = s["vacant_utxo"]
+            if not isinstance(vu, dict) or "txid" not in vu or "vout" not in vu:
+                return False, "WIRE_MEMBER"
+            op_key = (vu["txid"], vu["vout"])
+            if op_key in seen_outpoints:
+                return False, "ORIGIN_UNVERIFIED"
+            seen_outpoints.add(op_key)
+            if "script_policy" in vu:
+                try:
+                    got_vu_spk, _ = compile_script_policy(vu["script_policy"])
+                except (ValueError, KeyError, TypeError):
+                    return False, "CHAIN_SCRIPT_UNSUPPORTED"
+                if got_vu_spk != exp_both_spk:
+                    return False, "CHAIN_SCRIPT_UNSUPPORTED"
     return True, "OK"
 
 
@@ -1710,6 +2024,56 @@ def self_test() -> None:
     assert ed25519_pubkey(ed_sk2) == ed_pk2_exp, "RFC 8032 Ed25519 TV2 pubkey mismatch"
     assert ed25519_sign(b"\x72", ed_sk2) == ed_sig2_exp, "RFC 8032 Ed25519 TV2 sig mismatch"
     assert ed25519_verify(b"\x72", ed_pk2_exp, ed_sig2_exp), "RFC 8032 Ed25519 TV2 verify failed"
+
+    # Strict Ed25519 negative checks (R3 B6 / W-11): all 8 small-order points & non-canonical encodings MUST reject
+    small_order_hexes = [
+        "0100000000000000000000000000000000000000000000000000000000000000",  # order 1 (identity)
+        "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",  # order 2
+        "0000000000000000000000000000000000000000000000000000000000000000",  # order 4
+        "0000000000000000000000000000000000000000000000000000000000000080",  # order 4
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",  # order 8
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",  # order 8
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",  # order 8
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",  # order 8
+    ]
+    for spk in small_order_hexes:
+        assert not is_valid_ed25519_pubkey(spk), f"Small-order Ed25519 key MUST reject: {spk}"
+        # Classic forged signature with small-order A, small-order R, S = 0
+        assert not ed25519_verify(b"test", spk, spk + "00" * 32), f"Small-order Ed25519 sig MUST reject: {spk}"
+    # Non-canonical y >= p (y = p = 2^255 - 19 -> edff..7f)
+    assert not is_valid_ed25519_pubkey("edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f")
+
+    # BranchKeySpec m-of-n compilation self-test (Decision 6A-A2)
+    p1 = compressed_pubkey(deterministic_privkey("bks-1"))
+    p2 = compressed_pubkey(deterministic_privkey("bks-2"))
+    p3 = compressed_pubkey(deterministic_privkey("bks-3"))
+    p4 = compressed_pubkey(deterministic_privkey("bks-4"))
+    p5 = compressed_pubkey(deterministic_privkey("bks-5"))
+    bks_disp = {"m": 2, "pks": sorted([p1, p2, p3])}
+    bks_arb = {"m": 2, "pks": sorted([p4, p5])}
+    spk_e2, ws_e2 = compile_script_policy({"kind": "branch", "template": "either_of_2", "keys": {"a": bks_disp, "b": p4}})
+    assert len(spk_e2) == 34 and ws_e2 is not None and len(ws_e2) < 400
+    spk_b2, ws_b2 = compile_script_policy({"kind": "branch", "template": "both_of_2", "keys": {"a": bks_disp, "b": bks_arb}})
+    assert len(spk_b2) == 34 and ws_b2 is not None and len(ws_b2) < 400
+    spk_gp, ws_gp = compile_script_policy({
+        "kind": "branch", "template": "guardian_slot_pending",
+        "keys": {"disposer": bks_disp, "challenger": bks_arb, "guardian": compressed_pubkey(deterministic_privkey("bks-6"))},
+        "delay_blocks": 16,
+    })
+    assert len(spk_gp) == 34 and ws_gp is not None and len(ws_gp) < 400
+    # 1000-deep JSON MUST return WIRE_SIZE without RecursionError
+    ok_d, err_d = jcs_validate((b'{"a":' * 1000) + b'1' + (b'}' * 1000))
+    assert not ok_d and err_d == "WIRE_SIZE", f"Expected WIRE_SIZE on 1000-deep JSON, got {(ok_d, err_d)}"
+    # Exact container depth 16 MUST pass; depth 17 MUST fail WIRE_SIZE
+    ok_16, _ = jcs_validate((b'{"a":' * 16) + b'1' + (b'}' * 16))
+    assert ok_16, "Container depth 16 MUST pass"
+    ok_17, err_17 = jcs_validate((b'{"a":' * 17) + b'1' + (b'}' * 17))
+    assert not ok_17 and err_17 == "WIRE_SIZE", f"Container depth 17 MUST fail WIRE_SIZE, got {(ok_17, err_17)}"
+    # Leading-zero number MUST return WIRE_NUMBER; trailing whitespace MUST return WIRE_JSON
+    ok_lz, err_lz = jcs_validate(b'{"a":01}')
+    assert not ok_lz and err_lz == "WIRE_NUMBER", f"Leading zero expected WIRE_NUMBER, got {err_lz}"
+    ok_tw, err_tw = jcs_validate(b'{"a":1}\n')
+    assert not ok_tw and err_tw == "WIRE_JSON", f"Trailing newline expected WIRE_JSON, got {err_tw}"
 
     # Official RFC 6979 Appendix A.2.5 NIST P-256 SHA-256 test vector (low-S normalized + high-S rejected)
     rfc_p256_sk = bytes.fromhex("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721")

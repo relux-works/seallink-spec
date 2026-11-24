@@ -1,0 +1,200 @@
+{
+  "$comment": "SealLink v1.0 Authoritative Action Profile Registry (SPEC-06, SPEC-07, PROFILE-mail-v1, PROFILE-agent-v1). Machine-readable SSOT for action argument/result schemas, target authority rules, mandatory quotas, allowed where-predicates, and guardian event classes. Executors MUST refuse unregistered actions unless explicitly enabled via a local SLIP profile.",
+  "protocol": "SealLink",
+  "version": "1.0.0-draft.7",
+  "actions": [
+    {
+      "action": "mail/list",
+      "service_type": "mail",
+      "profile": "profiles/PROFILE-mail-v1.md",
+      "args_schema": "schemas/profile-mail.schema.json#/$defs/MailListArgs",
+      "result_schema": "schemas/profile-mail.schema.json#/$defs/MailListResult",
+      "target_pattern": "^mailbox:([a-z0-9][a-z0-9./_-]{0,254}):([a-z0-9][a-z0-9._-]{0,63})$",
+      "target_authority": "mailbox_owner",
+      "external_mutation": false,
+      "allows_executor_ref": true,
+      "requires_contract": false,
+      "require_seal": true,
+      "risk_class": 2,
+      "mechanical": true,
+      "quota_consuming": false,
+      "required_quotas": [],
+      "allowed_where_predicates": {
+        "folder": ["eq", "in", "not_in", "prefix"],
+        "sender_domain": ["eq", "in", "not_in", "suffix"],
+        "max_bytes": ["range"]
+      },
+      "guardian_event_class": "routine_read"
+    },
+    {
+      "action": "mail/read",
+      "service_type": "mail",
+      "profile": "profiles/PROFILE-mail-v1.md",
+      "args_schema": "schemas/profile-mail.schema.json#/$defs/MailReadArgs",
+      "result_schema": "schemas/profile-mail.schema.json#/$defs/MailReadResult",
+      "target_pattern": "^mailbox:([a-z0-9][a-z0-9./_-]{0,254}):([a-z0-9][a-z0-9._-]{0,63})$",
+      "target_authority": "mailbox_owner",
+      "external_mutation": false,
+      "allows_executor_ref": true,
+      "requires_contract": false,
+      "require_seal": true,
+      "risk_class": 2,
+      "mechanical": true,
+      "quota_consuming": false,
+      "required_quotas": [],
+      "allowed_where_predicates": {
+        "folder": ["eq", "in", "not_in", "prefix"],
+        "message_id": ["eq", "in"],
+        "sender_domain": ["eq", "in", "not_in", "suffix"],
+        "max_bytes": ["range"]
+      },
+      "guardian_event_class": "routine_read"
+    },
+    {
+      "action": "mail/send",
+      "service_type": "mail",
+      "profile": "profiles/PROFILE-mail-v1.md",
+      "args_schema": "schemas/profile-mail.schema.json#/$defs/MailSendArgs",
+      "result_schema": "schemas/profile-mail.schema.json#/$defs/MailSendResult",
+      "target_pattern": "^mailbox:([a-z0-9][a-z0-9./_-]{0,254}):([a-z0-9][a-z0-9._-]{0,63})$",
+      "target_authority": "mailbox_owner",
+      "external_mutation": true,
+      "allows_executor_ref": false,
+      "requires_contract": false,
+      "require_seal": true,
+      "risk_class": 1,
+      "mechanical": true,
+      "quota_consuming": true,
+      "required_quotas": [
+        {
+          "kind": "seallink/count",
+          "resource": "{target}",
+          "unit": "messages"
+        }
+      ],
+      "allowed_where_predicates": {
+        "to": ["eq", "in", "not_in", "suffix"],
+        "subject": ["eq", "prefix"],
+        "body_sha256": ["hash_eq"],
+        "size_bytes": ["range"]
+      },
+      "guardian_event_class": "effect_grant"
+    },
+    {
+      "action": "agent/brief",
+      "service_type": "agent-session",
+      "profile": "profiles/PROFILE-agent-v1.md",
+      "args_schema": "schemas/profile-agent.schema.json#/$defs/AgentBriefArgs",
+      "result_schema": "schemas/profile-agent.schema.json#/$defs/AgentBriefResult",
+      "target_pattern": "^station:([a-z0-9][a-z0-9./_-]{0,254}):([a-z0-9][a-z0-9._-]{0,63})$",
+      "target_authority": "station_host",
+      "external_mutation": false,
+      "allows_executor_ref": false,
+      "requires_contract": false,
+      "require_seal": false,
+      "risk_class": 2,
+      "mechanical": false,
+      "quota_consuming": true,
+      "required_quotas": [
+        {
+          "kind": "seallink/count",
+          "resource": "{target}",
+          "unit": "starts"
+        }
+      ],
+      "allowed_where_predicates": {
+        "task_id": ["eq", "in", "prefix"],
+        "brief_sha256": ["hash_eq"],
+        "max_duration_sec": ["range"],
+        "artifact_channel": ["eq", "in", "prefix"]
+      },
+      "guardian_event_class": "effect_grant"
+    },
+    {
+      "action": "agent/tool",
+      "service_type": "agent-session",
+      "profile": "profiles/PROFILE-agent-v1.md",
+      "args_schema": "schemas/profile-agent.schema.json#/$defs/AgentToolArgs",
+      "result_schema": "schemas/profile-agent.schema.json#/$defs/AgentToolResult",
+      "target_pattern": "^station:([a-z0-9][a-z0-9./_-]{0,254}):([a-z0-9][a-z0-9._-]{0,63})$",
+      "target_authority": "station_host",
+      "external_mutation": true,
+      "allows_executor_ref": false,
+      "requires_contract": false,
+      "require_seal": true,
+      "risk_class": 1,
+      "mechanical": true,
+      "quota_consuming": true,
+      "required_quotas": [
+        {
+          "kind": "seallink/count",
+          "resource": "{target}",
+          "unit": "calls"
+        }
+      ],
+      "allowed_where_predicates": {
+        "tool_name": ["eq", "in", "not_in"],
+        "input_sha256": ["hash_eq"],
+        "resource_path": ["eq", "in", "not_in", "prefix"],
+        "max_output_bytes": ["range"]
+      },
+      "guardian_event_class": "effect_grant"
+    },
+    {
+      "action": "agent/session",
+      "service_type": "agent-session",
+      "profile": "profiles/PROFILE-agent-v1.md",
+      "args_schema": "schemas/profile-agent.schema.json#/$defs/AgentSessionArgs",
+      "result_schema": "schemas/profile-agent.schema.json#/$defs/AgentSessionResult",
+      "target_pattern": "^station:([a-z0-9][a-z0-9./_-]{0,254}):([a-z0-9][a-z0-9._-]{0,63})$",
+      "target_authority": "station_host",
+      "external_mutation": true,
+      "allows_executor_ref": false,
+      "requires_contract": true,
+      "require_seal": true,
+      "risk_class": 1,
+      "mechanical": true,
+      "quota_consuming": true,
+      "required_quotas": [
+        {
+          "kind": "seallink/count",
+          "resource": "{target}",
+          "unit": "starts"
+        }
+      ],
+      "allowed_where_predicates": {
+        "op": ["eq", "in"],
+        "session_slot": ["eq", "in", "prefix"],
+        "config_sha256": ["hash_eq"],
+        "max_wall_sec": ["range"]
+      },
+      "guardian_event_class": "effect_grant"
+    },
+    {
+      "action": "agent/guardian-message",
+      "service_type": "agent-session",
+      "profile": "profiles/PROFILE-agent-v1.md",
+      "args_schema": "schemas/profile-agent.schema.json#/$defs/AgentGuardianMessageArgs",
+      "result_schema": "schemas/profile-agent.schema.json#/$defs/AgentGuardianMessageResult",
+      "target_pattern": "^ward:([0-9a-f]{64})$",
+      "target_authority": "pinned_ward",
+      "external_mutation": false,
+      "allows_executor_ref": false,
+      "requires_contract": false,
+      "require_seal": true,
+      "risk_class": 1,
+      "mechanical": true,
+      "quota_consuming": false,
+      "required_quotas": [],
+      "allowed_where_predicates": {
+        "origin_id": ["eq"],
+        "subject_ward_name": ["eq"],
+        "revision": ["eq", "range"],
+        "message_sha256": ["hash_eq"],
+        "channel": ["eq", "in", "not_in"],
+        "delivery_mode": ["eq"]
+      },
+      "guardian_event_class": "effect_grant"
+    }
+  ]
+}

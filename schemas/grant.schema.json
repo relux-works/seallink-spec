@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.6/schemas/grant.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/grant.schema.json",
   "title": "SealLink v1.0 Universal Grant & Issuance Preparation",
   "oneOf": [
     {
@@ -30,7 +30,8 @@
           "allOf": [
             { "$ref": "#/$defs/GrantPayload" },
             { "required": ["issuer", "guardian_context"] },
-            { "not": { "required": ["parent"] } }
+            { "not": { "required": ["parent"] } },
+            { "properties": { "issuer": { "not": { "required": ["role_policy"] } } } }
           ]
         },
         "guardian_approvals": { "$ref": "common.schema.json#/$defs/GuardianApprovals" }
@@ -82,10 +83,11 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["mode", "name", "owner_policy"],
+              "required": ["mode", "name", "registration", "owner_policy"],
               "properties": {
                 "mode": { "const": "name" },
                 "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
                 "owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }
               }
             },
@@ -115,8 +117,8 @@
           "required": ["provider_of", "service_type", "label"],
           "properties": {
             "provider_of": { "$ref": "common.schema.json#/$defs/NameStr" },
-            "service_type": { "type": "string", "minLength": 1, "maxLength": 128 },
-            "label": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" }
+            "service_type": { "$ref": "common.schema.json#/$defs/ServiceTypeStr" },
+            "label": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$", "not": { "pattern": "\n" } }
           }
         },
         "capabilities": {
@@ -129,6 +131,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 8192,
+          "x-seallink-allow-lf": true,
           "description": "Cognitive work guidance ONLY; mechanical effect executors MUST refuse any grant carrying terms_text."
         },
         "not_before_height": { "$ref": "common.schema.json#/$defs/Uint53" },
@@ -138,6 +141,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 144,
+          "x-seallink-refusal": "WIRE_INTEGER",
           "description": "Optional issuer-requested minimum confirmation depth for anchor/seal (omitted defaults to 1)."
         },
         "revocation": {
@@ -149,8 +153,28 @@
               "properties": {
                 "mode": { "const": "seal" },
                 "construction": { "type": "string", "enum": ["W", "L"] },
-                "kind": { "type": "string", "enum": ["revocable", "single_use"] },
+                "kind": { "const": "revocable" },
                 "seal": { "$ref": "common.schema.json#/$defs/Seal" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode", "construction", "kind", "seal"],
+              "properties": {
+                "mode": { "const": "seal" },
+                "construction": { "type": "string", "enum": ["W", "L"] },
+                "kind": { "const": "single_use" },
+                "seal": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["txid", "vout", "script_policy"],
+                  "properties": {
+                    "txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+                    "vout": { "$ref": "common.schema.json#/$defs/Vout" },
+                    "script_policy": { "$ref": "common.schema.json#/$defs/SingleUseScriptPolicy" }
+                  }
+                }
               }
             },
             {
@@ -178,6 +202,7 @@
             },
             "notaries": {
               "type": "array",
+              "minItems": 1,
               "maxItems": 4,
               "items": { "$ref": "common.schema.json#/$defs/NamePin" }
             },
@@ -213,7 +238,17 @@
                       },
                       "notary_mode": { "type": "string", "enum": ["none", "optional_stop", "required_act"] },
                       "notary_name": { "$ref": "common.schema.json#/$defs/NameStr" }
-                    }
+                    },
+                    "allOf": [
+                      {
+                        "if": { "required": ["notary_mode"], "properties": { "notary_mode": { "enum": ["optional_stop", "required_act"] } } },
+                        "then": { "required": ["notary_name"] }
+                      },
+                      {
+                        "if": { "required": ["notary_mode"], "properties": { "notary_mode": { "const": "none" } } },
+                        "then": { "not": { "required": ["notary_name"] } }
+                      }
+                    ]
                   },
                   "ranges": {
                     "type": "array",
@@ -226,11 +261,11 @@
                       "properties": {
                         "txid": { "$ref": "common.schema.json#/$defs/Hex64" },
                         "first": { "$ref": "common.schema.json#/$defs/Vout" },
-                        "count": { "type": "integer", "minimum": 1, "maximum": 4096 },
-                        "script_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+                        "count": { "type": "integer", "minimum": 1, "maximum": 2048, "x-seallink-refusal": "WIRE_INTEGER" },
+                        "script_policy": { "$ref": "common.schema.json#/$defs/P2wpkhScriptPolicy" },
                         "stop_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
                         "stop_first": { "$ref": "common.schema.json#/$defs/Vout" },
-                        "stop_script_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }
+                        "stop_script_policy": { "$ref": "common.schema.json#/$defs/P2wpkhScriptPolicy" }
                       },
                       "dependentRequired": {
                         "stop_txid": ["stop_first", "stop_script_policy"],
@@ -261,10 +296,30 @@
         },
         {
           "if": { "required": ["parent"] },
-          "then": { "not": { "required": ["delegate"] } }
+          "then": {
+            "not": { "required": ["delegate"] },
+            "properties": {
+              "revocation": {
+                "properties": {
+                  "mode": { "const": "seal" },
+                  "seal": {
+                    "properties": {
+                      "script_policy": {
+                        "oneOf": [
+                          { "$ref": "common.schema.json#/$defs/P2wpkhScriptPolicy" },
+                          { "$ref": "common.schema.json#/$defs/SingleUseScriptPolicy" }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         },
         {
           "if": {
+            "required": ["revocation"],
             "properties": { "revocation": { "properties": { "mode": { "const": "window_only" } }, "required": ["mode"] } }
           },
           "then": {
@@ -301,10 +356,11 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["mode", "name", "owner_policy"],
+          "required": ["mode", "name", "registration", "owner_policy"],
           "properties": {
             "mode": { "const": "exact_name" },
             "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+            "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
             "owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }
           }
         },
@@ -328,18 +384,13 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "genesis", "grant_id", "grant_content_addr"],
+      "description": "Unique canonical preimage for OP_RETURN 0x01 (and 0x02 root batch leaves). contract_id MUST be included iff grant.payload carries contract_id.",
       "properties": {
         "type": { "const": "seallink-issuance/1" },
         "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
         "grant_id": { "$ref": "common.schema.json#/$defs/Hex64" },
         "grant_content_addr": { "$ref": "common.schema.json#/$defs/Hex64" },
-        "contract_id": { "$ref": "common.schema.json#/$defs/Hex64" },
-        "assent_content_addrs": {
-          "type": "array",
-          "minItems": 2,
-          "maxItems": 32,
-          "items": { "$ref": "common.schema.json#/$defs/Hex64" }
-        }
+        "contract_id": { "$ref": "common.schema.json#/$defs/Hex64" }
       }
     }
   }

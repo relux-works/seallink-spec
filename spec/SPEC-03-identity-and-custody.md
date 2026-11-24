@@ -1,6 +1,6 @@
 # SPEC-03: Identity, Name Value, Manifest, Key Taxonomy, Authentication, and Owner Control
 
-- **Version:** `1.0.0-draft.6`
+- **Version:** `1.0.0-draft.7`
 - **Status:** `draft` (normative rules `decided`; domain-binding verification and FIDO2/SSH device extensions tracked `open` in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/service-types.json`, `registry/refusal-codes.json`
@@ -14,7 +14,7 @@ An actor's ledger name (conventionally `id/<label>`, which MAY be a human-readab
 
 ### 1.1 Top-Level Members (`SL-IDEN-002`, `decided`)
 
-A SealLink reader MUST match top-level keys `link`, `m`, and `nostr` strictly (refusing duplicates or Unicode simple case-fold aliases with `WIRE_DUPLICATE`), and MUST ignore unknown owner-defined top-level members.
+A SealLink reader MUST match top-level keys `link`, `m`, and `nostr` strictly — refusing duplicate keys and all 71 Unicode simple case-fold aliases of `link`, `m`, and `nostr` (explicitly enumerated in `schemas/name-value.schema.json`) with `WIRE_DUPLICATE` / `WIRE_MEMBER` — and MUST ignore unknown owner-defined top-level members.
 
 | Top-Level Key | Optional | Structure & Purpose | Closes Grants on Edit? |
 | --- | :-: | --- | :-: |
@@ -37,8 +37,8 @@ One `id/` name MAY publish distinct, strictly isolated role keys or threshold ro
 - **Byte budget:** With three roles (even with `{"p":...}` pins) + `origin` + `m`, the value is ~405 bytes — well within the 520-byte protocol limit.
 - **Per-role history isolation:** Rotating or removing `link.notary` or `link.cred` MUST NOT close live grants bound to `link.grant`. Rotating or removing `link.grant` closes active grants (`NAME_ROLE_CHANGED`), while leaving eternal credentials and notary acts intact unless closed by `0x0b` (`h_c`).
 - **Privacy-preserving `origin` pin:** Every origin-certified actor (child, adult, organization, or materialized agent) writes the identical field name `link.origin = "<origin_id_64hex>"`. Public chain observers cannot distinguish subject class or capacity from the name value alone (`SL-ARCH-012`).
-- **Role key disjointness:** Within one name, every key appearing in `link.grant`, `link.cred`, `link.notary`, `nostr`, and `manifest.auth_key` MUST be disjoint (`NAME_VALUE_INVALID` if reused).
-- **Name history walk (`SL-IDEN-004`, `decided`):** To verify an issuer's `grant` role policy for an active grant, the verifier resolves the name (refusing `NAME_NOT_FOUND` if absent on the active chain) and walks the name's confirmed update chain back to `issuer.registration`: `owner_policy` and `link.grant` MUST be unchanged from the grant's `recent_block` through the tip (renewals, `m` updates, `nostr` updates, and unrelated role changes close nothing). An owner-signed (`SIGHASH_ALL`) change or removal of `link.grant` (in mempool or block) writes a durable `NAME_ROLE_CHANGED` closure.
+- **Role key disjointness:** Within one name, every public key appearing in `link.grant`, `link.cred`, `link.notary` (whether direct `xonly_64hex` or expanded via `{"p":...}` `role_policies`), `nostr` (direct 64-hex string OR NIP-05 `names._`), and `manifest.auth_key` MUST be pairwise disjoint (`NAME_VALUE_INVALID` if any key is reused across roles).
+- **Name history walk (`SL-IDEN-004`, `decided`):** To verify an issuer's `grant` role policy for an active grant, the verifier resolves the name (refusing `NAME_NOT_FOUND` if absent on the active chain) and walks the name's confirmed update chain back to `issuer.registration`: `owner_policy` and `link.grant` MUST remain unchanged across every step from the grant's `recent_block` through the tip (detecting even `K1 -> K2 -> K1` rotations; renewals, `m` updates, `nostr` updates, and unrelated role changes close nothing). Every update MUST pass writer verification against the pinned `owner_policy` (`SL-LDGR-007`). An owner-signed (`SIGHASH_ALL`) change or removal of `link.grant` (in mempool or block) writes a durable `NAME_ROLE_CHANGED` closure.
 
 ---
 
@@ -61,15 +61,15 @@ All 22 key roles, curves, derivation accounts, and permitted signing domains are
 
 ## 3. Unified Manifest (`seallink-manifest/1`) and Off-Chain Sets
 
-The single `m` pin in the name value authenticates one canonical JCS `seallink-manifest/1` object (`<= 16384` bytes, `schemas/manifest.schema.json`) (`SL-IDEN-006`, `decided`).
+The single `m` pin in the name value authenticates one canonical JCS `seallink-manifest/1` object (`<= 32768` bytes, `schemas/manifest.schema.json`) (`SL-IDEN-006`, `decided`).
 
 ### 3.1 Manifest Members
 
 1. **`sets`** *(optional)*: Hash + monotonic `seq` pins for up to four off-chain JCS sets:
    - `card` (`seallink-card/1`): Public entity metadata card (`person | agent | organization | service`, display name, transports, relays, role, contact). Self-declared `kind` carries zero authority; if an `origin/1` is verified, `card.kind` MUST match `origin_class`.
    - `devices` (`seallink-device-list/1`): Owner control-plane devices (`label, alg ∈ {bip340, p256, ed25519}, key, presence, ceiling ∈ {0,1,2}, seal`).
-   - `members` (`seallink-members-list/1`): Up to 1,024 managed/member actor pins `(name, owner_policy, seal)`. Verifiers MUST bound per-issuer journaled entries to prevent unbounded state growth.
-   - `certs` (`seallink-certset-head/1`): Head committing to an actor's self-signed `seallink-statement/1` records (`config-section`, `transport-binding`, `root-rotate`, `root-cancel`, each with a closed `subject` schema).
+   - `members` (`seallink-members-list/1`): Up to 1,024 managed/member actor pins `(name, registration, owner_policy, seal)`. Pinning `registration` prevents an expired member name string from being hijacked upon re-registration. Verifiers MUST bound per-issuer journaled entries to prevent unbounded state growth.
+   - `certs` (`seallink-certset-head/1`): Head committing to an actor's active self-signed `seallink-statement/1` records (`config-section`, `transport-binding`, `root-rotate`, `root-cancel`, `migration-accept`, each with a closed `subject` schema). Normative commitment formula: `set_sha256 = SHA256(canonical_JCS(sorted_content_addrs))` where `sorted_content_addrs` is the strictly ascending array of `content_addr` hex digests of the active statements (`count == len(sorted_content_addrs)`).
 2. **`service`** *(optional)*: Self-declaration when this actor operates a service (`service_type, actions, receipt_key, endpoint`, optional `tls_spki_sha256` pin). Discovery only; never substitutes for a pinned grant executor key.
 3. **`providers`** *(optional, `SL-IDEN-007`, `decided`)*: Labeled bindings declaring which external service actors host this actor's resources. Each entry binds `(service_type, label)` to a full **`provider: NamePin`** (`{name, registration, owner_policy}`) plus optional `transport_key`:
    ```json
@@ -119,7 +119,7 @@ Bytes from ANY channel are accepted **if and only if** `SHA256(bytes)` equals th
 
 A foreign replaceable service authenticates actors using `seallink-auth-challenge/1` and `seallink-auth-upgrade/1` (`SL-IDEN-010`, `decided`):
 
-1. **Challenge lifecycle:** Service generates a 32-byte CSPRNG `nonce`, records `issued_at` and `expires_at` (`issued_at < expires_at <= issued_at + 120`), pins its own `service_id`, and records the challenge durably. Client signs with `auth_key` (never `device`, `grant`, or `name_owner`). Service verifies `SPEC-01 §7`, checks `issued_at <= now < expires_at` (`AUTH_CHALLENGE_EXPIRED`), checks audience/nonce (`AUTH_CHALLENGE_INVALID`), and **atomically consumes the nonce** before creating any session.
+1. **Challenge lifecycle:** Service generates a 32-byte CSPRNG `nonce`, records `(nonce, service_id, issued_at, expires_at)` durably with `issued_at < expires_at <= issued_at + 120`. Client signs with `auth_key` (never `device`, `grant`, or `name_owner`). Service verifies `SPEC-01 §7`, confirms exact equality of `(service_id, nonce, issued_at, expires_at)` against its own stored challenge record (`AUTH_CHALLENGE_INVALID` on any mismatch or unknown/reused nonce), verifies `issued_at <= now < expires_at` (`AUTH_CHALLENGE_EXPIRED`), and **atomically consumes the nonce** before creating any session.
 2. **Named mode:** Service resolves `name`, walks owner history, verifies `manifest/1`, confirms `manifest.auth_key == auth_pubkey` (`AUTH_KEY_UNPINNED`), and confirms `manifest.auth_seal` is unspent (`SEAL_SPENT` if spent, `SEAL_UNAVAILABLE` if unconfirmed or inconclusive). Existing service accounts MUST retain their original `(name, registration, owner_policy)` binding; a re-registered name string MUST NOT take over an old account.
 3. **Provisional key-only onboarding:** A service MAY admit a challenge without `name` into a strictly rate- and storage-capped local cell (zero effect, PII-release, or federation rights).
 4. **Sponsored client-owned registration & atomic upgrade:** A sponsor MAY fund UTXOs controlled exclusively by the client so the client broadcasts `OP_NAME_NEW` and (`>= 12` blocks later) `OP_NAME_FIRSTUPDATE` (sponsor never owns the name). Once confirmed at required depth, client signs `seallink-auth-upgrade/1` under the same `auth_key` to atomically bind the confirmed registration to the provisional cell.
@@ -131,13 +131,13 @@ A foreign replaceable service authenticates actors using `seallink-auth-challeng
 
 For commanding an actor's **own** hosts, executors, and managed agent key holders (`SL-IDEN-011`, `decided`):
 
-1. **Device levels and closed command set:** `seallink-owner-command/1` carries a closed command enum (`agent-dispatch`, `session-terminate`, `policy-apply`, `keyholder-halt`) with typed `arguments` schemas (`schemas/invocation.schema.json`):
+1. **Device levels and closed command set:** `seallink-owner-command/1` carries a closed command enum (`agent-dispatch`, `session-terminate`, `policy-apply`, `keyholder-halt`, `approve-pii-disclosure`) with typed `arguments` schemas (`schemas/invocation.schema.json`). Every `owner-command/1` MUST be verified against an active entry in the owner's confirmed `manifest.sets.devices` (`seallink-device-list/1`) whose `seal` is unspent and whose `(alg, key)` matches the command's signing key (`DEVICE_UNAUTHORIZED` otherwise), with `device.ceiling >= command.level` and, for `level == 2`, `device.presence == true`:
    - **L0:** Cognitive work / read-only dispatch (`agent-dispatch` with `level = 0`); zero effects.
    - **L1:** Policy-bounded operational control (`agent-dispatch`, `session-terminate` within local executor caps).
-   - **L2:** High-assurance presence-verified device (`presence = true`, `ceiling = 2`): may issue `policy-apply` (paired with an L2-signed `seallink-statement/1`), `keyholder-halt`, and fast device revocation (`tx_revoke`).
+   - **L2:** High-assurance presence-verified device (`presence = true`, `ceiling = 2`): may issue `policy-apply` (paired with an L2-signed `seallink-statement/1`), `keyholder-halt`, `approve-pii-disclosure` (Contour A targeted PII release, `SPEC-07 §3`, strictly `route_mode = "direct"`), and fast device revocation (`tx_revoke`).
    - **Level inheritance:** Any agent run launched by an `seallink-owner-command/1` inherits its `level` ceiling; the run's key holder MUST NOT sign effects above that level.
 2. **Foreign boundary:** Device keys MUST NEVER be accepted by foreign services (`DEVICE_UNAUTHORIZED`).
-3. **Host Trust-Root Pin and Delayed Admin Override (`SL-IDEN-012`, `decided`):** An isolated host/runtime pins `(network, genesis, root_name, registration, owner_policy, pinned_grant_policy)` in admin-owned read-only storage outside agent write reach. Routine rotation uses a `root-rotate` statement signed by the old policy. Unassisted administrator overwrite enters a mandatory pending delay `D` (default `1008` blocks) with out-of-band owner alerts on every load; the old policy OR the name's cold `owner_policy` MAY cancel before `effective_height` via `root-cancel`.
+3. **Host Trust-Root Pin and Delayed Admin Override (`SL-IDEN-012`, `decided`):** An isolated host/runtime pins `(network, genesis, root_name, registration, owner_policy, pinned_grant_policy)` in admin-owned read-only storage outside agent write reach. Routine rotation uses a `root-rotate` statement signed by the old `pinned_grant_policy`. Unassisted administrator overwrite enters a mandatory pending delay `D` (default `1008` blocks) with out-of-band owner alerts on every load; the old `pinned_grant_policy` (via a signed `seallink-statement/1` with `kind = "root-cancel"`) OR the name's cold `owner_policy` (via an owner-authored `SIGHASH_ALL` `OP_NAME_UPDATE`) MAY cancel before `effective_height`.
 
 ---
 

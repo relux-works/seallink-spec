@@ -1,10 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.6/schemas/name-value.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/name-value.schema.json",
   "title": "SealLink v1.0 Ledger Name Value (520-Byte Budget)",
-  "description": "Formal schema for SealLink-recognized top-level members in a Namecoin name value. Unknown owner-defined top-level members are permitted and ignored by SealLink readers (SL-IDEN-002).",
+  "description": "Formal schema for SealLink-recognized top-level members in a Namecoin name value. Unknown owner-defined top-level members are permitted and ignored by SealLink readers (SL-IDEN-002), while all 71 Unicode simple case-fold aliases of link, m, and nostr are explicitly forbidden (WIRE_DUPLICATE).",
   "type": "object",
   "additionalProperties": true,
+  "propertyNames": {
+    "not": {
+      "enum": [
+        "LINK", "LINk", "LIN\u212a", "LInK", "LInk", "LIn\u212a", "LiNK", "LiNk", "LiN\u212a", "LinK", "Link", "Lin\u212a",
+        "M",
+        "NOSTR", "NOSTr", "NOStR", "NOStr", "NOsTR", "NOsTr", "NOstR", "NOstr", "NO\u017fTR", "NO\u017fTr", "NO\u017ftR", "NO\u017ftr",
+        "NoSTR", "NoSTr", "NoStR", "NoStr", "NosTR", "NosTr", "NostR", "Nostr", "No\u017fTR", "No\u017fTr", "No\u017ftR", "No\u017ftr",
+        "lINK", "lINk", "lIN\u212a", "lInK", "lInk", "lIn\u212a", "liNK", "liNk", "liN\u212a", "linK", "lin\u212a",
+        "nOSTR", "nOSTr", "nOStR", "nOStr", "nOsTR", "nOsTr", "nOstR", "nOstr", "nO\u017fTR", "nO\u017fTr", "nO\u017ftR", "nO\u017ftr",
+        "noSTR", "noSTr", "noStR", "noStr", "nosTR", "nosTr", "nostR", "no\u017fTR", "no\u017fTr", "no\u017ftR", "no\u017ftr"
+      ]
+    },
+    "x-seallink-refusal": "WIRE_DUPLICATE"
+  },
   "properties": {
     "link": {
       "type": "object",
@@ -47,7 +61,7 @@
               "additionalProperties": {
                 "type": "array",
                 "maxItems": 16,
-                "items": { "type": "string", "pattern": "^wss?://.+$", "maxLength": 256 }
+                "items": { "$ref": "common.schema.json#/$defs/RelayUri" }
               }
             }
           }
@@ -66,7 +80,7 @@
           "properties": {
             "p": {
               "$ref": "common.schema.json#/$defs/Hex64",
-              "description": "SHA-256 of canonical JCS ThresholdPolicy (m-of-n BIP-340 keys). Any change to the role policy requires an owner-authored ledger update."
+              "description": "SHA-256 of canonical JCS ThresholdPolicy (BIP-340 m-of-n, alg omitted). Any change to the role policy requires an owner-authored ledger update."
             }
           }
         }

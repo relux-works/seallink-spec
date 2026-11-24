@@ -13,10 +13,11 @@ Validates:
   7. Every SPEC-*.md carries Status, Evidence / Maturity, References, and Security Considerations.
   8. Full cryptographic & structural re-verification of all vectors/*.json via seallink_ref.py.
   9. LIVE EXECUTION of trace-01, trace-02, trace-03, trace-04, negative semantic & SL-ORIG-016
-     fixtures, and ALL 84/84 refusal codes in refusal-coverage-matrix.json through
-     tools/seallink_verifier.py — asserting computed verdicts, refusal codes, and journal
-     hash-chain commitments match expected values.
- 10. Full Draft 2020-12 metaschema + instance validation of all vectors (required in CI).
+     fixtures, ALL 85/85 refusal codes in refusal-coverage-matrix.json, and ALL 30/30 registered
+     object types through tools/seallink_verifier.py — asserting computed verdicts, refusal codes,
+     and journal hash-chain commitments match expected values.
+ 10. Full Draft 2020-12 metaschema + instance validation of all vectors, emitted JournalEntry
+     objects, and exact negative_schema_fixtures refusal codes (required in CI).
 """
 
 from __future__ import annotations
@@ -211,6 +212,9 @@ def _assert_journal_write(got_jw: dict[str, Any], exp_jw: dict[str, Any], label:
         errors.append(f"Verifier {label}: journal commitment mismatch (got {got_jw['c_before'][:12]}->{got_jw['c_after'][:12]})")
     if got_jw["entry"] != exp_jw["entry"]["object"]:
         errors.append(f"Verifier {label}: journal entry object mismatch")
+    j_err = sv.validate_against_schema("schemas/invocation.schema.json#/$defs/JournalEntry", got_jw["entry"], require_jsonschema=False)
+    if j_err is not None:
+        errors.append(f"Verifier {label}: emitted JournalEntry failed Draft 2020-12 schema: {j_err}")
 
 
 def execute_traces_and_matrix(
@@ -219,7 +223,7 @@ def execute_traces_and_matrix(
     require_jsonschema: bool,
     errors: list[str],
 ) -> tuple[int, int, int]:
-    """Execute ALL traces (trace-01..04), ALL 84/84 refusal-coverage-matrix cases,
+    """Execute ALL traces (trace-01..04), ALL 85/85 refusal-coverage-matrix cases,
     ALL security-conformance cases, and 10 live verifier-mutation tests via Tier1Verifier.
     """
     exec_checks = 0
@@ -249,7 +253,15 @@ def execute_traces_and_matrix(
                 ch.apply_patch(st["chain_patch"])
             if "invocation" in st:
                 rcpt_cache = st["receipt"]["object"] if "receipt" in st else None
-                res = v.verify_invocation(st["invocation"]["object"], bundle, ch, jr, exec_cfg, receipt_env_for_cache=rcpt_cache)
+                res = v.verify_invocation(
+                    st["invocation"]["object"],
+                    bundle,
+                    ch,
+                    jr,
+                    exec_cfg,
+                    receipt_env_for_cache=rcpt_cache,
+                    actual_message_meta=st.get("actual_message_meta"),
+                )
                 if res.verdict != st["expected_verdict"]:
                     errors.append(f"trace-01 step {st['step']}: expected verdict {st['expected_verdict']}, got {res.verdict} ({res.refusal_code})")
                 if st.get("expected_refusal") != res.refusal_code:
@@ -508,7 +520,7 @@ def execute_traces_and_matrix(
                         _assert_journal_write(res.journal_writes[1], st["settlement_journal_write"], f"trace-04/step-{st['step']}/settlement", errors)
             exec_checks += 1
 
-    # --- Execute refusal-coverage-matrix.json (MUST cover 100% = 84/84 refusal codes!) ---
+    # --- Execute refusal-coverage-matrix.json (MUST cover 100% = 85/85 refusal codes!) ---
     if "refusal-coverage-matrix.json" not in vectors:
         errors.append("Missing vectors/refusal-coverage-matrix.json")
     else:
@@ -527,10 +539,15 @@ def execute_traces_and_matrix(
         errors.append("Missing vectors/security-conformance.json")
     else:
         ss = vectors["security-conformance.json"]
+        seen_sec_ids: set[str] = set()
         for case in ss.get("cases", []):
+            cid = case["id"]
+            if cid in seen_sec_ids:
+                errors.append(f"Duplicate security-conformance case id: '{cid}'")
+            seen_sec_ids.add(cid)
             got_v, got_c = sec.execute_security_case(case, require_jsonschema=require_jsonschema)
             if (got_v, got_c) != (case["expected_verdict"], case.get("expected_refusal")):
-                errors.append(f"security-conformance '{case['id']}': expected {(case['expected_verdict'], case.get('expected_refusal'))}, got {(got_v, got_c)}")
+                errors.append(f"security-conformance '{cid}': expected {(case['expected_verdict'], case.get('expected_refusal'))}, got {(got_v, got_c)}")
             exec_checks += 1
         if "refusal-coverage-matrix.json" in vectors:
             mutations_killed, mut_errs = sec.run_verifier_mutation_tests(
@@ -780,6 +797,15 @@ def verify_jsonschema(
 
     validated = 0
     reg_types = sv.registered_types()
+    covered_types: set[str] = set()
+    t1v_neg = sv.Tier1Verifier(require_jsonschema=require)
+
+    def _record_type(inst: Any) -> None:
+        if isinstance(inst, dict):
+            ot = inst["payload"].get("type") if isinstance(inst.get("payload"), dict) else inst.get("type")
+            if isinstance(ot, str) and ot in reg_types:
+                covered_types.add(ot)
+
     for vname, vdoc in vectors.items():
         pos_instances: list[tuple[str, dict[str, Any], str]] = []
         collect_schema_instances(vdoc, pos_instances)
@@ -788,12 +814,18 @@ def verify_jsonschema(
             errs = list(val.iter_errors(inst))
             if errs:
                 errors.append(f"Schema validation failed for {vname} ({hint} against {sref}): {errs[0].message}")
+            else:
+                _record_type(inst)
             validated += 1
         for neg in vdoc.get("negative_schema_fixtures", []):
             val = get_validator(neg["schema"])
             errs = list(val.iter_errors(neg["object"]))
             if not errs:
                 errors.append(f"Negative schema fixture '{neg['id']}' in {vname} unexpectedly PASSED {neg['schema']}")
+            if "expected_refusal" in neg:
+                ok_nw, code_nw = t1v_neg.verify_wire_bytes(sl.jcs_encode(neg["object"]))
+                if ok_nw or code_nw != neg["expected_refusal"]:
+                    errors.append(f"Negative schema fixture '{neg['id']}' in {vname}: expected refusal {neg['expected_refusal']}, verifier computed {(ok_nw, code_nw)}")
             validated += 1
         # Validate EVERY recognizable typed object inside non-WIRE_* refusal-coverage-matrix cases!
         if vname == "refusal-coverage-matrix.json":
@@ -807,6 +839,8 @@ def verify_jsonschema(
                     errs = list(val.iter_errors(inst))
                     if errs:
                         errors.append(f"Semantic refusal case {hint} FAILED Draft 2020-12 schema {sref}: {errs[0].message}")
+                    else:
+                        _record_type(inst)
                     validated += 1
         # Validate EVERY recognizable typed object inside non-wire-syntax security-conformance cases!
         if vname == "security-conformance.json":
@@ -821,7 +855,12 @@ def verify_jsonschema(
                     errs = list(val.iter_errors(inst))
                     if errs:
                         errors.append(f"Security conformance case {hint} FAILED Draft 2020-12 schema {sref}: {errs[0].message}")
+                    else:
+                        _record_type(inst)
                     validated += 1
+    missing_types = sorted(set(reg_types.keys()) - covered_types)
+    if missing_types:
+        errors.append(f"Incomplete object-type conformance coverage ({len(covered_types)}/{len(reg_types)}): missing {', '.join(missing_types)}")
     return True, validated
 
 

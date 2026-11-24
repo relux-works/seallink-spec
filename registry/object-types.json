@@ -1,13 +1,19 @@
 {
   "$comment": "SealLink v1.0 Canonical Object Type Registry. Authoritative SSOT for object types, byte limits, signing roles, and schema targets. Signing domain tag equals the exact type string under SPEC-01.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.6",
+  "version": "1.0.0-draft.7",
+  "reserved_internal_domains": [
+    "seallink-clause/1",
+    "seallink-journal/1",
+    "seallink-merkle-leaf/1",
+    "seallink-merkle-node/1"
+  ],
   "types": [
     {
       "type": "seallink-manifest/1",
       "signed": false,
       "auth_mechanism": "name_value_sha256_pin",
-      "max_bytes": 16384,
+      "max_bytes": 32768,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json",
       "description": "Name-pinned operational manifest: off-chain set heads, self-service declaration, pinned labeled providers, optional role-policy preimages (verified against on-chain link.<role> hashes), and foreign-service auth key/seal."
@@ -34,7 +40,7 @@
       "type": "seallink-members-list/1",
       "signed": false,
       "auth_mechanism": "manifest_sha256_pin",
-      "max_bytes": 262144,
+      "max_bytes": 524288,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/MembersList",
       "description": "Manifest-pinned list of managed/member names with owner policy pins and per-entry revocation seals."
@@ -51,11 +57,11 @@
     {
       "type": "seallink-statement/1",
       "signed": true,
-      "signer_roles": ["grant", "device"],
+      "signer_roles": ["grant", "device", "receipt"],
       "max_bytes": 16384,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/Statement",
-      "description": "Typed actor-signed statement for external transport key bindings, host configuration sections, or trust-root rotation/cancellation."
+      "description": "Typed actor- or service-signed statement for external transport key bindings, host configuration sections, trust-root rotation/cancellation, or destination-provider migration acceptance."
     },
     {
       "type": "seallink-owner-command/1",
@@ -105,20 +111,20 @@
     {
       "type": "seallink-guardian/1",
       "signed": true,
-      "signer_roles": ["cred", "arbiter"],
+      "signer_roles": ["cred"],
       "max_bytes": 16384,
       "owning_spec": "SPEC-04",
       "schema": "schemas/guardian.schema.json#/$defs/GuardianRecord",
-      "description": "Acyclic revocable guardianship record supporting direct initial activation (mode=initial, 0x12) and two-stage successor appointment/activation (mode=appointed, 0x0d -> 0x0e)."
+      "description": "Acyclic revocable guardianship record signed by the origin's issuer (link.cred) and anchored via disposer+arbiter PSBT spend for direct initial activation (mode=initial, 0x12) or two-stage successor appointment/activation (mode=appointed, 0x0d -> 0x0e)."
     },
     {
       "type": "seallink-guardian-roster/1",
       "signed": true,
-      "signer_roles": ["cred", "arbiter"],
+      "signer_roles": ["cred"],
       "max_bytes": 32768,
       "owning_spec": "SPEC-04",
       "schema": "schemas/guardian.schema.json#/$defs/GuardianRoster",
-      "description": "Governed roster transition authorized by disposer+arbiter roster_seal spend (0x0f), advancing revision, adjusting approved revision_size, rotating challenger_pk, or re-anchoring burned slots."
+      "description": "Governed roster transition signed by the origin's issuer (link.cred) and authorized on-chain by disposer+arbiter roster_seal spend (0x0f), advancing revision, adjusting approved revision_size, rotating institutional keys, or re-anchoring burned slots."
     },
     {
       "type": "seallink-capacity/1",
@@ -159,11 +165,11 @@
     {
       "type": "seallink-termination/1",
       "signed": true,
-      "signer_roles": ["grant", "arbiter"],
+      "signer_roles": ["grant"],
       "max_bytes": 16384,
       "owning_spec": "SPEC-05",
       "schema": "schemas/contract.schema.json#/$defs/TerminationStatement",
-      "description": "Signed termination evidence committed inside a contract-seal spend (action 0x08); the seal spend alone terminates."
+      "description": "Signed termination evidence committed inside a contract-seal spend (action 0x08); signed by a contract party's grant key (the seal spend alone terminates regardless of 0x08 validity)."
     },
     {
       "type": "seallink-verdict/1",
@@ -196,7 +202,7 @@
       "type": "seallink-credential-break/1",
       "signed": false,
       "auth_mechanism": "owner_policy_name_update_sighash_all",
-      "max_bytes": 1024,
+      "max_bytes": 4096,
       "owning_spec": "SPEC-05",
       "schema": "schemas/credential.schema.json#/$defs/CredentialBreak",
       "description": "Chain-reconstructible compromise-height (h_c) break payload authenticated by the issuer's name OwnerPolicy (action 0x0b)."
@@ -226,7 +232,7 @@
       "max_bytes": 2048,
       "owning_spec": "SPEC-06",
       "schema": "schemas/grant.schema.json#/$defs/IssuancePrep",
-      "description": "Canonical issuance preparation committed in action 0x01 OP_RETURN, binding grant_id, grant signatures, and optional contract assents."
+      "description": "Canonical issuance preparation committed in action 0x01 OP_RETURN (or 0x02 root batch leaf), binding genesis, grant_id, grant_content_addr, and contract_id (present iff grant carries contract_id)."
     },
     {
       "type": "seallink-invocation/1",
@@ -259,19 +265,19 @@
       "type": "seallink-journal-entry/1",
       "signed": false,
       "auth_mechanism": "hash_chain_and_external_cas_witness",
-      "max_bytes": 4096,
+      "max_bytes": 16384,
       "owning_spec": "SPEC-06",
       "schema": "schemas/invocation.schema.json#/$defs/JournalEntry",
-      "description": "Canonical entry in an anti-rollback hash-chained journal (closures, reservations, settlements, single-use consumption, nonces, manifest heads, recovery boundaries)."
+      "description": "Canonical entry in an anti-rollback hash-chained journal (closures, atomic pending reservations, atomic terminal settlements, single-use consumption, nonces, manifest heads, session-open, migration-applied, recovery boundaries)."
     },
     {
       "type": "seallink-migration/1",
       "signed": true,
-      "signer_roles": ["receipt", "grant"],
+      "signer_roles": ["receipt"],
       "max_bytes": 65536,
       "owning_spec": "SPEC-07",
       "schema": "schemas/invocation.schema.json#/$defs/MigrationManifest",
-      "description": "Replaceable-service portable state and accounting handover manifest signed by old provider, holder, and new provider."
+      "description": "Replaceable-service portable state and accounting handover manifest signed by the source provider's receipt key, paired with holder seallink-assent/1 and destination seallink-statement/1 (migration-accept)."
     }
   ]
 }

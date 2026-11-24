@@ -1,19 +1,35 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.6/schemas/profile-mail.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/profile-mail.schema.json",
   "title": "SealLink PROFILE-mail-v1 Action Arguments and Result Schemas",
   "$defs": {
+    "LowercaseDnsDomain": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 255,
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$",
+      "not": { "pattern": "\n" }
+    },
+    "SingleAddrSpec": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 320,
+      "pattern": "^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$",
+      "not": { "pattern": "\n" }
+    },
     "MailListArgs": {
       "type": "object",
       "additionalProperties": false,
       "required": ["folder", "page"],
       "properties": {
-        "folder": { "type": "string", "minLength": 1, "maxLength": 256 },
-        "sender_domain": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "folder": { "type": "string", "minLength": 1, "maxLength": 256, "not": { "pattern": "\n" } },
+        "sender_domain": { "$ref": "#/$defs/LowercaseDnsDomain" },
         "max_bytes": { "$ref": "common.schema.json#/$defs/Uint64Str" },
         "snapshot_id": { "$ref": "common.schema.json#/$defs/Hex64" },
         "page": { "$ref": "common.schema.json#/$defs/Uint53" }
-      }
+      },
+      "if": { "required": ["page"], "properties": { "page": { "type": "integer", "minimum": 1 } } },
+      "then": { "required": ["snapshot_id"] }
     },
     "MailListResult": {
       "type": "object",
@@ -31,9 +47,9 @@
             "additionalProperties": false,
             "required": ["message_id", "folder", "sender_domain", "size_bytes", "received_at"],
             "properties": {
-              "message_id": { "type": "string", "minLength": 1, "maxLength": 256 },
-              "folder": { "type": "string", "minLength": 1, "maxLength": 256 },
-              "sender_domain": { "type": "string", "minLength": 1, "maxLength": 255 },
+              "message_id": { "type": "string", "minLength": 1, "maxLength": 256, "not": { "pattern": "\n" } },
+              "folder": { "type": "string", "minLength": 1, "maxLength": 256, "not": { "pattern": "\n" } },
+              "sender_domain": { "$ref": "#/$defs/LowercaseDnsDomain" },
               "size_bytes": { "$ref": "common.schema.json#/$defs/Uint64Str" },
               "received_at": { "$ref": "common.schema.json#/$defs/Uint53" }
             }
@@ -46,9 +62,9 @@
       "additionalProperties": false,
       "required": ["folder", "message_id"],
       "properties": {
-        "folder": { "type": "string", "minLength": 1, "maxLength": 256 },
-        "message_id": { "type": "string", "minLength": 1, "maxLength": 256 },
-        "sender_domain": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "folder": { "type": "string", "minLength": 1, "maxLength": 256, "not": { "pattern": "\n" } },
+        "message_id": { "type": "string", "minLength": 1, "maxLength": 256, "not": { "pattern": "\n" } },
+        "sender_domain": { "$ref": "#/$defs/LowercaseDnsDomain" },
         "max_bytes": { "$ref": "common.schema.json#/$defs/Uint64Str" }
       }
     },
@@ -57,9 +73,9 @@
       "additionalProperties": false,
       "required": ["message_id", "folder", "sender_domain", "size_bytes", "mime_sha256", "received_at"],
       "properties": {
-        "message_id": { "type": "string", "minLength": 1, "maxLength": 256 },
-        "folder": { "type": "string", "minLength": 1, "maxLength": 256 },
-        "sender_domain": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "message_id": { "type": "string", "minLength": 1, "maxLength": 256, "not": { "pattern": "\n" } },
+        "folder": { "type": "string", "minLength": 1, "maxLength": 256, "not": { "pattern": "\n" } },
+        "sender_domain": { "$ref": "#/$defs/LowercaseDnsDomain" },
         "size_bytes": { "$ref": "common.schema.json#/$defs/Uint64Str" },
         "mime_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
         "received_at": { "$ref": "common.schema.json#/$defs/Uint53" }
@@ -70,8 +86,8 @@
       "additionalProperties": false,
       "required": ["to", "subject", "body_sha256", "size_bytes"],
       "properties": {
-        "to": { "type": "string", "minLength": 3, "maxLength": 320 },
-        "subject": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "to": { "$ref": "#/$defs/SingleAddrSpec" },
+        "subject": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
         "body_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
         "size_bytes": { "$ref": "common.schema.json#/$defs/Uint64Str" }
       }
@@ -81,7 +97,7 @@
       "additionalProperties": false,
       "required": ["message_id", "body_sha256", "queued_at"],
       "properties": {
-        "message_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "message_id": { "type": "string", "minLength": 1, "maxLength": 256, "not": { "pattern": "\n" } },
         "body_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
         "queued_at": { "$ref": "common.schema.json#/$defs/Uint53" }
       }

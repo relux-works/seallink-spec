@@ -21,7 +21,7 @@ Every rule ID and refusal code below is mechanically validated by `tools/speclin
 | `SL-ARCH-007` | `decided` | Availability-only off-chain storage and transport; authenticity solely via hash pins & signatures | `trace-01`, `refusal-coverage-matrix.json` (`MANIFEST_MISMATCH`), `GUIDE-01 §5` |
 | `SL-ARCH-008` | `decided` | Actor-agnostic core mechanics with origin-certified class distinction | `trace-02`, `trace-04`, `schemas/origin.schema.json` |
 | `SL-ARCH-009` | `decided` | Orthogonal actor axes (origin class vs. autonomy/guardianship mode) | `SPEC-00 §3`, `schemas/origin.schema.json`, `trace-02`, `trace-04` |
-| `SL-ARCH-010` | `decided` | Single Source of Truth precedence (`registry/*.json` and `schemas/*.schema.json` over prose) | `tools/speclint.py` (registries, `$ref`s, Draft 2020-12 metaschemas) |
+| `SL-ARCH-010` | `decided` | Single Source of Truth: prose defines normative behavior; `registry/*.json`, `schemas/*.schema.json`, and `vectors/*.json` define exact identifiers, grammars, and required outcomes; disagreement is a spec defect | `tools/speclint.py` (registries, `$ref`s, Draft 2020-12 metaschemas) |
 | `SL-ARCH-011` | `decided` | Honest security guarantees and fail-closed threat boundaries | `SPEC-00 §6.1`, `CONFORMANCE.md §3`, `security-conformance.json` |
 | `SL-ARCH-012` | `decided` | Privacy by default on public ledger (commitments, seals, and salted hashes only) | `schemas/name-value.schema.json`, `schemas/origin.schema.json`, `trace-02` |
 

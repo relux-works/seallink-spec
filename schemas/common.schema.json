@@ -1,46 +1,71 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.6/schemas/common.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.7/schemas/common.schema.json",
   "title": "SealLink v1.0 Shared Wire Primitives",
+  "description": "Shared primitives with normative x-seallink-refusal class annotations (SPEC-01 §7 deterministic precedence: WIRE_TYPE -> WIRE_MEMBER -> WIRE_INTEGER -> WIRE_KEY -> WIRE_SIGNATURE -> WIRE_CONSTRAINT -> CHAIN_SCRIPT_UNSUPPORTED). Regular expressions follow ECMA-262 semantics without lookaround.",
   "$defs": {
+    "SingleLine": {
+      "type": "string",
+      "not": { "pattern": "\n" },
+      "x-seallink-refusal": "WIRE_STRING"
+    },
     "Hex64": {
       "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
+      "pattern": "^[0-9a-f]{64}$",
+      "not": { "pattern": "\n" }
     },
     "XOnlyPubkey64": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
+      "not": { "pattern": "\n" },
+      "x-seallink-refusal": "WIRE_KEY",
       "description": "Valid BIP-340 x-only secp256k1 public key."
     },
     "CompressedPubkey66": {
       "type": "string",
       "pattern": "^0[23][0-9a-f]{64}$",
-      "description": "Valid compressed secp256k1 public key."
+      "not": { "pattern": "\n" },
+      "x-seallink-refusal": "WIRE_KEY",
+      "description": "Valid compressed secp256k1 public key (SEC 1)."
+    },
+    "Ed25519Pubkey64": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "not": { "pattern": "\n" },
+      "x-seallink-refusal": "WIRE_KEY",
+      "description": "Valid canonical non-small-order Ed25519 compressed public key (RFC 8032 / SPEC-01 §4.1)."
     },
     "Sig128": {
       "type": "string",
       "pattern": "^[0-9a-f]{128}$",
-      "description": "Strict 64-byte signature (BIP-340, P-256 low-S raw r||s, or RFC 8032 Ed25519) in lowercase hex."
+      "not": { "pattern": "\n" },
+      "x-seallink-refusal": "WIRE_SIGNATURE",
+      "description": "Strict 64-byte signature (BIP-340, P-256 low-S raw r||s, or strict canonical non-small-order Ed25519) in lowercase hex."
     },
     "Uint53": {
       "type": "integer",
       "minimum": 0,
-      "maximum": 9007199254740991
+      "maximum": 9007199254740991,
+      "x-seallink-refusal": "WIRE_INTEGER"
     },
     "PositiveUint53": {
       "type": "integer",
       "minimum": 1,
-      "maximum": 9007199254740991
+      "maximum": 9007199254740991,
+      "x-seallink-refusal": "WIRE_INTEGER"
     },
     "Vout": {
       "type": "integer",
       "minimum": 0,
-      "maximum": 4294967295
+      "maximum": 4294967295,
+      "x-seallink-refusal": "WIRE_INTEGER"
     },
     "Uint64Str": {
       "type": "string",
-      "pattern": "^(0|[1-9][0-9]{0,19})$",
-      "description": "Exact unsigned 64-bit integer encoded as canonical decimal string (<= 18446744073709551615)."
+      "pattern": "^(0|[1-9][0-9]{0,18}|1([0-7][0-9]{18}|8([0-3][0-9]{17}|4([0-3][0-9]{16}|4([0-5][0-9]{15}|6([0-6][0-9]{14}|7([0-3][0-9]{13}|4([0-3][0-9]{12}|40([0-6][0-9]{10}|7([0-2][0-9]{9}|3([0-6][0-9]{8}|70([0-8][0-9]{6}|9([0-4][0-9]{5}|5([0-4][0-9]{4}|5(0[0-9]{3}|1([0-5][0-9]{2}|6(0[0-9]|1[0-5])))))))))))))))))$",
+      "not": { "pattern": "\n" },
+      "x-seallink-refusal": "WIRE_INTEGER",
+      "description": "Exact unsigned 64-bit integer encoded as canonical decimal string (0 <= v <= 18446744073709551615)."
     },
     "Network": {
       "type": "string",
@@ -50,14 +75,45 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 255,
-      "pattern": "^[a-z0-9][a-z0-9./_-]{0,254}$"
+      "pattern": "^[a-z0-9][a-z0-9./_-]{0,254}$",
+      "not": { "pattern": "\n" }
     },
     "PartyId": {
       "type": "string",
       "minLength": 1,
       "maxLength": 64,
       "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+      "not": { "pattern": "\n" },
       "description": "Unique-within-contract party identifier disambiguating multiple parties sharing a legal role."
+    },
+    "ActionStr": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9._-]+(/[a-z0-9._-]+)+$",
+      "not": { "pattern": "\n" }
+    },
+    "ServiceTypeStr": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(mail|agent-session|xmpp|blob|wallet|names|compute|rental|[a-z0-9-]+(\\.[a-z0-9-]+)+/[a-z0-9][a-z0-9._-]{0,63})$",
+      "not": { "pattern": "\n" }
+    },
+    "QuotaKindStr": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^(seallink/[a-z0-9._-]+|[a-z0-9-]+(\\.[a-z0-9-]+)+/[a-z0-9._-]+)$",
+      "not": { "pattern": "\n" },
+      "x-seallink-refusal": "WIRE_CONSTRAINT"
+    },
+    "RelayUri": {
+      "type": "string",
+      "minLength": 6,
+      "maxLength": 512,
+      "pattern": "^wss?://[^\\r\\n\\u2028\\u2029]+$",
+      "not": { "pattern": "\n" }
     },
     "Outpoint": {
       "type": "object",
@@ -68,31 +124,73 @@
         "vout": { "$ref": "#/$defs/Vout" }
       }
     },
-    "ScriptPolicy": {
+    "BranchKeySpec": {
+      "x-seallink-refusal": "WIRE_KEY",
+      "description": "Canonical ECDSA branch signer: either a single compressed secp256k1 key (including MPC/threshold-ECDSA per OQ-007) or a compact native P2WSH m-of-n multisig (2 <= n <= 5, 1 <= m <= n, strictly sorted pks; single-key object form forbidden to prevent dual encoding).",
       "oneOf": [
+        { "$ref": "#/$defs/CompressedPubkey66" },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["kind", "pk"],
+          "required": ["m", "pks"],
           "properties": {
-            "kind": { "const": "key" },
-            "pk": { "$ref": "#/$defs/CompressedPubkey66" }
+            "m": { "type": "integer", "minimum": 1, "maximum": 5, "x-seallink-refusal": "WIRE_INTEGER" },
+            "pks": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 5,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/CompressedPubkey66" }
+            }
           }
-        },
+        }
+      ]
+    },
+    "P2wpkhScriptPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "pk"],
+      "properties": {
+        "kind": { "const": "key" },
+        "pk": { "$ref": "#/$defs/CompressedPubkey66" }
+      }
+    },
+    "SingleUseScriptPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "template", "keys"],
+      "properties": {
+        "kind": { "const": "branch" },
+        "template": { "const": "single_use_1_of_2" },
+        "keys": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["issuer", "grantee"],
+          "properties": {
+            "issuer": { "$ref": "#/$defs/CompressedPubkey66" },
+            "grantee": { "$ref": "#/$defs/CompressedPubkey66" }
+          }
+        }
+      }
+    },
+    "ScriptPolicy": {
+      "x-seallink-refusal": "CHAIN_SCRIPT_UNSUPPORTED",
+      "oneOf": [
+        { "$ref": "#/$defs/P2wpkhScriptPolicy" },
         {
           "type": "object",
           "additionalProperties": false,
           "required": ["kind", "m", "pks"],
           "properties": {
             "kind": { "const": "multisig" },
-            "m": { "type": "integer", "minimum": 1, "maximum": 15 },
+            "m": { "type": "integer", "minimum": 1, "maximum": 15, "x-seallink-refusal": "WIRE_INTEGER" },
             "pks": {
               "type": "array",
               "minItems": 1,
               "maxItems": 15,
               "uniqueItems": true,
               "items": { "$ref": "#/$defs/CompressedPubkey66" },
-              "description": "Strictly sorted in ascending lexicographical hex order; verifier MUST also enforce 1 <= m <= len(pks)."
+              "description": "Strictly sorted in ascending lexicographical hex order; verifier MUST also enforce 1 <= m <= len(pks) and distinct x-coordinates."
             }
           }
         },
@@ -108,8 +206,8 @@
               "additionalProperties": false,
               "required": ["a", "b"],
               "properties": {
-                "a": { "$ref": "#/$defs/CompressedPubkey66" },
-                "b": { "$ref": "#/$defs/CompressedPubkey66" }
+                "a": { "$ref": "#/$defs/BranchKeySpec" },
+                "b": { "$ref": "#/$defs/BranchKeySpec" }
               }
             }
           }
@@ -128,29 +226,12 @@
               "properties": {
                 "a": { "$ref": "#/$defs/CompressedPubkey66" },
                 "b": { "$ref": "#/$defs/CompressedPubkey66" },
-                "arbiter": { "$ref": "#/$defs/CompressedPubkey66" }
+                "arbiter": { "$ref": "#/$defs/BranchKeySpec" }
               }
             }
           }
         },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["kind", "template", "keys"],
-          "properties": {
-            "kind": { "const": "branch" },
-            "template": { "const": "single_use_1_of_2" },
-            "keys": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["issuer", "grantee"],
-              "properties": {
-                "issuer": { "$ref": "#/$defs/CompressedPubkey66" },
-                "grantee": { "$ref": "#/$defs/CompressedPubkey66" }
-              }
-            }
-          }
-        },
+        { "$ref": "#/$defs/SingleUseScriptPolicy" },
         {
           "type": "object",
           "additionalProperties": false,
@@ -163,12 +244,12 @@
               "additionalProperties": false,
               "required": ["disposer", "challenger", "guardian"],
               "properties": {
-                "disposer": { "$ref": "#/$defs/CompressedPubkey66" },
-                "challenger": { "$ref": "#/$defs/CompressedPubkey66" },
+                "disposer": { "$ref": "#/$defs/BranchKeySpec" },
+                "challenger": { "$ref": "#/$defs/BranchKeySpec" },
                 "guardian": { "$ref": "#/$defs/CompressedPubkey66" }
               }
             },
-            "delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560 }
+            "delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" }
           }
         }
       ]
@@ -204,33 +285,85 @@
         "script_policy": { "$ref": "#/$defs/ScriptPolicy" }
       }
     },
+    "P2wpkhSeal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["txid", "vout", "script_policy"],
+      "properties": {
+        "txid": { "$ref": "#/$defs/Hex64" },
+        "vout": { "$ref": "#/$defs/Vout" },
+        "script_policy": { "$ref": "#/$defs/P2wpkhScriptPolicy" }
+      }
+    },
     "ThresholdPolicy": {
       "type": "object",
       "additionalProperties": false,
       "required": ["m", "pks"],
+      "description": "Canonical single-encoding BIP-340 m-of-n threshold policy (alg MUST be omitted; strictly sorted ascending XOnlyPubkey64 pks; 1 <= m <= len(pks)).",
       "properties": {
-        "alg": {
-          "type": "string",
-          "enum": ["bip340", "p256", "ed25519"],
-          "description": "Omitted defaults to bip340. Non-bip340 permitted ONLY on device-authorized object types."
-        },
-        "m": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "m": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
         "pks": {
           "type": "array",
           "minItems": 1,
           "maxItems": 32,
           "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^([0-9a-f]{64}|0[23][0-9a-f]{64})$" },
-          "description": "Strictly sorted in ascending lexicographical hex order; verifier MUST also enforce 1 <= m <= len(pks)."
+          "items": { "$ref": "#/$defs/XOnlyPubkey64" }
         }
       }
+    },
+    "DeviceThresholdPolicy": {
+      "description": "Canonical device-capable threshold policy: omits alg for BIP-340 (explicit alg='bip340' forbidden), or specifies alg='p256' (CompressedPubkey66) or alg='ed25519' (Ed25519Pubkey64).",
+      "oneOf": [
+        { "$ref": "#/$defs/ThresholdPolicy" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["alg", "m", "pks"],
+          "properties": {
+            "alg": { "const": "p256" },
+            "m": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
+            "pks": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/CompressedPubkey66" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["alg", "m", "pks"],
+          "properties": {
+            "alg": { "const": "ed25519" },
+            "m": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
+            "pks": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/Ed25519Pubkey64" }
+            }
+          }
+        }
+      ]
     },
     "SignatureEntry": {
       "type": "object",
       "additionalProperties": false,
       "required": ["pk", "sig"],
       "properties": {
-        "pk": { "type": "string", "pattern": "^([0-9a-f]{64}|0[23][0-9a-f]{64})$" },
+        "pk": { "$ref": "#/$defs/XOnlyPubkey64" },
+        "sig": { "$ref": "#/$defs/Sig128" }
+      }
+    },
+    "DeviceSignatureEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pk", "sig"],
+      "properties": {
+        "pk": { "type": "string", "pattern": "^([0-9a-f]{64}|0[23][0-9a-f]{64})$", "not": { "pattern": "\n" }, "x-seallink-refusal": "WIRE_KEY" },
         "sig": { "$ref": "#/$defs/Sig128" }
       }
     },
@@ -238,6 +371,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["policy", "sigs"],
+      "description": "BIP-340 SignatureSet; sigs MUST be strictly sorted in ascending lexicographical pk order.",
       "properties": {
         "policy": { "$ref": "#/$defs/ThresholdPolicy" },
         "sigs": {
@@ -248,12 +382,27 @@
         }
       }
     },
+    "DeviceSignatureSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "sigs"],
+      "description": "Device-capable SignatureSet (BIP-340, P-256 low-S, or strict canonical Ed25519); sigs MUST be strictly sorted in ascending lexicographical pk order.",
+      "properties": {
+        "policy": { "$ref": "#/$defs/DeviceThresholdPolicy" },
+        "sigs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/DeviceSignatureEntry" }
+        }
+      }
+    },
     "GuardianApproval": {
       "type": "object",
       "additionalProperties": false,
       "required": ["slot", "revision", "guardian_name", "signatures"],
       "properties": {
-        "slot": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "slot": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
         "revision": { "$ref": "#/$defs/PositiveUint53" },
         "guardian_name": { "$ref": "#/$defs/NameStr" },
         "signatures": { "$ref": "#/$defs/SignatureSet" }
@@ -287,9 +436,9 @@
       "additionalProperties": false,
       "required": ["num", "den", "min"],
       "properties": {
-        "num": { "type": "integer", "minimum": 1, "maximum": 32 },
-        "den": { "type": "integer", "minimum": 1, "maximum": 32 },
-        "min": { "type": "integer", "minimum": 1, "maximum": 32 }
+        "num": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
+        "den": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
+        "min": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" }
       },
       "description": "Verifier MUST enforce 1 <= num <= den and 1 <= min <= revision_size."
     },
@@ -297,6 +446,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["routine_read", "effect_grant", "contract_assent", "custody_change"],
+      "description": "Verifier MUST enforce non-decreasing monotonicity: required(routine_read) <= required(effect_grant) <= required(contract_assent) <= required(custody_change) for revision_size.",
       "properties": {
         "routine_read": { "$ref": "#/$defs/RationalQuorum" },
         "effect_grant": { "$ref": "#/$defs/RationalQuorum" },
@@ -337,6 +487,7 @@
       }
     },
     "ConstraintPredicate": {
+      "x-seallink-refusal": "WIRE_CONSTRAINT",
       "oneOf": [
         {
           "type": "object",
@@ -349,7 +500,7 @@
           "additionalProperties": false,
           "required": ["in"],
           "properties": {
-            "in": { "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": { "type": "string" } }
+            "in": { "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": { "$ref": "#/$defs/SingleLine" } }
           }
         },
         {
@@ -357,20 +508,20 @@
           "additionalProperties": false,
           "required": ["not_in"],
           "properties": {
-            "not_in": { "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": { "type": "string" } }
+            "not_in": { "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": { "$ref": "#/$defs/SingleLine" } }
           }
         },
         {
           "type": "object",
           "additionalProperties": false,
           "required": ["prefix"],
-          "properties": { "prefix": { "type": "string", "minLength": 1, "maxLength": 512 } }
+          "properties": { "prefix": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } } }
         },
         {
           "type": "object",
           "additionalProperties": false,
           "required": ["suffix"],
-          "properties": { "suffix": { "type": "string", "minLength": 1, "maxLength": 512 } }
+          "properties": { "suffix": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } } }
         },
         {
           "type": "object",
@@ -397,12 +548,13 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "resource", "unit", "max", "window"],
+      "x-seallink-refusal": "WIRE_CONSTRAINT",
       "properties": {
-        "kind": { "type": "string", "minLength": 1, "maxLength": 128 },
-        "resource": { "type": "string", "minLength": 1, "maxLength": 256 },
-        "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "kind": { "$ref": "#/$defs/QuotaKindStr" },
+        "resource": { "type": "string", "minLength": 1, "maxLength": 256, "not": { "pattern": "\n" } },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 64, "not": { "pattern": "\n" } },
         "max": { "$ref": "#/$defs/Uint64Str" },
-        "window": { "type": "string", "pattern": "^(term|blocks:[1-9][0-9]{0,8}|seconds:[1-9][0-9]{0,9})$" }
+        "window": { "type": "string", "pattern": "^(term|blocks:[1-9][0-9]{0,8}|seconds:[1-9][0-9]{0,9})$", "not": { "pattern": "\n" } }
       }
     },
     "Capability": {
@@ -410,8 +562,8 @@
       "additionalProperties": false,
       "required": ["action", "target"],
       "properties": {
-        "action": { "type": "string", "pattern": "^[a-z0-9._-]+(/[a-z0-9._-]+)+$", "maxLength": 128 },
-        "target": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "action": { "$ref": "#/$defs/ActionStr" },
+        "target": { "type": "string", "minLength": 1, "maxLength": 256, "not": { "pattern": "\n" } },
         "where": {
           "type": "object",
           "maxProperties": 32,
@@ -419,11 +571,13 @@
         },
         "quotas": {
           "type": "array",
+          "minItems": 1,
           "maxItems": 32,
           "items": { "$ref": "#/$defs/Quota" }
         },
         "extensions": {
           "not": {},
+          "x-seallink-refusal": "WIRE_CONSTRAINT",
           "description": "Reserved for future versions; any presence MUST refuse with WIRE_CONSTRAINT."
         }
       }

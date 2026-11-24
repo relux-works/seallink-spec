@@ -1,11 +1,18 @@
 name: Deploy seallink.org
 
+# Immutable release publishing policy: production seallink.org deploys ONLY from
+# signed release tags (v*) or explicit workflow_dispatch so commits on main never
+# mutate already-published immutable /releases/<tag>/ endpoints.
 on:
   push:
-    branches: [main]
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Optional release tag label (defaults to latest v* tag)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -37,10 +44,12 @@ jobs:
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          elif [[ -n "${{ github.event.inputs.version }}" ]]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
           else
             LATEST_TAG=$(git tag --sort=-creatordate | grep '^v' | head -n 1 || true)
             if [[ -z "${LATEST_TAG}" ]]; then
-              LATEST_TAG="v1.0.0-draft.6"
+              LATEST_TAG="v1.0.0-draft.7"
             fi
             echo "version=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
           fi
