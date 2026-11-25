@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.10/schemas/grant.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.11/schemas/grant.schema.json",
   "title": "SealLink v1.0 Universal Grant & Issuance Preparation",
   "oneOf": [
     {

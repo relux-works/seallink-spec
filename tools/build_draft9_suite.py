@@ -776,6 +776,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
         rec_pol = of_x["_rec_pol"]
         rec_spk = _spk_hex(rec_pol)
         b2 = {
+            "binding_mode": "recovery",
             "genesis": GENESIS_MAIN,
             "name": "id/child-leo-recovered",
             "network": "main",

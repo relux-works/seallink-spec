@@ -1,6 +1,6 @@
 # SealLink Open Questions and Provisional Parameters
 
-- **Version:** `1.0.0-draft.10`
+- **Version:** `1.0.0-draft.11`
 - **Purpose:** Authoritative registry of every unresolved design item, provisional numeric constant, deferred extension, and unprofiled standard service type. Per `SPEC-00 §5.1`, readers MUST fail closed on any unprofiled `open` construct.
 
 ---
@@ -10,7 +10,7 @@
 | ID | Owning Spec | Status | Topic | Current Safe Fallback / Blocking Scope |
 | --- | --- | :-: | --- | --- |
 | `OQ-001` | `SPEC-04 §4` (`SL-ORIG-010`) | `open` | **Trusted calendar time-interval oracle** for human majority boundary `T` (`[t_low, t_high]`). | Fail closed (`GUARDIAN_TIME_BOUNDARY`) whenever credible UTC bounds cannot be established or straddle `T`. Candidate profiles: multi-source Roughtime / signed NTS quorum + chain MTP floor. |
-| `OQ-002` | `SPEC-02 §1.1` (`SL-LDGR-002`) | `open` | **Tier 2 light / proof-bundle verifier profile** (`k >= 2` independent UTXO/name proof servers or future authenticated UTXO commitments). | Tier 1 full-node verifier is required for all effect executors. Tier 2 is deferred to post-v1.0. |
+| `OQ-002` | `SPEC-02 §1.1` (`SL-LDGR-002`) | `open` | **General Tier 2 light / proof-bundle verifier profile** (`k >= 2` independent UTXO/name proof servers or future authenticated UTXO commitments). | Tier 1 full-node verifier remains required for all effect executors. A dedicated consensus-exact Tier-2 SPV profile for artifact notarization & name-history verification (`seallink-tier2-name-history/1`, `SegWitNameUpdateProof`, Namecoin AuxPoW & retarget) is specified in optional module `PROFILE-artifact-v1.md`; general effect-executor Tier-2 UTXO verification remains post-v1.0. |
 | `OQ-003` | `SPEC-06 §6` (`SL-GRNT-014`) | `open` | **External CAS witness wire protocol** (`advance(journal_id, token, pos, from_commit, to_commit)`). | State machine and fencing invariants are `decided`; interoperable wire transport (e.g., HTTP CAS / Raft / consensus-backed service) remains operator-local until profiled. |
 | `OQ-004` | `SPEC-03 §4` (`SL-IDEN-009`) | `open` | **HTTPS `.well-known` domain-binding verification** (Channel 2 pairing between `id/<label>` and `d/<label>` or DNSSEC/NIP-05). | Channel 0 (inline) and Channel 1 (local cache / configured mirrors) work unconditionally; Channel 2 is optional and hash-pinned only. |
 | `OQ-005` | `SPEC-01 §4.1` (`SL-WIRE-012`) | `open` | **Additional hardware device algorithms** (`fido2-es256`, `fido2-eddsa`, `ssh-ed25519` WebAuthn/SSH wrappers). | v1.0 closes `DeviceList.alg` to `bip340`, `p256`, and `ed25519`. Hardware wrapper formats will be proposed via SLIPs with exact canonical challenge framing. |

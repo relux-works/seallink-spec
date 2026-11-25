@@ -1,6 +1,6 @@
 # GUIDE-01: Custody, Signers, Namecoin PSBT, and Agent Runtime Integration
 
-- **Version:** `1.0.0-draft.10`
+- **Version:** `1.0.0-draft.11`
 - **Status:** Informative Implementation Guide (non-normative)
 - **Purpose:** Collects unobservable local operator duties, hardware custody guidance, Namecoin `namepsbt` workflows, and Agent Isolation Runtime integration patterns that intentionally remain outside the normative wire specification (`spec/SPEC-00`…`SPEC-07`).
 
@@ -19,7 +19,8 @@ Normative key-role isolation lives in `SPEC-03 §2` and `registry/key-roles.json
 3. **Personal Key Service (macOS / Linux / Windows / iOS / Android):**
    - Exposes a local signing daemon with **typed field display** and **hardware presence (biometric / PIN)** per signature for `grant`, `cred`, `notary`, and L2 `device` keys.
    - Example macOS custody: non-exportable software `secp256k1` generic-password item in the macOS Data Protection Keychain gated by Touch ID (`biometryCurrentSet`, no passcode fallback) for BIP-340 `grant` keys, and hardware Secure Enclave `P-256` keys for L2 `device` commands.
-4. **Role key hygiene (`A -> B -> A` vs `0x0b`):** While `SL-IDEN-004` scopes routine `NAME_ROLE_CHANGED` journal closures by `retired_before_height` so multisig membership reversals (`A -> B -> A`) remain deterministic across stateful and freshly started verifiers, operators **SHOULD NOT** reuse retired single-key `grant`/`cred`/`notary` keys in production. Whenever any role key is suspected compromised (rather than routinely rotated), operators **MUST** broadcast an on-chain `0x0b` `CredentialBreak` (`SPEC-05 §4.1`) instead of relying on routine rotation alone.
+4. **Role key hygiene (`A -> B -> A` vs `0x0b` and post-rebind `B_1` audit window):** While `SL-IDEN-004` scopes routine `NAME_ROLE_CHANGED` journal closures by `retired_before_height` so multisig membership reversals (`A -> B -> A`) remain deterministic across stateful and freshly started verifiers, operators **SHOULD NOT** reuse retired single-key `grant`/`cred`/`notary`/`release` keys in production. Whenever any role key is suspected compromised (rather than routinely rotated), operators **MUST** broadcast an on-chain `0x0b` `CredentialBreak` (`SPEC-05 §4.1`) instead of relying on routine rotation alone. After a `0x13 VOLUNTARY_REBIND` (`B_1 -> B_2`), destroying old role keys from `B_1` in HSMs prevents future misuse, but defending against *already-occurred covert forgeries prior to `h_13`* requires keeping `B_1` renewed (`0.01 NMC` every ~8 months) for the desired audit/discovery window (or indefinitely for root registries, notaries, and release publishers) so `0x0b` remains executable on `B_1`.
+5. **BIP-340 vs ECDSA HSM custody for `notary` / `release` / `log_seal`:** Signing keys for `link.notary` and `link.release` use BIP-340 Schnorr and require a dedicated BIP-340 signer (HSM with native BIP-340 support or attested Nitro/Confidential Enclave; do NOT place BIP-340 keys in Vault backends lacking native Schnorr signing). Conversely, `log_seal` (secp256k1 ECDSA spending `0x14` continuation UTXOs) works with standard ECDSA HSM/KMS custody (including AWS/GCP KMS or Vault) and MUST remain isolated from ordinary `funding` UTXOs. Signers constructing Namecoin SegWit transactions **SHOULD** emit low-S ECDSA signatures (`S <= N/2`) to satisfy standard mempool relay policy, even though Tier-2 SPV verifiers (`PROFILE-artifact-v1.md`) accept consensus-valid high-S signatures mined on chain.
 
 ---
 

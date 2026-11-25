@@ -1,10 +1,10 @@
 # SealLink v1.0 Rule Inventory and Migration Traceability
 
-**Purpose:** Provide (1) a complete per-rule index of every declared normative `SL-*` rule across `SPEC-00`–`SPEC-07` and standard profiles (`PROFILE-mail-v1`, `PROFILE-agent-v1`), mapped to its current status and verification coverage; and (2) migration traceability from the historical draft corpus (`swarma-link-spec` v0.1.67, `LIP-0001`–`LIP-0038`, `FINAL-ru.md`, and `book/ru/` v2.0).
+**Purpose:** Provide (1) a complete per-rule index of every declared normative `SL-*` rule across `SPEC-00`–`SPEC-07` and standard profiles (`PROFILE-mail-v1`, `PROFILE-agent-v1`, `PROFILE-artifact-v1`), mapped to its current status and verification coverage; and (2) migration traceability from the historical draft corpus (`swarma-link-spec` v0.1.67, `LIP-0001`–`LIP-0038`, `FINAL-ru.md`, and `book/ru/` v2.0).
 
 ---
 
-## 1. Complete Per-Rule Conformance Index (114 Declared `SL-*` Rules)
+## 1. Complete Per-Rule Conformance Index (123 Declared `SL-*` Rules)
 
 Every rule ID and refusal code below is mechanically validated by `tools/speclint.py` against `spec/SPEC-*.md`, `profiles/PROFILE-*.md`, and `registry/refusal-codes.json`.
 
@@ -105,6 +105,7 @@ Every rule ID and refusal code below is mechanically validated by `tools/speclin
 | `SL-ORIG-014` | `decided` | Delayed recovery activation (`0x0c` + CSV), live-owner `0x10` `RECOVERY_CANCEL` veto restoring `B_k`, and post-delay promotion to `B_{k+1}` with `next_recovery_vout` | `trace-02` (both positive continuation branches), `refusal-coverage-matrix.json` (`RECOVERY_FORBIDDEN`) |
 | `SL-ORIG-015` | `decided` | Roster transitions (`seallink-guardian-roster/1`, `0x0f`), slot actions (`retain_active`, `retain_vacant`, `new_vacant`), and ban on retaining slots across `disposer_pk`/`arbiter_pk` rotation | `trace-02`, `constraints-and-schemas.json`, `security-conformance.json`, mutation audit |
 | `SL-ORIG-016` | `decided` | Structural guardianship consistency invariants (`n_slots`, quorum ordering, key/policy bounds, slot-action coherence) | `constraints-and-schemas.json` (6 negative vectors), `security-conformance.json`, `seallink_ref.py` |
+| `SL-ORIG-017` | `decided` | Voluntary name rebinding (`0x13 VOLUNTARY_REBIND`): discriminated `binding_mode`, `T_offer`/`T_rebind` (`nVersion=0x7100`), 5-subphase deterministic automaton (`1->2->3->4->4b`), `awaiting_activation` Step 3 gate, `first_error_height` isolation, full `NamePin` check in `verify_assent` | `security-conformance.json`, `conformance/traces-regtest/` (Trace 06), `tools/seallink_verifier.py` |
 
 ### 1.6 Contracts, Credentials, Notaries, and Verdicts (`SPEC-05`)
 
@@ -120,7 +121,9 @@ Every rule ID and refusal code below is mechanically validated by `tools/speclin
 | `SL-CONT-008` | `decided` | Verifiable credentials (`eternal` `0x09` vs. `revocable` `0x0a`) signed by issuer `link.cred` | `schemas/credential.schema.json`, `refusal-coverage-matrix.json` (`CRED_ANCHOR_MISSING`, `CRED_REVOKED_FOR_CAUSE`) |
 | `SL-CONT-009` | `decided` | Owner-authenticated policy-scoped compromise break `h_c` (`0x0b`) invalidating only matching `compromised_policy` at `h >= h_c` | `refusal-coverage-matrix.json` (`CRED_ISSUER_CLOSED`), `security-conformance.json` (4-case A/B rotation & cutoff matrix) |
 | `SL-CONT-010` | `decided` | Deterministic credential verification order (wire -> anchor -> issuer role & policy-scoped `h_c` -> window -> revocable seal) | `refusal-coverage-matrix.json` (`CRED_ANCHOR_MISSING`, `CRED_ISSUER_CLOSED`, `CRED_WINDOW_CLOSED`, `CRED_REVOKED_FOR_CAUSE`) |
-| `SL-CONT-011` | `decided` | General off-authority-path notary acts (`seallink-notary/1`, `0x04`/`0x05`) | `schemas/credential.schema.json`, `registry/opreturn-actions.json` (`0x04`, `0x05`) |
+| `SL-CONT-011` | `decided` | General off-authority-path notary acts (`seallink-notary/1`, `0x04`/`0x05`/`0x14`, `artifact-notarization`, `log_tracked`) | `schemas/credential.schema.json`, `registry/opreturn-actions.json` (`0x04`, `0x05`, `0x14`), `security-conformance.json` |
+| `SL-CONT-012` | `decided` | Transparency & denial logs (`0x14 LOG_CHECKPOINT`), immutable `log_id`, acyclic RFC 9162 `checkpoints_root`, `O(1)` handover, canonical Fixed-Depth-256 SMT (`sib != D[h-1]`), 4-mode `seallink-log-fraud/1` & unified 100% `CLOSE` (`NOTARY_LOG_COMPROMISED`) | `schemas/log.schema.json`, `refusal-coverage-matrix.json` (`NOTARY_LOG_COMPROMISED`), `security-conformance.json`, `conformance/traces-regtest/` (Trace 07) |
+| `SL-CONT-013` | `decided` | Canonical artifact `target_id` (excluding `params`, `fsverity-sha256` `salt_hex=""`) and software release records (`seallink-release/1`, `link.release`, `0x0b` `release` role) | `registry/artifact-schemes.json`, `schemas/log.schema.json`, `security-conformance.json`, `conformance/traces-regtest/` (Trace 07) |
 
 ### 1.7 Universal Grants, Delegation, Sessions, and Fenced Journals (`SPEC-06`)
 
@@ -166,6 +169,12 @@ Every rule ID and refusal code below is mechanically validated by `tools/speclin
 | `SL-AGNT-003` | `decided` | Normative `result_sha256` commitment over canonical JCS result body | `trace-03`, `trace-04`, `schemas/profile-agent.schema.json` |
 | `SL-AGNT-004` | `decided` | Normative `agent/guardian-message` intake verification (`strict_drop` ward default, `event_class = "effect_grant"`, `guardian_approvals[]`) | `trace-04` (full positive + negative intake steps), `schemas/profile-agent.schema.json` |
 | `SL-AGNT-005` | `decided` | Contract-bound sessions, dual-account (`own` + per-`row_ordinal` `row`) multi-quota enforcement, and `config_sha256` binding | `trace-03`, `refusal-coverage-matrix.json` (`CONTRACT_CONFIG_MISMATCH`, `QUOTA_EXCEEDED`), `security-conformance.json` |
+| `SL-ARTF-001` | `decided` | Optional module activation gate for `artifact-notarization` (`seallink-ticket/1`, `seallink-tier2-name-history/1` -> `ACTION_UNSUPPORTED` when disabled) | `schemas/profile-artifact.schema.json`, `refusal-coverage-matrix.json` (`TICKET_PROOF_INVALID`), `security-conformance.json` |
+| `SL-ARTF-002` | `decided` | Canonical `target_id` enforcement & `fsverity-sha256` fixed `salt_hex = ""` parameter validation in artifact tickets | `registry/artifact-schemes.json`, `schemas/log.schema.json`, `security-conformance.json` |
+| `SL-ARTF-003` | `decided` | Artifact ticket Gatekeeper policy (`standard`/`hardened`, `bootstrap_expires_at` ban in `hardened`, provisional gossip deny-wins, `release_floor`, `m-of-n` quorum) | `schemas/profile-artifact.schema.json`, `refusal-coverage-matrix.json` (`ARTIFACT_POLICY_DENIED`), `security-conformance.json` |
+| `SL-ARTF-004` | `decided` | Present notarization `verdict ∈ {"pass","fail","inconclusive"}` semantics, `target:` SMT veto, and mandatory absent-notary veto proofs in `hardened` mode | `schemas/profile-artifact.schema.json`, `security-conformance.json` |
+| `SL-ARTF-005` | `decided` | Consensus-exact 7-check Tier-2 `SegWitNameUpdateProof` (anti-64B leaf forgery, coinbase depth `D_tree`, BIP-141 last commitment, `wtxid[0]==00*32`, stripped BIP-143 `scriptCode` + varint, strict BIP-66 DER + `SIGHASH_ALL` accepting high-S) | `schemas/profile-artifact.schema.json`, `security-conformance.json`, `conformance/traces-regtest/` (Trace 07) |
+| `SL-ARTF-006` | `decided` | Namecoin AuxPoW (`CAuxPow::check`, `chain_id = 0x0001`, `fabe6d6d`, `GetExpectedIndex`) and difficulty retarget (`[302400, 4838400]`, `fPowNoRetargeting` on `regtest`) | `schemas/profile-artifact.schema.json`, `security-conformance.json`, `tools/seallink_ref.py` |
 
 ---
 

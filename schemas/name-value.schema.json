@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.10/schemas/name-value.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.11/schemas/name-value.schema.json",
   "title": "SealLink v1.0 Ledger Name Value (520-Byte Budget)",
   "description": "Formal schema for SealLink-recognized top-level members in a Namecoin name value. Unknown owner-defined top-level members are permitted and ignored by SealLink readers (SL-IDEN-002), while all 71 Unicode simple case-fold aliases of link, m, and nostr are explicitly forbidden (WIRE_DUPLICATE).",
   "type": "object",
@@ -28,6 +28,7 @@
         "grant": { "$ref": "#/$defs/RoleKeyOrPolicyPin" },
         "cred": { "$ref": "#/$defs/RoleKeyOrPolicyPin" },
         "notary": { "$ref": "#/$defs/RoleKeyOrPolicyPin" },
+        "release": { "$ref": "#/$defs/RoleKeyOrPolicyPin" },
         "origin": { "$ref": "common.schema.json#/$defs/Hex64" }
       }
     },

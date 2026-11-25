@@ -1,6 +1,6 @@
 # SPEC-01: Wire Format, Cryptography, Thresholds, and Constraint Algebra
 
-- **Version:** `1.0.0-draft.10`
+- **Version:** `1.0.0-draft.11`
 - **Status:** `draft` (normative rules `decided`; see `OPEN-QUESTIONS.md` for deferred algorithm extensions)
 - **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/constraints-and-schemas.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/refusal-codes.json`, `registry/constraints.json`
@@ -160,11 +160,11 @@ Every verifier parsing any SealLink object **MUST** execute checks in this exact
 5. **Restricted RFC 8785 byte-for-byte round-trip** (`SL-WIRE-006`) -> `WIRE_NOT_CANONICAL`.
 6. **Registered `type` check** (`SL-WIRE-010`, `registry/object-types.json`) -> `WIRE_TYPE`.
 7. **Per-type `max_bytes` check** (`registry/object-types.json`: e.g. `65536` for `seallink-journal-entry/1` and `seallink-manifest/1`, `1048576` for `seallink-members-list/1`) -> `WIRE_SIZE`.
-7b. **Optional-module activation gate (`CONFORMANCE.md §1.1`):** If the object's `type` or discriminated sub-kind belongs to a disabled optional v1.0 module (`seallink-session-open/1` -> `bearer-sessions`; `seallink-migration/1`, `seallink-statement/1` with `statement_kind ∈ {"migration-accept", "migration-fence"}`, or `seallink-assent/1` with `target_type = "seallink-migration/1"` -> `service-migration`; `seallink-owner-command/1` with `command = "approve-pii-disclosure"` -> `federated-screening`), refuse uniformly with **`ACTION_UNSUPPORTED`** and zero journal writes (NEVER `WIRE_TYPE`).
+7b. **Optional-module activation gate (`CONFORMANCE.md §1.1`):** If the object's `type` or discriminated sub-kind belongs to a disabled optional v1.0 module (`seallink-session-open/1` -> `bearer-sessions`; `seallink-migration/1`, `seallink-statement/1` with `statement_kind ∈ {"migration-accept", "migration-fence"}`, or `seallink-assent/1` with `target_type = "seallink-migration/1"` -> `service-migration`; `seallink-owner-command/1` with `command = "approve-pii-disclosure"` -> `federated-screening`; `seallink-ticket/1` or `seallink-tier2-name-history/1` -> `artifact-notarization`), refuse uniformly with **`ACTION_UNSUPPORTED`** and zero journal writes (NEVER `WIRE_TYPE`).
 8. **Closed Draft 2020-12 JSON Schema & library-independent discriminator resolution** (`SL-WIRE-010`, `SL-WIRE-015..016`):
    - **Discriminator-first `oneOf` / `anyOf` selection:** To eliminate divergence across JSON Schema libraries (Python `jsonschema`, Rust `jsonschema`, Go validators), whenever an instance fails a `oneOf` or `anyOf` schema, verifiers MUST first narrow candidate branches using the protocol's fixed discriminator rules:
      1. *JSON value type* (`string` vs `object`, e.g., `BranchKeySpec`, `RoleKeyOrPolicyPin`, `nostr` field).
-     2. *Scalar discriminator property* (`kind`, `template`, `mode`, `op`, `command`, `subject_kind`, `activation_mode`, `action`, `lifecycle`, `statement_kind`) matched by `const` / `enum`.
+     2. *Scalar discriminator property* (`kind`, `template`, `mode`, `op`, `command`, `subject_kind`, `activation_mode`, `action`, `lifecycle`, `statement_kind`, `binding_mode`, `fraud_mode`, `scheme`) matched by `const` / `enum`.
      3. *`DeviceThresholdPolicy` `alg` presence* (omitted -> `bip340` branch; `"p256"` / `"ed25519"` -> matching branch).
      4. *Structural presence discriminators*: `guardian_approvals` vs `signatures`, `guardian_context` vs `signatures`, `parent` vs `issuer`, `executor_ref` vs `executor`, `ward_origin_id` vs `signing_policy`.
      5. *Single-key operator discriminator* for `ConstraintPredicate` (`eq`, `in`, `not_in`, `prefix`, `suffix`, `range`, `hash_eq`).

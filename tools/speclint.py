@@ -13,7 +13,7 @@ Validates:
   7. Every SPEC-*.md carries Status, Evidence / Maturity, References, and Security Considerations.
   8. Full cryptographic & structural re-verification of all vectors/*.json via seallink_ref.py.
   9. LIVE EXECUTION of trace-01, trace-02, trace-03, trace-04, negative semantic & SL-ORIG-016
-     fixtures, ALL 86/86 refusal codes in refusal-coverage-matrix.json, and ALL 30/30 registered
+     fixtures, ALL 89/89 refusal codes in refusal-coverage-matrix.json, and ALL 37/37 registered
      object types through tools/seallink_verifier.py — asserting computed verdicts, refusal codes,
      and journal hash-chain commitments match expected values.
  10. Full Draft 2020-12 metaschema + instance validation of all vectors, emitted JournalEntry
@@ -61,6 +61,8 @@ REFUSAL_PREFIXES = (
     "JOURNAL_",
     "SERVICE_",
     "FEDERATION_",
+    "TICKET_",
+    "ARTIFACT_",
 )
 
 RULE_ID_RE = re.compile(r"`(SL-[A-Z]+-\d{3})`")
@@ -71,6 +73,16 @@ DOMAIN_ONLY_TAGS = frozenset({
     "seallink-journal/1",
     "seallink-merkle-leaf/1",
     "seallink-merkle-node/1",
+    "seallink-artifact-id/1",
+    "seallink-log-id/1",
+    "seallink-log-entry/1",
+    "seallink-batch-empty/1",
+    "seallink-log-ckpt-leaf/1",
+    "seallink-log-ckpt-node/1",
+    "seallink-log-ckpt-empty/1",
+    "seallink-smt-empty/1",
+    "seallink-smt-leaf/1",
+    "seallink-smt-node/1",
 })
 BASE_NON_REFUSAL_IDENTIFIERS = frozenset({
     "NAME_NEW",
@@ -226,7 +238,7 @@ def execute_traces_and_matrix(
     *,
     fail_fast: bool = False,
 ) -> tuple[int, int, int]:
-    """Execute ALL traces (trace-01..04), ALL 85/85 refusal-coverage-matrix cases,
+    """Execute ALL traces (trace-01..04), ALL 89/89 refusal-coverage-matrix cases,
     ALL security-conformance cases, and 10 live verifier-mutation tests via Tier1Verifier.
     """
     exec_checks = 0
@@ -538,8 +550,8 @@ def execute_traces_and_matrix(
                         _assert_journal_write(res.journal_writes[1], st["settlement_journal_write"], f"trace-04/step-{st['step']}/settlement", errors)
             exec_checks += 1
 
-    # --- Execute refusal-coverage-matrix.json (MUST cover 100% = 86/86 refusal codes, all tagged with module!) ---
-    valid_modules = {"core", "bearer-sessions", "service-migration", "federated-screening"}
+    # --- Execute refusal-coverage-matrix.json (MUST cover 100% = 89/89 refusal codes, all tagged with module!) ---
+    valid_modules = {"core", "bearer-sessions", "service-migration", "federated-screening", "artifact-notarization"}
     if fail_fast and errors:
         return exec_checks, len(covered_refusals), 0
     if "refusal-coverage-matrix.json" not in vectors:
@@ -908,7 +920,7 @@ def verify_jsonschema(
         # Validate EVERY recognizable typed object inside non-wire-syntax security-conformance cases,
         # module tags, AND closed ChainViewSnapshot on all positive (ADMIT*) cases & positive sub-steps!
         if vname == "security-conformance.json":
-            valid_modules = {"core", "bearer-sessions", "service-migration", "federated-screening"}
+            valid_modules = {"core", "bearer-sessions", "service-migration", "federated-screening", "artifact-notarization"}
             for case in vdoc.get("cases", []):
                 if case.get("module") not in valid_modules:
                     errors.append(f"Security conformance case '{case.get('id')}' has missing/invalid module tag: {case.get('module')!r}")

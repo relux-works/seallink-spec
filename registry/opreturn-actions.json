@@ -1,15 +1,16 @@
 {
   "$comment": "SealLink v1.0 OP_RETURN Commitment Framing Registry (SPEC-02). All standard frames fit strictly within Bitcoin/Namecoin MAX_OP_RETURN_RELAY = 83 bytes.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.10",
+  "version": "1.0.0-draft.11",
   "magic_ascii": "SLNK",
   "magic_hex": "534c4e4b",
   "max_relay_script_bytes": 83,
   "header_format": "OP_RETURN(0x6a) PUSH5(0x05) magic(4B='SLNK') action(1B) PUSH_N(1B) payload(N bytes)",
   "standard_payload_format": "version(1B=0x01) || commitment(32B) || loc_type(1B) || pointer(0B | 32B)",
   "critical_forward_only_range": "0x13..0x1a",
+  "critical_forward_only_reserved_range": "0x15..0x1a",
   "critical_retroactive_range": "0x1b..0x1f",
-  "critical_reserved_range": "0x13..0x1f",
+  "critical_reserved_range": "0x15..0x1f",
   "advisory_ignorable_range": "0x20..0x2f",
   "locator_types": [
     {
@@ -130,7 +131,7 @@
       "commitment": "content_addr(signed_form)",
       "allowed_locators": ["0x00", "0x01", "0x05"],
       "owning_spec": "SPEC-04",
-      "description": "Anchors the complete signed form of seallink-origin/1, seallink-credential/1, seallink-capacity/1 (spending status_seal), or seallink-end/1 (terminally spending status_seal)."
+      "description": "Anchors the complete signed form of seallink-origin/1, seallink-credential/1, seallink-release/1 (eternal), seallink-capacity/1 (spending status_seal), or seallink-end/1 (terminally spending status_seal)."
     },
     {
       "code": "0x0a",
@@ -152,7 +153,7 @@
       "commitment": "typed_digest(seallink-credential-break/1)",
       "allowed_locators": ["0x00"],
       "owning_spec": "SPEC-05",
-      "description": "OwnerPolicy-authenticated compromise height h_c for a cred, notary, or grant role policy; anchors < h_c survive, >= h_c refuse."
+      "description": "OwnerPolicy-authenticated compromise height h_c for a cred, notary, grant, or release role policy; anchors < h_c survive, >= h_c refuse."
     },
     {
       "code": "0x0c",
@@ -202,7 +203,7 @@
       "commitment": "id(seallink-name-binding/1)",
       "allowed_locators": ["0x00"],
       "owning_spec": "SPEC-04",
-      "description": "Committed inside an owner-authored (SIGHASH_ALL) OP_NAME_UPDATE of the live existing name prior to h_rec + delay_blocks to abort a pending dual-party recovery and restore prior binding admission."
+      "description": "Committed inside an owner-authored (SIGHASH_ALL) OP_NAME_UPDATE of the live existing name (or pending voluntary target B_2) prior to deadline to abort a pending 0x0c recovery or 0x13 voluntary rebind and restore prior binding admission."
     },
     {
       "code": "0x11",
@@ -226,25 +227,25 @@
     },
     {
       "code": "0x13",
-      "name": "RESERVED_CRITICAL_VOLUNTARY_REBIND",
-      "status": "reserved_critical",
+      "name": "VOLUNTARY_REBIND",
+      "status": "decided",
       "critical_scope": "forward_only",
       "version": "0x01",
-      "commitment": "reserved",
-      "allowed_locators": [],
+      "commitment": "id(seallink-name-binding/1)",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
       "owning_spec": "SPEC-04",
-      "description": "Reserved critical forward-only action code (0x13..0x1a range) for future voluntary name rebinding. Verifiers observing an unknown confirmed frame in 0x13..0x1a at live tip or at_height >= confirmed_height MUST fail closed with ORIGIN_STATUS_INCOMPLETE (historical queries strictly prior to confirmed_height are unaffected)."
+      "description": "Committed in a single nVersion=0x7100 PSBT (T_rebind) spending autonomous B_1's name UTXO (writing value='{}' and preserving B_1's effective owner_policy) together with B_2's consent_utxo from T_offer to initiate a delayed (D >= 144) voluntary rebind of origin_id from B_1 to B_2."
     },
     {
       "code": "0x14",
-      "name": "RESERVED_CRITICAL_LOG_CHECKPOINT",
-      "status": "reserved_critical",
+      "name": "LOG_CHECKPOINT",
+      "status": "decided",
       "critical_scope": "forward_only",
       "version": "0x01",
-      "commitment": "reserved",
-      "allowed_locators": [],
+      "commitment": "content_addr(seallink-log-checkpoint/1)",
+      "allowed_locators": ["0x00", "0x01", "0x05"],
       "owning_spec": "SPEC-05",
-      "description": "Reserved critical forward-only action code (0x13..0x1a range) for future notarization/release log checkpoints. Verifiers observing an unknown confirmed frame in 0x13..0x1a at live tip or at_height >= confirmed_height MUST fail closed with ORIGIN_STATUS_INCOMPLETE (historical queries strictly prior to confirmed_height are unaffected)."
+      "description": "Committed when spending the active log_seal UTXO (genesis_seal at seq=1 or previous checkpoint's next_log_vout at seq>=2) to anchor a signed notary or release transparency/denial log checkpoint (batch_root, denials_delta_root, Fixed-Depth-256 SMT denials_root, and acyclic RFC 9162 checkpoints_root)."
     }
   ]
 }

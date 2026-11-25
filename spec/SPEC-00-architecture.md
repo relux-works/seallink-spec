@@ -1,6 +1,6 @@
 # SPEC-00: SealLink Architecture, Ontology, and Governance
 
-- **Version:** `1.0.0-draft.10`
+- **Version:** `1.0.0-draft.11`
 - **Status:** `draft` (normative rules tagged `decided` or `open`; open items tracked in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `prose`
 - **Authors:** Ivan Oparin, Alexey Grigorev

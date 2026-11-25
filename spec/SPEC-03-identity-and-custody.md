@@ -1,6 +1,6 @@
 # SPEC-03: Identity, Name Value, Manifest, Key Taxonomy, Authentication, and Owner Control
 
-- **Version:** `1.0.0-draft.10`
+- **Version:** `1.0.0-draft.11`
 - **Status:** `draft` (normative rules `decided`; domain-binding verification and FIDO2/SSH device extensions tracked `open` in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/service-types.json`, `registry/refusal-codes.json`
@@ -18,7 +18,7 @@ A SealLink reader MUST match top-level keys `link`, `m`, and `nostr` strictly �
 
 | Top-Level Key | Optional | Structure & Purpose | Closes Grants on Edit? |
 | --- | :-: | --- | :-: |
-| `link` | Yes | Authority & origin root object: closed subset of `{cred, grant, notary, origin}`. Each of `cred`, `grant`, `notary` is either a single `xonly_64hex` key or an on-chain threshold pin `{"p":"<sha256_of_JCS(ThresholdPolicy)>"}`. | **Per-role only (`SL-IDEN-003`)** |
+| `link` | Yes | Authority & origin root object: closed subset of `{cred, grant, notary, release, origin}`. Each of `cred`, `grant`, `notary`, `release` is either a single `xonly_64hex` key or an on-chain threshold pin `{"p":"<sha256_of_JCS(ThresholdPolicy)>"}`. | **Per-role only (`SL-IDEN-003`)** |
 | `m` | Yes | Single manifest head: `{"h":"<64hex>","s":<PositiveUint53>}` pinning `seallink-manifest/1` (JCS sorted keys `h`, `s`). Zero URLs or `loc` allowed. | **Never** |
 | `nostr` | Yes | Optional transport messaging key: `"<64hex>"` OR NIP-05 object `{"names":{"_":"<64hex>"},"relays":{...}}`. Only `"_"` is read. Zero authority. | **Never** |
 
@@ -34,20 +34,20 @@ One `id/` name MAY publish distinct, strictly isolated role keys or threshold ro
   - When `link.<role>` is a 64-hex string `k`, the resolved role policy is `{"m":1,"pks":[k]}`.
   - When `link.<role>` is `{"p":h}`, the presenter supplies the full `ThresholdPolicy` (inside the signed object's `issuer.role_policy` and/or `manifest.role_policies.<role>`), and the verifier MUST confirm `SHA256(canonical_JCS(role_policy)) == h` (`WIRE_SIGNATURE` on mismatch). *(For ward-represented `seallink-grant/1` objects using `guardian_approvals[]`, `issuer.role_policy` is omitted on the ward's `issuer` pin and signing authority is resolved from each approving guardian's `link.grant` policy per `SPEC-04`.)*
   - Rotating any key or threshold inside a role policy changes `link.<role>` via an owner-authored (`SIGHASH_ALL`) ledger update, triggering the exact per-role closure rule below.
-- **Byte budget:** With three roles (even with `{"p":...}` pins) + `origin` + `m`, the value is ~405 bytes — well within the 520-byte protocol limit.
-- **Per-role history isolation:** Rotating or removing `link.notary` or `link.cred` MUST NOT close live grants bound to `link.grant`. Rotating or removing `link.grant` closes active grants (`NAME_ROLE_CHANGED`), while leaving eternal credentials and notary acts intact unless closed by `0x0b` (`h_c`).
+- **Byte budget:** With all four threshold role pins (`cred`, `grant`, `notary`, `release`) + `origin` + `m` (at `uint53` max), canonical Restricted JCS occupies at most **510 bytes** — strictly within the 520-byte protocol limit.
+- **Per-role history isolation:** Rotating or removing `link.notary`, `link.cred`, or `link.release` MUST NOT close live grants bound to `link.grant`. Rotating or removing `link.grant` closes active grants (`NAME_ROLE_CHANGED`), while leaving eternal credentials, release records, and notary acts intact unless closed by `0x0b` (`h_c`) or log fraud (`NOTARY_LOG_COMPROMISED`).
 - **Privacy-preserving `origin` pin:** Every origin-certified actor (child, adult, organization, or materialized agent) writes the identical field name `link.origin = "<origin_id_64hex>"`. Public chain observers cannot distinguish subject class or capacity from the name value alone (`SL-ARCH-012`).
-- **Role key & policy-pin disjointness:** Within one name, every public key appearing in `link.grant`, `link.cred`, `link.notary` (whether direct `xonly_64hex` or expanded via `{"p":...}` `role_policies`), `nostr` (direct 64-hex string OR NIP-05 `names._`), and `manifest.auth_key` MUST be pairwise disjoint, AND no two distinct roles in `{link.grant, link.cred, link.notary}` MAY share the same on-chain policy-hash pin `{"p": ...}` (`NAME_VALUE_INVALID` on any collision).
+- **Role key & policy-pin disjointness:** Within one name, every public key appearing in `link.grant`, `link.cred`, `link.notary`, `link.release` (whether direct `xonly_64hex` or expanded via `{"p":...}` `role_policies`), `nostr` (direct 64-hex string OR NIP-05 `names._`), and `manifest.auth_key` MUST be pairwise disjoint, AND no two distinct roles in `{link.grant, link.cred, link.notary, link.release}` MAY share the same on-chain policy-hash pin `{"p": ...}` (`NAME_VALUE_INVALID` on any collision).
 - **Name history walk (`SL-IDEN-004`, `decided`):** To verify an issuer's `grant` role policy for an active grant, the verifier resolves the name (refusing `NAME_NOT_FOUND` if absent on the active chain) and walks the name's confirmed update chain back to `issuer.registration`: `owner_policy` and `link.grant` MUST remain unchanged across every step from the grant's `recent_block` through the tip (detecting even `K1 -> K2 -> K1` rotations for grants issued before the rotation; renewals, `m` updates, `nostr` updates, and unrelated role changes close nothing). Every historical update MUST parse cleanly under the exact Namecoin prefix grammar and 520-byte JCS rules (unparseable historical updates fail closed with `CHAIN_SCRIPT_UNSUPPORTED` / `NAME_VALUE_INVALID`, never silently skipped) and MUST pass writer verification against the pinned `owner_policy` (`SL-LDGR-007`). An owner-signed (`SIGHASH_ALL`) change or removal of `link.grant` (in mempool or block) writes a durable cause- and epoch-scoped `NAME_ROLE_CHANGED` closure pinned by `retired_before_height` (the height of the update removing that policy, or `tip_height + 1` for a mempool update) — so grants with `recent_block < retired_before_height` remain closed permanently, while a clean `A -> B -> A` return yields identical verdicts on both stateful and freshly started verifiers for new grants whose `recent_block >= retired_before_height`. An unparseable or unfetchable mempool update (`unparseable: true`) fails closed with retryable **`NAME_HISTORY_UNAVAILABLE`** without writing a permanent role closure (separating missing observation from proven rotation).
 
 ---
 
 ## 2. Key Taxonomy and Cold Custody Rules
 
-All 22 key roles, curves, derivation accounts, and permitted signing domains are authoritatively fixed in `registry/key-roles.json` (`SL-IDEN-005`, `decided`):
+All 25 key roles, curves, derivation accounts, and permitted signing domains are authoritatively fixed in `registry/key-roles.json` (`SL-IDEN-005`, `decided`):
 
 1. **Cold isolation:** `name_owner` (separate cold seed `m/84'/7'/0'`) and `emergency_fee_reserve` (cold seed `m/84'/7'/3'`, strictly isolated from all hot signers so a hot compromise cannot drain emergency update/CPFP fees) MUST NEVER reside on an agent host or ordinary hot wallet.
-2. **Authority separation:** `grant`, `cred`, and `notary` keys sign ONLY their registered BIP-340 domains (`registry/object-types.json`) and NEVER sign ledger transactions or spend seals.
+2. **Authority separation:** `grant`, `cred`, `notary`, and `release` keys sign ONLY their registered BIP-340 domains (`registry/object-types.json`) and NEVER sign ledger transactions or spend seals. `log_seal` (secp256k1 ECDSA) controls `0x14` log-checkpoint continuation UTXOs and MUST remain strictly isolated from ordinary `funding` UTXOs.
 3. **Auth vs Device vs Messaging:**
    - `auth` (`m/84'/7'/2'/0/i`) authenticates to foreign services ONLY (`seallink-auth-challenge/1`, `seallink-auth-upgrade/1`) and confers zero grant, contract assent, or effect authority.
    - `device` keys control the owner's own executors and agent key holders ONLY (`seallink-owner-command/1`, `seallink-statement/1`) and MUST NEVER sign foreign login challenges, assents, or grants (`DEVICE_UNAUTHORIZED`).
@@ -94,7 +94,8 @@ The single `m` pin in the name value authenticates one canonical JCS `seallink-m
    - Each `(service_type, label)` pair MUST be unique within `providers`.
    - **Provider continuity:** Because `provider` pins `(name, registration, owner_policy)`, an attacker who re-registers an expired provider name string cannot hijack dynamic `executor_ref` delegations (`SERVICE_PROVIDER_UNBOUND` if holder's manifest lacks a matching `(service_type, label, provider)` entry; `NAME_OWNER_MISMATCH` if the pinned provider name's confirmed ledger output does not match `provider.owner_policy`). Switching providers requires an explicit owner-authored manifest update.
 4. **`auth_key` + `auth_seal`** *(paired optional)*: Dedicated BIP-340 foreign-service login key and its disposable fast-revocation seal.
-5. **`role_policies`** *(optional availability hint ONLY)*: Carries full `ThresholdPolicy` preimages for on-chain `link.<role>.p` pins. A `role_policies` entry has ZERO authority unless `SHA256(canonical_JCS(policy))` equals the confirmed on-chain `link.<role>.p` hash (`SL-IDEN-003`).
+5. **`role_policies`** *(optional availability hint ONLY)*: Carries full `ThresholdPolicy` preimages for on-chain `link.<role>.p` pins (`grant`, `cred`, `notary`, `release`). A `role_policies` entry has ZERO authority unless `SHA256(canonical_JCS(policy))` equals the confirmed on-chain `link.<role>.p` hash (`SL-IDEN-003`).
+6. **`notary` / `release`** *(optional operational declarations)*: Structured `LogBindingSpec` declarations advertising active and predecessor `0x14` transparency/denial logs (`log_id`, `genesis_seal: Seal`, `heartbeat_max_blocks`, `mirrors[]`, optional `policy_sha256` and `claimed_schemes[]`). Availability & discovery hints only; authentic log heads and revocations are verified strictly from on-chain `0x14` checkpoints and signatures (`SPEC-05 §6`).
 
 ### 3.2 Monotonicity, Removal, and Reorg Rules (`SL-IDEN-008`, `decided`)
 

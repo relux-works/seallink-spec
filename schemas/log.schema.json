@@ -1,0 +1,385 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.11/schemas/log.schema.json",
+  "title": "SealLink v1.0 Release Records, Transparency/Denial Logs (0x14), Fixed-Depth-256 SMT & 4-Mode Fraud Proofs",
+  "$defs": {
+    "ArtifactIdentity": {
+      "description": "Canonical artifact identity. target_id = target_sha256 = H_tag('seallink-artifact-id/1', JCS({'digest', 'scheme'})) strictly excluding params.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scheme", "digest", "params"],
+          "properties": {
+            "scheme": { "const": "fsverity-sha256" },
+            "digest": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "params": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["version", "hash_alg", "block_size", "salt_hex"],
+              "properties": {
+                "version": { "type": "integer", "const": 1, "x-seallink-refusal": "WIRE_INTEGER" },
+                "hash_alg": { "const": "sha256" },
+                "block_size": { "type": "integer", "const": 4096, "x-seallink-refusal": "WIRE_INTEGER" },
+                "salt_hex": { "const": "" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scheme", "digest"],
+          "properties": {
+            "scheme": { "type": "string", "enum": ["sha256", "oci-digest-sha256", "git-tree-sha256", "apple-cdhash-sha256"] },
+            "digest": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "params": {
+              "type": "object",
+              "maxProperties": 16,
+              "additionalProperties": { "type": "string", "maxLength": 512, "not": { "pattern": "\n" } }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scheme", "digest"],
+          "properties": {
+            "scheme": { "type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+/[a-z0-9][a-z0-9._-]{0,63}$", "maxLength": 128, "not": { "pattern": "\n" } },
+            "digest": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "params": {
+              "type": "object",
+              "maxProperties": 16,
+              "additionalProperties": { "type": "string", "maxLength": 512, "not": { "pattern": "\n" } }
+            }
+          }
+        }
+      ]
+    },
+    "DenialKeyStr": {
+      "type": "string",
+      "pattern": "^(act:[0-9a-f]{64}\\|(\\*|cap:[a-z0-9._-]+(/[a-z0-9._-]+)+)|rel:[0-9a-f]{64}\\|\\*|target:[0-9a-f]{64}\\|(\\*|cap:[a-z0-9._-]+(/[a-z0-9._-]+)+))$",
+      "maxLength": 256,
+      "not": { "pattern": "\n" }
+    },
+    "LogRole": {
+      "type": "string",
+      "enum": ["notary", "release"]
+    },
+    "SmtProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "key_str", "state", "bitmap_hex", "siblings"],
+      "description": "Canonical Fixed-Depth-256 Logical Binary SMT proof (MSB-first bitmap_hex, bottom-up siblings ordered d=255..0, canonical sib != D[h-1] for every 1-bit).",
+      "properties": {
+        "root": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "key_str": { "$ref": "#/$defs/DenialKeyStr" },
+        "state": { "type": "string", "enum": ["included", "absent"] },
+        "value": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "bitmap_hex": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "siblings": {
+          "type": "array",
+          "maxItems": 256,
+          "items": { "$ref": "common.schema.json#/$defs/Hex64" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["state"], "properties": { "state": { "const": "included" } } },
+          "then": { "required": ["value"] },
+          "else": { "not": { "required": ["value"] } }
+        }
+      ]
+    },
+    "BatchMerkleProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "leaf_digest", "steps"],
+      "properties": {
+        "root": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "leaf_digest": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "steps": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["side", "hash"],
+            "properties": {
+              "side": { "type": "string", "enum": ["L", "R"] },
+              "hash": { "$ref": "common.schema.json#/$defs/Hex64" }
+            }
+          }
+        }
+      }
+    },
+    "CheckpointsInclusionProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["leaf_index", "tree_size", "hashes"],
+      "description": "RFC 9162 §2.1.3 audit path proving predecessor checkpoint leaf_index = seq_a - 1 inside cp_b.checkpoints_root (tree_size = seq_b - 1).",
+      "properties": {
+        "leaf_index": { "$ref": "common.schema.json#/$defs/Uint53" },
+        "tree_size": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+        "hashes": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "common.schema.json#/$defs/Hex64" }
+        }
+      }
+    },
+    "ReleaseRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type", "network", "genesis", "issuer", "product_id", "version_str",
+            "release_seq", "artifact_identity", "target_sha256", "lifecycle", "released_at"
+          ],
+          "properties": {
+            "type": { "const": "seallink-release/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
+            "product_id": { "type": "string", "pattern": "^[a-z0-9._-]+/[a-z0-9._-]+(/[a-z0-9._-]+)*$", "maxLength": 128, "not": { "pattern": "\n" } },
+            "version_str": { "type": "string", "minLength": 1, "maxLength": 64, "not": { "pattern": "\n" } },
+            "release_seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "artifact_identity": { "$ref": "#/$defs/ArtifactIdentity" },
+            "target_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "lifecycle": { "type": "string", "enum": ["eternal", "log_tracked"] },
+            "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "released_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+          },
+          "allOf": [
+            {
+              "if": { "required": ["lifecycle"], "properties": { "lifecycle": { "const": "log_tracked" } } },
+              "then": { "required": ["log_id"] },
+              "else": { "not": { "required": ["log_id"] } }
+            }
+          ]
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "LogCheckpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type", "network", "genesis", "role", "issuer", "log_id", "seq",
+            "prev_log_outpoint", "terminal", "batch_count", "cumulative_entries_count",
+            "batch_root", "denials_delta_root", "denials_root", "checkpoints_root"
+          ],
+          "properties": {
+            "type": { "const": "seallink-log-checkpoint/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "role": { "$ref": "#/$defs/LogRole" },
+            "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
+            "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "prev_checkpoint_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "predecessor_log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "predecessor_terminal_denials_root": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "prev_log_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
+            "terminal": { "type": "boolean" },
+            "next_log_vout": { "$ref": "common.schema.json#/$defs/Vout" },
+            "next_log_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+            "batch_count": { "type": "integer", "minimum": 0, "maximum": 65536, "x-seallink-refusal": "WIRE_INTEGER" },
+            "cumulative_entries_count": { "$ref": "common.schema.json#/$defs/Uint53" },
+            "batch_root": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "denials_delta_root": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "denials_root": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "checkpoints_root": { "$ref": "common.schema.json#/$defs/Hex64" }
+          },
+          "dependentRequired": {
+            "predecessor_log_id": ["predecessor_terminal_denials_root"],
+            "predecessor_terminal_denials_root": ["predecessor_log_id"],
+            "next_log_vout": ["next_log_policy"],
+            "next_log_policy": ["next_log_vout"]
+          },
+          "allOf": [
+            {
+              "if": { "required": ["seq"], "properties": { "seq": { "type": "integer", "const": 1 } } },
+              "then": { "not": { "required": ["prev_checkpoint_id"] } },
+              "else": {
+                "required": ["prev_checkpoint_id"],
+                "not": { "anyOf": [{ "required": ["predecessor_log_id"] }, { "required": ["predecessor_terminal_denials_root"] }] }
+              }
+            },
+            {
+              "if": { "required": ["terminal"], "properties": { "terminal": { "const": false } } },
+              "then": { "required": ["next_log_vout", "next_log_policy"] },
+              "else": { "not": { "anyOf": [{ "required": ["next_log_vout"] }, { "required": ["next_log_policy"] }] } }
+            }
+          ]
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "LogRevocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "role", "issuer", "log_id", "denial_key", "state_seq", "reason_code", "issued_at"],
+          "properties": {
+            "type": { "const": "seallink-log-revocation/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "role": { "$ref": "#/$defs/LogRole" },
+            "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
+            "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "denial_key": { "$ref": "#/$defs/DenialKeyStr" },
+            "state_seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "prev_record_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "reason_code": { "type": "string", "pattern": "^[a-z0-9._-]+$", "minLength": 1, "maxLength": 64, "not": { "pattern": "\n" } },
+            "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+          },
+          "allOf": [
+            {
+              "if": { "required": ["state_seq"], "properties": { "state_seq": { "type": "integer", "const": 1 } } },
+              "then": { "not": { "required": ["prev_record_id"] } },
+              "else": { "required": ["prev_record_id"] }
+            }
+          ]
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "LogReinstatement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload", "signatures"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "role", "issuer", "log_id", "denial_key", "state_seq", "prev_record_id", "reason_code", "issued_at"],
+          "properties": {
+            "type": { "const": "seallink-log-reinstatement/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "role": { "$ref": "#/$defs/LogRole" },
+            "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
+            "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "denial_key": { "$ref": "#/$defs/DenialKeyStr" },
+            "state_seq": { "type": "integer", "minimum": 2, "maximum": 9007199254740991, "x-seallink-refusal": "WIRE_INTEGER" },
+            "prev_record_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "reason_code": { "type": "string", "pattern": "^[a-z0-9._-]+$", "minLength": 1, "maxLength": 64, "not": { "pattern": "\n" } },
+            "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+          }
+        },
+        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+      }
+    },
+    "LogStateRecord": {
+      "oneOf": [
+        { "$ref": "#/$defs/LogRevocation" },
+        { "$ref": "#/$defs/LogReinstatement" }
+      ]
+    },
+    "LogFraudProof": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "role", "log_id", "fraud_mode", "cp_a", "cp_b"],
+          "properties": {
+            "type": { "const": "seallink-log-fraud/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "role": { "$ref": "#/$defs/LogRole" },
+            "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "fraud_mode": { "const": "equivocation" },
+            "cp_a": { "$ref": "#/$defs/LogCheckpoint" },
+            "cp_b": { "$ref": "#/$defs/LogCheckpoint" },
+            "cp_a_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "cp_b_txid": { "$ref": "common.schema.json#/$defs/Hex64" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "role", "log_id", "fraud_mode", "cp_a", "cp_a_txid", "cp_b", "cp_b_txid", "revocation", "batch_proof", "smt_proof"],
+          "properties": {
+            "type": { "const": "seallink-log-fraud/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "role": { "$ref": "#/$defs/LogRole" },
+            "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "fraud_mode": { "const": "revocation_omission" },
+            "cp_a": { "$ref": "#/$defs/LogCheckpoint" },
+            "cp_a_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "cp_b": { "$ref": "#/$defs/LogCheckpoint" },
+            "cp_b_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "revocation": { "$ref": "#/$defs/LogRevocation" },
+            "batch_proof": { "$ref": "#/$defs/BatchMerkleProof" },
+            "checkpoints_proof": { "$ref": "#/$defs/CheckpointsInclusionProof" },
+            "smt_proof": { "$ref": "#/$defs/SmtProof" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "role", "log_id", "fraud_mode", "cp_a", "cp_a_txid", "cp_b", "cp_b_txid", "checkpoints_proof", "rec_a", "smt_proof_a", "smt_proof_b"],
+          "properties": {
+            "type": { "const": "seallink-log-fraud/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "role": { "$ref": "#/$defs/LogRole" },
+            "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "fraud_mode": { "const": "illegal_reversion" },
+            "cp_a": { "$ref": "#/$defs/LogCheckpoint" },
+            "cp_a_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "cp_b": { "$ref": "#/$defs/LogCheckpoint" },
+            "cp_b_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "checkpoints_proof": { "$ref": "#/$defs/CheckpointsInclusionProof" },
+            "rec_a": { "$ref": "#/$defs/LogStateRecord" },
+            "smt_proof_a": { "$ref": "#/$defs/SmtProof" },
+            "smt_proof_b": { "$ref": "#/$defs/SmtProof" },
+            "rec_b": { "$ref": "#/$defs/LogStateRecord" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "role", "log_id", "fraud_mode", "cp_next", "cp_next_txid"],
+          "properties": {
+            "type": { "const": "seallink-log-fraud/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "role": { "$ref": "#/$defs/LogRole" },
+            "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "fraud_mode": { "const": "invalid_checkpoint_chain" },
+            "cp_next": { "$ref": "#/$defs/LogCheckpoint" },
+            "cp_next_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "cp_prev": { "$ref": "#/$defs/LogCheckpoint" },
+            "cp_prev_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "peaks": {
+              "type": "array",
+              "maxItems": 64,
+              "items": { "$ref": "common.schema.json#/$defs/Hex64" }
+            }
+          },
+          "dependentRequired": {
+            "cp_prev": ["cp_prev_txid", "peaks"],
+            "cp_prev_txid": ["cp_prev", "peaks"],
+            "peaks": ["cp_prev", "cp_prev_txid"]
+          }
+        }
+      ]
+    }
+  }
+}

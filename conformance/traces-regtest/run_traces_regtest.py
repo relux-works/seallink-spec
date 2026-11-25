@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.10.
+Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.11.
 
-Executes five end-to-end SealLink protocol traces on two fresh loopback-only
+Executes seven end-to-end SealLink protocol traces on two fresh loopback-only
 Namecoin Core 28 regtest nodes under strict standard policy (`-acceptnonstdtxn=0`,
 `-txindex=1`, `-namehistory=1`), extracting live ChainViews via a stateless cold
 `ColdNamecoinObserver` (`tools/nc_rpc_adapter.py`) talking strictly to the independent
@@ -462,12 +462,12 @@ class RegtestCluster:
         assert self.rpc(1, "getblockhash", 0) == self.genesis_hash
         net_info = self.rpc(0, "getnetworkinfo")
 
-        # Derive bech32 address for cluster funder key and mine 155 blocks -> 55 mature coinbase UTXOs
+        # Derive bech32 address for cluster funder key and mine 175 blocks -> 75 mature coinbase UTXOs
         desc = self.rpc(0, "getdescriptorinfo", f"wpkh({self.fund_key['comp']})")["descriptor"]
         self.fund_addr = self.rpc(0, "deriveaddresses", desc)[0]
-        blocks = self.rpc(0, "generatetoaddress", 155, self.fund_addr)
+        blocks = self.rpc(0, "generatetoaddress", 175, self.fund_addr)
         assert self.until(lambda: self.rpc(1, "getbestblockhash") == blocks[-1], limit=180.0)
-        for bh in blocks[:55]:
+        for bh in blocks[:75]:
             cb = self.rpc(0, "getblock", bh, 2)["tx"][0]
             out = next(x for x in cb["vout"] if x["scriptPubKey"].get("address") == self.fund_addr)
             self.coinbase_pool.append({
@@ -658,7 +658,8 @@ class RegtestCluster:
         pol = new_owner_policy or name_rec["owner_policy"]
         trailing_spk, ws = sl.compile_script_policy(pol)
         upd_spk = sl.encode_name_output("NAME_UPDATE", trailing_spk, name=name.encode("utf-8"), value=val_b)
-        fee_in = self.split_funding(1, each_sat=500_000)[0]
+        extra_sat = sum(v for v, _ in (extra_outputs or []))
+        fee_in = self.split_funding(1, each_sat=max(500_000, extra_sat + FEE_SAT + 100_000))[0]
         name_in = {
             "txid": name_rec["current_txid"],
             "vout": name_rec["current_vout"],
@@ -669,7 +670,6 @@ class RegtestCluster:
         outs: list[tuple[int, bytes]] = [(MIN_NAME_SAT, upd_spk)]
         if extra_outputs:
             outs.extend(extra_outputs)
-        extra_sat = sum(v for v, _ in (extra_outputs or []))
         outs.append((fee_in["value_sat"] - extra_sat - FEE_SAT, self.fund_key["p2wpkh_spk"]))
         txid, raw_hex = build_signed_tx([name_in, fee_in], outs, version=NAMECOIN_TX_VERSION)
         self.broadcast_and_wait_peer(raw_hex)
@@ -1218,6 +1218,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
 
     # Anchor 0x0c Name Binding strictly AFTER 0x09 height & FIRSTUPDATE, spending origin.binding_seal!
     binding = {
+        "binding_mode": "initial",
         "genesis": cl.genesis_hash,
         "name": "id/t2-child-leo",
         "network": "regtest",
@@ -1466,6 +1467,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
 
     # Execute live 0x0c recovery attempt spending recovery_seal (both_of_2), THEN cancel it via P2WSH 2-of-3 OP_NAME_UPDATE carrying 0x10 RECOVERY_CANCEL!
     cand_b2 = {
+        "binding_mode": "recovery",
         "genesis": cl.genesis_hash,
         "name": "id/t2-child-leo-recovered",
         "network": "regtest",
@@ -2397,6 +2399,7 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
     tip_time = int(cl.rpc(1, "getblockheader", recent_blk)["time"])
 
     binding = {
+        "binding_mode": "initial",
         "genesis": cl.genesis_hash,
         "name": "id/t4-ward",
         "network": "regtest",
@@ -2882,8 +2885,719 @@ def run_trace_05(cl: RegtestCluster) -> dict[str, Any]:
     }
 
 
+# ============================================================================
+# Trace 06: Live 0x13 VOLUNTARY_REBIND (T_offer -> T_rebind -> D=144 -> Step 3
+#           -> real 30-block B_1 expiry -> alien legacy P2PKH re-registration)
+# ============================================================================
+
+def run_trace_06(cl: RegtestCluster) -> dict[str, Any]:
+    reg_own, reg_cred = kp("t6-reg-own"), kp("t6-reg-cred")
+    b1_own, b1_gr, b1_cred = kp("t6-b1-own"), kp("t6-b1-gr"), kp("t6-b1-cred")
+    b2_own, b2_gr = kp("t6-b2-own"), kp("t6-b2-gr")
+    bseal_k, stat_k = kp("t6-bseal"), kp("t6-stat")
+    hijack_k = kp("t6-hijack-p2pkh")
+    other_party_k = kp("t6-other-party")
+
+    reg_pol = {"kind": "key", "pk": reg_own["comp"]}
+    b1_pol = {"kind": "key", "pk": b1_own["comp"]}
+    b2_pol = {"kind": "key", "pk": b2_own["comp"]}
+    bseal_pol = {"kind": "key", "pk": bseal_k["comp"]}
+    stat_pol = {"kind": "key", "pk": stat_k["comp"]}
+
+    # 1. Register id/t6-registry and mint binding_seal + status_seal, then anchor 0x09 autonomous origin (mode="none")!
+    n_reg = cl.register_names_batch([
+        {"name": "id/t6-registry", "owner_policy": reg_pol, "owner_kp": reg_own, "value_obj": {"link": {"cred": reg_cred["xonly"]}}, "rand_label": "t6-reg"},
+    ])
+    reg_pin = {"name": "id/t6-registry", "owner_policy": reg_pol, "registration": n_reg["id/t6-registry"]["registration"]}
+    reg_issuer = {**reg_pin, "role_policy": {"m": 1, "pks": [reg_cred["xonly"]]}}
+
+    f = cl.split_funding(8, each_sat=3_000_000)
+    seals_txid, seals_raw = build_signed_tx(
+        [f[0]],
+        [
+            (SEAL_SAT, bseal_k["p2wpkh_spk"]),
+            (SEAL_SAT, stat_k["p2wpkh_spk"]),
+            (f[0]["value_sat"] - 2 * SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
+        ],
+    )
+    cl.broadcast_and_wait_peer(seals_raw)
+    cl.mine(1)
+
+    orig_p = {
+        "binding_seal": {"script_policy": bseal_pol, "txid": seals_txid, "vout": 0},
+        "claims": {"intended_name": "id/t6-alice-v1", "intended_owner_policy": b1_pol},
+        "genesis": cl.genesis_hash,
+        "issuer": reg_issuer,
+        "name_recovery": {"mode": "none"},
+        "network": "regtest",
+        "origin_class": "person",
+        "request_sha256": sl.sha256(b"t6-orig-req").hex(),
+        "status_seal": {"script_policy": stat_pol, "txid": seals_txid, "vout": 1},
+        "subject_initial_key": b1_gr["xonly"],
+        "type": "seallink-origin/1",
+    }
+    orig_env = sl.sign_envelope(orig_p, [reg_cred["sk"]])
+    oid = sl.object_id(orig_p)
+    anc09_txid, anc09_raw = build_signed_tx(
+        [f[1]],
+        [(0, op_return_spk(0x09, sl.content_addr(orig_env))), (f[1]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+    )
+    cl.broadcast_and_wait_peer(anc09_raw)
+    cl.mine(1)
+
+    # 2. Register id/t6-alice-v1 (B_1) and id/t6-alice-v2 (B_2, value="{}") strictly AFTER h_origin!
+    n_ab = cl.register_names_batch([
+        {"name": "id/t6-alice-v1", "owner_policy": b1_pol, "owner_kp": b1_own, "value_obj": {"link": {"cred": b1_cred["xonly"], "grant": b1_gr["xonly"], "origin": oid}}, "rand_label": "t6-b1"},
+        {"name": "id/t6-alice-v2", "owner_policy": b2_pol, "owner_kp": b2_own, "value_obj": {}, "rand_label": "t6-b2"},
+    ])
+    b1_rec = n_ab["id/t6-alice-v1"]
+    b2_rec = n_ab["id/t6-alice-v2"]
+
+    b1_obj = {
+        "binding_mode": "initial",
+        "genesis": cl.genesis_hash,
+        "name": "id/t6-alice-v1",
+        "network": "regtest",
+        "origin_id": oid,
+        "owner_policy": b1_pol,
+        "registration": b1_rec["registration"],
+        "seq": 1,
+        "type": "seallink-name-binding/1",
+    }
+    b1_id = sl.object_id(b1_obj)
+    anc0c_txid, anc0c_raw = build_signed_tx(
+        [{"txid": seals_txid, "vout": 0, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": bseal_k}, f[2]],
+        [(0, op_return_spk(0x0C, b1_id)), (f[2]["value_sat"] + SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+    )
+    cl.broadcast_and_wait_peer(anc0c_raw)
+    cl.mine(1)
+
+    # 3. Anchor an eternal credential signed by B_1's link.cred at h_dip < h_13 (must survive 0x13 + expiry + alien hijack!)
+    tip_t_dip = int(cl.rpc(1, "getblockheader", cl.rpc(1, "getbestblockhash"))["time"])
+    dip_b1_p = {
+        "claims": {"note": "Pre-rebind eternal attestation on B_1"},
+        "credential_kind": "education/diploma",
+        "genesis": cl.genesis_hash,
+        "issued_at": tip_t_dip,
+        "issuer": {"name": "id/t6-alice-v1", "owner_policy": b1_pol, "registration": b1_rec["registration"], "role_policy": {"m": 1, "pks": [b1_cred["xonly"]]}},
+        "lifecycle": "eternal",
+        "network": "regtest",
+        "not_before_height": b1_rec["height"],
+        "subject": {"key": other_party_k["xonly"], "mode": "key"},
+        "type": "seallink-credential/1",
+    }
+    dip_b1 = sl.sign_envelope(dip_b1_p, [b1_cred["sk"]])
+    dip_b1_txid, dip_b1_raw = build_signed_tx(
+        [f[3]],
+        [(0, op_return_spk(0x09, sl.content_addr(dip_b1))), (f[3]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+    )
+    cl.broadcast_and_wait_peer(dip_b1_raw)
+    cl.mine(1)
+    h_dip_b1 = cl.rpc(1, "getblockcount")
+
+    # 4. Broadcast & mine T_offer (nVersion=0x7100 OP_NAME_UPDATE on id/t6-alice-v2 value="{}" + non-name consent_utxo at vout=1!)
+    t_offer_txid, t_offer_raw = cl.update_name_p2wpkh(
+        b2_rec, "id/t6-alice-v2", b2_own, {}, extra_outputs=[(SEAL_SAT, b2_own["p2wpkh_spk"])]
+    )
+    h_offer = cl.rpc(1, "getblockcount")
+
+    # 5. Build voluntary NameBinding B_2 (delay_blocks=144) and broadcast T_rebind with NON-DEFAULT vin/vout order!
+    #    vin[0]=fee, vin[1]=consent_utxo (T_offer:1), vin[2]=B_1 name UTXO
+    #    vout[0]=change, vout[1]=OP_NAME_UPDATE B_1 value="{}" preserving b1_pol, vout[2]=OP_RETURN 0x13 object_id(B_2)
+    b2_obj = {
+        "binding_mode": "voluntary",
+        "consent_outpoint": {"txid": t_offer_txid, "vout": 1},
+        "delay_blocks": 144,
+        "genesis": cl.genesis_hash,
+        "name": "id/t6-alice-v2",
+        "network": "regtest",
+        "origin_id": oid,
+        "owner_policy": b2_pol,
+        "registration": b2_rec["registration"],
+        "seq": 2,
+        "supersedes_binding_id": b1_id,
+        "type": "seallink-name-binding/1",
+    }
+    b2_id = sl.object_id(b2_obj)
+    b1_rebind_spk = sl.encode_name_output("NAME_UPDATE", b1_own["p2wpkh_spk"], name=b"id/t6-alice-v1", value=b"{}")
+    t_rebind_txid, t_rebind_raw = build_signed_tx(
+        [
+            f[4],
+            {"txid": t_offer_txid, "vout": 1, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": b2_own},
+            {"txid": b1_rec["current_txid"], "vout": b1_rec["current_vout"], "value_sat": MIN_NAME_SAT, "kind": "p2wpkh", "signer": b1_own},
+        ],
+        [
+            (f[4]["value_sat"] + SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
+            (MIN_NAME_SAT, b1_rebind_spk),
+            (0, op_return_spk(0x13, b2_id)),
+        ],
+        version=NAMECOIN_TX_VERSION,
+    )
+    cl.broadcast_and_wait_peer(t_rebind_raw)
+    cl.mine(1)
+    h_13 = cl.rpc(1, "getblockcount")
+    b1_rec["current_txid"] = t_rebind_txid
+    b1_rec["current_vout"] = 1
+
+    ob = {
+        "name_binding": b1_obj,
+        "name_binding_txid": anc0c_txid,
+        "origin": orig_env,
+        "origin_anchor_txid": anc09_txid,
+        "recovery_bindings": [],
+        "voluntary_rebind_bindings": [b2_obj],
+    }
+    v = sv.Tier1Verifier(
+        pinned_network="regtest",
+        pinned_genesis=cl.genesis_hash,
+        operator_min_depth=1,
+        trusted_origin_issuer_pins=[reg_pin],
+        require_jsonschema=True,
+        require_observation_bracket=True,
+    )
+
+    # Verdict 1: Inside delay window (h_13 < tip < h_13 + 144) -> REFUSE RECOVERY_FORBIDDEN!
+    cl.mine(1)
+    ch_win = sv.ChainView(cl.new_cold_observer().build_chain_view(wire_objects=[ob]))
+    _, err_win = v.verify_origin_and_status(ob, ch_win)
+    assert err_win == "RECOVERY_FORBIDDEN", f"Trace 06 in-window expected RECOVERY_FORBIDDEN, got {err_win}"
+
+    # Mine through D=144 while renewing id/t6-alice-v2 (value="{}") every 20 blocks so B_2 never expires on regtest (30-block TTL)!
+    h_maturity = h_13 + 144
+    while cl.rpc(1, "getblockcount") < h_maturity:
+        cur_h = cl.rpc(1, "getblockcount")
+        rem = h_maturity - cur_h
+        if rem > 20:
+            cl.mine(19)
+            cl.update_name_p2wpkh(b2_rec, "id/t6-alice-v2", b2_own, {})
+        else:
+            # Renew B_2 once right before maturity if needed so it has fresh TTL at h_maturity
+            if rem > 5:
+                cl.mine(rem - 2)
+                cl.update_name_p2wpkh(b2_rec, "id/t6-alice-v2", b2_own, {})
+                rem = h_maturity - cl.rpc(1, "getblockcount")
+            if rem > 0:
+                cl.mine(rem)
+    assert cl.rpc(1, "getblockcount") == h_maturity
+
+    # Verdict 2: At exact maturity h_13 + 144 BEFORE Step 3 activation (awaiting_activation) -> REFUSE ORIGIN_BINDING_INVALID!
+    ch_await_dict = cl.new_cold_observer().build_chain_view(wire_objects=[ob])
+    assert str(h_maturity) in ch_await_dict.get("block_times", {}), "Cold observer must auto-populate quiet maturity MTP in block_times!"
+    _, err_await = v.verify_origin_and_status(ob, sv.ChainView(ch_await_dict))
+    assert err_await == "ORIGIN_BINDING_INVALID", f"Trace 06 awaiting_activation expected ORIGIN_BINDING_INVALID, got {err_await}"
+
+    # 6. Step 3 activation on B_2 (OP_NAME_UPDATE writing link.origin == oid + link.grant == b2_gr)!
+    step3_txid, _ = cl.update_name_p2wpkh(
+        b2_rec, "id/t6-alice-v2", b2_own, {"link": {"grant": b2_gr["xonly"], "origin": oid}}
+    )
+    h_act = cl.rpc(1, "getblockcount")
+
+    # 7. Verify B_1 has ALREADY expired on live nc28.0 regtest (h_act - h_13 >= 145 >> 30), then ALIEN hijacker re-registers
+    #    id/t6-alice-v1 with a LEGACY P2PKH scriptPubKey (OP_DUP OP_HASH160 <20B> OP_EQUALVERIFY OP_CHECKSIG)!
+    try:
+        cl.rpc(1, "name_show", "id/t6-alice-v1")
+        raise AssertionError("Expected id/t6-alice-v1 to be expired after 144+ blocks on regtest")
+    except RuntimeError as exc:
+        assert "name expired" in str(exc).lower(), f"Unexpected name_show error on expired B_1: {exc}"
+
+    p2pkh_spk = b"\x76\xa9\x14" + sl.hash160(hijack_k["comp_bytes"]) + b"\x88\xac"
+    rand_hij = sl.sha256(b"t6-alien-p2pkh-rand")[:20]
+    h20_hij = sl.hash160(rand_hij + b"id/t6-alice-v1")
+    nn_hij_spk = sl.encode_name_output("NAME_NEW", cl.fund_key["p2wpkh_spk"], hash20=h20_hij)
+    nn_hij_txid, nn_hij_raw = build_signed_tx(
+        [f[5]],
+        [(MIN_NAME_SAT, nn_hij_spk), (f[5]["value_sat"] - MIN_NAME_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+        version=NAMECOIN_TX_VERSION,
+    )
+    cl.broadcast_and_wait_peer(nn_hij_raw)
+    cl.mine(13)
+    # Keep B_2 fresh while hijacking B_1!
+    cl.update_name_p2wpkh(b2_rec, "id/t6-alice-v2", b2_own, {"link": {"grant": b2_gr["xonly"], "origin": oid}})
+    fu_hij_spk = sl.encode_name_output("NAME_FIRSTUPDATE", p2pkh_spk, name=b"id/t6-alice-v1", rand=rand_hij, value=b'{"hijacked":true}')
+    fu_hij_txid, fu_hij_raw = build_signed_tx(
+        [{"txid": nn_hij_txid, "vout": 0, "value_sat": MIN_NAME_SAT, "kind": "p2wpkh", "signer": cl.fund_key}, f[6]],
+        [(MIN_NAME_SAT, fu_hij_spk), (f[6]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+        version=NAMECOIN_TX_VERSION,
+    )
+    cl.broadcast_and_wait_peer(fu_hij_raw)
+    cl.mine(1)
+    shown_hij = cl.rpc(1, "name_show", "id/t6-alice-v1")
+    assert shown_hij["txid"] == fu_hij_txid
+
+    # 8. Build ONE single cold-observer ChainView from Node B at final tip and verify ALL 4 final verdicts!
+    ch_fin_dict = cl.new_cold_observer().build_chain_view(wire_objects=[ob, dip_b1], extra_txids=[dip_b1_txid])
+    assert len(ch_fin_dict["name_registrations"]["id/t6-alice-v1"]) == 2, "Expected 2 lineages on id/t6-alice-v1 (B_1 + alien P2PKH)"
+    assert str(h_maturity) in ch_fin_dict.get("block_times", {}), "Quiet maturity MTP must persist in final cold ChainView!"
+    ch_fin = sv.ChainView(ch_fin_dict)
+
+    # Verdict 3: verify_origin_and_status -> ADMIT_AUTONOMOUS with active B_2!
+    st_fin, err_fin = v.verify_origin_and_status(ob, ch_fin)
+    assert err_fin is None and st_fin is not None, f"Trace 06 final origin_status failed: {err_fin}"
+    assert st_fin["capacity"] == "autonomous" and st_fin["binding"]["name"] == "id/t6-alice-v2"
+    assert st_fin["voluntary_rebind_events"][-1]["outcome"] == "promoted"
+
+    # Verdict 4: Historical eternal diploma issued by B_1 at h_dip < h_13 -> ADMIT!
+    r_dip_fin = v.verify_credential(dip_b1, dip_b1_txid, ch_fin)
+    assert r_dip_fin.verdict == "ADMIT", f"Trace 06 historical B_1 diploma failed after rebind + alien P2PKH hijack: {r_dip_fin}"
+
+    # Verdict 5: Autonomous contract assent under active B_2 -> ADMIT!
+    c_seal_pol = {"kind": "key", "pk": other_party_k["comp"]}
+    c_b2 = {
+        "clause_commitments": [sl.clause_commit(sl.sha256(b"t6-c0").hex(), {"text": "Post-rebind contract"})],
+        "contract_salt": sl.sha256(b"t6-cs").hex(),
+        "genesis": cl.genesis_hash,
+        "network": "regtest",
+        "parties": [
+            {"name_pin": {"name": "id/t6-alice-v2", "owner_policy": b2_pol, "registration": b2_rec["registration"]}, "party_id": "alice", "role": "client", "signing_policy": {"m": 1, "pks": [b2_gr["xonly"]]}},
+            {"party_id": "counterparty", "role": "vendor", "signing_policy": {"m": 1, "pks": [other_party_k["xonly"]]}},
+        ],
+        "profile": "org.seallink/generic-v1",
+        "seal": {"script_policy": c_seal_pol, "txid": sl.sha256(b"t6-cseal").hex(), "vout": 0},
+        "type": "seallink-contract/1",
+        "window": {"not_after_height": ch_fin.tip_height + 20, "not_before_height": ch_fin.tip_height - 10},
+    }
+    ass_b2 = sl.sign_envelope(
+        {
+            "expires_at": ch_fin.now + 100_000, "genesis": cl.genesis_hash, "issued_at": ch_fin.now - 10,
+            "network": "regtest", "nonce": sl.sha256(b"t6-ass-b2").hex(), "party_id": "alice",
+            "party_name": "id/t6-alice-v2", "party_role": "client", "target_id": sl.object_id(c_b2),
+            "target_type": "seallink-contract/1", "type": "seallink-assent/1",
+        },
+        [b2_gr["sk"]],
+    )
+    r_ass_b2 = v.verify_assent(ass_b2, c_b2, ob, ch_fin)
+    assert r_ass_b2.verdict == "ADMIT", f"Trace 06 B_2 assent failed: {r_ass_b2}"
+
+    # Verdict 6: Alien hijacker / superseded B_1 pin attempting live assent -> REFUSE!
+    c_hij = {
+        **copy.deepcopy(c_b2),
+        "contract_salt": sl.sha256(b"t6-cs-hij").hex(),
+        "parties": [
+            {"name_pin": {"name": "id/t6-alice-v1", "owner_policy": b1_pol, "registration": b1_rec["registration"]}, "party_id": "alice", "role": "client", "signing_policy": {"m": 1, "pks": [b1_gr["xonly"]]}},
+            {"party_id": "counterparty", "role": "vendor", "signing_policy": {"m": 1, "pks": [other_party_k["xonly"]]}},
+        ],
+    }
+    ass_hij = sl.sign_envelope(
+        {
+            "expires_at": ch_fin.now + 100_000, "genesis": cl.genesis_hash, "issued_at": ch_fin.now - 10,
+            "network": "regtest", "nonce": sl.sha256(b"t6-ass-hij").hex(), "party_id": "alice",
+            "party_name": "id/t6-alice-v1", "party_role": "client", "target_id": sl.object_id(c_hij),
+            "target_type": "seallink-contract/1", "type": "seallink-assent/1",
+        },
+        [b1_gr["sk"]],
+    )
+    r_ass_hij = v.verify_assent(ass_hij, c_hij, ob, ch_fin)
+    assert (r_ass_hij.verdict, r_ass_hij.refusal_code) == ("REFUSE", "NAME_HISTORY_UNAVAILABLE"), (
+        f"Trace 06 superseded/P2PKH-hijacked B_1 live assent should fail closed with NAME_HISTORY_UNAVAILABLE, got {r_ass_hij}"
+    )
+
+    return {
+        "cold_observer_adapter": "tools/nc_rpc_adapter.py:ColdNamecoinObserver",
+        "origin_id": oid,
+        "origin_0x09_txid": anc09_txid,
+        "b1_initial_0x0c_txid": anc0c_txid,
+        "b1_historical_diploma_0x09_txid": dip_b1_txid,
+        "b1_historical_diploma_height": h_dip_b1,
+        "t_offer_txid": t_offer_txid,
+        "t_offer_height": h_offer,
+        "t_rebind_txid": t_rebind_txid,
+        "t_rebind_raw_hex": t_rebind_raw,
+        "t_rebind_height": h_13,
+        "quiet_maturity_height": h_maturity,
+        "quiet_maturity_mtp_captured_cold": str(h_maturity) in ch_fin_dict.get("block_times", {}),
+        "b2_step3_activation_txid": step3_txid,
+        "b2_step3_activation_height": h_act,
+        "alien_p2pkh_hijack_firstupdate_txid": fu_hij_txid,
+        "cold_discovered_b1_lineages": len(ch_fin_dict["name_registrations"]["id/t6-alice-v1"]),
+        "verdicts": {
+            "in_delay_window_d144": {"verdict": "REFUSE", "refusal_code": err_win},
+            "matured_awaiting_step3_activation": {"verdict": "REFUSE", "refusal_code": err_await},
+            "post_step3_and_alien_p2pkh_hijack_origin_status": {"verdict": "ADMIT_AUTONOMOUS", "active_name": st_fin["binding"]["name"], "rebind_outcome": st_fin["voluntary_rebind_events"][-1]["outcome"]},
+            "historical_b1_diploma_after_rebind_and_hijack": {"verdict": r_dip_fin.verdict, "outcome": r_dip_fin.outcome},
+            "post_rebind_b2_assent": {"verdict": r_ass_b2.verdict, "outcome": r_ass_b2.outcome},
+            "superseded_b1_after_alien_p2pkh_hijack_assent": {"verdict": r_ass_hij.verdict, "refusal_code": r_ass_hij.refusal_code},
+        },
+    }
+
+
+# ============================================================================
+# Trace 07: Live 0x14 LOG_CHECKPOINT (non-default next_log_vout=2) +
+#           seallink-release/1 + log_tracked seallink-notary/1 + SMT revocation +
+#           PROFILE-artifact-v1 Gatekeeper + REAL MINED SegWitNameUpdateProof
+# ============================================================================
+
+def _btc_merkle_branches_from_hashes_le(hashes_le: list[bytes]) -> tuple[bytes, list[list[str]]]:
+    n = len(hashes_le)
+    branches: list[list[str]] = [[] for _ in range(n)]
+    level = list(hashes_le)
+    idxs = list(range(n))
+    while len(level) > 1:
+        if len(level) & 1:
+            level.append(level[-1])
+        for i in range(n):
+            branches[i].append(level[idxs[i] ^ 1][::-1].hex())
+            idxs[i] >>= 1
+        level = [sl.dsha256(level[j] + level[j + 1]) for j in range(0, len(level), 2)]
+    return level[0], branches
+
+
+def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
+    rel_own, rel_role, rel_seal = kp("t7-rel-own"), kp("t7-rel-role"), kp("t7-rel-seal")
+    not_own, not_role, not_seal = kp("t7-not-own"), kp("t7-not-role"), kp("t7-not-seal")
+
+    rel_pol = {"kind": "key", "pk": rel_own["comp"]}
+    not_pol = {"kind": "key", "pk": not_own["comp"]}
+    rel_seal_pol = {"kind": "key", "pk": rel_seal["comp"]}
+    not_seal_pol = {"kind": "key", "pk": not_seal["comp"]}
+
+    # 1. Register id/t7-release-op (link.release) and id/t7-notary-1 (link.notary) on live nc28.0!
+    names = cl.register_names_batch([
+        {"name": "id/t7-release-op", "owner_policy": rel_pol, "owner_kp": rel_own, "value_obj": {"link": {"release": rel_role["xonly"]}}, "rand_label": "t7-rel"},
+        {"name": "id/t7-notary-1", "owner_policy": not_pol, "owner_kp": not_own, "value_obj": {"link": {"notary": not_role["xonly"]}}, "rand_label": "t7-not"},
+    ])
+    rel_rec, not_rec = names["id/t7-release-op"], names["id/t7-notary-1"]
+    rel_pin = {"name": "id/t7-release-op", "owner_policy": rel_pol, "registration": rel_rec["registration"]}
+    rel_role_pin = {**rel_pin, "role_policy": {"m": 1, "pks": [rel_role["xonly"]]}}
+    not_pin = {"name": "id/t7-notary-1", "owner_policy": not_pol, "registration": not_rec["registration"]}
+    not_role_pin = {**not_pin, "role_policy": {"m": 1, "pks": [not_role["xonly"]]}}
+
+    # 2. Mint genesis log seals for both release log & notary log!
+    f = cl.split_funding(8, each_sat=3_000_000)
+    gen_txid, gen_raw = build_signed_tx(
+        [f[0]],
+        [
+            (SEAL_SAT, rel_seal["p2wpkh_spk"]),
+            (SEAL_SAT, not_seal["p2wpkh_spk"]),
+            (f[0]["value_sat"] - 2 * SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
+        ],
+    )
+    cl.broadcast_and_wait_peer(gen_raw)
+    cl.mine(1)
+
+    rel_log_id = sl.compute_log_id("regtest", cl.genesis_hash, "release", "id/t7-release-op", rel_rec["registration"], {"txid": gen_txid, "vout": 0})
+    not_log_id = sl.compute_log_id("regtest", cl.genesis_hash, "notary", "id/t7-notary-1", not_rec["registration"], {"txid": gen_txid, "vout": 1})
+
+    # 3. Create canonical fsverity-sha256 artifact (salt_hex=""), log_tracked seallink-release/1 & log_tracked seallink-notary/1
+    fsv_art = {"digest": sl.sha256(b"t7-curator-bundle-v2.1").hex(), "params": {"block_size": 4096, "hash_alg": "sha256", "salt_hex": "", "version": 1}, "scheme": "fsverity-sha256"}
+    fsv_tid = sl.artifact_target_id(fsv_art)
+    tip_h0 = cl.rpc(1, "getblockcount")
+    tip_bh0 = cl.rpc(1, "getbestblockhash")
+    tip_t0 = int(cl.rpc(1, "getblockheader", tip_bh0)["time"])
+
+    rel_p = {
+        "artifact_identity": fsv_art, "genesis": cl.genesis_hash, "issuer": rel_role_pin,
+        "lifecycle": "log_tracked", "log_id": rel_log_id, "network": "regtest",
+        "product_id": "works.relux/curator-cli", "release_seq": 10, "released_at": tip_t0,
+        "target_sha256": fsv_tid, "type": "seallink-release/1", "version_str": "2.1.0",
+    }
+    rel_env = sl.sign_envelope(rel_p, [rel_role["sk"]])
+    rel_id = sl.object_id(rel_p)
+
+    not_p = {
+        "act_kind": "artifact-notarization", "attested_at": tip_t0,
+        "details": {"artifact_identity": fsv_art, "claims": [{"claim_id": "seallink.org/build-repro", "verdict": "pass"}], "kind": "artifact-notarization"},
+        "genesis": cl.genesis_hash, "lifecycle": "log_tracked", "log_id": not_log_id, "network": "regtest",
+        "notary": not_role_pin, "target_sha256": fsv_tid, "tip_hash": tip_bh0, "tip_height": tip_h0,
+        "type": "seallink-notary/1",
+    }
+    not_env = sl.sign_envelope(not_p, [not_role["sk"]])
+    not_id = sl.object_id(not_p)
+
+    # 4. Anchor 0x14 cp1 (seq=1, non-default next_log_vout=2!) and cp2 (seq=2, next_log_vout=2) for BOTH logs!
+    rel_e1 = sl.log_entry_digest(0x01, sl.content_addr(rel_env))
+    rel_b1_root, rel_b1_pfs = sl.build_log_batch_root([rel_e1])
+    rel_cp1 = sl.sign_envelope({
+        "batch_count": 1, "batch_root": rel_b1_root, "checkpoints_root": sl.EMPTY_CHECKPOINTS_ROOT,
+        "cumulative_entries_count": 1, "denials_delta_root": sl.EMPTY_BATCH_ROOT, "denials_root": sl.SMT_EMPTY_ROOT,
+        "genesis": cl.genesis_hash, "issuer": rel_role_pin, "log_id": rel_log_id, "network": "regtest",
+        "next_log_policy": rel_seal_pol, "next_log_vout": 2, "prev_log_outpoint": {"txid": gen_txid, "vout": 0},
+        "role": "release", "seq": 1, "terminal": False, "type": "seallink-log-checkpoint/1",
+    }, [rel_role["sk"]])
+    rel_cp1_ca = sl.content_addr(rel_cp1)
+    rel_cp1_tx, rel_cp1_raw = build_signed_tx(
+        [{"txid": gen_txid, "vout": 0, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": rel_seal}, f[1]],
+        [
+            (0, op_return_spk(0x14, rel_cp1_ca)),
+            (f[1]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
+            (SEAL_SAT, rel_seal["p2wpkh_spk"]),  # non-default next_log_vout = 2!
+        ],
+    )
+    cl.broadcast_and_wait_peer(rel_cp1_raw)
+
+    not_e1 = sl.log_entry_digest(0x01, sl.content_addr(not_env))
+    not_b1_root, not_b1_pfs = sl.build_log_batch_root([not_e1])
+    not_cp1 = sl.sign_envelope({
+        "batch_count": 1, "batch_root": not_b1_root, "checkpoints_root": sl.EMPTY_CHECKPOINTS_ROOT,
+        "cumulative_entries_count": 1, "denials_delta_root": sl.EMPTY_BATCH_ROOT, "denials_root": sl.SMT_EMPTY_ROOT,
+        "genesis": cl.genesis_hash, "issuer": not_role_pin, "log_id": not_log_id, "network": "regtest",
+        "next_log_policy": not_seal_pol, "next_log_vout": 2, "prev_log_outpoint": {"txid": gen_txid, "vout": 1},
+        "role": "notary", "seq": 1, "terminal": False, "type": "seallink-log-checkpoint/1",
+    }, [not_role["sk"]])
+    not_cp1_ca = sl.content_addr(not_cp1)
+    not_cp1_tx, not_cp1_raw = build_signed_tx(
+        [{"txid": gen_txid, "vout": 1, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": not_seal}, f[2]],
+        [
+            (0, op_return_spk(0x14, not_cp1_ca)),
+            (f[2]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
+            (SEAL_SAT, not_seal["p2wpkh_spk"]),  # non-default next_log_vout = 2!
+        ],
+    )
+    cl.broadcast_and_wait_peer(not_cp1_raw)
+    cl.mine(1)
+
+    # cp2 (seq=2) spending cp1:2 for BOTH logs!
+    rel_l1 = [sl.ckpt_leaf(1, rel_cp1_ca)]
+    rel_cp2 = sl.sign_envelope({
+        "batch_count": 0, "batch_root": sl.EMPTY_BATCH_ROOT, "checkpoints_root": sl.rfc9162_mth(rel_l1).hex(),
+        "cumulative_entries_count": 1, "denials_delta_root": sl.EMPTY_BATCH_ROOT, "denials_root": sl.SMT_EMPTY_ROOT,
+        "genesis": cl.genesis_hash, "issuer": rel_role_pin, "log_id": rel_log_id, "network": "regtest",
+        "next_log_policy": rel_seal_pol, "next_log_vout": 2, "prev_checkpoint_id": rel_cp1_ca,
+        "prev_log_outpoint": {"txid": rel_cp1_tx, "vout": 2}, "role": "release", "seq": 2, "terminal": False,
+        "type": "seallink-log-checkpoint/1",
+    }, [rel_role["sk"]])
+    rel_cp2_ca = sl.content_addr(rel_cp2)
+    rel_cp2_tx, rel_cp2_raw = build_signed_tx(
+        [{"txid": rel_cp1_tx, "vout": 2, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": rel_seal}, f[3]],
+        [
+            (0, op_return_spk(0x14, rel_cp2_ca)),
+            (f[3]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
+            (SEAL_SAT, rel_seal["p2wpkh_spk"]),
+        ],
+    )
+    cl.broadcast_and_wait_peer(rel_cp2_raw)
+
+    not_l1 = [sl.ckpt_leaf(1, not_cp1_ca)]
+    not_cp2 = sl.sign_envelope({
+        "batch_count": 0, "batch_root": sl.EMPTY_BATCH_ROOT, "checkpoints_root": sl.rfc9162_mth(not_l1).hex(),
+        "cumulative_entries_count": 1, "denials_delta_root": sl.EMPTY_BATCH_ROOT, "denials_root": sl.SMT_EMPTY_ROOT,
+        "genesis": cl.genesis_hash, "issuer": not_role_pin, "log_id": not_log_id, "network": "regtest",
+        "next_log_policy": not_seal_pol, "next_log_vout": 2, "prev_checkpoint_id": not_cp1_ca,
+        "prev_log_outpoint": {"txid": not_cp1_tx, "vout": 2}, "role": "notary", "seq": 2, "terminal": False,
+        "type": "seallink-log-checkpoint/1",
+    }, [not_role["sk"]])
+    not_cp2_ca = sl.content_addr(not_cp2)
+    not_cp2_tx, not_cp2_raw = build_signed_tx(
+        [{"txid": not_cp1_tx, "vout": 2, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": not_seal}, f[4]],
+        [
+            (0, op_return_spk(0x14, not_cp2_ca)),
+            (f[4]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
+            (SEAL_SAT, not_seal["p2wpkh_spk"]),
+        ],
+    )
+    cl.broadcast_and_wait_peer(not_cp2_raw)
+    cl.mine(1)
+
+    tkt_ok = {
+        "artifact_identity": fsv_art, "genesis": cl.genesis_hash, "network": "regtest",
+        "notarizations": [{
+            "act_smt_proof": sl.smt_prove({}, f"act:{not_id}|*"),
+            "batch_proof": not_b1_pfs[not_e1],
+            "checkpoint": not_cp1, "checkpoint_txid": not_cp1_tx,
+            "checkpoints_proof": sl.rfc9162_inclusion_proof(not_l1, 0),
+            "head_checkpoint": not_cp2, "head_checkpoint_txid": not_cp2_tx,
+            "notary_act": not_env,
+            "target_smt_proof": sl.smt_prove({}, f"target:{fsv_tid}|*"),
+        }],
+        "release": rel_env, "release_batch_proof": rel_b1_pfs[rel_e1],
+        "release_checkpoint": rel_cp1, "release_checkpoint_txid": rel_cp1_tx,
+        "release_checkpoints_proof": sl.rfc9162_inclusion_proof(rel_l1, 0),
+        "release_head_checkpoint": rel_cp2, "release_head_checkpoint_txid": rel_cp2_tx,
+        "release_smt_proof": sl.smt_prove({}, f"rel:{rel_id}|*"),
+        "target_sha256": fsv_tid, "type": "seallink-ticket/1",
+    }
+    gk_pol = {
+        "allow_reinstatement": False, "mode": "hardened", "quorum_m": 1,
+        "release_floor": {"works.relux/curator-cli": 10}, "require_release": True,
+        "required_claims": ["seallink.org/build-repro"],
+        "trusted_notaries": [{"log_id": not_log_id, "notary_pin": not_pin}],
+        "trusted_release_issuers": [{"allowed_product_prefixes": ["works.relux/"], "issuer_pin": rel_pin, "log_id": rel_log_id}],
+    }
+
+    v_art = sv.Tier1Verifier(
+        pinned_network="regtest", pinned_genesis=cl.genesis_hash, operator_min_depth=1,
+        require_jsonschema=True, require_observation_bracket=True,
+        enabled_modules=["core", "artifact-notarization"],
+    )
+    v_core = sv.Tier1Verifier(
+        pinned_network="regtest", pinned_genesis=cl.genesis_hash, operator_min_depth=1,
+        require_jsonschema=True, require_observation_bracket=True,
+        enabled_modules=["core"],
+    )
+
+    ch1 = sv.ChainView(cl.new_cold_observer().build_chain_view(wire_objects=[tkt_ok, rel_cp1, not_cp1]))
+    j_log = sv.FencedJournal(sl.sha256(b"t7-log-journal").hex())
+
+    # Verdict 1: verify_log_checkpoint cp2 (chained to cp1 via non-default next_log_vout=2) + FencedJournal log-head restart replay!
+    r_cp2 = v_art.verify_log_checkpoint(rel_cp2, rel_cp2_tx, ch1, prev_cp_env=rel_cp1, prev_cp_txid=rel_cp1_tx, journal=j_log)
+    assert r_cp2.verdict == "ADMIT", f"Trace 07 cp2 verification failed: {r_cp2}"
+    j_log_rep = sv.FencedJournal.replay_persisted_entries(
+        j_log.journal_id, json.loads(json.dumps(j_log.entries)),
+        witness_pos=j_log.witness_pos, witness_commitment=j_log.witness_commitment, write_token_active=True,
+    )
+    assert j_log_rep.check_continuity() is None and j_log_rep.log_heads == j_log.log_heads
+
+    # Verdict 2: verify_release (log_tracked Core primitive) -> ADMIT!
+    r_rel = v_core.verify_release(
+        rel_env, ch1,
+        log_ctx={
+            "batch_proof": rel_b1_pfs[rel_e1], "checkpoint": rel_cp1, "checkpoint_txid": rel_cp1_tx,
+            "checkpoints_proof": sl.rfc9162_inclusion_proof(rel_l1, 0),
+            "head_checkpoint": rel_cp2, "head_checkpoint_txid": rel_cp2_tx,
+            "smt_proof": sl.smt_prove({}, f"rel:{rel_id}|*"),
+        },
+        journal=j_log_rep,
+    )
+    assert r_rel.verdict == "ADMIT", f"Trace 07 verify_release failed: {r_rel}"
+
+    # Verdict 3: verify_artifact_ticket (PROFILE-artifact-v1 Gatekeeper hardened 1-of-1 + release_floor) -> ADMIT!
+    r_tkt_ok = v_art.verify_artifact_ticket(tkt_ok, gk_pol, ch1, journal=j_log_rep)
+    assert r_tkt_ok.verdict == "ADMIT", f"Trace 07 Gatekeeper ADMIT failed: {r_tkt_ok}"
+
+    # 5. Emit SMT target:<tid>|* revocation in terminal cp3 (seq=3) on notary log -> Gatekeeper MUST refuse ARTIFACT_POLICY_DENIED!
+    rev_t = sl.sign_envelope({
+        "denial_key": f"target:{fsv_tid}|*", "genesis": cl.genesis_hash, "issued_at": tip_t0 + 60,
+        "issuer": not_role_pin, "log_id": not_log_id, "network": "regtest",
+        "reason_code": "supply-chain-alert", "role": "notary", "state_seq": 1, "type": "seallink-log-revocation/1",
+    }, [not_role["sk"]])
+    rev_t_ca = sl.content_addr(rev_t)
+    e_rev = sl.log_entry_digest(0x02, rev_t_ca)
+    not_b3_root, _ = sl.build_log_batch_root([e_rev])
+    not_l2 = not_l1 + [sl.ckpt_leaf(2, not_cp2_ca)]
+    kv_rev = {f"target:{fsv_tid}|*": rev_t_ca}
+    not_cp3 = sl.sign_envelope({
+        "batch_count": 1, "batch_root": not_b3_root, "checkpoints_root": sl.rfc9162_mth(not_l2).hex(),
+        "cumulative_entries_count": 2, "denials_delta_root": not_b3_root, "denials_root": sl.smt_root(kv_rev),
+        "genesis": cl.genesis_hash, "issuer": not_role_pin, "log_id": not_log_id, "network": "regtest",
+        "prev_checkpoint_id": not_cp2_ca, "prev_log_outpoint": {"txid": not_cp2_tx, "vout": 2},
+        "role": "notary", "seq": 3, "terminal": True, "type": "seallink-log-checkpoint/1",
+    }, [not_role["sk"]])
+    not_cp3_ca = sl.content_addr(not_cp3)
+    not_cp3_tx, not_cp3_raw = build_signed_tx(
+        [{"txid": not_cp2_tx, "vout": 2, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": not_seal}, f[5]],
+        [(0, op_return_spk(0x14, not_cp3_ca)), (f[5]["value_sat"] + SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+    )
+    cl.broadcast_and_wait_peer(not_cp3_raw)
+    cl.mine(1)
+
+    tkt_rev = copy.deepcopy(tkt_ok)
+    tkt_rev["notarizations"][0].update({
+        "act_smt_proof": sl.smt_prove(kv_rev, f"act:{not_id}|*"),
+        "checkpoints_proof": sl.rfc9162_inclusion_proof(not_l2, 0),
+        "head_checkpoint": not_cp3, "head_checkpoint_txid": not_cp3_tx,
+        "target_smt_proof": sl.smt_prove(kv_rev, f"target:{fsv_tid}|*"),
+        "target_state_record": rev_t,
+    })
+    ch2 = sv.ChainView(cl.new_cold_observer().build_chain_view(wire_objects=[tkt_rev, not_cp1, not_cp2, rel_cp1]))
+    # Verdict 4: Revoked target in cp3 SMT -> REFUSE ARTIFACT_POLICY_DENIED!
+    r_tkt_rev = v_art.verify_artifact_ticket(tkt_rev, gk_pol, ch2)
+    assert (r_tkt_rev.verdict, r_tkt_rev.refusal_code) == ("REFUSE", "ARTIFACT_POLICY_DENIED"), (
+        f"Trace 07 revoked ticket expected ARTIFACT_POLICY_DENIED, got {r_tkt_rev}"
+    )
+
+    # 6. Extract a REAL MINED SegWitNameUpdateProof directly from Node B's 9-method read-only rpcwhitelist RPCs!
+    obs_rpc = nca.make_cli_rpc(cl.bin_dir, cl.dirs[1], cl.ports[1], regtest=True, rpcuser=cl.obs_user, rpcpassword=cl.obs_password)
+    upd_txid = not_rec["update_txid"]
+    upd_txd = obs_rpc("getrawtransaction", upd_txid, True)
+    upd_raw_hex = upd_txd["hex"]
+    prev_txid = upd_txd["vin"][0]["txid"]
+    prev_raw_hex = obs_rpc("getrawtransaction", prev_txid, False)
+    blk_hash = upd_txd["blockhash"]
+    blk_raw_hex = obs_rpc("getblock", blk_hash, 0)
+    blk_hdr_hex = blk_raw_hex[:160]  # real 80-byte Namecoin Core block header!
+    blk_v1 = obs_rpc("getblock", blk_hash, 1)
+    blk_v2 = obs_rpc("getblock", blk_hash, 2)
+    blk_height = int(blk_v2["height"])
+    hdr_entry: dict[str, Any] = {"header_hex": blk_hdr_hex, "height": blk_height}
+    if isinstance(blk_v1.get("auxpow"), dict):
+        ap = blk_v1["auxpow"]
+        pb = ap["parentblock"]
+        prev_h = bytes.fromhex(pb.get("previousblockhash", "00" * 32))[::-1]
+        parent_hdr = (
+            struct.pack("<I", int(pb["version"]))
+            + prev_h
+            + bytes.fromhex(pb["merkleroot"])[::-1]
+            + struct.pack("<III", int(pb["time"]), int(pb["bits"], 16), int(pb["nonce"]))
+        )
+        assert sl.dsha256(parent_hdr)[::-1].hex() == pb["hash"], "reconstructed parent_hdr hash mismatch"
+        c_branch = list(ap["chainmerklebranch"])
+        hdr_entry["auxpow"] = {
+            "chain_branch": c_branch,
+            "chain_merkle_nonce": 0,
+            "chain_merkle_size": 1 << len(c_branch),
+            "coinbase_branch": list(ap["merklebranch"]),
+            "parent_coinbase_hex": ap["tx"]["hex"],
+            "parent_header_hex": parent_hdr.hex(),
+        }
+    tx_list = blk_v2["tx"]
+    tx_idx = next(i for i, tx in enumerate(tx_list) if tx["txid"] == upd_txid)
+    cb_raw_hex = tx_list[0]["hex"]
+    txids_le = [bytes.fromhex(tx["txid"])[::-1] for tx in tx_list]
+    wtxids_le = [b"\x00" * 32] + [bytes.fromhex(tx["hash"])[::-1] for tx in tx_list[1:]]
+    _, t_branches = _btc_merkle_branches_from_hashes_le(txids_le)
+    _, w_branches = _btc_merkle_branches_from_hashes_le(wtxids_le)
+    real_spv_proof = {
+        "block_hash": blk_hash,
+        "block_header_hex": blk_hdr_hex,
+        "block_height": blk_height,
+        "coinbase_merkle_branch": t_branches[0],
+        "coinbase_tx_hex": cb_raw_hex,
+        "prevout_tx_hex": prev_raw_hex,
+        "tx_hex": upd_raw_hex,
+        "tx_index": tx_idx,
+        "txid_branch": t_branches[tx_idx],
+        "wtxid_branch": w_branches[tx_idx],
+        "wtxid_coinbase_branch": w_branches[0],
+    }
+    tier2_page = {
+        "genesis": cl.genesis_hash, "has_more": False, "limit": 10,
+        "name": "id/t7-notary-1", "network": "regtest",
+        "registration": not_rec["registration"],
+        "type": "seallink-tier2-name-history/1",
+        "updates": [real_spv_proof],
+    }
+
+    # Verdict 5: REAL mined nc28.0 SegWitNameUpdateProof + real AuxPoW block header PoW -> ADMIT!
+    r_spv_ok = v_art.verify_tier2_name_history_page(
+        tier2_page, not_pol, headers=[hdr_entry]
+    )
+    assert r_spv_ok.verdict == "ADMIT", f"Trace 07 REAL mined nc28.0 SegWitNameUpdateProof failed: {r_spv_ok}"
+
+    # Verdict 6: Core-only verifier refuses Tier-2 module page with ACTION_UNSUPPORTED!
+    r_spv_core = v_core.verify_tier2_name_history_page(tier2_page, not_pol)
+    assert (r_spv_core.verdict, r_spv_core.refusal_code) == ("REFUSE", "ACTION_UNSUPPORTED"), (
+        f"Trace 07 core-only expected ACTION_UNSUPPORTED, got {r_spv_core}"
+    )
+
+    return {
+        "cold_observer_adapter": "tools/nc_rpc_adapter.py:ColdNamecoinObserver",
+        "release_log_id": rel_log_id,
+        "notary_log_id": not_log_id,
+        "artifact_target_sha256": fsv_tid,
+        "release_cp1_0x14_txid": rel_cp1_tx,
+        "release_cp2_0x14_txid": rel_cp2_tx,
+        "notary_cp1_0x14_txid": not_cp1_tx,
+        "notary_cp2_0x14_txid": not_cp2_tx,
+        "notary_cp3_revocation_0x14_txid": not_cp3_tx,
+        "non_default_next_log_vout": 2,
+        "real_mined_spv_txid": upd_txid,
+        "real_mined_spv_block_hash": blk_hash,
+        "real_mined_spv_block_height": blk_height,
+        "real_mined_spv_tx_index": tx_idx,
+        "real_mined_spv_merkle_depth": len(t_branches[0]),
+        "real_mined_spv_auxpow_verified": "auxpow" in hdr_entry,
+        "verdicts": {
+            "log_checkpoint_cp2_and_journal_replay": {"verdict": r_cp2.verdict, "outcome": r_cp2.outcome},
+            "log_tracked_release_core": {"verdict": r_rel.verdict, "outcome": r_rel.outcome},
+            "artifact_gatekeeper_hardened_admit": {"verdict": r_tkt_ok.verdict, "outcome": r_tkt_ok.outcome},
+            "artifact_gatekeeper_post_cp3_smt_revocation": {"verdict": r_tkt_rev.verdict, "refusal_code": r_tkt_rev.refusal_code},
+            "real_mined_nc28_tier2_spv_proof": {"verdict": r_spv_ok.verdict, "outcome": r_spv_ok.outcome},
+            "tier2_module_core_only_gating": {"verdict": r_spv_core.verdict, "refusal_code": r_spv_core.refusal_code},
+        },
+    }
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Execute all 5 SealLink traces live on two Namecoin Core nc28.0 regtest nodes via ColdNamecoinObserver.")
+    ap = argparse.ArgumentParser(description="Execute all 7 SealLink traces live on two Namecoin Core nc28.0 regtest nodes via ColdNamecoinObserver.")
     ap.add_argument("--bin-dir", required=True, type=Path, help="Directory containing nc28.0 namecoind and namecoin-cli")
     ap.add_argument("--output-json", required=True, type=Path, help="Output JSON file path for observed-traces.json")
     args = ap.parse_args()
@@ -2898,10 +3612,12 @@ def main() -> int:
         t3 = run_trace_03(cl)
         t4 = run_trace_04(cl)
         t5 = run_trace_05(cl)
+        t6 = run_trace_06(cl)
+        t7 = run_trace_07(cl)
         elapsed = round(time.monotonic() - t0, 2)
         report = {
             "suite": "seallink-nc28-live-traces-regtest",
-            "spec_version": "1.0.0-draft.10",
+            "spec_version": "1.0.0-draft.11",
             "chain": "regtest",
             "policy": "standard (-acceptnonstdtxn=0 -txindex=1 -namehistory=1), two loopback-only nodes (node A writer outbound -> node B read-only cold observer with -disablewallet=1 and -rpcwhitelistdefault=0)",
             "node_b_rpcwhitelist": cl.obs_whitelist.split(","),
@@ -2915,6 +3631,8 @@ def main() -> int:
             "trace_03_delegation_depth2_restart_single_use_p2a": t3,
             "trace_04_ward_agent_intake": t4,
             "trace_05_historical_diploma_expiry_reregistration": t5,
+            "trace_06_voluntary_rebind_0x13_and_alien_p2pkh_hijack": t6,
+            "trace_07_transparency_log_0x14_gatekeeper_and_real_mined_spv": t7,
         }
     finally:
         stopped = cl.stop()
@@ -2924,7 +3642,7 @@ def main() -> int:
     assert stopped, "Failed to stop all regtest namecoind processes cleanly"
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"PASS: All 5 SealLink traces verified live via ColdNamecoinObserver on Namecoin Core {meta['subversion']} regtest in {elapsed}s -> {args.output_json}")
+    print(f"PASS: All 7 SealLink traces verified live via ColdNamecoinObserver on Namecoin Core {meta['subversion']} regtest in {elapsed}s -> {args.output_json}")
     return 0
 
 

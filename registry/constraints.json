@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Structured Capability & Constraint Algebra Registry (SPEC-01, SPEC-06). All 7 predicates have linear-time decidable conservative subsumption (child <= parent) with zero Turing-completeness. Standard quota kinds define exact deterministic reservation and settlement rules.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.10",
+  "version": "1.0.0-draft.11",
   "comparison_semantics": "conservative_pairwise",
   "predicates": [
     {

@@ -523,6 +523,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
     of_r4 = rm._base_origin_fixture()
     rec_s4 = of_r4["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]
     bad_b2 = {
+        "binding_mode": "recovery",
         "genesis": GENESIS_MAIN,
         "name": "id/child-leo-badseq",
         "network": "main",
@@ -713,6 +714,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
     maj_nr10 = of_nr10["_maj_unix"]
     rec_nr10 = of_nr10["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]
     b2_nr10 = {
+        "binding_mode": "recovery",
         "genesis": GENESIS_MAIN,
         "name": "id/child-leo-rec-nr10",
         "network": "main",
@@ -1919,7 +1921,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
         of_rc = rm._base_origin_fixture()
         rec_s = of_rc["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]
         b2 = {
-            "genesis": GENESIS_MAIN, "name": "id/child-leo-rec-mk", "network": "main",
+            "binding_mode": "recovery", "genesis": GENESIS_MAIN, "name": "id/child-leo-rec-mk", "network": "main",
             "next_recovery_policy": rec_s["script_policy"], "next_recovery_vout": 0,
             "origin_id": of_rc["_origin_id"], "owner_policy": {"kind": "key", "pk": _kp("d8-mk-rc-b2")["comp"]},
             "registration": {"txid": _h32("d8-mk-rc-b2-reg"), "vout": 0}, "seq": 2,

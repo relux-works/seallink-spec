@@ -10,9 +10,9 @@ ready directory (`site/` by default) containing:
   - Single-page print-ready HTML edition (`/releases/<tag>/seallink-spec-<tag>.html`)
     for direct browser viewing and clean Print-to-PDF export
   - Exact single-file Markdown bundle + SHA-256 (`/releases/<tag>/seallink-spec-<tag>.md{,.sha256}`)
-  - Exact live `$id` endpoints for all 12 Draft 2020-12 JSON Schemas:
+  - Exact live `$id` endpoints for all 14 Draft 2020-12 JSON Schemas:
       /releases/<tag>/schemas/<name>.schema.json (plus /schemas/<name>.schema.json)
-  - All 7 registries and 9 executable vector suites under /releases/<tag>/{registry,vectors}/
+  - All 8 registries and 9 executable vector suites under /releases/<tag>/{registry,vectors}/
   - Optional SealLink Channel 2 /.well-known/ assets copied verbatim from well-known/ if present
   - Explicit `/404.html` (disables Cloudflare Pages SPA fallback so missing schema/artifact paths return HTTP 404)
   - Cloudflare Pages `_headers` (CORS, application/schema+json, immutable caching)
@@ -837,7 +837,7 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
 </section>
 
 <section class="metrics">
-  <div class="metric-card"><div class="metric-num">8 + 2</div><div class="metric-label">Core Specs &amp; Standard Profiles</div></div>
+  <div class="metric-card"><div class="metric-num">{len(spec_files)} + {len(profile_files)}</div><div class="metric-label">Core Specs &amp; Standard Profiles</div></div>
   <div class="metric-card"><div class="metric-num">{len(reg_obj["types"])}</div><div class="metric-label">Canonical Object Types</div></div>
   <div class="metric-card"><div class="metric-num">{len(reg_ref["codes"])}/{len(reg_ref["codes"])}</div><div class="metric-label">Refusal Codes Executed in CI</div></div>
   <div class="metric-card"><div class="metric-num">{len(schema_files)}</div><div class="metric-label">Draft 2020-12 JSON Schemas</div></div>
@@ -1058,7 +1058,7 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build static website & live schema host for seallink.org.")
-    parser.add_argument("--version", default="v1.0.0-draft.10", help="Release version label (e.g. v1.0.0-draft.10)")
+    parser.add_argument("--version", default="v1.0.0-draft.11", help="Release version label (e.g. v1.0.0-draft.11)")
     parser.add_argument("--out", default=str(ROOT / "site"), help="Output directory for generated static site")
     parser.add_argument(
         "--archive-tags",

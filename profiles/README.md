@@ -6,6 +6,7 @@ Pluggable domain profiles extending the SealLink v1.0 Core (`spec/SPEC-00` throu
 | --- | --- | :-: | :-: | --- | --- |
 | [`PROFILE-mail-v1.md`](PROFILE-mail-v1.md) | `mail` | `decided` | `vectors` | `schemas/profile-mail.schema.json` | Sovereign email hosting decoupled from identity: `mail/list`, `mail/read`, `mail/send`, folder/sender Constraint Algebra predicates, snapshot pagination, pinned TLS SPKI mutual auth, offline issuer & UTXO seal revocation. |
 | [`PROFILE-agent-v1.md`](PROFILE-agent-v1.md) | `agent-session` | `decided` | `vectors` | `schemas/profile-agent.schema.json` | Bounded autonomous agent task briefs (`agent/brief`), mechanical tool execution (`agent/tool`), contract-bound isolated sessions with `config_sha256` (`agent/session`), and normative guardian message intake (`agent/guardian-message`). |
+| [`PROFILE-artifact-v1.md`](PROFILE-artifact-v1.md) | *(optional module `artifact-notarization`)* | `decided` | `vectors` | `schemas/profile-artifact.schema.json`, `schemas/log.schema.json` | Decentralized artifact notarization & release Gatekeeper (`seallink-ticket/1`, `m-of-n`, `inconclusive`, absent-notary `target:` veto, `release_floor`, `fsverity-sha256`) and consensus-exact Tier-2 SPV (`seallink-tier2-name-history/1`, `SegWitNameUpdateProof`, Namecoin AuxPoW & retarget). |
 
 Planned profiles (registered in `registry/service-types.json` and `OPEN-QUESTIONS.md` as `open`):
 - `PROFILE-xmpp-v1.md` (`xmpp`)

@@ -494,7 +494,7 @@
             ]
           }
         ],
-        "opreturn_hex": "6a05534c4e4b0c2201d5d593a4bbbc8537be11dc6bfaffaa2be54ff02ffd89c28069652333d67ba26600",
+        "opreturn_hex": "6a05534c4e4b0c2201abdf48fb5489313e88bf139b2190a86e5d4e8b1808c76d170f5efd0d480ace2a00",
         "outputs": {}
       },
       "e3bd4b24c971cbf49b45abbcbd98d29f241ba634c44e7b95001541556e6ffccc": {
@@ -826,9 +826,10 @@
     "salt_hex": "c6ca600efd7625462d6d25edb23028c2151391029eca8b376da2665d77f5c33e"
   },
   "name_binding": {
-    "canonical_jcs": "{\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"name\":\"id/child-leo\",\"network\":\"main\",\"origin_id\":\"873e33a31f122f8fee9938754250671997f9b9429a09c65151d8f0d29d5a24bc\",\"owner_policy\":{\"kind\":\"multisig\",\"m\":2,\"pks\":[\"02861ba2e0e305f4e48ebaee19242ddc98ac94e3e6ae17c4ebad2073b910ef24e5\",\"038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f\",\"03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9\"]},\"registration\":{\"txid\":\"351061827fb3386e023c11ff92727d2508622dcc971d057439c3fde399cdfed0\",\"vout\":0},\"seq\":1,\"type\":\"seallink-name-binding/1\"}",
-    "content_addr": "d5d593a4bbbc8537be11dc6bfaffaa2be54ff02ffd89c28069652333d67ba266",
+    "canonical_jcs": "{\"binding_mode\":\"initial\",\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"name\":\"id/child-leo\",\"network\":\"main\",\"origin_id\":\"873e33a31f122f8fee9938754250671997f9b9429a09c65151d8f0d29d5a24bc\",\"owner_policy\":{\"kind\":\"multisig\",\"m\":2,\"pks\":[\"02861ba2e0e305f4e48ebaee19242ddc98ac94e3e6ae17c4ebad2073b910ef24e5\",\"038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f\",\"03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9\"]},\"registration\":{\"txid\":\"351061827fb3386e023c11ff92727d2508622dcc971d057439c3fde399cdfed0\",\"vout\":0},\"seq\":1,\"type\":\"seallink-name-binding/1\"}",
+    "content_addr": "abdf48fb5489313e88bf139b2190a86e5d4e8b1808c76d170f5efd0d480ace2a",
     "object": {
+      "binding_mode": "initial",
       "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
       "name": "id/child-leo",
       "network": "main",
@@ -849,10 +850,10 @@
       "seq": 1,
       "type": "seallink-name-binding/1"
     },
-    "object_id": "d5d593a4bbbc8537be11dc6bfaffaa2be54ff02ffd89c28069652333d67ba266",
+    "object_id": "abdf48fb5489313e88bf139b2190a86e5d4e8b1808c76d170f5efd0d480ace2a",
     "schema": "schemas/guardian.schema.json#/$defs/NameBinding"
   },
-  "name_binding_opreturn_hex": "6a05534c4e4b0c2201d5d593a4bbbc8537be11dc6bfaffaa2be54ff02ffd89c28069652333d67ba26600",
+  "name_binding_opreturn_hex": "6a05534c4e4b0c2201abdf48fb5489313e88bf139b2190a86e5d4e8b1808c76d170f5efd0d480ace2a00",
   "name_binding_txid": "dbe284fec8d4c6dcfd941fc253f2355b3e9abc671ede537f9a07d82bc851ba88",
   "name_recovery_positive_traces": {
     "branch_a_timely_0x10_cancel_restores_b1": {
@@ -934,7 +935,7 @@
                 "block_time": 1795219000,
                 "confirmed_height": 750500,
                 "op": "NAME_UPDATE",
-                "opreturn_hex": "6a05534c4e4b10220109ca415ab46aff7011e870b38a356d5a9582047eb596bbe32ab0bff53750b33e00",
+                "opreturn_hex": "6a05534c4e4b102201593b641ae299c2e79962b0327c37d378756a441a3a56941445f2ae7966011c5700",
                 "output_script_hex": "530c69642f6368696c642d6c656f4c567b226c696e6b223a7b226f726967696e223a2238373365333361333166313232663866656539393338373534323530363731393937663962393432396130396336353135316438663064323964356132346263227d7d6d75002083f431803325b969b68c0162775719d39a3709a6b8799e197d8450136b2b3525",
                 "owner_policy": {
                   "kind": "multisig",
@@ -1174,7 +1175,7 @@
           },
           "765cdb3ed5ec07374a533f54f28ef7130a5bac8df1e1935031e654dd368f4274": {
             "confirmed_height": 750400,
-            "opreturn_hex": "6a05534c4e4b0c220109ca415ab46aff7011e870b38a356d5a9582047eb596bbe32ab0bff53750b33e00",
+            "opreturn_hex": "6a05534c4e4b0c2201593b641ae299c2e79962b0327c37d378756a441a3a56941445f2ae7966011c5700",
             "outputs": {
               "0": {
                 "script_pubkey_hex": "0020372af4d26098f7358820a31c5c117e65af7847cfe62ef98c8ac41f36554ff7c6"
@@ -1237,7 +1238,7 @@
                 ]
               }
             ],
-            "opreturn_hex": "6a05534c4e4b0c2201d5d593a4bbbc8537be11dc6bfaffaa2be54ff02ffd89c28069652333d67ba26600",
+            "opreturn_hex": "6a05534c4e4b0c2201abdf48fb5489313e88bf139b2190a86e5d4e8b1808c76d170f5efd0d480ace2a00",
             "outputs": {}
           },
           "e3bd4b24c971cbf49b45abbcbd98d29f241ba634c44e7b95001541556e6ffccc": {
@@ -1259,7 +1260,7 @@
           }
         }
       },
-      "expected_active_binding_id": "d5d593a4bbbc8537be11dc6bfaffaa2be54ff02ffd89c28069652333d67ba266",
+      "expected_active_binding_id": "abdf48fb5489313e88bf139b2190a86e5d4e8b1808c76d170f5efd0d480ace2a",
       "expected_active_recovery_seal": {
         "txid": "765cdb3ed5ec07374a533f54f28ef7130a5bac8df1e1935031e654dd368f4274",
         "vout": 0
@@ -1345,7 +1346,7 @@
                 "block_time": 1795219000,
                 "confirmed_height": 750500,
                 "op": "NAME_UPDATE",
-                "opreturn_hex": "6a05534c4e4b10220109ca415ab46aff7011e870b38a356d5a9582047eb596bbe32ab0bff53750b33e00",
+                "opreturn_hex": "6a05534c4e4b102201593b641ae299c2e79962b0327c37d378756a441a3a56941445f2ae7966011c5700",
                 "output_script_hex": "530c69642f6368696c642d6c656f4c567b226c696e6b223a7b226f726967696e223a2238373365333361333166313232663866656539393338373534323530363731393937663962393432396130396336353135316438663064323964356132346263227d7d6d75002083f431803325b969b68c0162775719d39a3709a6b8799e197d8450136b2b3525",
                 "owner_policy": {
                   "kind": "multisig",
@@ -1627,7 +1628,7 @@
           },
           "765cdb3ed5ec07374a533f54f28ef7130a5bac8df1e1935031e654dd368f4274": {
             "confirmed_height": 750400,
-            "opreturn_hex": "6a05534c4e4b0c220109ca415ab46aff7011e870b38a356d5a9582047eb596bbe32ab0bff53750b33e00",
+            "opreturn_hex": "6a05534c4e4b0c2201593b641ae299c2e79962b0327c37d378756a441a3a56941445f2ae7966011c5700",
             "outputs": {
               "0": {
                 "script_pubkey_hex": "0020372af4d26098f7358820a31c5c117e65af7847cfe62ef98c8ac41f36554ff7c6",
@@ -1691,7 +1692,7 @@
                 ]
               }
             ],
-            "opreturn_hex": "6a05534c4e4b0c2201d5d593a4bbbc8537be11dc6bfaffaa2be54ff02ffd89c28069652333d67ba26600",
+            "opreturn_hex": "6a05534c4e4b0c2201abdf48fb5489313e88bf139b2190a86e5d4e8b1808c76d170f5efd0d480ace2a00",
             "outputs": {}
           },
           "e3bd4b24c971cbf49b45abbcbd98d29f241ba634c44e7b95001541556e6ffccc": {
@@ -1705,7 +1706,7 @@
           },
           "ed07edf77799f0cc37d99c563add0e48634d6d9a8ec641de2fde4f83e4fdcceb": {
             "confirmed_height": 751000,
-            "opreturn_hex": "6a05534c4e4b0c220167e94b16e2962b5cbe4461e050a1254dc6c544fef75bdb5d06b077d7449b4b2a00",
+            "opreturn_hex": "6a05534c4e4b0c2201b09067de73f3a1a07bde96dc692cdac92fc0bc7fcf15f637e78f1132174dc64700",
             "outputs": {
               "0": {
                 "script_pubkey_hex": "0020372af4d26098f7358820a31c5c117e65af7847cfe62ef98c8ac41f36554ff7c6"
@@ -1722,7 +1723,7 @@
           }
         }
       },
-      "expected_active_binding_id": "67e94b16e2962b5cbe4461e050a1254dc6c544fef75bdb5d06b077d7449b4b2a",
+      "expected_active_binding_id": "b09067de73f3a1a07bde96dc692cdac92fc0bc7fcf15f637e78f1132174dc647",
       "expected_active_recovery_seal": {
         "txid": "ed07edf77799f0cc37d99c563add0e48634d6d9a8ec641de2fde4f83e4fdcceb",
         "vout": 0
@@ -1730,9 +1731,10 @@
       "expected_superseded_b1_refusal": "ORIGIN_BINDING_INVALID"
     },
     "candidate_b2": {
-      "canonical_jcs": "{\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"name\":\"id/child-leo-attempted-rec\",\"network\":\"main\",\"next_recovery_policy\":{\"keys\":{\"a\":\"02f4c6e44a4cf772c45b7e98b05bbb80de25092246224964800e636f9f63872311\",\"b\":\"03bc32f6fc90cf62ecb14e3efef14e993d1cd7328dfab12e3014bdf8e8f5f906a6\"},\"kind\":\"branch\",\"template\":\"both_of_2\"},\"next_recovery_vout\":0,\"origin_id\":\"873e33a31f122f8fee9938754250671997f9b9429a09c65151d8f0d29d5a24bc\",\"owner_policy\":{\"kind\":\"multisig\",\"m\":2,\"pks\":[\"02861ba2e0e305f4e48ebaee19242ddc98ac94e3e6ae17c4ebad2073b910ef24e5\",\"038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f\",\"03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9\"]},\"registration\":{\"txid\":\"34f0f978b460a0667720e8ccc3ed74f09df2e6b7f8ed25c505b21e24f28ae0a2\",\"vout\":0},\"seq\":2,\"supersedes_binding_id\":\"d5d593a4bbbc8537be11dc6bfaffaa2be54ff02ffd89c28069652333d67ba266\",\"type\":\"seallink-name-binding/1\"}",
-      "content_addr": "09ca415ab46aff7011e870b38a356d5a9582047eb596bbe32ab0bff53750b33e",
+      "canonical_jcs": "{\"binding_mode\":\"recovery\",\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"name\":\"id/child-leo-attempted-rec\",\"network\":\"main\",\"next_recovery_policy\":{\"keys\":{\"a\":\"02f4c6e44a4cf772c45b7e98b05bbb80de25092246224964800e636f9f63872311\",\"b\":\"03bc32f6fc90cf62ecb14e3efef14e993d1cd7328dfab12e3014bdf8e8f5f906a6\"},\"kind\":\"branch\",\"template\":\"both_of_2\"},\"next_recovery_vout\":0,\"origin_id\":\"873e33a31f122f8fee9938754250671997f9b9429a09c65151d8f0d29d5a24bc\",\"owner_policy\":{\"kind\":\"multisig\",\"m\":2,\"pks\":[\"02861ba2e0e305f4e48ebaee19242ddc98ac94e3e6ae17c4ebad2073b910ef24e5\",\"038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f\",\"03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9\"]},\"registration\":{\"txid\":\"34f0f978b460a0667720e8ccc3ed74f09df2e6b7f8ed25c505b21e24f28ae0a2\",\"vout\":0},\"seq\":2,\"supersedes_binding_id\":\"abdf48fb5489313e88bf139b2190a86e5d4e8b1808c76d170f5efd0d480ace2a\",\"type\":\"seallink-name-binding/1\"}",
+      "content_addr": "593b641ae299c2e79962b0327c37d378756a441a3a56941445f2ae7966011c57",
       "object": {
+        "binding_mode": "recovery",
         "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
         "name": "id/child-leo-attempted-rec",
         "network": "main",
@@ -1760,16 +1762,17 @@
           "vout": 0
         },
         "seq": 2,
-        "supersedes_binding_id": "d5d593a4bbbc8537be11dc6bfaffaa2be54ff02ffd89c28069652333d67ba266",
+        "supersedes_binding_id": "abdf48fb5489313e88bf139b2190a86e5d4e8b1808c76d170f5efd0d480ace2a",
         "type": "seallink-name-binding/1"
       },
-      "object_id": "09ca415ab46aff7011e870b38a356d5a9582047eb596bbe32ab0bff53750b33e",
+      "object_id": "593b641ae299c2e79962b0327c37d378756a441a3a56941445f2ae7966011c57",
       "schema": "schemas/guardian.schema.json#/$defs/NameBinding"
     },
     "candidate_b3": {
-      "canonical_jcs": "{\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"name\":\"id/child-leo-recovered-final\",\"network\":\"main\",\"next_recovery_policy\":{\"keys\":{\"a\":\"02f4c6e44a4cf772c45b7e98b05bbb80de25092246224964800e636f9f63872311\",\"b\":\"03bc32f6fc90cf62ecb14e3efef14e993d1cd7328dfab12e3014bdf8e8f5f906a6\"},\"kind\":\"branch\",\"template\":\"both_of_2\"},\"next_recovery_vout\":0,\"origin_id\":\"873e33a31f122f8fee9938754250671997f9b9429a09c65151d8f0d29d5a24bc\",\"owner_policy\":{\"kind\":\"key\",\"pk\":\"0354764cd4811f673edc325484d18767df188d3d1119a0e33842c1c50909157f35\"},\"registration\":{\"txid\":\"0bb758905eeaa0e870a10c1c76500b6c08baaab252953989a8202299a956eec2\",\"vout\":0},\"seq\":2,\"supersedes_binding_id\":\"d5d593a4bbbc8537be11dc6bfaffaa2be54ff02ffd89c28069652333d67ba266\",\"type\":\"seallink-name-binding/1\"}",
-      "content_addr": "67e94b16e2962b5cbe4461e050a1254dc6c544fef75bdb5d06b077d7449b4b2a",
+      "canonical_jcs": "{\"binding_mode\":\"recovery\",\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"name\":\"id/child-leo-recovered-final\",\"network\":\"main\",\"next_recovery_policy\":{\"keys\":{\"a\":\"02f4c6e44a4cf772c45b7e98b05bbb80de25092246224964800e636f9f63872311\",\"b\":\"03bc32f6fc90cf62ecb14e3efef14e993d1cd7328dfab12e3014bdf8e8f5f906a6\"},\"kind\":\"branch\",\"template\":\"both_of_2\"},\"next_recovery_vout\":0,\"origin_id\":\"873e33a31f122f8fee9938754250671997f9b9429a09c65151d8f0d29d5a24bc\",\"owner_policy\":{\"kind\":\"key\",\"pk\":\"0354764cd4811f673edc325484d18767df188d3d1119a0e33842c1c50909157f35\"},\"registration\":{\"txid\":\"0bb758905eeaa0e870a10c1c76500b6c08baaab252953989a8202299a956eec2\",\"vout\":0},\"seq\":2,\"supersedes_binding_id\":\"abdf48fb5489313e88bf139b2190a86e5d4e8b1808c76d170f5efd0d480ace2a\",\"type\":\"seallink-name-binding/1\"}",
+      "content_addr": "b09067de73f3a1a07bde96dc692cdac92fc0bc7fcf15f637e78f1132174dc647",
       "object": {
+        "binding_mode": "recovery",
         "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
         "name": "id/child-leo-recovered-final",
         "network": "main",
@@ -1792,10 +1795,10 @@
           "vout": 0
         },
         "seq": 2,
-        "supersedes_binding_id": "d5d593a4bbbc8537be11dc6bfaffaa2be54ff02ffd89c28069652333d67ba266",
+        "supersedes_binding_id": "abdf48fb5489313e88bf139b2190a86e5d4e8b1808c76d170f5efd0d480ace2a",
         "type": "seallink-name-binding/1"
       },
-      "object_id": "67e94b16e2962b5cbe4461e050a1254dc6c544fef75bdb5d06b077d7449b4b2a",
+      "object_id": "b09067de73f3a1a07bde96dc692cdac92fc0bc7fcf15f637e78f1132174dc647",
       "schema": "schemas/guardian.schema.json#/$defs/NameBinding"
     }
   },
@@ -2357,5 +2360,5 @@
       }
     }
   ],
-  "version": "1.0.0-draft.10"
+  "version": "1.0.0-draft.11"
 }

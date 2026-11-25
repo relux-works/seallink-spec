@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.11/schemas/profile-artifact.schema.json",
+  "title": "SealLink v1.0 PROFILE-artifact-v1: Artifact Tickets, Tier-2 SPV SegWitNameUpdateProof, AuxPoW & Gatekeeper Policy",
+  "$defs": {
+    "AuxPowProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["parent_header_hex", "parent_coinbase_hex", "coinbase_branch", "chain_branch", "chain_merkle_nonce", "chain_merkle_size"],
+      "properties": {
+        "parent_header_hex": { "type": "string", "pattern": "^[0-9a-f]{160}$", "not": { "pattern": "\n" } },
+        "parent_coinbase_hex": { "type": "string", "pattern": "^([0-9a-f]{2}){60,100000}$", "not": { "pattern": "\n" } },
+        "coinbase_branch": {
+          "type": "array",
+          "maxItems": 32,
+          "items": { "$ref": "common.schema.json#/$defs/Hex64" }
+        },
+        "chain_branch": {
+          "type": "array",
+          "maxItems": 32,
+          "items": { "$ref": "common.schema.json#/$defs/Hex64" }
+        },
+        "chain_merkle_nonce": { "type": "integer", "minimum": 0, "maximum": 4294967295, "x-seallink-refusal": "WIRE_INTEGER" },
+        "chain_merkle_size": { "type": "integer", "minimum": 1, "maximum": 1073741824, "x-seallink-refusal": "WIRE_INTEGER" }
+      }
+    },
+    "BlockHeaderProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["height", "header_hex"],
+      "properties": {
+        "height": { "$ref": "common.schema.json#/$defs/Uint53" },
+        "header_hex": { "type": "string", "pattern": "^[0-9a-f]{160}$", "not": { "pattern": "\n" } },
+        "auxpow": { "$ref": "#/$defs/AuxPowProof" }
+      }
+    },
+    "SegWitNameUpdateProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "block_height", "block_hash", "block_header_hex", "tx_index",
+        "tx_hex", "prevout_tx_hex", "coinbase_tx_hex",
+        "coinbase_merkle_branch", "txid_branch", "wtxid_branch", "wtxid_coinbase_branch"
+      ],
+      "description": "Consensus-exact Tier-2 SPV proof for a SegWit Namecoin OP_NAME_UPDATE / OP_NAME_FIRSTUPDATE (all 7 P0-CONS-1 checks: non-64B, coinbase index==0 & depth D_tree, BIP-141 last 6a24aa21a9ed commitment, wtxid[0]==00*32, stripped BIP-143 scriptCode with CompactSize prefix, strict BIP-66 DER + SIGHASH_ALL accepting high-S).",
+      "properties": {
+        "block_height": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+        "block_hash": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "block_header_hex": { "type": "string", "pattern": "^[0-9a-f]{160}$", "not": { "pattern": "\n" } },
+        "tx_index": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+        "tx_hex": { "type": "string", "pattern": "^([0-9a-f]{2}){60,200000}$", "not": { "pattern": "\n" } },
+        "prevout_tx_hex": { "type": "string", "pattern": "^([0-9a-f]{2}){60,200000}$", "not": { "pattern": "\n" } },
+        "coinbase_tx_hex": { "type": "string", "pattern": "^([0-9a-f]{2}){60,200000}$", "not": { "pattern": "\n" } },
+        "coinbase_merkle_branch": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "common.schema.json#/$defs/Hex64" }
+        },
+        "txid_branch": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "common.schema.json#/$defs/Hex64" }
+        },
+        "wtxid_branch": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "common.schema.json#/$defs/Hex64" }
+        },
+        "wtxid_coinbase_branch": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "common.schema.json#/$defs/Hex64" }
+        }
+      }
+    },
+    "Tier2NameHistoryPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "network", "genesis", "name", "registration", "limit", "updates", "has_more"],
+      "properties": {
+        "type": { "const": "seallink-tier2-name-history/1" },
+        "network": { "$ref": "common.schema.json#/$defs/Network" },
+        "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+        "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
+        "cursor_height": { "$ref": "common.schema.json#/$defs/Uint53" },
+        "cursor_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 64, "x-seallink-refusal": "WIRE_INTEGER" },
+        "updates": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/SegWitNameUpdateProof" }
+        },
+        "has_more": { "type": "boolean" },
+        "next_cursor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["height", "txid"],
+          "properties": {
+            "height": { "$ref": "common.schema.json#/$defs/Uint53" },
+            "txid": { "$ref": "common.schema.json#/$defs/Hex64" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["has_more"], "properties": { "has_more": { "const": true } } },
+          "then": { "required": ["next_cursor"] },
+          "else": { "not": { "required": ["next_cursor"] } }
+        }
+      ]
+    },
+    "NotarizationTicketEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["notary_act"],
+      "properties": {
+        "notary_act": { "$ref": "credential.schema.json#/$defs/NotaryAct" },
+        "anchor_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "checkpoint": { "$ref": "log.schema.json#/$defs/LogCheckpoint" },
+        "checkpoint_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "batch_proof": { "$ref": "log.schema.json#/$defs/BatchMerkleProof" },
+        "head_checkpoint": { "$ref": "log.schema.json#/$defs/LogCheckpoint" },
+        "head_checkpoint_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "checkpoints_proof": { "$ref": "log.schema.json#/$defs/CheckpointsInclusionProof" },
+        "act_smt_proof": { "$ref": "log.schema.json#/$defs/SmtProof" },
+        "target_smt_proof": { "$ref": "log.schema.json#/$defs/SmtProof" },
+        "act_state_record": { "$ref": "log.schema.json#/$defs/LogStateRecord" },
+        "target_state_record": { "$ref": "log.schema.json#/$defs/LogStateRecord" }
+      }
+    },
+    "AbsentNotaryProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["log_id", "head_checkpoint", "head_checkpoint_txid", "target_smt_proof"],
+      "properties": {
+        "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "head_checkpoint": { "$ref": "log.schema.json#/$defs/LogCheckpoint" },
+        "head_checkpoint_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "target_smt_proof": { "$ref": "log.schema.json#/$defs/SmtProof" },
+        "target_state_record": { "$ref": "log.schema.json#/$defs/LogStateRecord" }
+      }
+    },
+    "ArtifactTicket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "network", "genesis", "artifact_identity", "target_sha256", "notarizations"],
+      "properties": {
+        "type": { "const": "seallink-ticket/1" },
+        "network": { "$ref": "common.schema.json#/$defs/Network" },
+        "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "artifact_identity": { "$ref": "log.schema.json#/$defs/ArtifactIdentity" },
+        "target_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "release": { "$ref": "log.schema.json#/$defs/ReleaseRecord" },
+        "release_anchor_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "release_checkpoint": { "$ref": "log.schema.json#/$defs/LogCheckpoint" },
+        "release_checkpoint_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "release_batch_proof": { "$ref": "log.schema.json#/$defs/BatchMerkleProof" },
+        "release_head_checkpoint": { "$ref": "log.schema.json#/$defs/LogCheckpoint" },
+        "release_head_checkpoint_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "release_checkpoints_proof": { "$ref": "log.schema.json#/$defs/CheckpointsInclusionProof" },
+        "release_smt_proof": { "$ref": "log.schema.json#/$defs/SmtProof" },
+        "release_state_record": { "$ref": "log.schema.json#/$defs/LogStateRecord" },
+        "notarizations": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/NotarizationTicketEntry" }
+        },
+        "absent_notary_proofs": {
+          "type": "array",
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/AbsentNotaryProof" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["notarizations"], "properties": { "notarizations": { "maxItems": 0 } } },
+          "then": { "required": ["release"] }
+        }
+      ]
+    },
+    "GatekeeperPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "trusted_notaries", "quorum_m", "required_claims", "allow_reinstatement"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["standard", "hardened"] },
+        "trusted_notaries": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["notary_pin"],
+            "properties": {
+              "notary_pin": { "$ref": "common.schema.json#/$defs/NamePin" },
+              "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+              "heartbeat_max_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" }
+            }
+          }
+        },
+        "quorum_m": { "type": "integer", "minimum": 0, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
+        "required_claims": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z0-9._-]+(/[a-z0-9._-]+)+$", "maxLength": 128, "not": { "pattern": "\n" } }
+        },
+        "trusted_release_issuers": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["issuer_pin", "allowed_product_prefixes"],
+            "properties": {
+              "issuer_pin": { "$ref": "common.schema.json#/$defs/NamePin" },
+              "allowed_product_prefixes": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 64,
+                "items": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-z0-9._-]+(/[a-z0-9._-]+)*/$", "not": { "pattern": "\n" } }
+              },
+              "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+              "heartbeat_max_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" }
+            }
+          }
+        },
+        "require_release": { "type": "boolean" },
+        "release_floor": {
+          "type": "object",
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/PositiveUint53" }
+        },
+        "allow_reinstatement": { "type": "boolean" },
+        "bootstrap_expires_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["mode"], "properties": { "mode": { "const": "hardened" } } },
+          "then": { "not": { "required": ["bootstrap_expires_at"] } }
+        }
+      ]
+    }
+  }
+}

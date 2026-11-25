@@ -30,7 +30,7 @@ import build_security_suite as sec
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.10"
+VERSION = "1.0.0-draft.11"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 VECTORS_DIR = ROOT / "vectors"
 
@@ -1118,6 +1118,7 @@ def build_trace_02_guardian() -> dict[str, Any]:
 
     # NameBinding (0x0c)
     binding = {
+        "binding_mode": "initial",
         "genesis": GENESIS_MAIN,
         "name": "id/child-leo",
         "network": "main",
@@ -1471,6 +1472,7 @@ def build_trace_02_guardian() -> dict[str, Any]:
     # Branch A: recovery_seal spent with 0x0c proposing B2 -> owner broadcasts 0x10 cancel -> B1 restored & recovery_seal advances to (T_rec1, 0)!
     # Branch B: subsequent 0x0c spends (T_rec1, 0) proposing B3 -> after 1008 blocks without 0x10 -> B3 promoted & recovery_seal advances to (T_rec2, 0)!
     b2 = {
+        "binding_mode": "recovery",
         "genesis": GENESIS_MAIN,
         "name": "id/child-leo-attempted-rec",
         "network": "main",
@@ -1488,6 +1490,7 @@ def build_trace_02_guardian() -> dict[str, Any]:
     b3_owner = make_keypair("t2-leo-b3-new-owner")
     b3_owner_pol = {"kind": "key", "pk": b3_owner["compressed_pk"]}
     b3 = {
+        "binding_mode": "recovery",
         "genesis": GENESIS_MAIN,
         "name": "id/child-leo-recovered-final",
         "network": "main",
@@ -2324,6 +2327,7 @@ def build_trace_04_agent_guardian_intake() -> dict[str, Any]:
     origin_txid = h32("t4-origin-tx")
 
     binding = {
+        "binding_mode": "initial",
         "genesis": GENESIS_MAIN,
         "name": "id/agent-nova",
         "network": "main",

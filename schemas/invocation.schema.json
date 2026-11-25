@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.10/schemas/invocation.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.11/schemas/invocation.schema.json",
   "title": "SealLink v1.0 Invocation, Receipt, Sessions, Auth, Owner Control, Journal & Migration",
   "$defs": {
     "Invocation": {
@@ -394,7 +394,7 @@
             "subject_kind": { "const": "role" },
             "name": { "$ref": "common.schema.json#/$defs/NameStr" },
             "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
-            "role": { "type": "string", "enum": ["grant", "cred", "notary"] },
+            "role": { "type": "string", "enum": ["grant", "cred", "notary", "release"] },
             "policy_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
             "cutoff_height": { "$ref": "common.schema.json#/$defs/Uint53" },
             "retired_before_height": { "$ref": "common.schema.json#/$defs/Uint53" }
@@ -409,6 +409,16 @@
             "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "slot": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
             "outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["subject_kind", "log_id", "role"],
+          "properties": {
+            "subject_kind": { "const": "log" },
+            "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "role": { "type": "string", "enum": ["notary", "release"] }
           }
         }
       ]
@@ -475,7 +485,8 @@
                   "enum": [
                     "SEAL_SPENT", "NAME_ROLE_CHANGED", "SUBJECT_ENDED",
                     "CRED_ISSUER_CLOSED", "CRED_REVOKED_FOR_CAUSE",
-                    "GRANT_CLOSED", "GRANT_ROW_STOPPED", "SINGLE_USE_CONSUMED"
+                    "GRANT_CLOSED", "GRANT_ROW_STOPPED", "SINGLE_USE_CONSUMED",
+                    "NOTARY_LOG_COMPROMISED"
                   ]
                 },
                 "spend_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
@@ -768,6 +779,39 @@
                 "block_height": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
                 "block_hash": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "header_time": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "journal_id", "pos", "prev_commitment", "kind", "body"],
+          "properties": {
+            "type": { "const": "seallink-journal-entry/1" },
+            "journal_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "pos": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+            "prev_commitment": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "kind": { "const": "log-head" },
+            "body": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "log_id", "role", "max_seq", "checkpoint_id", "checkpoint_txid",
+                "block_hash", "confirmed_height", "denials_root", "checkpoints_root", "terminal"
+              ],
+              "description": "Reorg-safe confirmed notary/release log head persisted strictly after confirmation depth >= required_depth.",
+              "properties": {
+                "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "role": { "type": "string", "enum": ["notary", "release"] },
+                "max_seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                "checkpoint_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "checkpoint_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "block_hash": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "confirmed_height": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                "denials_root": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "checkpoints_root": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "terminal": { "type": "boolean" }
               }
             }
           }

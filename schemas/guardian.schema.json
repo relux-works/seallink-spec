@@ -1,48 +1,74 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.10/schemas/guardian.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.11/schemas/guardian.schema.json",
   "title": "SealLink v1.0 Name Binding, Guardianship, Roster Transition, Capacity & Subject End",
   "$defs": {
     "NameBinding": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type", "network", "genesis", "origin_id", "seq", "name", "registration", "owner_policy"],
-      "properties": {
-        "type": { "const": "seallink-name-binding/1" },
-        "network": { "$ref": "common.schema.json#/$defs/Network" },
-        "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
-        "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
-        "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
-        "name": { "$ref": "common.schema.json#/$defs/NameStr" },
-        "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
-        "owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
-        "supersedes_binding_id": { "$ref": "common.schema.json#/$defs/Hex64" },
-        "next_recovery_vout": {
-          "$ref": "common.schema.json#/$defs/Vout",
-          "description": "Output index in the 0x0c recovery transaction holding the successor both_of_2(disposer_pk, arbiter_pk) recovery_seal."
-        },
-        "next_recovery_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }
-      },
-      "dependentRequired": {
-        "next_recovery_vout": ["next_recovery_policy"],
-        "next_recovery_policy": ["next_recovery_vout"]
-      },
-      "allOf": [
+      "oneOf": [
         {
-          "if": { "required": ["seq"], "properties": { "seq": { "type": "integer", "const": 1 } } },
-          "then": {
-            "not": {
-              "anyOf": [
-                { "required": ["supersedes_binding_id"] },
-                { "required": ["next_recovery_vout"] },
-                { "required": ["next_recovery_policy"] }
-              ]
-            }
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "origin_id", "seq", "binding_mode", "name", "registration", "owner_policy"],
+          "properties": {
+            "type": { "const": "seallink-name-binding/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "seq": { "type": "integer", "const": 1, "x-seallink-refusal": "WIRE_INTEGER" },
+            "binding_mode": { "const": "initial" },
+            "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+            "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
+            "owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }
           }
         },
         {
-          "if": { "required": ["seq"], "properties": { "seq": { "type": "integer", "minimum": 2 } } },
-          "then": { "required": ["supersedes_binding_id", "next_recovery_vout", "next_recovery_policy"] }
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "origin_id", "seq", "binding_mode", "name", "registration", "owner_policy", "supersedes_binding_id", "next_recovery_vout", "next_recovery_policy"],
+          "properties": {
+            "type": { "const": "seallink-name-binding/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "seq": { "type": "integer", "minimum": 2, "maximum": 9007199254740991, "x-seallink-refusal": "WIRE_INTEGER" },
+            "binding_mode": { "const": "recovery" },
+            "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+            "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
+            "owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+            "supersedes_binding_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "next_recovery_vout": {
+              "$ref": "common.schema.json#/$defs/Vout",
+              "description": "Output index in the 0x0c recovery transaction holding the successor both_of_2(disposer_pk, arbiter_pk) recovery_seal."
+            },
+            "next_recovery_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "network", "genesis", "origin_id", "seq", "binding_mode", "name", "registration", "owner_policy", "supersedes_binding_id", "consent_outpoint", "delay_blocks"],
+          "properties": {
+            "type": { "const": "seallink-name-binding/1" },
+            "network": { "$ref": "common.schema.json#/$defs/Network" },
+            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "origin_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "seq": { "type": "integer", "minimum": 2, "maximum": 9007199254740991, "x-seallink-refusal": "WIRE_INTEGER" },
+            "binding_mode": { "const": "voluntary" },
+            "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+            "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
+            "owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+            "supersedes_binding_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "consent_outpoint": {
+              "$ref": "common.schema.json#/$defs/Outpoint",
+              "description": "Ordinary SegWit consent UTXO created in T_offer on B_2.registration locked to compile(B_2.owner_policy) and spent in T_rebind (0x13)."
+            },
+            "delay_blocks": {
+              "type": "integer",
+              "minimum": 144,
+              "maximum": 52560,
+              "x-seallink-refusal": "WIRE_INTEGER"
+            }
+          }
         }
       ]
     },

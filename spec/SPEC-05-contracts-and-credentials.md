@@ -1,10 +1,10 @@
 # SPEC-05: Contracts, Symmetric Assent, Verifiable Credentials, and General Notary Acts
 
-- **Version:** `1.0.0-draft.10`
+- **Version:** `1.0.0-draft.11`
 - **Status:** `draft` (normative rules `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/trace-02-guardian-succession-assent.json`, `vectors/refusal-coverage-matrix.json`)
-- **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/opreturn-actions.json`, `registry/refusal-codes.json`
-- **Schemas:** `schemas/contract.schema.json`, `schemas/credential.schema.json`
+- **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/opreturn-actions.json`, `registry/refusal-codes.json`, `registry/artifact-schemes.json`
+- **Schemas:** `schemas/contract.schema.json`, `schemas/credential.schema.json`, `schemas/log.schema.json`
 
 ---
 
@@ -90,8 +90,8 @@ Third-party attestations about a subject — diplomas, licenses, notary credenti
    - **`eternal`:** MUST NOT carry `revocation_seal`; `not_after_height` / `not_after_unix` optional. Verified against the historical registration lineage matching `issuer.registration` at `h_anchor` (`link.cred` role policy active at `h_anchor`). Similarly, if `subject.mode = "name"`, `subject.name_pin` `(name, registration, owner_policy)` is verified at **`h_anchor`** (so an eternal diploma survives both issuer and subject name expiry/transfer). If `subject.mode = "origin"`, the presenter MUST supply a verified `origin_bundle` matching `subject.origin_id` (`ORIGIN_UNVERIFIED` if omitted or invalid), and the verifier verifies **historical origin existence and trusted issuance** (`h_origin <= h_anchor`, confirmed `binding_seal` and `status_seal` UTXOs at `<= h_anchor` [failing closed `ORIGIN_STATUS_INCOMPLETE` if missing/unconfirmed], valid `name_binding` if supplied, and `h_origin < h_c` under any origin-issuer `0x0b` break) — independent of whether an initial `0x0c` name binding had already confirmed at `h_anchor`, and independent of subsequent emancipation, status change, `seallink-end/1`, or name transfer.
    - **`revocable`:** MUST carry a confirmed `revocation_seal`; `not_after_height` / `not_after_unix` optional. By default verifies the issuer's `link.cred` role policy, `subject.name_pin` (when `subject.mode = "name"`), and active `origin_bundle` status (when `subject.mode = "origin"`, `ORIGIN_UNVERIFIED` if missing/invalid) current at tip (exceptions such as `seallink-guardian/1` verify issuer at `h_anchor`, `SL-ORIG-008`). Spending the seal closes the credential (`SEAL_SPENT`); spending with `OP_RETURN 0x0a` (`typed_digest(seallink-credential-withdrawal/1)`) records `CRED_REVOKED_FOR_CAUSE` (`seallink-credential-withdrawal/1` is an unsigned cause record authenticated by the on-chain spend of `revocation_seal`; when presented alongside `0x0a`, verifiers validate its closed schema and exact `credential_id` / `typed_digest` match against the `0x0a` frame; a `0x0a` spend without an off-chain document still revokes permanently and NEVER admits).
 4. **Owner-authenticated compromise break `h_c` (`0x0b`, `SL-CONT-009`, `decided`):**
-   - If an issuer's or guardian's `cred`, `notary`, or `grant` role policy (current or retired) is compromised, the actor's cold `name_owner` `ScriptPolicy` broadcasts an `OP_NAME_UPDATE` (removing/replacing the role if current, signed `SIGHASH_ALL`) containing the 50-byte `0x0b` frame embedding `h_c_le64` (`<= inclusion_height`) and `typed_digest(seallink-credential-break/1)`.
-   - Because verifiers reconstruct `seallink-credential-break/1` (`schemas/credential.schema.json#/$defs/CredentialBreak`, with `role ∈ {"cred", "notary", "grant"}`) directly from the name history — using the confirmed spent previous name output `name_input` (whose trailing script MUST equal `compile(issuer.owner_policy)` and whose spend MUST pass `SL-LDGR-007`), `issuer` `NamePin`, `role`, candidate historical canonical `compromised_policy` (`ThresholdPolicy` without `"alg"`), and on-chain `h_c` — withholding off-chain break documents cannot hide a compromise.
+   - If an issuer's, notary's, release publisher's, or guardian's `cred`, `notary`, `grant`, or `release` role policy (current or retired) is compromised, the actor's cold `name_owner` `ScriptPolicy` broadcasts an `OP_NAME_UPDATE` (removing/replacing the role if current, signed `SIGHASH_ALL`) containing the 50-byte `0x0b` frame embedding `h_c_le64` (`<= inclusion_height`) and `typed_digest(seallink-credential-break/1)`.
+   - Because verifiers reconstruct `seallink-credential-break/1` (`schemas/credential.schema.json#/$defs/CredentialBreak`, with `role ∈ {"cred", "notary", "grant", "release"}`) directly from the name history — using the confirmed spent previous name output `name_input` (whose trailing script MUST equal `compile(issuer.owner_policy)` and whose spend MUST pass `SL-LDGR-007`), `issuer` `NamePin`, `role`, candidate historical canonical `compromised_policy` (`ThresholdPolicy` without `"alg"`), and on-chain `h_c` — withholding off-chain break documents cannot hide a compromise.
    - For the exact affected `(issuer, registration, owner_policy, role, compromised_policy)` whose reconstructed `typed_digest(seallink-credential-break/1)` matches the `0x0b` frame commitment: anchors at `h_anchor < h_c` (e.g., `h_anchor = h_c - 1`) **survive**, while anchors at `h_anchor >= h_c` (`h_anchor = h_c` or `h_anchor = h_c + 1`) durably refuse **`CRED_ISSUER_CLOSED`** (for eternal and revocable credentials, notary acts, AND both historical and live-tip ward `grant` approvals). Multiple breaks matching the same policy narrow by `min(h_c)`. Durable `role` closures in `FencedJournal` MUST be keyed by **`(cause, name, registration, role, policy_sha256)`** (`schemas/invocation.schema.json#/$defs/ClosureSubject`) — separating `CRED_ISSUER_CLOSED` (`cutoff_height = h_c`) from routine `NAME_ROLE_CHANGED` (`retired_before_height`) so a later `0x0b` NEVER overwrites or weakens an earlier `NAME_ROLE_CHANGED` closure, scoping the closure to that exact `(name, registration, role, policy_sha256)` even across subsequent `owner_policy` changes on the same registration, and writing idempotently (zero duplicate writes on repeated observation). Observing a late anchor `h_late >= h_c` NEVER blocks an earlier anchor `h_early < h_c` of the same document or a distinct successor policy `B` installed via valid `OP_NAME_UPDATE` in the same journal. *(Because `0x0b` is an on-chain owner-authenticated ledger fact reconstructed directly from confirmed name history rather than caller-asserted metadata, recording a verified `CRED_ISSUER_CLOSED` cutoff upon witnessing a confirmed `0x0b` frame does not depend on validating an unauthenticated caller's signature.)*
 5. **Privacy:** Raw PII MUST NOT appear on chain (`loc_type = 0x00` default). Issuers deduplicating humans MUST NOT hash raw biometrics directly. Per-claim selective disclosure uses `claim_commitments` with an independent 32-byte CSPRNG salt per entry (`SL-WIRE-014`).
 
@@ -112,30 +112,65 @@ Third-party attestations about a subject — diplomas, licenses, notary credenti
 
 A notary is an independent off-authority-path actor (human, organization, or agent; refusing by actor class is invalid unless required by explicit policy) acting under its `link.notary` role policy (`SL-CONT-011`, `decided`):
 
-1. **Four act kinds (each with a closed `details` schema bound strictly to `act_kind == details.kind` in `schemas/credential.schema.json`):**
+1. **Five act kinds (each with a closed `details` schema bound strictly to `act_kind == details.kind` in `schemas/credential.schema.json`):**
    - `contract-notarization`: certifies that named parties executed `contract_id` (plus optional `notary_clause_sha256`).
    - `certified-copy`: certifies correspondence of `original_sha256` and `media_type` to an inspected original.
    - `fact-attestation`: certifies a witnessed `fact_sha256` under `fact_schema` at `(tip_height, tip_hash)`.
    - `child-within-parent`: optional re-delegation attestation naming `(parent_grant_id, child_grant_id, ordinal)` when parent policy demands prose/policy review alongside mechanical narrowing.
-2. **Lifecycles & Anchoring (`0x04`):** Anchored via a presenter-supplied confirmed `OP_RETURN` action `0x04` transaction committing `content_addr(seallink-notary/1)` (presenters SHOULD supply the earliest confirmed `0x04` anchor). Supports BOTH **`eternal`** (no `notary_seal`, verified against `link.notary` at `h_anchor`, bounded by `0x0b` `h_c`) and **`revocable`** (`notary_seal` required; plain spend withdraws allowing recertification; spend with `0x05` committing `typed_digest(seallink-credential-withdrawal/1)` — authenticated by the on-chain `notary_seal` spend — records `CRED_REVOKED_FOR_CAUSE` and bars recertification without a new ruling).
+   - `artifact-notarization`: certifies claims (`claims[]`, each with `claim_id` and `verdict ∈ {"pass", "fail", "inconclusive"}`) over a canonical `artifact_identity` (`schemas/log.schema.json#/$defs/ArtifactIdentity`), requiring `target_sha256 == H_tag("seallink-artifact-id/1", JCS({"digest", "scheme"}))` strictly excluding `params` (`SL-CONT-013`).
+2. **Lifecycles & Anchoring (`0x04` and `0x14`):** Supports THREE lifecycles: **`eternal`** (`0x04`, no `notary_seal`, verified against `link.notary` at `h_anchor`, bounded by `0x0b` `h_c`), **`revocable`** (`0x04` + `notary_seal`; plain spend withdraws allowing recertification; spend with `0x05` committing `typed_digest(seallink-credential-withdrawal/1)` records `CRED_REVOKED_FOR_CAUSE`), and **`log_tracked`** (`log_id` required, `notary_seal` forbidden; batched inside a `0x14` transparency/denial log checkpoint per `§6` with SMT denial key `act:<act_id>|*` and optional `target:<target_id>|*` veto).
 3. **Notary identity pin & deterministic verification order:** Every reference to a notary pins `(name, registration, owner_policy)` with mandatory writer verification (`SL-LDGR-007`) so transferring a notary's name never transfers notarizing authority. Verifying any `seallink-notary/1` MUST execute in order:
-   1. Wire pipeline (`SPEC-01 §7`) & `network`/`genesis` match (`CHAIN_MISMATCH`);
-   2. Presenter-supplied confirmed `0x04` anchor matching `content_addr(seallink-notary/1)` (`CRED_ANCHOR_MISSING`) at depth `>= required_depth` (`CHAIN_DEPTH_INSUFFICIENT`);
-   3. Notary `link.notary` history walk & writer-verified `owner_policy` match at `h_anchor` (`eternal`) or tip (`revocable`) (`NAME_HISTORY_UNAVAILABLE` / `NAME_OWNER_MISMATCH` / `WIRE_SIGNATURE`) + `0x0b` compromise check (`h_anchor >= h_c` refuses `CRED_ISSUER_CLOSED`; `h_anchor < h_c` survives);
+   1. Wire pipeline (`SPEC-01 §7`) & `network`/`genesis` match (`CHAIN_MISMATCH`) & canonical `target_sha256` check for `artifact-notarization` (`WIRE_MEMBER`);
+   2. For `eternal`/`revocable`: presenter-supplied confirmed `0x04` anchor matching `content_addr(seallink-notary/1)` (`CRED_ANCHOR_MISSING`) at depth `>= required_depth` (`CHAIN_DEPTH_INSUFFICIENT`); for `log_tracked`: verify `0x14` checkpoint inclusion, ancestor chain, durable log closure (`NOTARY_LOG_COMPROMISED`), and canonical SMT denial proof (`§6`);
+   3. Notary `link.notary` history walk & writer-verified `owner_policy` match at `h_anchor` (`eternal`/`log_tracked`) or tip (`revocable`) (`NAME_HISTORY_UNAVAILABLE` / `NAME_OWNER_MISMATCH` / `WIRE_SIGNATURE`) + `0x0b` compromise check (`h_anchor >= h_c` refuses `CRED_ISSUER_CLOSED`; `h_anchor < h_c` survives);
    4. Persisted journal `credential` closure check AND (for `revocable`) `notary_seal` state (`0x05` -> `CRED_REVOKED_FOR_CAUSE`; plain spend -> `SEAL_SPENT`; unavailable -> `SEAL_UNAVAILABLE`);
    5. When required by a parent grant (`notary_mode != "none"`): `act_kind == "child-within-parent"`, exact `(parent_grant_id, child_grant_id, ordinal)` equality, and exact notary `NamePin` membership in `parent.delegate.notaries[]` (plus `notary.name == parent.delegate.notary_name` when configured; `NOTARY_REQUIRED` otherwise).
 
 ---
 
-## 6. Security Considerations
+## 6. Transparency & Denial Logs (`0x14 LOG_CHECKPOINT`), Canonical SMT & Fraud Proofs (`SL-CONT-012`, `decided`)
+
+To support high-volume notarization and software release publishing without per-item UTXO churn, SealLink Core defines a single-use-seal transparency and denial log (`schemas/log.schema.json`) shared uniformly by `role ∈ {"notary", "release"}`:
+
+1. **Immutable `log_id` (survives cold `owner_policy` rotation):**
+   `log_id = H_tag("seallink-log-id/1", JCS({"genesis", "genesis_seal_outpoint": {"txid", "vout"}, "issuer_name", "issuer_registration", "network", "role"}))`.
+2. **Checkpoint chain (`seallink-log-checkpoint/1`, `OP_RETURN 0x14`):**
+   - Each confirmed `0x14` transaction spends `prev_log_outpoint` (`genesis_seal` at `seq == 1`, or `(prev_txid, prev.next_log_vout)` at `seq >= 2`), creates `next_log_policy` at `next_log_vout` when `terminal == false` (forbids both when `terminal == true`), and commits `content_addr(seallink-log-checkpoint/1)` signed by `link.<role>`.
+   - **`batch_root` & `denials_delta_root`:** Constructed via `SPEC-02 §5.3` over tagged leaves `H_tag("seallink-log-entry/1", kind_byte || content_addr_32B)` (`0x01` issue, `0x02` revocation, `0x03` reinstatement), or `H_tag("seallink-batch-empty/1", b"")` when empty (`batch_count == 0` requires both roots empty).
+   - **Acyclic RFC 9162 `checkpoints_root` (strictly over predecessors `1..(seq - 1)`):** At `seq == 1`, `checkpoints_root == H_tag("seallink-log-ckpt-empty/1", b"")`. At `seq = k >= 2`, `checkpoints_root == MTH([C_0, ..., C_{k-2}])` per RFC 9162 §2.1.1 where `C_i = H_tag("seallink-log-ckpt-leaf/1", uint64_be(i + 1) || content_addr_32B(cp_{i+1}))` and `M(L, R) = H_tag("seallink-log-ckpt-node/1", L || R)`.
+   - **`O(1)` log handover (`seq == 1`):** When `predecessor_log_id` and `predecessor_terminal_denials_root` are present (paired via `dependentRequired`, permitted strictly at `seq == 1`), `cp_1` MUST satisfy `denials_root == predecessor_terminal_denials_root` and `denials_delta_root == H_tag("seallink-batch-empty/1", b"")`.
+   - **Reorg-safe journal persistence:** Verifiers persist confirmed heads in `FencedJournal` as `JournalEntry(kind = "log-head")` (`SPEC-06 §6`) strictly after reaching `required_depth`, refusing rollback or same-seq divergence with **`NOTARY_LOG_COMPROMISED`**. When `terminal == true`, heartbeat freshness stops while the final `denials_root` remains valid permanently.
+3. **Canonical Fixed-Depth-256 Logical Binary SMT (`denials_root`):**
+   - Key hash `k = SHA256(UTF8(denial_key))` (`act:<id>|*`, `act:<id>|cap:<c>`, `rel:<id>|*`, `target:<id>|*`, `target:<id>|cap:<c>`), MSB-first bit order (`d = 0` at root, `d = 255` at leaf), empty defaults `D[0] = H_tag("seallink-smt-empty/1", b"")`, `D[h] = H_tag("seallink-smt-node/1", D[h-1] || D[h-1])`, leaf `L(k, v) = H_tag("seallink-smt-leaf/1", k || v_32B)`.
+   - Every `SmtProof` carries MSB-first `bitmap_hex` (32 B) and bottom-up `siblings[]` (`h = 1..256`, `len == popcount(bitmap_hex)`), enforcing canonical **`sib != D[h - 1]`** for every `1`-bit.
+   - `seallink-log-revocation/1` (`state_seq >= 1`) and `seallink-log-reinstatement/1` (`state_seq >= 2`) both require `prev_record_id` iff `state_seq >= 2` (forbidding it at `state_seq == 1`), supporting audited `revoke -> reinstate -> revoke` transitions while forbidding deletion back to `D[0]`.
+4. **4-Mode `seallink-log-fraud/1` & Unified 100% `CLOSE`:**
+   - Unsigned publicly verifiable fraud proof supporting 4 discriminated modes (`fraud_mode`):
+     1. `"equivocation"`: two valid checkpoints for identical `(log_id, seq)` with `object_id(cp_a.payload) != object_id(cp_b.payload)` (confirmed `cp_*_txid` verified against `link.<role>` at `h_conf`; unconfirmed/offline checkpoint verified against live `link.<role>` at tip with `0x0b` check).
+     2. `"revocation_omission"`: confirmed `cp_a` includes `0x02 || content_addr(revocation)` in `batch_root`, `cp_b` is `cp_a` (`seq_b == seq_a`, no `checkpoints_proof`, identical `content_addr`) or a descendant (`seq_b > seq_a` proven via RFC 9162 `checkpoints_proof` of leaf `seq_a - 1` in size `seq_b - 1`), yet `cp_b.denials_root` proves `revocation.denial_key` `"absent"`.
+     3. `"illegal_reversion"`: confirmed `cp_a` (`seq_a < seq_b`, proven in `cp_b.checkpoints_root`) includes `rec_a`, while `cp_b` either **(3a)** deletes the key to `"absent"`, **(3b)** rolls back/substitutes `rec_b.state_seq <= rec_a.state_seq` (`content_addr(rec_b) != content_addr(rec_a)`), **(3c)** breaks adjacency (`rec_b.state_seq == rec_a.state_seq + 1` with `rec_b.prev_record_id != content_addr(rec_a)`), or **(3d)** commits an invalid successor `rec_b`.
+     4. `"invalid_checkpoint_chain"`: confirmed `cp_next` violates `seq == 1` empty `checkpoints_root` / `cumulative_entries_count == batch_count` / `O(1)` handover invariants, OR at `seq = k >= 2` (given confirmed `cp_prev` and `peaks[]` of length `popcount(k - 2)` matching `cp_prev.checkpoints_root`) violates `append_rfc9162_leaf(peaks, k - 2, C_{k-2}) == cp_next.checkpoints_root` or `cumulative_entries_count == prev + batch_count`.
+   - Any verified `seallink-log-fraud/1` records durable `ClosureSubject(subject_kind = "log", log_id)` with cause **`NOTARY_LOG_COMPROMISED`**, unconditionally blocking **100%** of acts and releases of `log_id` across all verifier modes.
+
+---
+
+## 7. Artifact Identity and Software Release Records (`seallink-release/1`, `SL-CONT-013`, `decided`)
+
+1. **Canonical `target_id` (`registry/artifact-schemes.json`):** For every `ArtifactIdentity`, `target_id = target_sha256 = H_tag("seallink-artifact-id/1", JCS({"digest", "scheme"}))` strictly excluding `params` (preventing scheme-parameter split-identity attacks). Standard schemes include `sha256`, `fsverity-sha256` (requiring fixed `version = 1`, `hash_alg = "sha256"`, `block_size = 4096`, `salt_hex = ""`), `oci-digest-sha256`, `git-tree-sha256`, `apple-cdhash-sha256`, and namespaced reverse-DNS schemes (e.g., `works.relux.curator/content-v2`).
+2. **`seallink-release/1` (`schemas/log.schema.json`):** Signed strictly under `link.release` (`issuer.role_policy`), binding `(product_id, version_str, release_seq, artifact_identity, target_sha256, lifecycle ∈ {"eternal", "log_tracked"}, released_at)` (plus `log_id` iff `log_tracked`). `eternal` releases anchor via `0x09`; `log_tracked` releases anchor via `0x14` (`role = "release"`, denial key `rel:<release_id>|*`). Subject to `0x0b` `CredentialBreak(role = "release")` and `NOTARY_LOG_COMPROMISED`.
+
+---
+
+## 8. Security Considerations
 
 - **Choosing `h_c`:** Setting `h_c` too late preserves earlier attacker forgeries; setting `h_c` too early invalidates legitimate historical documents.
 - **Selective clause context:** Disclosing a single contract clause without qualifying clauses can mislead; `machine_clause_indices` ensures executors always see every machine-enforced clause, while arbiters MAY demand additional prose clauses before ruling.
 - **Notary truth limit:** A notary act cryptographically binds the notary's accountability to a claim; it never proves physical truth mathematically.
+- **Log fee-bumping:** Log operators MUST use CPFP (or RBF committing the identical `seallink-log-checkpoint/1` payload) so fee-bumping never creates an `equivocation` fraud proof.
 
 ---
 
-## 7. References
+## 9. References
 
-- **Normative:** [RFC8785], [BIP-340], [BIP-141], [JSON-SCHEMA-2020-12].
+- **Normative:** [RFC8785], [RFC9162], [BIP-340], [BIP-141], [JSON-SCHEMA-2020-12].
 - **Informative:** [RFC8448].

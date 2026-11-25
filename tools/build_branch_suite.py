@@ -818,6 +818,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     of_seq2 = rm._base_origin_fixture()
     nr_s2 = of_seq2["origin_bundle"]["origin"]["payload"]["name_recovery"]
     of_seq2["origin_bundle"]["name_binding"].update({
+        "binding_mode": "recovery",
         "next_recovery_policy": {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(nr_s2["disposer_pk"], nr_s2["arbiter_pk"])},
         "next_recovery_vout": 0,
         "seq": 2,
@@ -877,6 +878,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         rec_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(nr["disposer_pk"], nr["arbiter_pk"])}
         cand = {
             **copy.deepcopy(o2["origin_bundle"]["name_binding"]),
+            "binding_mode": "recovery",
             "name": "id/child-leo-rec",
             "seq": 3 if bad_seq else 2,
             "supersedes_binding_id": sl.object_id(o2["origin_bundle"]["name_binding"]),

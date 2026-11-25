@@ -539,7 +539,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     rec_pol = of_rec["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]["script_policy"]
     rec_tx_id = of_rec["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]["txid"]
     cand_b2 = {
-        "genesis": GENESIS_MAIN, "name": "id/child-leo-rec2", "network": "main",
+        "binding_mode": "recovery", "genesis": GENESIS_MAIN, "name": "id/child-leo-rec2", "network": "main",
         "next_recovery_policy": rec_pol, "next_recovery_vout": 0, "origin_id": of_rec["_origin_id"],
         "owner_policy": of_rec["origin_bundle"]["name_binding"]["owner_policy"],
         "registration": {"txid": _h32("bnd-rec2-reg"), "vout": 0}, "seq": 2,

@@ -15,6 +15,7 @@ Implements normative primitives from SPEC-01, SPEC-02, SPEC-04, SPEC-05, SPEC-06
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import hmac
 import json
@@ -552,6 +553,7 @@ def _point_mul(p: tuple[int, int] | None, n: int) -> tuple[int, int] | None:
     return ((rx * z_inv2) % _P, (ry * z_inv2 * z_inv) % _P)
 
 
+@functools.lru_cache(maxsize=16384)
 def _lift_x(x: int) -> tuple[int, int] | None:
     if x >= _P:
         return None
@@ -629,6 +631,7 @@ def schnorr_sign(msg32: bytes, privkey: bytes, aux_rand: bytes = b"\x00" * 32) -
     return sig.hex()
 
 
+@functools.lru_cache(maxsize=16384)
 def schnorr_verify(msg32: bytes, pubkey_hex: str, sig_hex: str) -> bool:
     if len(msg32) != 32 or len(pubkey_hex) != 64 or len(sig_hex) != 128:
         return False
@@ -795,6 +798,7 @@ def ed25519_sign(msg: bytes, seed32: bytes) -> str:
     return sig.hex()
 
 
+@functools.lru_cache(maxsize=4096)
 def ed25519_verify(msg: bytes, pubkey_hex: str, sig_hex: str) -> bool:
     """Strict canonical non-small-order cofactorless Ed25519 verification (SPEC-01 §4.1)."""
     if len(pubkey_hex) != 64 or len(sig_hex) != 128:
@@ -1555,6 +1559,8 @@ ACTION_ALLOWED_LOCATORS: dict[int, frozenset[int]] = {
     0x10: frozenset({0x00}),
     0x11: frozenset({0x00}),
     0x12: frozenset({0x00, 0x01, 0x05}),
+    0x13: frozenset({0x00, 0x01, 0x05}),
+    0x14: frozenset({0x00, 0x01, 0x05}),
 }
 
 
@@ -1655,7 +1661,7 @@ def decode_opreturn_with_criticality(script: bytes) -> dict[str, Any]:
         raise ValueError("CHAIN_FRAME_INVALID")
     if action in ACTION_ALLOWED_LOCATORS:
         return decode_opreturn(script)
-    if 0x13 <= action <= 0x1A:
+    if 0x15 <= action <= 0x1A:
         return {"action": f"0x{action:02x}", "critical_scope": "forward_only"}
     if 0x1B <= action <= 0x1F:
         return {"action": f"0x{action:02x}", "critical_scope": "retroactive"}
@@ -2091,6 +2097,895 @@ def derive_guardian_event_class(payload: dict[str, Any]) -> str:
     raise ValueError(f"Unsupported guardian_context carrier: {obj_type}")
 
 
+# ============================================================================
+# 9. v1.0.0-draft.11 Primitives: Artifact ID, Transparency Logs (0x14),
+#    Acyclic RFC 9162 checkpoints_root, Canonical Fixed-Depth-256 SMT,
+#    Consensus-Exact SegWitNameUpdateProof & Namecoin AuxPoW / Retarget
+# ============================================================================
+
+EMPTY_BATCH_ROOT = tagged_hash("seallink-batch-empty/1", b"").hex()
+EMPTY_CHECKPOINTS_ROOT = tagged_hash("seallink-log-ckpt-empty/1", b"").hex()
+NAMECOIN_POW_LIMIT_MAIN = 0x00000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+NAMECOIN_POW_LIMIT_REGTEST = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+NAMECOIN_TARGET_TIMESPAN = 1209600  # 14 days
+NAMECOIN_MIN_TIMESPAN = 302400      # 1209600 // 4
+NAMECOIN_MAX_TIMESPAN = 4838400     # 1209600 * 4
+NAMECOIN_AUX_CHAIN_ID = 0x0001
+
+
+def dsha256(data: bytes) -> bytes:
+    return sha256(sha256(data))
+
+
+def artifact_target_id(artifact_identity: dict[str, Any]) -> str:
+    """Canonical artifact target_id = target_sha256 strictly over {'digest', 'scheme'} (EXCLUDING params, F1/P0-C)."""
+    return tagged_hash(
+        "seallink-artifact-id/1",
+        jcs_encode({"digest": artifact_identity["digest"], "scheme": artifact_identity["scheme"]}),
+    ).hex()
+
+
+def compute_log_id(
+    network: str,
+    genesis: str,
+    role: str,
+    issuer_name: str,
+    issuer_registration: dict[str, Any],
+    genesis_seal_outpoint: dict[str, Any],
+) -> str:
+    """Immutable log_id bound to (name, registration, genesis_seal_outpoint) WITHOUT owner_policy (survives cold rotation, M-b)."""
+    return tagged_hash(
+        "seallink-log-id/1",
+        jcs_encode({
+            "genesis": genesis,
+            "genesis_seal_outpoint": {"txid": genesis_seal_outpoint["txid"], "vout": genesis_seal_outpoint["vout"]},
+            "issuer_name": issuer_name,
+            "issuer_registration": {"txid": issuer_registration["txid"], "vout": issuer_registration["vout"]},
+            "network": network,
+            "role": role,
+        }),
+    ).hex()
+
+
+def log_entry_digest(kind_byte: int, content_addr_hex: str) -> str:
+    """Tagged log batch leaf digest: 0x01=issue, 0x02=revocation, 0x03=reinstatement."""
+    if kind_byte not in (0x01, 0x02, 0x03):
+        raise ValueError("invalid log entry kind_byte")
+    b = bytes.fromhex(content_addr_hex)
+    if len(b) != 32:
+        raise ValueError("content_addr must be 32 bytes")
+    return tagged_hash("seallink-log-entry/1", bytes([kind_byte]) + b).hex()
+
+
+def build_log_batch_root(entry_digests: list[str]) -> tuple[str, dict[str, dict[str, Any]]]:
+    """Build SPEC-02 §5.3 batch root for a log checkpoint (EMPTY_BATCH_ROOT when empty)."""
+    if not entry_digests:
+        return EMPTY_BATCH_ROOT, {}
+    return build_merkle_tree(entry_digests)
+
+
+# --- Acyclic RFC 9162 §2.1.1 / §2.1.3 checkpoints_root (P0-CORE-1 & P0-CORE-2) ---
+
+def ckpt_leaf(seq: int, checkpoint_caddr_hex: str) -> bytes:
+    if seq < 1:
+        raise ValueError("checkpoint seq must be >= 1")
+    b = bytes.fromhex(checkpoint_caddr_hex)
+    if len(b) != 32:
+        raise ValueError("checkpoint content_addr must be 32 bytes")
+    return tagged_hash("seallink-log-ckpt-leaf/1", struct.pack(">Q", seq) + b)
+
+
+def ckpt_node(left: bytes, right: bytes) -> bytes:
+    return tagged_hash("seallink-log-ckpt-node/1", left + right)
+
+
+def _largest_pow2_lt(n: int) -> int:
+    return 1 << ((n - 1).bit_length() - 1)
+
+
+def rfc9162_mth(leaves: list[bytes]) -> bytes:
+    """RFC 9162 §2.1.1 Merkle Tree Hash over predecessor checkpoints 1..(k-1)."""
+    n = len(leaves)
+    if n == 0:
+        return bytes.fromhex(EMPTY_CHECKPOINTS_ROOT)
+    if n == 1:
+        return leaves[0]
+    p = _largest_pow2_lt(n)
+    return ckpt_node(rfc9162_mth(leaves[:p]), rfc9162_mth(leaves[p:]))
+
+
+def rfc9162_inclusion_proof(leaves: list[bytes], leaf_index: int) -> dict[str, Any]:
+    """Build RFC 9162 §2.1.3 audit path proving leaf_index in MTH(leaves)."""
+    n = len(leaves)
+    if not (0 <= leaf_index < n):
+        raise ValueError("leaf_index out of bounds")
+
+    def _path(m: int, sub: list[bytes]) -> list[str]:
+        sz = len(sub)
+        if sz == 1:
+            return []
+        p = _largest_pow2_lt(sz)
+        if m < p:
+            return _path(m, sub[:p]) + [rfc9162_mth(sub[p:]).hex()]
+        return _path(m - p, sub[p:]) + [rfc9162_mth(sub[:p]).hex()]
+
+    return {
+        "hashes": _path(leaf_index, leaves),
+        "leaf_index": leaf_index,
+        "tree_size": n,
+    }
+
+
+def rfc9162_verify_inclusion(
+    leaf_hash: bytes,
+    leaf_index: int,
+    tree_size: int,
+    hashes: list[str],
+    expected_root_hex: str,
+) -> bool:
+    """Verify RFC 9162 §2.1.3.2 audit path of leaf_hash at leaf_index in tree of size tree_size."""
+    if tree_size < 1 or not (0 <= leaf_index < tree_size) or len(hashes) > 64:
+        return False
+    fn = leaf_index
+    sn = tree_size - 1
+    r = leaf_hash
+    for h_hex in hashes:
+        if sn == 0 or not isinstance(h_hex, str) or len(h_hex) != 64:
+            return False
+        try:
+            p = bytes.fromhex(h_hex)
+        except ValueError:
+            return False
+        if (fn & 1) == 1 or fn == sn:
+            r = ckpt_node(p, r)
+            while (fn & 1) == 0 and fn != 0:
+                fn >>= 1
+                sn >>= 1
+        else:
+            r = ckpt_node(r, p)
+        fn >>= 1
+        sn >>= 1
+    return sn == 0 and r.hex() == expected_root_hex
+
+
+def rfc9162_peaks(leaves: list[bytes]) -> list[str]:
+    """Decompose leaves[0..n] into exactly popcount(n) full-binary subtree peaks (left-to-right)."""
+    n = len(leaves)
+    peaks: list[str] = []
+    pos = 0
+    rem = n
+    while rem > 0:
+        sz = 1 << (rem.bit_length() - 1)
+        peaks.append(rfc9162_mth(leaves[pos : pos + sz]).hex())
+        pos += sz
+        rem -= sz
+    return peaks
+
+
+def rfc9162_root_from_peaks(peaks: list[str], tree_size: int) -> str | None:
+    """Fold popcount(tree_size) peaks right-to-left into exact RFC 9162 MTH."""
+    if tree_size < 0 or len(peaks) != tree_size.bit_count():
+        return None
+    if tree_size == 0:
+        return EMPTY_CHECKPOINTS_ROOT
+    try:
+        pbytes = [bytes.fromhex(p) for p in peaks]
+    except ValueError:
+        return None
+    if any(len(b) != 32 for b in pbytes):
+        return None
+    acc = pbytes[-1]
+    for b in reversed(pbytes[:-1]):
+        acc = ckpt_node(b, acc)
+    return acc.hex()
+
+
+def rfc9162_append_leaf_to_peaks(peaks: list[str], prev_tree_size: int, new_leaf: bytes) -> str | None:
+    """Compute MTH(prev_tree_size + 1) by appending new_leaf onto popcount(prev_tree_size) peaks."""
+    if prev_tree_size < 0 or len(peaks) != prev_tree_size.bit_count():
+        return None
+    try:
+        rem = [bytes.fromhex(p) for p in peaks]
+    except ValueError:
+        return None
+    if any(len(b) != 32 for b in rem):
+        return None
+    cur = new_leaf
+    bit = 0
+    while (prev_tree_size >> bit) & 1:
+        cur = ckpt_node(rem.pop(), cur)
+        bit += 1
+    rem.append(cur)
+    acc = rem[-1]
+    for b in reversed(rem[:-1]):
+        acc = ckpt_node(b, acc)
+    return acc.hex()
+
+
+# --- Canonical Fixed-Depth-256 Logical Binary SMT (P0-B, P1) ---
+
+def _build_smt_defaults() -> list[bytes]:
+    d: list[bytes] = [tagged_hash("seallink-smt-empty/1", b"")]
+    for _ in range(256):
+        prev = d[-1]
+        d.append(tagged_hash("seallink-smt-node/1", prev + prev))
+    return d
+
+
+SMT_DEFAULTS: list[bytes] = _build_smt_defaults()
+SMT_EMPTY_ROOT: str = SMT_DEFAULTS[256].hex()
+
+
+def smt_get_bit(buf32: bytes, depth: int) -> int:
+    """MSB-first bit at depth d in [0..255] (d=0 is top bit near root, d=255 is leaf)."""
+    return (buf32[depth >> 3] >> (7 - (depth & 7))) & 1
+
+
+def smt_leaf_hash(key_hash32: bytes, value_hex: str) -> bytes:
+    vb = bytes.fromhex(value_hex)
+    if len(vb) != 32:
+        raise ValueError("SMT value must be 32-byte hex")
+    return tagged_hash("seallink-smt-leaf/1", key_hash32 + vb)
+
+
+def smt_node_hash(left: bytes, right: bytes) -> bytes:
+    return tagged_hash("seallink-smt-node/1", left + right)
+
+
+def _smt_subtree_hash(items: list[tuple[bytes, bytes]], depth: int) -> bytes:
+    if not items:
+        return SMT_DEFAULTS[256 - depth]
+    if depth == 256:
+        return items[0][1]
+    left = [it for it in items if smt_get_bit(it[0], depth) == 0]
+    right = [it for it in items if smt_get_bit(it[0], depth) == 1]
+    return smt_node_hash(_smt_subtree_hash(left, depth + 1), _smt_subtree_hash(right, depth + 1))
+
+
+def smt_root(kv_map: dict[str, str]) -> str:
+    """Compute canonical Fixed-Depth-256 Logical Binary SMT root from {denial_key: content_addr_hex}."""
+    items = [(sha256(k.encode("utf-8")), smt_leaf_hash(sha256(k.encode("utf-8")), v)) for k, v in kv_map.items()]
+    return _smt_subtree_hash(items, 0).hex()
+
+
+def smt_prove(kv_map: dict[str, str], key_str: str) -> dict[str, Any]:
+    """Generate canonical Fixed-Depth-256 SmtProof (inclusion or absence) with MSB-first bitmap_hex & bottom-up siblings."""
+    items = [(sha256(k.encode("utf-8")), smt_leaf_hash(sha256(k.encode("utf-8")), v)) for k, v in kv_map.items()]
+    root_hex = _smt_subtree_hash(items, 0).hex()
+    target_k = sha256(key_str.encode("utf-8"))
+    sib_by_depth: list[bytes] = []
+    cur_items = items
+    for d in range(256):
+        bit = smt_get_bit(target_k, d)
+        left = [it for it in cur_items if smt_get_bit(it[0], d) == 0]
+        right = [it for it in cur_items if smt_get_bit(it[0], d) == 1]
+        if bit == 0:
+            sib_by_depth.append(_smt_subtree_hash(right, d + 1))
+            cur_items = left
+        else:
+            sib_by_depth.append(_smt_subtree_hash(left, d + 1))
+            cur_items = right
+    bitmap = bytearray(32)
+    siblings: list[str] = []
+    for h in range(1, 257):
+        d = 256 - h
+        sib = sib_by_depth[d]
+        if sib != SMT_DEFAULTS[h - 1]:
+            bitmap[d >> 3] |= 1 << (7 - (d & 7))
+            siblings.append(sib.hex())
+    out: dict[str, Any] = {
+        "bitmap_hex": bytes(bitmap).hex(),
+        "key_str": key_str,
+        "root": root_hex,
+        "siblings": siblings,
+        "state": "included" if key_str in kv_map else "absent",
+    }
+    if key_str in kv_map:
+        out["value"] = kv_map[key_str]
+    return out
+
+
+def smt_verify_proof(proof: dict[str, Any]) -> bool:
+    """Verify canonical Fixed-Depth-256 Logical Binary SMT proof (enforces canonical sib != D[h-1], P0-B & P1)."""
+    if not isinstance(proof, dict):
+        return False
+    root = proof.get("root")
+    key_str = proof.get("key_str")
+    state = proof.get("state")
+    bitmap_hex = proof.get("bitmap_hex")
+    siblings = proof.get("siblings")
+    if (
+        not isinstance(root, str) or len(root) != 64
+        or not isinstance(key_str, str)
+        or state not in ("included", "absent")
+        or not isinstance(bitmap_hex, str) or len(bitmap_hex) != 64
+        or not isinstance(siblings, list)
+    ):
+        return False
+    try:
+        bitmap = bytes.fromhex(bitmap_hex)
+    except ValueError:
+        return False
+    popcnt = sum(b.bit_count() for b in bitmap)
+    if len(siblings) != popcnt:
+        return False
+    k = sha256(key_str.encode("utf-8"))
+    if state == "included":
+        val = proof.get("value")
+        if not isinstance(val, str) or len(val) != 64:
+            return False
+        try:
+            cur = smt_leaf_hash(k, val)
+        except ValueError:
+            return False
+    else:
+        if "value" in proof:
+            return False
+        cur = SMT_DEFAULTS[0]
+    sib_idx = 0
+    for h in range(1, 257):
+        d = 256 - h
+        if smt_get_bit(bitmap, d) == 1:
+            s_hex = siblings[sib_idx]
+            sib_idx += 1
+            if not isinstance(s_hex, str) or len(s_hex) != 64:
+                return False
+            try:
+                sib = bytes.fromhex(s_hex)
+            except ValueError:
+                return False
+            # P1 canonical check: a 1-bit in bitmap MUST NOT supply the empty subtree constant D[h-1]!
+            if sib == SMT_DEFAULTS[h - 1]:
+                return False
+        else:
+            sib = SMT_DEFAULTS[h - 1]
+        cur = smt_node_hash(sib, cur) if smt_get_bit(k, d) == 1 else smt_node_hash(cur, sib)
+    return sib_idx == len(siblings) and cur.hex() == root
+
+
+# --- Strict BIP-66 DER ECDSA (accepting consensus-valid high-S, P0-CONS-1) ---
+
+def parse_bip66_der_sig(sig_with_hashtype: bytes) -> tuple[int, int, int] | None:
+    """Strict BIP-66 DER signature + sighash byte parser WITHOUT low-S rejection (Namecoin/Bitcoin consensus)."""
+    n = len(sig_with_hashtype)
+    if n < 9 or n > 73:
+        return None
+    if sig_with_hashtype[0] != 0x30 or sig_with_hashtype[1] != n - 3:
+        return None
+    if sig_with_hashtype[2] != 0x02:
+        return None
+    len_r = sig_with_hashtype[3]
+    if len_r == 0 or 5 + len_r >= n:
+        return None
+    r_bytes = sig_with_hashtype[4 : 4 + len_r]
+    if r_bytes[0] & 0x80:
+        return None
+    if len_r > 1 and r_bytes[0] == 0x00 and not (r_bytes[1] & 0x80):
+        return None
+    pos_s = 4 + len_r
+    if sig_with_hashtype[pos_s] != 0x02:
+        return None
+    len_s = sig_with_hashtype[pos_s + 1]
+    if len_s == 0 or pos_s + 2 + len_s != n - 1:
+        return None
+    s_bytes = sig_with_hashtype[pos_s + 2 : pos_s + 2 + len_s]
+    if s_bytes[0] & 0x80:
+        return None
+    if len_s > 1 and s_bytes[0] == 0x00 and not (s_bytes[1] & 0x80):
+        return None
+    r = int.from_bytes(r_bytes, "big")
+    s = int.from_bytes(s_bytes, "big")
+    if not (1 <= r < _N and 1 <= s < _N):
+        return None
+    return r, s, sig_with_hashtype[-1]
+
+
+def _decode_secp256k1_compressed(comp_pk_hex: str) -> tuple[int, int] | None:
+    if not is_valid_compressed_pubkey(comp_pk_hex):
+        return None
+    x = int(comp_pk_hex[2:], 16)
+    pt = _lift_x(x)
+    if pt is None:
+        return None
+    want_odd = comp_pk_hex[:2] == "03"
+    y = pt[1] if (pt[1] % 2 == (1 if want_odd else 0)) else (_P - pt[1])
+    return (x, y)
+
+
+@functools.lru_cache(maxsize=4096)
+def secp256k1_ecdsa_verify_bip66(msg32: bytes, comp_pk_hex: str, sig_with_hashtype: bytes) -> tuple[bool, int]:
+    """Verify strict BIP-66 DER ECDSA signature (consensus-exact: accepts high-S!) over msg32."""
+    if len(msg32) != 32:
+        return False, -1
+    parsed = parse_bip66_der_sig(sig_with_hashtype)
+    if parsed is None:
+        return False, -1
+    r, s, sht = parsed
+    q_pt = _decode_secp256k1_compressed(comp_pk_hex)
+    if q_pt is None:
+        return False, sht
+    z = int.from_bytes(msg32, "big")
+    w = pow(s, _N - 2, _N)
+    u1 = (z * w) % _N
+    u2 = (r * w) % _N
+    p1 = _point_mul(_G, u1)
+    p2 = _point_mul(q_pt, u2)
+    pt = _point_add(p1, p2)
+    if pt is None:
+        return False, sht
+    return (pt[0] % _N) == r, sht
+
+
+# --- Consensus-Exact Raw SegWit TX, BIP-143, SegWitNameUpdateProof & Namecoin AuxPoW (P0-CONS-1) ---
+
+def _read_varint(buf: bytes, off: int) -> tuple[int, int]:
+    if off >= len(buf):
+        raise ValueError("truncated varint")
+    b0 = buf[off]
+    if b0 < 0xFD:
+        return b0, off + 1
+    if b0 == 0xFD:
+        if off + 3 > len(buf):
+            raise ValueError("truncated varint 0xfd")
+        val = struct.unpack("<H", buf[off + 1 : off + 3])[0]
+        if val < 0xFD:
+            raise ValueError("non-minimal varint")
+        return val, off + 3
+    if b0 == 0xFE:
+        if off + 5 > len(buf):
+            raise ValueError("truncated varint 0xfe")
+        val = struct.unpack("<I", buf[off + 1 : off + 5])[0]
+        if val <= 0xFFFF:
+            raise ValueError("non-minimal varint")
+        return val, off + 5
+    if off + 9 > len(buf):
+        raise ValueError("truncated varint 0xff")
+    val = struct.unpack("<Q", buf[off + 1 : off + 9])[0]
+    if val <= 0xFFFFFFFF:
+        raise ValueError("non-minimal varint")
+    return val, off + 9
+
+
+def _encode_varint(n: int) -> bytes:
+    if n < 0xFD:
+        return bytes([n])
+    if n <= 0xFFFF:
+        return b"\xfd" + struct.pack("<H", n)
+    if n <= 0xFFFFFFFF:
+        return b"\xfe" + struct.pack("<I", n)
+    return b"\xff" + struct.pack("<Q", n)
+
+
+def parse_raw_tx(raw: bytes, *, allow_empty_vout: bool = False) -> dict[str, Any]:
+    """Strict BIP-141 raw Bitcoin/Namecoin transaction parser (enforces 00 01 marker/flag)."""
+    if len(raw) < 10:
+        raise ValueError("tx too short")
+    version = struct.unpack("<I", raw[0:4])[0]
+    off = 4
+    has_witness = False
+    if raw[off] == 0x00:
+        if off + 2 > len(raw) or raw[off + 1] != 0x01:
+            raise ValueError("invalid segwit marker/flag")
+        has_witness = True
+        off += 2
+    vin_start = off
+    vin_cnt, off = _read_varint(raw, off)
+    if vin_cnt == 0:
+        raise ValueError("zero inputs")
+    vins: list[dict[str, Any]] = []
+    for _ in range(vin_cnt):
+        if off + 36 > len(raw):
+            raise ValueError("truncated vin")
+        prev_txid_le = raw[off : off + 32]
+        prev_vout = struct.unpack("<I", raw[off + 32 : off + 36])[0]
+        off += 36
+        ss_len, off = _read_varint(raw, off)
+        if off + ss_len + 4 > len(raw):
+            raise ValueError("truncated scriptSig")
+        script_sig = raw[off : off + ss_len]
+        off += ss_len
+        seq = struct.unpack("<I", raw[off : off + 4])[0]
+        off += 4
+        vins.append({
+            "prev_txid": prev_txid_le[::-1].hex(),
+            "prev_txid_le": prev_txid_le,
+            "prev_vout": prev_vout,
+            "script_sig": script_sig,
+            "sequence": seq,
+            "witness": [],
+        })
+    vout_cnt, off = _read_varint(raw, off)
+    if vout_cnt == 0 and not allow_empty_vout:
+        raise ValueError("zero outputs")
+    vouts: list[dict[str, Any]] = []
+    for n_idx in range(vout_cnt):
+        if off + 8 > len(raw):
+            raise ValueError("truncated vout value")
+        val_sat = struct.unpack("<Q", raw[off : off + 8])[0]
+        off += 8
+        spk_len, off = _read_varint(raw, off)
+        if off + spk_len > len(raw):
+            raise ValueError("truncated scriptPubKey")
+        spk = raw[off : off + spk_len]
+        off += spk_len
+        vouts.append({"n": n_idx, "value_sat": val_sat, "script_pubkey": spk})
+    body_end = off
+    if has_witness:
+        any_wit = False
+        for vin in vins:
+            w_cnt, off = _read_varint(raw, off)
+            stack: list[bytes] = []
+            for _ in range(w_cnt):
+                item_len, off = _read_varint(raw, off)
+                if off + item_len > len(raw):
+                    raise ValueError("truncated witness item")
+                stack.append(raw[off : off + item_len])
+                off += item_len
+            if stack:
+                any_wit = True
+            vin["witness"] = stack
+        if not any_wit:
+            raise ValueError("empty segwit witness")
+    if off + 4 != len(raw):
+        raise ValueError("trailing or truncated locktime")
+    locktime = struct.unpack("<I", raw[off : off + 4])[0]
+    non_witness_bytes = raw[0:4] + raw[vin_start:body_end] + raw[off : off + 4]
+    txid_le = dsha256(non_witness_bytes)
+    wtxid_le = dsha256(raw) if has_witness else txid_le
+    return {
+        "version": version,
+        "has_witness": has_witness,
+        "vin": vins,
+        "vout": vouts,
+        "locktime": locktime,
+        "non_witness_bytes": non_witness_bytes,
+        "full_bytes": raw,
+        "txid_le": txid_le,
+        "txid": txid_le[::-1].hex(),
+        "wtxid_le": wtxid_le,
+        "wtxid": wtxid_le[::-1].hex(),
+    }
+
+
+def verify_btc_merkle_branch(leaf_le: bytes, index: int, branch_be: list[str], expected_root_le: bytes) -> bool:
+    """Verify Bitcoin/Namecoin Merkle branch (32B LE hashes internally, BE hex on wire) with CVE-2012-2459 guard."""
+    if len(leaf_le) != 32 or len(expected_root_le) != 32 or index < 0:
+        return False
+    cur = leaf_le
+    idx = index
+    for h_be in branch_be:
+        if not isinstance(h_be, str) or len(h_be) != 64:
+            return False
+        try:
+            sib_le = bytes.fromhex(h_be)[::-1]
+        except ValueError:
+            return False
+        if (idx & 1) == 1:
+            if sib_le == cur:
+                return False  # CVE-2012-2459 odd-position duplicate rejection
+            cur = dsha256(sib_le + cur)
+        else:
+            cur = dsha256(cur + sib_le)
+        idx >>= 1
+    return idx == 0 and cur == expected_root_le
+
+
+def compute_bip143_sighash(tx: dict[str, Any], in_idx: int, script_code: bytes, value_sat: int, sighash_type: int = 0x01) -> bytes:
+    """Compute BIP-143 SegWit v0 sighash with CompactSize varint prefix on scriptCode."""
+    prevouts = b"".join(v["prev_txid_le"] + struct.pack("<I", v["prev_vout"]) for v in tx["vin"])
+    seqs = b"".join(struct.pack("<I", v["sequence"]) for v in tx["vin"])
+    outs = b"".join(struct.pack("<Q", o["value_sat"]) + _encode_varint(len(o["script_pubkey"])) + o["script_pubkey"] for o in tx["vout"])
+    inp = tx["vin"][in_idx]
+    preimage = (
+        struct.pack("<I", tx["version"])
+        + dsha256(prevouts)
+        + dsha256(seqs)
+        + inp["prev_txid_le"]
+        + struct.pack("<I", inp["prev_vout"])
+        + _encode_varint(len(script_code))
+        + script_code
+        + struct.pack("<Q", value_sat)
+        + struct.pack("<I", inp["sequence"])
+        + dsha256(outs)
+        + struct.pack("<I", tx["locktime"])
+        + struct.pack("<I", sighash_type)
+    )
+    return dsha256(preimage)
+
+
+def verify_segwit_name_update_proof(
+    proof: dict[str, Any],
+    expected_owner_policy: dict[str, Any],
+    expected_name: str,
+) -> tuple[bool, dict[str, Any] | str]:
+    """Verify all 7 consensus-exact P0-CONS-1 checks on a Tier-2 SegWitNameUpdateProof."""
+    try:
+        hdr = bytes.fromhex(proof["block_header_hex"])
+        if len(hdr) != 80:
+            return False, "TICKET_PROOF_INVALID"
+        if dsha256(hdr)[::-1].hex() != proof["block_hash"]:
+            return False, "TICKET_PROOF_INVALID"
+        merkle_root_le = hdr[36:68]
+        tx = parse_raw_tx(bytes.fromhex(proof["tx_hex"]))
+        prev_tx = parse_raw_tx(bytes.fromhex(proof["prevout_tx_hex"]))
+        cb_tx = parse_raw_tx(bytes.fromhex(proof["coinbase_tx_hex"]))
+    except (ValueError, KeyError, TypeError):
+        return False, "TICKET_PROOF_INVALID"
+
+    # Step 1: Reject 64-byte leaf forgery variants + require nVersion == 0x7100 + SegWit witness
+    if (
+        len(cb_tx["non_witness_bytes"]) == 64
+        or len(tx["non_witness_bytes"]) == 64
+        or len(tx["full_bytes"]) == 64
+        or len(prev_tx["non_witness_bytes"]) == 64
+        or tx["version"] != 0x7100
+        or not tx["has_witness"]
+    ):
+        return False, "TICKET_PROOF_INVALID"
+
+    # Step 2: Coinbase structural check (len(vin) == 1, null prevout) + index==0 Merkle branch -> exact D_tree
+    if len(cb_tx["vin"]) != 1 or cb_tx["vin"][0]["prev_txid_le"] != (b"\x00" * 32) or cb_tx["vin"][0]["prev_vout"] != 0xFFFFFFFF:
+        return False, "TICKET_PROOF_INVALID"
+    cb_branch = proof.get("coinbase_merkle_branch", [])
+    if not cb_branch or not verify_btc_merkle_branch(cb_tx["txid_le"], 0, cb_branch, merkle_root_le):
+        return False, "TICKET_PROOF_INVALID"
+    d_tree = len(cb_branch)
+
+    # Step 3: Exact depth D_tree on txid_branch, wtxid_branch, wtxid_coinbase_branch + tx_index >= 1
+    tx_index = proof.get("tx_index", 0)
+    txid_branch = proof.get("txid_branch", [])
+    wtxid_branch = proof.get("wtxid_branch", [])
+    wtxid_cb_branch = proof.get("wtxid_coinbase_branch", [])
+    if (
+        not isinstance(tx_index, int) or tx_index < 1
+        or len(txid_branch) != d_tree
+        or len(wtxid_branch) != d_tree
+        or len(wtxid_cb_branch) != d_tree
+    ):
+        return False, "TICKET_PROOF_INVALID"
+    if not verify_btc_merkle_branch(tx["txid_le"], tx_index, txid_branch, merkle_root_le):
+        return False, "TICKET_PROOF_INVALID"
+
+    # Step 4: BIP-141 LAST coinbase output starting with 6a24aa21a9ed + 32B witness_reserved_value
+    witness_commitment: bytes | None = None
+    for vo in cb_tx["vout"]:
+        spk = vo["script_pubkey"]
+        if len(spk) >= 38 and spk[:6] == b"\x6a\x24\xaa\x21\xa9\xed":
+            witness_commitment = spk[6:38]
+    cb_wit = cb_tx["vin"][0]["witness"]
+    if witness_commitment is None or len(cb_wit) != 1 or len(cb_wit[0]) != 32:
+        return False, "TICKET_PROOF_INVALID"
+    witness_reserved_value = cb_wit[0]
+
+    # Step 5: wtxid tree binding (same tx_index, coinbase wtxid[0] == 00*32, SHA256d(wtxid_root || reserved) == commitment)
+    cur_w = tx["wtxid_le"]
+    idx_w = tx_index
+    for h_be in wtxid_branch:
+        try:
+            sib_le = bytes.fromhex(h_be)[::-1]
+        except ValueError:
+            return False, "TICKET_PROOF_INVALID"
+        if (idx_w & 1) == 1:
+            if sib_le == cur_w:
+                return False, "TICKET_PROOF_INVALID"
+            cur_w = dsha256(sib_le + cur_w)
+        else:
+            cur_w = dsha256(cur_w + sib_le)
+        idx_w >>= 1
+    if idx_w != 0:
+        return False, "TICKET_PROOF_INVALID"
+    wtxid_root_le = cur_w
+    if not verify_btc_merkle_branch(b"\x00" * 32, 0, wtxid_cb_branch, wtxid_root_le):
+        return False, "TICKET_PROOF_INVALID"
+    if dsha256(wtxid_root_le + witness_reserved_value) != witness_commitment:
+        return False, "TICKET_PROOF_INVALID"
+
+    # Step 6: Locate name input spending prev_tx, strip Namecoin prefix, match compiled expected_owner_policy, compute BIP-143 sighash
+    try:
+        exp_spk, exp_ws = compile_script_policy(expected_owner_policy)
+    except (ValueError, KeyError, TypeError):
+        return False, "TICKET_PROOF_INVALID"
+    name_in_idx: int | None = None
+    prev_out: dict[str, Any] | None = None
+    for i, vin in enumerate(tx["vin"]):
+        if vin["prev_txid"] == prev_tx["txid"] and vin["prev_vout"] < len(prev_tx["vout"]):
+            cand_out = prev_tx["vout"][vin["prev_vout"]]
+            try:
+                p_prev = parse_name_output(cand_out["script_pubkey"])
+            except ValueError:
+                continue
+            if p_prev.get("name") == expected_name and p_prev.get("op") in ("NAME_FIRSTUPDATE", "NAME_UPDATE"):
+                name_in_idx = i
+                prev_out = cand_out
+                if p_prev["trailing_script_pubkey"] != exp_spk.hex():
+                    return False, "TICKET_PROOF_INVALID"
+                break
+    if name_in_idx is None or prev_out is None:
+        return False, "TICKET_PROOF_INVALID"
+    # Locate matching name output in tx
+    parsed_new: dict[str, Any] | None = None
+    for vo in tx["vout"]:
+        try:
+            pn = parse_name_output(vo["script_pubkey"])
+        except ValueError:
+            continue
+        if pn.get("name") == expected_name and pn.get("op") == "NAME_UPDATE":
+            parsed_new = pn
+            break
+    if parsed_new is None:
+        return False, "TICKET_PROOF_INVALID"
+
+    # Step 7: Strict consensus BIP-66 DER + SIGHASH_ALL (0x01), WITHOUT rejecting consensus-valid high-S!
+    wit = tx["vin"][name_in_idx]["witness"]
+    kind = expected_owner_policy.get("kind")
+    if kind == "key":
+        if len(wit) != 2 or wit[1].hex() != expected_owner_policy["pk"]:
+            return False, "TICKET_PROOF_INVALID"
+        script_code = b"\x76\xa9\x14" + hash160(wit[1]) + b"\x88\xac"
+        sighash = compute_bip143_sighash(tx, name_in_idx, script_code, prev_out["value_sat"], 0x01)
+        ok_sig, sht = secp256k1_ecdsa_verify_bip66(sighash, expected_owner_policy["pk"], wit[0])
+        if not ok_sig or sht != 0x01:
+            return False, "TICKET_PROOF_INVALID"
+    elif kind == "multisig":
+        assert exp_ws is not None
+        m = int(expected_owner_policy["m"])
+        pks = list(expected_owner_policy["pks"])
+        if len(wit) != m + 2 or wit[0] != b"" or wit[-1] != exp_ws:
+            return False, "TICKET_PROOF_INVALID"
+        sighash = compute_bip143_sighash(tx, name_in_idx, exp_ws, prev_out["value_sat"], 0x01)
+        sigs = wit[1:-1]
+        pk_pos = 0
+        for sb in sigs:
+            matched = False
+            while pk_pos < len(pks):
+                ok_s, sht = secp256k1_ecdsa_verify_bip66(sighash, pks[pk_pos], sb)
+                pk_pos += 1
+                if ok_s and sht == 0x01:
+                    matched = True
+                    break
+            if not matched:
+                return False, "TICKET_PROOF_INVALID"
+    else:
+        return False, "TICKET_PROOF_INVALID"
+
+    return True, {"txid": tx["txid"], "parsed_update": parsed_new}
+
+
+# --- Namecoin Difficulty Retarget & CAuxPow::check (P0-CONS-1) ---
+
+def bits_to_target(nbits: int) -> int:
+    exp = (nbits >> 24) & 0xFF
+    mant = nbits & 0x007FFFFF
+    if nbits & 0x00800000:
+        return 0
+    if exp <= 3:
+        return mant >> (8 * (3 - exp))
+    return mant << (8 * (exp - 3))
+
+
+def target_to_bits(target: int) -> int:
+    if target <= 0:
+        return 0
+    b = target.to_bytes((target.bit_length() + 7) // 8, "big")
+    if b[0] & 0x80:
+        b = b"\x00" + b
+    exp = len(b)
+    if exp >= 3:
+        mant = int.from_bytes(b[:3], "big")
+    else:
+        mant = int.from_bytes(b, "big") << (8 * (3 - exp))
+    return (exp << 24) | (mant & 0x007FFFFF)
+
+
+def compute_namecoin_next_bits(
+    prev_bits: int,
+    epoch_start_time: int,
+    prev_block_time: int,
+    *,
+    network: str = "main",
+) -> int:
+    """Exact Namecoin Core retarget (actual_timespan = block[H-1].nTime - block[H-2016].nTime clamped to [302400, 4838400], fPowNoRetargeting on regtest)."""
+    if network == "regtest":
+        return prev_bits
+    actual = prev_block_time - epoch_start_time
+    if actual < NAMECOIN_MIN_TIMESPAN:
+        actual = NAMECOIN_MIN_TIMESPAN
+    elif actual > NAMECOIN_MAX_TIMESPAN:
+        actual = NAMECOIN_MAX_TIMESPAN
+    old_t = bits_to_target(prev_bits)
+    new_t = (old_t * actual) // NAMECOIN_TARGET_TIMESPAN
+    if new_t > NAMECOIN_POW_LIMIT_MAIN:
+        new_t = NAMECOIN_POW_LIMIT_MAIN
+    return target_to_bits(new_t)
+
+
+def auxpow_expected_index(nonce: int, chain_id: int, merkle_size: int) -> int:
+    """Exact Namecoin Core CAuxPow::getExpectedIndex."""
+    rand = nonce & 0xFFFFFFFF
+    rand = (rand * 1103515245 + 12345) & 0xFFFFFFFF
+    rand = (rand + chain_id) & 0xFFFFFFFF
+    rand = (rand * 1103515245 + 12345) & 0xFFFFFFFF
+    return rand % merkle_size
+
+
+def verify_namecoin_header_pow(header_hex: str, *, network: str = "main") -> bool:
+    """Verify non-AuxPoW Namecoin block header PoW against network powLimit and compact nBits target."""
+    try:
+        hdr = bytes.fromhex(header_hex)
+        if len(hdr) != 80:
+            return False
+        nbits = struct.unpack("<I", hdr[72:76])[0]
+        pow_limit = NAMECOIN_POW_LIMIT_REGTEST if network == "regtest" else NAMECOIN_POW_LIMIT_MAIN
+        target = bits_to_target(nbits)
+        if target <= 0 or target > pow_limit:
+            return False
+        return int.from_bytes(dsha256(hdr), "little") <= target
+    except Exception:
+        return False
+
+
+def verify_namecoin_auxpow(header_hex: str, auxpow: dict[str, Any], *, network: str = "main") -> bool:
+    """Verify Namecoin Core CAuxPow::check (version AuxPoW flag, chain_id=1, parent PoW, coinbase branch, fabe6d6d, GetExpectedIndex)."""
+    try:
+        hdr = bytes.fromhex(header_hex)
+        if len(hdr) != 80:
+            return False
+        n_ver = struct.unpack("<I", hdr[0:4])[0]
+        n_bits = struct.unpack("<I", hdr[72:76])[0]
+        if (n_ver & 0x00000100) == 0 or (n_ver >> 16) != NAMECOIN_AUX_CHAIN_ID:
+            return False
+        pow_limit = NAMECOIN_POW_LIMIT_REGTEST if network == "regtest" else NAMECOIN_POW_LIMIT_MAIN
+        target = bits_to_target(n_bits)
+        if target <= 0 or target > pow_limit:
+            return False
+        parent_hdr = bytes.fromhex(auxpow["parent_header_hex"])
+        if len(parent_hdr) != 80:
+            return False
+        parent_hash_int = int.from_bytes(dsha256(parent_hdr), "little")
+        if parent_hash_int > target:
+            return False
+        parent_merkle_le = parent_hdr[36:68]
+        cb_tx = parse_raw_tx(bytes.fromhex(auxpow["parent_coinbase_hex"]), allow_empty_vout=True)
+        if len(cb_tx["vin"]) != 1 or cb_tx["vin"][0]["prev_txid_le"] != (b"\x00" * 32) or cb_tx["vin"][0]["prev_vout"] != 0xFFFFFFFF:
+            return False
+        if not verify_btc_merkle_branch(cb_tx["txid_le"], 0, auxpow["coinbase_branch"], parent_merkle_le):
+            return False
+        merkle_size = int(auxpow["chain_merkle_size"])
+        merkle_nonce = int(auxpow["chain_merkle_nonce"])
+        chain_branch = auxpow["chain_branch"]
+        if merkle_size != (1 << len(chain_branch)):
+            return False
+        exp_idx = auxpow_expected_index(merkle_nonce, NAMECOIN_AUX_CHAIN_ID, merkle_size)
+        aux_block_hash_le = dsha256(hdr)
+        cur = aux_block_hash_le
+        idx = exp_idx
+        for h_be in chain_branch:
+            sib_le = bytes.fromhex(h_be)[::-1]
+            cur = dsha256(sib_le + cur) if (idx & 1) else dsha256(cur + sib_le)
+            idx >>= 1
+        aux_root_be = cur[::-1]
+        ss = cb_tx["vin"][0]["script_sig"]
+        magic = b"\xfa\xbe\x6d\x6d"
+        pc = ss.find(aux_root_be)
+        if pc < 0:
+            return False
+        mpos = ss.find(magic)
+        if mpos >= 0:
+            # Namecoin Core CAuxPow::check: at most one fabe6d6d magic, immediately preceding aux_root_be
+            if ss.find(magic, mpos + 4) != -1 or mpos + 4 != pc:
+                return False
+        elif pc > 20:
+            # Namecoin Core CAuxPow::check: when fabe6d6d is omitted, aux_root_be MUST start within first 20 bytes
+            return False
+        # Followed immediately by 4B LE chain_merkle_size + 4B LE chain_merkle_nonce
+        if len(ss) < pc + 40:
+            return False
+        got_sz, got_nonce = struct.unpack("<II", ss[pc + 32 : pc + 40])
+        return got_sz == merkle_size and got_nonce == merkle_nonce
+    except (ValueError, KeyError, TypeError):
+        return False
+
+
 def self_test() -> None:
     """Verify pure-Python BIP-340, RIPEMD-160, RFC 8032 Ed25519, and low-S NIST P-256 against official vectors."""
     # Official BIP-340 Test Vector 0
@@ -2208,7 +3103,79 @@ def self_test() -> None:
     salt = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
     c_hash = clause_commit(salt, {"text": "Room inspection"})
     assert c_hash.startswith("b030a8a82ef79e9d"), f"clause_commit mismatch: {c_hash}"
-    print(f"seallink_ref self_test PASS (BIP-340 + RFC8032 Ed25519 + low-S P-256 + RIPEMD-160) | clause_commit={c_hash}")
+
+    # v1.0.0-draft.11 primitives self-tests: target_id (excluding params), RFC 9162 checkpoints_root & peaks,
+    # canonical Fixed-Depth-256 SMT (incl. sib != D[h-1]), consensus BIP-66 high-S ECDSA, and Namecoin retarget/AuxPoW
+    tid1 = artifact_target_id({"scheme": "sha256", "digest": "11" * 32, "params": {"filename": "a.bin"}})
+    tid2 = artifact_target_id({"scheme": "sha256", "digest": "11" * 32, "params": {"filename": "b.bin"}})
+    assert tid1 == tid2, "target_id MUST ignore params"
+    c_leaves = [ckpt_leaf(i + 1, sha256(f"cp-{i+1}".encode()).hex()) for i in range(7)]
+    for sz in range(1, 8):
+        sub = c_leaves[:sz]
+        r_mth = rfc9162_mth(sub).hex()
+        pks = rfc9162_peaks(sub)
+        assert len(pks) == sz.bit_count() and rfc9162_root_from_peaks(pks, sz) == r_mth
+        if sz < 7:
+            assert rfc9162_append_leaf_to_peaks(pks, sz, c_leaves[sz]) == rfc9162_mth(c_leaves[: sz + 1]).hex()
+        for m_i in range(sz):
+            ip = rfc9162_inclusion_proof(sub, m_i)
+            assert rfc9162_verify_inclusion(sub[m_i], m_i, sz, ip["hashes"], r_mth)
+    kv_smt = {"act:" + ("aa" * 32) + "|*": "bb" * 32, "target:" + ("cc" * 32) + "|*": "dd" * 32}
+    p_inc = smt_prove(kv_smt, "act:" + ("aa" * 32) + "|*")
+    p_abs = smt_prove(kv_smt, "rel:" + ("ee" * 32) + "|*")
+    assert smt_verify_proof(p_inc) and smt_verify_proof(p_abs)
+    # Non-canonical SMT proof supplying D[h-1] for a 1-bit MUST reject (P1)!
+    bad_bm = bytearray(bytes.fromhex(p_abs["bitmap_hex"]))
+    for h_i in range(1, 257):
+        d_i = 256 - h_i
+        if smt_get_bit(bytes(bad_bm), d_i) == 0:
+            bad_bm[d_i >> 3] |= 1 << (7 - (d_i & 7))
+            # insert D[h_i - 1] at exact bottom-up position
+            ins_at = sum(smt_get_bit(bytes(bad_bm), 256 - hh) for hh in range(1, h_i))
+            bad_sibs = list(p_abs["siblings"])
+            bad_sibs.insert(ins_at, SMT_DEFAULTS[h_i - 1].hex())
+            assert not smt_verify_proof({**p_abs, "bitmap_hex": bytes(bad_bm).hex(), "siblings": bad_sibs})
+            break
+    # Consensus BIP-66 DER ECDSA MUST accept high-S (P0-CONS-1)
+    sk_e = deterministic_privkey("bip66-high-s-test")
+    pk_e = compressed_pubkey(sk_e)
+    z_e = sha256(b"consensus-high-s")
+    d_int = int.from_bytes(sk_e, "big")
+    k_int = int.from_bytes(sha256(b"k-high-s"), "big") % (_N - 1) + 1
+    pt_k = _point_mul(_G, k_int)
+    assert pt_k is not None
+    r_e = pt_k[0] % _N
+    s_e = (pow(k_int, _N - 2, _N) * (int.from_bytes(z_e, "big") + r_e * d_int)) % _N
+    if s_e <= _N // 2:
+        s_e = _N - s_e  # force high-S
+    def _der_u(v: int) -> bytes:
+        b = v.to_bytes((v.bit_length() + 7) // 8, "big")
+        if b[0] & 0x80:
+            b = b"\x00" + b
+        return b"\x02" + bytes([len(b)]) + b
+    der_body = _der_u(r_e) + _der_u(s_e)
+    sig_high_s = b"\x30" + bytes([len(der_body)]) + der_body + b"\x01"
+    ok_hs, sht_hs = secp256k1_ecdsa_verify_bip66(z_e, pk_e, sig_high_s)
+    assert ok_hs and sht_hs == 0x01, "Consensus BIP-66 verifier MUST accept valid high-S ECDSA signature"
+    assert compute_namecoin_next_bits(0x1D00FFFF, 1000, 1000 + 100, network="main") == target_to_bits(bits_to_target(0x1D00FFFF) // 4)
+    assert compute_namecoin_next_bits(0x207FFFFF, 1000, 1000 + 100, network="regtest") == 0x207FFFFF
+    # CAuxPow::check regtest parity: omitted fabe6d6d allowed iff root_offset <= 20, empty vout allowed in parent coinbase
+    _aux_hdr = struct.pack("<I", 0x00010104) + (b"\x00" * 32) + (b"\x11" * 32) + struct.pack("<III", 1700000000, 0x207FFFFF, 0)
+    _aux_root_be = dsha256(_aux_hdr)[::-1]
+    def _mk_cb_empty_vout(ss_b: bytes) -> bytes:
+        return struct.pack("<I", 1) + b"\x01" + (b"\x00" * 32) + struct.pack("<I", 0xFFFFFFFF) + _encode_varint(len(ss_b)) + ss_b + struct.pack("<I", 0xFFFFFFFF) + b"\x00" + struct.pack("<I", 0)
+    _cb_ok = _mk_cb_empty_vout(b"\x28" + _aux_root_be + struct.pack("<II", 1, 0))
+    _cb_far = _mk_cb_empty_vout((b"\x00" * 21) + _aux_root_be + struct.pack("<II", 1, 0))
+    _ph_ok = struct.pack("<I", 1) + (b"\x00" * 32) + dsha256(_cb_ok) + struct.pack("<III", 0, 0, 0)
+    while int.from_bytes(dsha256(_ph_ok), "little") > bits_to_target(0x207FFFFF):
+        _ph_ok = _ph_ok[:-4] + struct.pack("<I", struct.unpack("<I", _ph_ok[-4:])[0] + 1)
+    _ph_far = struct.pack("<I", 1) + (b"\x00" * 32) + dsha256(_cb_far) + struct.pack("<III", 0, 0, 0)
+    while int.from_bytes(dsha256(_ph_far), "little") > bits_to_target(0x207FFFFF):
+        _ph_far = _ph_far[:-4] + struct.pack("<I", struct.unpack("<I", _ph_far[-4:])[0] + 1)
+    assert verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_ok.hex(), "parent_header_hex": _ph_ok.hex()}, network="regtest")
+    assert not verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_far.hex(), "parent_header_hex": _ph_far.hex()}, network="regtest")
+
+    print(f"seallink_ref self_test PASS (BIP-340 + RFC8032 Ed25519 + low-S P-256 + RIPEMD-160 + RFC9162 + SMT256 + BIP66 + CAuxPow) | clause_commit={c_hash}")
 
 
 if __name__ == "__main__":

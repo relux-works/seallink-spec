@@ -739,8 +739,8 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         ("d10-h3-name-history-malformed-0x0b-frame-invalid", _raw_slnk_frame(0x0B, b"\x01" + b"\x00" * 10), "REFUSE", "CHAIN_FRAME_INVALID", "H-3: Truncated/malformed 0x0b in name history MUST refuse CHAIN_FRAME_INVALID."),
         ("d10-h3-name-history-bad-loc-type-frame-invalid", _raw_slnk_frame(0x07, b"\x01" + bytes.fromhex(_h32("c07")) + b"\x09"), "REFUSE", "CHAIN_FRAME_INVALID", "H-3: Invalid loc_type in name history SLNK frame MUST refuse CHAIN_FRAME_INVALID."),
         ("d10-l8-name-history-0x0b-hc-gt-inclusion-height-frame-invalid", sl.encode_opreturn(0x0B, _h32("cb-fut"), h_c=749011).hex(), "REFUSE", "CHAIN_FRAME_INVALID", "L-8: 0x0b with h_c > inclusion_height MUST refuse CHAIN_FRAME_INVALID."),
-        ("d10-f3-name-history-0x13-critical-reserved-incomplete", _raw_slnk_frame(0x13, valid_34b_payload), "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "F3/H-3: Critical reserved 0x13 in name history MUST fail closed ORIGIN_STATUS_INCOMPLETE on v1.0 readers."),
-        ("d10-f3-name-history-0x14-critical-reserved-incomplete", _raw_slnk_frame(0x14, valid_34b_payload), "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "F3/H-3: Critical reserved 0x14 in name history MUST fail closed ORIGIN_STATUS_INCOMPLETE on v1.0 readers."),
+        ("d10-f3-name-history-0x13-critical-reserved-incomplete", _raw_slnk_frame(0x13, valid_34b_payload), "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "F3/H-3: Unresolved 0x13 VOLUNTARY_REBIND in name history MUST fail closed ORIGIN_STATUS_INCOMPLETE without origin_bundle."),
+        ("d10-f3-name-history-0x15-critical-reserved-incomplete", _raw_slnk_frame(0x15, valid_34b_payload), "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "F3/H-3: Critical reserved 0x15 in name history MUST fail closed ORIGIN_STATUS_INCOMPLETE on v1.0 readers."),
         ("d10-f3-name-history-0x20-advisory-ignorable-admit", _raw_slnk_frame(0x20, valid_34b_payload), "ADMIT", None, "F3/H-3: Well-formed advisory 0x20 in name history MUST be safely ignored by v1.0 readers (ADMIT)."),
         ("d10-f3-name-history-0x20-malformed-frame-invalid", _raw_slnk_frame(0x20, b"\x01" + b"\x00" * 16), "REFUSE", "CHAIN_FRAME_INVALID", "F3/H-3: Malformed advisory 0x20 in name history MUST refuse CHAIN_FRAME_INVALID."),
     ]:
@@ -1064,6 +1064,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         new_reg = {"txid": _h32(f"d10-rec-reg-{label}"), "vout": 0}
         rec_pol = of_x["_rec_pol"]
         b2 = {
+            "binding_mode": "recovery",
             "genesis": GENESIS_MAIN,
             "name": name_new,
             "network": "main",
@@ -1251,6 +1252,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     b2_adult = of_h6_s4["origin_bundle"]["recovery_bindings"][0]
     b2_rtx = of_h6_s4["chain"]["txs"][of_h6_s4["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]["txid"]]["outputs"]["0"]["spent_by_txid"]
     b3_rogue = {
+        "binding_mode": "recovery",
         "genesis": GENESIS_MAIN,
         "name": "id/rogue-takeover",
         "network": "main",
@@ -1956,8 +1958,8 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     sl_cred_env = sl.sign_envelope(sl_cred_p, [sl_cred["sk"]])
     sl_atx_before = _h32("l1-sl-atx-749999")
     sl_atx_at = _h32("l1-sl-atx-750000")
-    frame_0x13_ok = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x13, 0x22, 0x01]) + (b"\xaa" * 32) + bytes([0x00])).hex()
-    frame_0x13_bad_outer = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x13, 0x05, 0x01, 0x02])).hex()
+    frame_0x13_ok = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x15, 0x22, 0x01]) + (b"\xaa" * 32) + bytes([0x00])).hex()
+    frame_0x13_bad_outer = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x15, 0x05, 0x01, 0x02])).hex()
     frame_0x1b_ok = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x1B, 0x22, 0x01]) + (b"\xbb" * 32) + bytes([0x00])).hex()
     frame_0x0b_bad_hc = sl.encode_opreturn(0x0B, _h32("l1-0b-bad"), 0x00, h_c=750050).hex()
 

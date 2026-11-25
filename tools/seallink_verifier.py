@@ -26,6 +26,7 @@ import hmac
 import json
 import re
 import secrets
+import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -169,6 +170,9 @@ _SCALAR_ONEOF_DISCRIMINATORS: tuple[str, ...] = (
     "action",
     "lifecycle",
     "statement_kind",
+    "binding_mode",
+    "fraud_mode",
+    "scheme",
 )
 
 
@@ -410,6 +414,8 @@ def _closure_subject_key(subject: dict[str, Any], cause: str | None = None) -> s
         return f"role:{c_part}{subject['name']}:{_outpoint_key(subject['registration'])}:{subject['role']}:{subject['policy_sha256']}"
     if sk == "guardian_slot":
         return f"guardian_slot:{subject['origin_id']}:{subject['slot']}:{_outpoint_key(subject['outpoint'])}"
+    if sk == "log":
+        return f"log:{subject['log_id']}"
     return str(subject)
 
 
@@ -748,6 +754,7 @@ class FencedJournal:
         self.sessions_by_id: dict[str, dict[str, Any]] = {}
         self.auth_nonces: dict[str, dict[str, Any]] = {}
         self.migrations_applied: set[str] = set()
+        self.log_heads: dict[str, dict[str, Any]] = {}
 
     @classmethod
     def from_dict(cls, cfg: dict[str, Any]) -> "FencedJournal":
@@ -808,6 +815,8 @@ class FencedJournal:
             j.auth_nonces[k] = copy.deepcopy(v)
         for mid in cfg.get("migrations_applied", []):
             j.migrations_applied.add(mid)
+        for lid, lhead in cfg.get("log_heads", {}).items():
+            j.log_heads[lid] = copy.deepcopy(lhead)
         return j
 
     @classmethod
@@ -1168,6 +1177,8 @@ class FencedJournal:
                     self.quota_watermarks[qkey] = max(self.quota_watermarks.get(qkey, 0), int(rec_at))
         elif kind == "migration-applied":
             self.migrations_applied.add(body["migration_id"])
+        elif kind == "log-head":
+            self.log_heads[body["log_id"]] = copy.deepcopy(body)
         return {"entry": entry, "c_before": c_before, "c_after": c_after}
 
 
@@ -1263,10 +1274,12 @@ class ChainView:
 class Tier1Verifier:
     """Reference Verifier Core implementing SPEC-01 through SPEC-07."""
 
-    _VALID_MODULES = frozenset({"core", "bearer-sessions", "service-migration", "federated-screening"})
+    _VALID_MODULES = frozenset({"core", "bearer-sessions", "service-migration", "federated-screening", "artifact-notarization"})
     _TYPE_REQUIRED_MODULE: dict[str, str] = {
         "seallink-session-open/1": "bearer-sessions",
         "seallink-migration/1": "service-migration",
+        "seallink-ticket/1": "artifact-notarization",
+        "seallink-tier2-name-history/1": "artifact-notarization",
     }
 
     def __init__(
@@ -1898,7 +1911,7 @@ class Tier1Verifier:
         used_policy_hashes: set[str] = set()
         link = val_obj.get("link", {})
         if isinstance(link, dict):
-            for r in ("grant", "cred", "notary"):
+            for r in ("grant", "cred", "notary", "release"):
                 rk = link.get(r)
                 if isinstance(rk, str):
                     if not sl.is_valid_xonly_pubkey(rk) or rk in used_keys:
@@ -1933,8 +1946,9 @@ class Tier1Verifier:
         require_history: bool = True,
         at_height: int | None = None,
         historical: bool = False,
+        allow_unresolved_voluntary_rebind: bool = False,
     ) -> tuple[dict[str, Any] | None, str | None]:
-        """Resolve a Namecoin name strictly by walking its structured updates[] history (B-9, B-12, A-5, A-7, R2-L-01)."""
+        """Resolve a Namecoin name strictly by walking its structured updates[] history (B-9, B-12, A-5, A-7, R2-L-01, P0-4)."""
         is_hist = at_height is not None or historical
         raw_cur = chain.get_name(name)
         rec = chain.get_name_for_registration(name, expected_registration, historical=is_hist)
@@ -1950,8 +1964,20 @@ class Tier1Verifier:
         updates = rec.get("updates")
         if not isinstance(updates, list) or not updates:
             return None, "NAME_HISTORY_UNAVAILABLE"
+        feh = rec.get("first_error_height")
+        trunc_masked = (
+            bool(rec.get("history_truncated", False))
+            and at_height is not None
+            and isinstance(feh, int)
+            and not isinstance(feh, bool)
+            and at_height < feh
+        )
+        if trunc_masked:
+            updates = [u for u in updates if u.get("confirmed_height") is not None and u["confirmed_height"] < feh]
+            if not updates:
+                return None, "NAME_HISTORY_UNAVAILABLE"
         if require_history:
-            if rec.get("history_truncated", False) or len(updates) > self.max_history_steps:
+            if (rec.get("history_truncated", False) and not trunc_masked) or len(updates) > self.max_history_steps:
                 return None, "NAME_HISTORY_UNAVAILABLE"
             reg = rec.get("registration")
             if not reg or updates[0].get("txid") != reg.get("txid") or updates[0].get("vout") != reg.get("vout"):
@@ -2038,11 +2064,12 @@ class Tier1Verifier:
             return None, "ORIGIN_UNVERIFIED"
         historical_origin_id = next(iter(hist_origins)) if hist_origins else None
 
-        # Derive 0x0b compromise breaks & 0x10 recovery cancels from confirmed updates in history,
+        # Derive 0x0b compromise breaks, 0x10 recovery cancels, & 0x13 voluntary rebinds from confirmed updates in history,
         # enforcing outer-before-semantic SLNK frame & forward-compatibility criticality rules on EVERY
-        # confirmed update (SPEC-02 §5.2, H-3/F3, L-8); semantic 0x0b/0x10 still require SIGHASH_ALL owner authorship!
+        # confirmed update (SPEC-02 §5.2, H-3/F3, L-8); semantic 0x0b/0x10/0x13 still require SIGHASH_ALL owner authorship!
         compromised_breaks: list[dict[str, Any]] = []
         recovery_cancels: list[dict[str, Any]] = []
+        voluntary_rebinds: list[dict[str, Any]] = []
         for idx in range(1, len(updates)):
             u = updates[idx]
             uh_conf = u.get("confirmed_height")
@@ -2068,6 +2095,16 @@ class Tier1Verifier:
                 continue
             if dec["action"] == "0x0b" and dec["h_c"] > int(uh_conf):
                 return None, "CHAIN_FRAME_INVALID"
+            if dec["action"] == "0x13":
+                voluntary_rebinds.append({
+                    "binding_id": dec["commitment"],
+                    "confirmed_height": int(uh_conf),
+                    "txid": u.get("txid"),
+                    "update_idx": idx,
+                })
+                if not allow_unresolved_voluntary_rebind and (at_height is None or int(uh_conf) <= at_height):
+                    return None, "ORIGIN_STATUS_INCOMPLETE"
+                continue
             if not self._is_owner_authored_update(u, updates[idx - 1]):
                 continue
             prev_owner_spk = None
@@ -2104,6 +2141,7 @@ class Tier1Verifier:
             "_historical_origin_id": historical_origin_id,
             "_compromised_breaks": compromised_breaks,
             "_recovery_cancels": recovery_cancels,
+            "_voluntary_rebinds": voluntary_rebinds,
             "_mempool_updates": list(rec.get("mempool_updates", [])),
         }, None
 
@@ -2257,7 +2295,7 @@ class Tier1Verifier:
         chain: ChainView,
     ) -> int | None:
         """Reconstruct seallink-credential-break/1 from on-chain 0x0b frames and return min(h_c) or None."""
-        if role not in ("cred", "notary", "grant"):
+        if role not in ("cred", "notary", "grant", "release"):
             return None
         issuer_name_pin = {
             "name": issuer_pin["name"],
@@ -2864,6 +2902,194 @@ class Tier1Verifier:
     def _is_trusted_origin_issuer(self, issuer_pin: dict[str, Any]) -> bool:
         return any(_name_pin_equal(issuer_pin, pin) for pin in self.trusted_origin_issuer_pins)
 
+    @staticmethod
+    def _binding_history_ok_until(nrec: dict[str, Any] | None, cutoff_h: int) -> bool:
+        """Return True iff name registration history is untruncated through `cutoff_h` (P0-4 `first_error_height`)."""
+        if not isinstance(nrec, dict):
+            return False
+        if not nrec.get("history_truncated", False):
+            return True
+        feh = nrec.get("first_error_height")
+        return isinstance(feh, int) and not isinstance(feh, bool) and feh > cutoff_h
+
+    def _validate_b2_invariant(
+        self,
+        cand: dict[str, Any],
+        chain: ChainView,
+        h_13: int,
+        check_until_h: int,
+        origin_id: str,
+        *,
+        allow_origin_at_exact: str | None = None,
+    ) -> tuple[bool, int | None]:
+        """Verify B_2 registration, T_offer consent_utxo, no expiry, writer authorship, owner_policy invariance on [h_offer, check_until_h], and no link.origin before maturity."""
+        reg_key = _outpoint_key(cand["registration"])
+        existing_oid = chain.raw.get("registered_bindings", {}).get(reg_key)
+        if existing_oid is not None and existing_oid != origin_id:
+            return False, None
+        b2_nrec = chain.get_name_for_registration(cand["name"], cand["registration"], historical=True)
+        if not self._binding_history_ok_until(b2_nrec, check_until_h):
+            return False, None
+        assert b2_nrec is not None
+        raw_updates = b2_nrec.get("updates", [])
+        updates = [u for u in raw_updates if u.get("confirmed_height") is not None and u["confirmed_height"] <= check_until_h]
+        if len(updates) < 2:
+            return False, None
+        b2_spk = sl.compile_script_policy(cand["owner_policy"])[0]
+        consent_op = cand["consent_outpoint"]
+        offer_idx: int | None = None
+        for idx, u in enumerate(updates):
+            if u.get("txid") == consent_op["txid"]:
+                offer_idx = idx
+                break
+        if offer_idx is None or offer_idx < 1:
+            return False, None
+        u_offer = updates[offer_idx]
+        h_offer = int(u_offer["confirmed_height"])
+        if u_offer.get("op") != "NAME_UPDATE" or h_offer >= h_13:
+            return False, None
+        offer_tx = chain.get_tx(consent_op["txid"])
+        if offer_tx is not None and "version" in offer_tx and offer_tx["version"] != 0x7100:
+            return False, None
+        if "version" in u_offer and u_offer["version"] != 0x7100:
+            return False, None
+        consent_out = chain.get_output(consent_op["txid"], consent_op["vout"])
+        if (
+            not consent_out
+            or consent_out.get("script_pubkey_hex", "").startswith(("51", "52", "53"))
+            or consent_out.get("script_pubkey_hex") != b2_spk.hex()
+        ):
+            return False, None
+        if sl.compile_script_policy(updates[offer_idx - 1]["owner_policy"])[0] != b2_spk:
+            return False, None
+        for idx, u in enumerate(updates):
+            uh = int(u["confirmed_height"])
+            if idx > 0:
+                prev_h = int(updates[idx - 1]["confirmed_height"])
+                if uh >= prev_h + chain.name_expiry_blocks:
+                    return False, None
+                if not self._is_owner_authored_update(u, updates[idx - 1]):
+                    return False, None
+            if idx >= offer_idx:
+                if sl.compile_script_policy(u["owner_policy"])[0] != b2_spk:
+                    return False, None
+            try:
+                parsed_u = sl.parse_name_output(bytes.fromhex(u["output_script_hex"]))
+            except (ValueError, KeyError, TypeError):
+                return False, None
+            if parsed_u.get("name") != cand["name"]:
+                return False, None
+            raw_v = parsed_u.get("value", "")
+            if raw_v != "":
+                ok_v, vobj = sl.jcs_validate(raw_v.encode("utf-8"), max_bytes=520)
+                if not ok_v:
+                    return False, None
+                if isinstance(vobj.get("link"), dict) and "origin" in vobj["link"]:
+                    if allow_origin_at_exact is None or uh < check_until_h or vobj["link"]["origin"] != allow_origin_at_exact:
+                        return False, None
+        if check_until_h >= int(updates[-1]["confirmed_height"]) + chain.name_expiry_blocks:
+            return False, None
+        return True, h_offer
+
+    def _validate_voluntary_rebind_tx(
+        self,
+        cand: dict[str, Any],
+        u13: dict[str, Any],
+        u13_idx: int,
+        b1_updates: list[dict[str, Any]],
+        active_binding: dict[str, Any],
+        origin_id: str,
+        nr: dict[str, Any],
+        seen_binding_regs: set[tuple[str, str]],
+        chain: ChainView,
+        h_13: int,
+    ) -> tuple[bool, int | None, str | None]:
+        """Validate all §1.1 rules for T_rebind (0x13) and T_offer against current writer-verified eff_pol_1."""
+        min_d = max(144, int(nr["delay_blocks"])) if nr["mode"] == "dual_party_delayed" else 144
+        if (
+            cand.get("binding_mode") != "voluntary"
+            or cand["origin_id"] != origin_id
+            or cand["network"] != self.pinned_network
+            or cand["genesis"] != self.pinned_genesis
+            or cand.get("supersedes_binding_id") != sl.object_id(active_binding)
+            or cand["seq"] != active_binding["seq"] + 1
+            or (cand["name"], _outpoint_key(cand["registration"])) in seen_binding_regs
+            or len(seen_binding_regs) == 257
+            or not (min_d <= cand["delay_blocks"] <= 52560)
+        ):
+            return False, None, None
+        if u13.get("op") != "NAME_UPDATE":
+            return False, None, None
+        if "version" in u13 and u13["version"] != 0x7100:
+            return False, None, None
+        try:
+            parsed_13 = sl.parse_name_output(bytes.fromhex(u13["output_script_hex"]))
+        except (ValueError, KeyError, TypeError):
+            return False, None, None
+        if parsed_13.get("name") != active_binding["name"] or parsed_13.get("value") != "{}":
+            return False, None, None
+        # Current writer-verified eff_pol_1 immediately before T_rebind MUST be preserved in T_rebind!
+        for i in range(1, u13_idx + 1):
+            if not self._is_owner_authored_update(b1_updates[i], b1_updates[i - 1]):
+                return False, None, None
+        eff_pol_1 = b1_updates[u13_idx - 1]["owner_policy"]
+        eff_spk_1 = sl.compile_script_policy(eff_pol_1)[0]
+        if u13_idx == 1:
+            if eff_spk_1 != sl.compile_script_policy(active_binding["owner_policy"])[0]:
+                return False, None, None
+        else:
+            if eff_spk_1 != sl.compile_script_policy(b1_updates[u13_idx - 2]["owner_policy"])[0]:
+                return False, None, None
+        if sl.compile_script_policy(u13["owner_policy"])[0] != eff_spk_1:
+            return False, None, None
+        tx13 = chain.get_tx(u13["txid"])
+        if (
+            not tx13
+            or tx13.get("confirmed_height") != h_13
+            or ("version" in tx13 and tx13["version"] != 0x7100)
+            or not self._tx_spends_outpoint(tx13, cand["consent_outpoint"])
+            or not self._tx_satisfies_witness_w(tx13)
+        ):
+            return False, None, None
+        ok_b2, h_offer = self._validate_b2_invariant(cand, chain, h_13, h_13, origin_id)
+        if not ok_b2 or h_offer is None:
+            return False, None, None
+        return True, h_offer, eff_spk_1.hex()
+
+    def _check_b2_step3_activated(
+        self,
+        binding: dict[str, Any],
+        origin_id: str,
+        since_h: int,
+        until_h: int,
+        chain: ChainView,
+    ) -> tuple[bool, dict[str, Any] | None]:
+        """Verify Step 3 activation on matured voluntary-rebind B_2 (confirmed SIGHASH_ALL OP_NAME_UPDATE at h_act >= since_h writing link.origin == origin_id)."""
+        b2_nrec = chain.get_name_for_registration(binding["name"], binding["registration"], historical=True)
+        if not self._binding_history_ok_until(b2_nrec, until_h):
+            return False, None
+        assert b2_nrec is not None
+        updates = [u for u in b2_nrec.get("updates", []) if u.get("confirmed_height") is not None and u["confirmed_height"] <= until_h]
+        b2_spk = sl.compile_script_policy(binding["owner_policy"])[0]
+        activated = False
+        for idx in range(1, len(updates)):
+            u = updates[idx]
+            uh = int(u["confirmed_height"])
+            if uh >= int(updates[idx - 1]["confirmed_height"]) + chain.name_expiry_blocks:
+                return False, None
+            if not self._is_owner_authored_update(u, updates[idx - 1]):
+                return False, None
+            if not activated:
+                if sl.compile_script_policy(u["owner_policy"])[0] != b2_spk:
+                    return False, None
+                if uh >= since_h:
+                    vobj, verr = self._parse_update_value(u, binding["name"])
+                    if verr is None and vobj is not None and vobj.get("link", {}).get("origin") == origin_id:
+                        activated = True
+        if not activated:
+            return False, None
+        return True, copy.deepcopy(updates[-1]["owner_policy"])
+
     def verify_origin_and_status(
         self,
         origin_bundle: dict[str, Any] | None,
@@ -3179,8 +3405,10 @@ class Tier1Verifier:
                     majority_cutoff_reached = True
                     emancipated_by_majority = True
 
-        # Walk full name_recovery continuation spine (SPEC-04 §6, 3-way D-1 R2G-01, non-retroactive D-2 R2G-05, H-5, H-6, M-9)
+        # Unified 5-subphase (1 -> 2 -> 3 -> 4 -> 4b) height-ordered binding state machine
+        # (SPEC-04 §6, voluntary-rebind-design-v2.2, 3-way D-1, non-retroactive D-2, H-5, H-6, M-9, P0-4)
         active_binding = binding
+        seen_binding_regs: set[tuple[str, str]] = {(binding["name"], _outpoint_key(binding["registration"]))}
         active_recovery_seal: dict[str, Any] | None = None
         last_recovery_promo_height: int | None = None
         last_recovery_promo_time: int | None = None
@@ -3195,12 +3423,14 @@ class Tier1Verifier:
             if before_cap and before_maj:
                 pre_trigger_pks.update(self._extract_policy_pubkeys(bu.get("owner_policy")))
         recovery_events: list[dict[str, Any]] = []
+        voluntary_rebind_events: list[dict[str, Any]] = []
         recovery_burned = False
         nr = op["name_recovery"]
         raw_rec_cands = origin_bundle.get("recovery_bindings", [])
-        if not isinstance(raw_rec_cands, list):
+        raw_reb_cands = origin_bundle.get("voluntary_rebind_bindings", [])
+        if not isinstance(raw_rec_cands, list) or not isinstance(raw_reb_cands, list):
             return None, "ORIGIN_STATUS_INCOMPLETE"
-        rec_candidates_list: list[Any] = list(raw_rec_cands)
+        rec_candidates_list: list[Any] = list(raw_rec_cands) + list(raw_reb_cands)
         if origin_bundle.get("pending_recovery_binding") is not None:
             rec_candidates_list.append(origin_bundle["pending_recovery_binding"])
         rec_by_id: dict[str, dict[str, Any]] = {}
@@ -3218,180 +3448,529 @@ class Tier1Verifier:
                     pass
 
         if nr["mode"] == "none":
-            if rec_candidates_list:
+            if any(isinstance(rb, dict) and rb.get("binding_mode") != "voluntary" for rb in rec_candidates_list):
                 return None, "RECOVERY_FORBIDDEN"
+            exp_rec_spk: bytes | None = None
         else:
-            cur_rec_seal = nr["recovery_seal"]
+            active_recovery_seal = nr["recovery_seal"]
             exp_rec_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(nr["disposer_pk"], nr["arbiter_pk"])}
-            exp_rec_spk, _ = sl.compile_script_policy(exp_rec_pol)
-            active_recovery_seal = cur_rec_seal
-            seen_rec_ops: set[str] = set()
-            while True:
-                cur_r_key = _outpoint_key(cur_rec_seal)
-                r_tx_cre = chain.get_tx(cur_rec_seal["txid"])
-                rout = chain.get_output(cur_rec_seal["txid"], cur_rec_seal["vout"])
-                if (
-                    cur_r_key in seen_rec_ops
-                    or len(seen_rec_ops) == 257
-                    or not r_tx_cre
-                    or r_tx_cre.get("confirmed_height") is None
-                    or r_tx_cre["confirmed_height"] > eval_h
-                    or not rout
-                    or rout.get("script_pubkey_hex") != exp_rec_spk.hex()
-                ):
-                    return None, "ORIGIN_STATUS_INCOMPLETE"
-                seen_rec_ops.add(cur_r_key)
-                rspend = rout.get("spent_by_txid")
-                if not rspend:
-                    if rout.get("absent_from_utxo"):
-                        # Unknown / unattributable spend without tx body -> fail closed ORIGIN_STATUS_INCOMPLETE (R2G-01)
-                        return None, "ORIGIN_STATUS_INCOMPLETE"
-                    break
-                rtx = chain.get_tx(rspend)
-                # 3-way D-1 Case 1 (R2G-01): unconfirmed spend of recovery_seal NEVER permanently burns!
-                if rtx is None or rtx.get("confirmed_height") is None:
-                    if at_height is not None:
-                        break
-                    return None, "ORIGIN_STATUS_INCOMPLETE"
-                if at_height is not None and rtx["confirmed_height"] > eval_h:
-                    break
-                dec_r = self._decode_opreturn_tx(rtx, expected_action="0x0c")
-                has_cont_out = any(
-                    isinstance(ov, dict) and ov.get("script_pubkey_hex") == exp_rec_spk.hex()
-                    for ov in (rtx.get("outputs") or {}).values()
-                )
-                # 3-way D-1 Case 3a: Provably malformed confirmed on-chain spend -> recovery_burned=True; B_k survives!
-                if dec_r is None or (rtx.get("inputs") and not self._tx_spends_outpoint(rtx, cur_rec_seal)) or not has_cont_out:
+            exp_rec_spk = sl.compile_script_policy(exp_rec_pol)[0]
+
+        seen_rec_ops: set[str] = set()
+        is_autonomous: bool = "guardian_policy" not in op
+        h_emancipated: int | None = h_origin if is_autonomous else None
+        emancipated_owner_policy: dict[str, Any] | None = None
+        awaiting_activation = False
+        awaiting_activation_since: int | None = None
+        pending_rec: dict[str, Any] | None = None
+        pending_reb: dict[str, Any] | None = None
+        processed_13_txids: set[str] = set()
+
+        def _block_time_at(h_q: int, fallback_tx: dict[str, Any] | None = None, zero_delay: bool = False) -> int | None:
+            blk_times = chain.raw.get("block_times", {})
+            bt = blk_times.get(str(h_q))
+            if bt is None:
+                bt = blk_times.get(h_q)
+            if bt is None and fallback_tx is not None and fallback_tx.get("deadline_block_time") is not None:
+                bt = fallback_tx["deadline_block_time"]
+            if bt is None and fallback_tx is not None and fallback_tx.get("block_time") is not None and zero_delay:
+                bt = fallback_tx["block_time"]
+            return int(bt) if (bt is not None and not isinstance(bt, bool)) else None
+
+        def _inspect_active_rec_seal() -> tuple[int | None, str | None, dict[str, Any] | None, str | None]:
+            if active_recovery_seal is None or recovery_burned or exp_rec_spk is None:
+                return None, None, None, None
+            cur_r_key = _outpoint_key(active_recovery_seal)
+            r_tx_cre = chain.get_tx(active_recovery_seal["txid"])
+            rout = chain.get_output(active_recovery_seal["txid"], active_recovery_seal["vout"])
+            if (
+                cur_r_key in seen_rec_ops
+                or len(seen_rec_ops) == 257
+                or not r_tx_cre
+                or r_tx_cre.get("confirmed_height") is None
+                or r_tx_cre["confirmed_height"] > eval_h
+                or not rout
+                or rout.get("script_pubkey_hex") != exp_rec_spk.hex()
+            ):
+                return None, None, None, "ORIGIN_STATUS_INCOMPLETE"
+            rspend = rout.get("spent_by_txid")
+            if not rspend:
+                if rout.get("absent_from_utxo"):
+                    return None, None, None, "ORIGIN_STATUS_INCOMPLETE"
+                return None, None, None, None
+            rtx = chain.get_tx(rspend)
+            if rtx is None or rtx.get("confirmed_height") is None:
+                if at_height is not None:
+                    return None, None, None, None
+                return None, None, None, "ORIGIN_STATUS_INCOMPLETE"
+            if at_height is not None and rtx["confirmed_height"] > eval_h:
+                return None, None, None, None
+            return int(rtx["confirmed_height"]), rspend, rtx, None
+
+        def _try_open_0x0c(rspend: str, rtx: dict[str, Any], h_r: int) -> tuple[dict[str, Any] | None, str | None]:
+            nonlocal active_recovery_seal, recovery_burned
+            assert active_recovery_seal is not None and exp_rec_spk is not None
+            seen_rec_ops.add(_outpoint_key(active_recovery_seal))
+            dec_r = self._decode_opreturn_tx(rtx, expected_action="0x0c")
+            has_cont_out = any(
+                isinstance(ov, dict) and ov.get("script_pubkey_hex") == exp_rec_spk.hex()
+                for ov in (rtx.get("outputs") or {}).values()
+            )
+            if dec_r is None or (rtx.get("inputs") and not self._tx_spends_outpoint(rtx, active_recovery_seal)) or not has_cont_out:
+                recovery_burned = True
+                recovery_events.append({"outcome": "recovery_burned", "spend_txid": rspend})
+                return None, None
+            cand_id = dec_r["commitment"]
+            cand = rec_by_id.get(cand_id)
+            if cand is None:
+                if cand_id in invalid_rec_preimages:
                     recovery_burned = True
                     recovery_events.append({"outcome": "recovery_burned", "spend_txid": rspend})
-                    break
-                cand_id = dec_r["commitment"]
-                cand = rec_by_id.get(cand_id)
-                # 3-way D-1 Case 2 (R2G-01): Confirmed valid 0x0c + continuation output, preimage WITHHELD -> ORIGIN_STATUS_INCOMPLETE!
-                if cand is None:
-                    if cand_id in invalid_rec_preimages:
-                        recovery_burned = True
-                        recovery_events.append({"outcome": "recovery_burned", "spend_txid": rspend})
-                        break
-                    return None, "ORIGIN_STATUS_INCOMPLETE"
-                # 3-way D-1 Case 3b: Committed preimage (exact object_id == H) is semantically invalid -> recovery_burned=True!
-                bad_cand = (
-                    cand["origin_id"] != origin_id
-                    or cand["network"] != self.pinned_network
-                    or cand["genesis"] != self.pinned_genesis
-                    or cand.get("supersedes_binding_id") != sl.object_id(active_binding)
-                    or cand["seq"] != active_binding["seq"] + 1  # G-6: exact seq = prev + 1
-                    or "next_recovery_vout" not in cand
-                    or "next_recovery_policy" not in cand
-                )
-                if not bad_cand:
-                    try:
-                        bad_cand = sl.compile_script_policy(cand["next_recovery_policy"])[0] != exp_rec_spk
-                    except (ValueError, KeyError, TypeError):
-                        bad_cand = True
-                if bad_cand:
-                    recovery_burned = True
-                    recovery_events.append({"outcome": "recovery_burned", "spend_txid": rspend})
-                    break
-                next_seal_out = chain.get_output(rspend, cand["next_recovery_vout"])
-                if not next_seal_out or next_seal_out.get("script_pubkey_hex") != exp_rec_spk.hex():
-                    recovery_burned = True
-                    recovery_events.append({"outcome": "recovery_burned", "spend_txid": rspend})
-                    break
-                next_rec_seal = {
-                    "txid": rspend,
-                    "vout": cand["next_recovery_vout"],
-                    "script_policy": cand["next_recovery_policy"],
-                }
-                h_rec = rtx["confirmed_height"]
-                deadline = h_rec + nr["delay_blocks"]
-                # H-29 + R2-A-01 + R2G-05: Scan full registration history of active_binding for owner-authored 0x10 cancel
-                # within [h_rec, deadline), evaluating former-guardian lockout AT the attempt height/time (non-retroactive!)
-                old_nrec = chain.get_name_for_registration(active_binding["name"], active_binding["registration"], historical=True)
-                if old_nrec is None or old_nrec.get("history_truncated", False):
-                    return None, "ORIGIN_STATUS_INCOMPLETE"
-                old_updates = old_nrec.get("updates", [])
-                cancelled = False
-                for u_idx in range(1, len(old_updates)):
-                    u_c = old_updates[u_idx]
-                    h_cancel = u_c.get("confirmed_height")
-                    if h_cancel is None or h_cancel < h_rec or h_cancel >= deadline or h_cancel > eval_h:
-                        continue
-                    if not self._is_owner_authored_update(u_c, old_updates[u_idx - 1]):
-                        continue
-                    slnk_c, bad_c = self._extract_slnk_bytes_strict(u_c)
-                    if bad_c or slnk_c is None:
-                        continue
-                    try:
-                        dec_c = sl.decode_opreturn_with_criticality(slnk_c)
-                    except ValueError:
-                        continue
-                    if dec_c.get("advisory") or dec_c.get("critical_scope") or dec_c["action"] != "0x10" or dec_c["commitment"] != cand_id:
-                        continue
-                    # H-6 / Non-retroactive D-2: Former-guardian lockout depends on origin State 3 at (h_cancel, cancel_block_time),
-                    # NOT on author_spk == int_spk (rotating W1->W2 before T/h_cap MUST NOT bypass State 3 lockout!).
-                    if "guardian_policy" in op:
-                        locked_by_cap = (cap_confirmed_height is not None and h_cancel >= cap_confirmed_height)
-                        cancel_bt = u_c.get("block_time")
-                        if opened_majority is not None:
-                            locked_by_maj = True if cancel_bt is None else (int(cancel_bt) >= opened_majority)
-                        else:
-                            locked_by_maj = False
-                        if locked_by_cap or locked_by_maj:
-                            already_state4, _ = self._check_emancipation_handover(
-                                active_binding["name"],
-                                active_binding["registration"],
-                                op["claims"]["intended_owner_policy"],
-                                subject_new_owner_policy,
-                                chain,
-                                active_binding=active_binding,
-                                at_height=h_cancel - 1,
-                                cap_confirmed_height=cap_confirmed_height,
-                                last_recovery_promo_height=last_recovery_promo_height,
-                                last_recovery_promo_time=last_recovery_promo_time,
-                                majority_cutoff_reached=locked_by_maj,
-                                opened_majority=opened_majority,
-                                pre_trigger_pks=pre_trigger_pks,
-                            )
-                            if not already_state4:
-                                continue
-                    cancelled = True
-                    break
-                if cancelled:
-                    recovery_events.append({"candidate_id": cand_id, "outcome": "cancelled_restored", "next_recovery_seal": next_rec_seal})
-                    if assert_binding_id is not None and assert_binding_id == cand_id:
-                        return None, "RECOVERY_FORBIDDEN"
-                    cur_rec_seal = next_rec_seal
-                    active_recovery_seal = next_rec_seal
+                    return None, None
+                return None, "ORIGIN_STATUS_INCOMPLETE"
+            bad_cand = (
+                cand.get("binding_mode") != "recovery"
+                or cand["origin_id"] != origin_id
+                or cand["network"] != self.pinned_network
+                or cand["genesis"] != self.pinned_genesis
+                or cand.get("supersedes_binding_id") != sl.object_id(active_binding)
+                or cand["seq"] != active_binding["seq"] + 1
+                or sl.compile_script_policy(cand["next_recovery_policy"])[0] != exp_rec_spk
+            )
+            if bad_cand:
+                recovery_burned = True
+                recovery_events.append({"outcome": "recovery_burned", "spend_txid": rspend})
+                return None, None
+            next_seal_out = chain.get_output(rspend, cand["next_recovery_vout"])
+            if not next_seal_out or next_seal_out.get("script_pubkey_hex") != exp_rec_spk.hex():
+                recovery_burned = True
+                recovery_events.append({"outcome": "recovery_burned", "spend_txid": rspend})
+                return None, None
+            next_rec_seal = {
+                "txid": rspend,
+                "vout": cand["next_recovery_vout"],
+                "script_policy": cand["next_recovery_policy"],
+            }
+            active_recovery_seal = next_rec_seal
+            return {
+                "cand": cand,
+                "cand_id": cand_id,
+                "deadline": h_r + nr["delay_blocks"],
+                "h_start": h_r,
+                "next_rec_seal": next_rec_seal,
+                "rtx": rtx,
+            }, None
+
+        def _check_0x10_at_h(
+            bnd: dict[str, Any],
+            cand_id: str,
+            h_q: int,
+            *,
+            check_state3_lockout: bool,
+            exp_prev_spk_hex: str | None = None,
+        ) -> str:
+            nrec_c = chain.get_name_for_registration(bnd["name"], bnd["registration"], historical=True)
+            if not self._binding_history_ok_until(nrec_c, h_q):
+                return "NONE"
+            assert nrec_c is not None
+            upds_c = nrec_c.get("updates", [])
+            for u_idx in range(1, len(upds_c)):
+                u_c = upds_c[u_idx]
+                if u_c.get("confirmed_height") != h_q:
                     continue
-                if eval_h < deadline:
-                    return None, "RECOVERY_FORBIDDEN"
-                # Delay elapsed without valid 0x10 cancel -> B_{k+1} promoted!
-                prev_id = sl.object_id(active_binding)
-                blk_times = chain.raw.get("block_times", {})
-                promo_bt = blk_times.get(str(deadline))
-                if promo_bt is None:
-                    promo_bt = blk_times.get(deadline)
-                if promo_bt is None and rtx.get("deadline_block_time") is not None:
-                    promo_bt = rtx["deadline_block_time"]
-                if promo_bt is None and rtx.get("block_time") is not None and nr["delay_blocks"] == 0:
-                    promo_bt = rtx["block_time"]
-                promo_bt_int = int(promo_bt) if (promo_bt is not None and not isinstance(promo_bt, bool)) else None
-                # H-5 / M-9: Record pre-trigger childhood 0x0c owner pubkeys so they can NEVER later self-emancipate!
-                promoted_before_cap = (cap_confirmed_height is None or deadline < cap_confirmed_height)
-                promoted_before_maj = (opened_majority is None or promo_bt_int is None or promo_bt_int < opened_majority)
-                if promoted_before_cap and promoted_before_maj:
-                    pre_trigger_pks.update(self._extract_policy_pubkeys(cand.get("owner_policy")))
-                last_recovery_promo_height = deadline
-                last_recovery_promo_time = promo_bt_int
-                recovery_events.append({"candidate_id": cand_id, "outcome": "promoted", "superseded_id": prev_id, "next_recovery_seal": next_rec_seal})
-                if assert_binding_id is not None and assert_binding_id == prev_id:
-                    return None, "ORIGIN_BINDING_INVALID"
-                active_binding = cand
-                cur_rec_seal = next_rec_seal
-                active_recovery_seal = next_rec_seal
-            if recovery_burned and assert_binding_id is not None and assert_binding_id != sl.object_id(active_binding):
-                return None, "RECOVERY_FORBIDDEN"
+                if not self._is_owner_authored_update(u_c, upds_c[u_idx - 1]):
+                    continue
+                if exp_prev_spk_hex is not None:
+                    if sl.compile_script_policy(upds_c[u_idx - 1]["owner_policy"])[0].hex() != exp_prev_spk_hex:
+                        continue
+                slnk_c, bad_c = self._extract_slnk_bytes_strict(u_c)
+                if bad_c or slnk_c is None:
+                    continue
+                try:
+                    dec_c = sl.decode_opreturn_with_criticality(slnk_c)
+                except ValueError:
+                    continue
+                if dec_c.get("advisory") or dec_c.get("critical_scope") or dec_c["action"] != "0x10" or dec_c["commitment"] != cand_id:
+                    continue
+                if check_state3_lockout and "guardian_policy" in op:
+                    locked_by_cap = cap_confirmed_height is not None and h_q >= cap_confirmed_height
+                    cancel_bt = u_c.get("block_time")
+                    locked_by_maj = (opened_majority is not None) and (cancel_bt is None or int(cancel_bt) >= opened_majority)
+                    if locked_by_cap or locked_by_maj:
+                        already_s4, _ = self._check_emancipation_handover(
+                            bnd["name"],
+                            bnd["registration"],
+                            op["claims"]["intended_owner_policy"],
+                            subject_new_owner_policy,
+                            chain,
+                            active_binding=bnd,
+                            at_height=h_q - 1,
+                            cap_confirmed_height=cap_confirmed_height,
+                            last_recovery_promo_height=last_recovery_promo_height,
+                            last_recovery_promo_time=last_recovery_promo_time,
+                            majority_cutoff_reached=locked_by_maj,
+                            opened_majority=opened_majority,
+                            pre_trigger_pks=pre_trigger_pks,
+                        )
+                        if not already_s4:
+                            continue
+                return "CANCEL"
+            return "NONE"
+
+        def _promote_pending_rec(prec: dict[str, Any], h_promo: int) -> str | None:
+            nonlocal active_binding, last_recovery_promo_height, last_recovery_promo_time
+            nonlocal awaiting_activation, awaiting_activation_since, is_autonomous, h_emancipated, emancipated_owner_policy
+            cand = prec["cand"]
+            cand_id = prec["cand_id"]
+            prev_id = sl.object_id(active_binding)
+            promo_bt_int = _block_time_at(h_promo, prec["rtx"], zero_delay=(nr["delay_blocks"] == 0))
+            promoted_before_cap = cap_confirmed_height is None or h_promo < cap_confirmed_height
+            promoted_before_maj = opened_majority is None or promo_bt_int is None or promo_bt_int < opened_majority
+            if promoted_before_cap and promoted_before_maj:
+                pre_trigger_pks.update(self._extract_policy_pubkeys(cand.get("owner_policy")))
+            last_recovery_promo_height = h_promo
+            last_recovery_promo_time = promo_bt_int
+            recovery_events.append({
+                "candidate_id": cand_id,
+                "next_recovery_seal": prec["next_rec_seal"],
+                "outcome": "promoted",
+                "superseded_id": prev_id,
+            })
+            if assert_binding_id is not None and assert_binding_id == prev_id:
+                return "ORIGIN_BINDING_INVALID"
+            active_binding = cand
+            seen_binding_regs.add((cand["name"], _outpoint_key(cand["registration"])))
+            awaiting_activation = False
+            awaiting_activation_since = None
+            if not is_autonomous and "guardian_policy" in op:
+                maj_reached_here = (opened_majority is not None and promo_bt_int is not None and promo_bt_int >= opened_majority) or (
+                    majority_cutoff_reached and h_promo == eval_h
+                )
+                cap_reached_here = cap_confirmed_height is not None and h_promo >= cap_confirmed_height
+                if cap_reached_here or maj_reached_here:
+                    hok, hpol = self._check_emancipation_handover(
+                        active_binding["name"],
+                        active_binding["registration"],
+                        op["claims"]["intended_owner_policy"],
+                        subject_new_owner_policy,
+                        chain,
+                        active_binding=active_binding,
+                        at_height=h_promo,
+                        cap_confirmed_height=cap_confirmed_height,
+                        last_recovery_promo_height=last_recovery_promo_height,
+                        last_recovery_promo_time=last_recovery_promo_time,
+                        majority_cutoff_reached=maj_reached_here,
+                        opened_majority=opened_majority,
+                        pre_trigger_pks=pre_trigger_pks,
+                    )
+                    if hok and hpol is not None:
+                        is_autonomous = True
+                        h_emancipated = h_promo
+                        emancipated_owner_policy = hpol
+            return None
+
+        def _collect_0x13_events(bnd: dict[str, Any], min_h: int) -> list[tuple[int, int, str, dict[str, Any], list[dict[str, Any]]]]:
+            nrec_b = chain.get_name_for_registration(bnd["name"], bnd["registration"], historical=True)
+            if not isinstance(nrec_b, dict):
+                return []
+            raw_u = nrec_b.get("updates", [])
+            upds_b = [
+                u for u in raw_u
+                if u.get("confirmed_height") is not None
+                and int(u["confirmed_height"]) <= eval_h
+            ]
+            out_13: list[tuple[int, int, str, dict[str, Any], list[dict[str, Any]]]] = []
+            for idx in range(1, len(upds_b)):
+                u = upds_b[idx]
+                uh = int(u["confirmed_height"])
+                if uh < min_h or u.get("txid") in processed_13_txids:
+                    continue
+                slnk_b, bad_b = self._extract_slnk_bytes_strict(u)
+                if bad_b or slnk_b is None:
+                    continue
+                try:
+                    dec_b13 = sl.decode_opreturn_with_criticality(slnk_b)
+                except ValueError:
+                    continue
+                if dec_b13.get("action") == "0x13":
+                    out_13.append((uh, idx, dec_b13["commitment"], u, upds_b))
+            return out_13
+
+        def _apply_0x10_cancel_rec(h_q: int) -> tuple[bool, str | None]:
+            nonlocal pending_rec
+            assert pending_rec is not None
+            c_res = _check_0x10_at_h(active_binding, pending_rec["cand_id"], h_q, check_state3_lockout=True)
+            if c_res == "CANCEL":
+                recovery_events.append({
+                    "candidate_id": pending_rec["cand_id"],
+                    "next_recovery_seal": pending_rec["next_rec_seal"],
+                    "outcome": "cancelled_restored",
+                })
+                if assert_binding_id is not None and assert_binding_id == pending_rec["cand_id"]:
+                    return False, "RECOVERY_FORBIDDEN"
+                pending_rec = None
+                return True, None
+            return False, None
+
+        def _apply_0x10_cancel_reb(h_q: int) -> str | None:
+            nonlocal pending_reb
+            assert pending_reb is not None
+            c_b1 = _check_0x10_at_h(
+                active_binding, pending_reb["cand_id"], h_q, check_state3_lockout=False, exp_prev_spk_hex=pending_reb["eff_spk_1_hex"]
+            )
+            c_b2 = _check_0x10_at_h(
+                pending_reb["cand"], pending_reb["cand_id"], h_q, check_state3_lockout=False, exp_prev_spk_hex=pending_reb["b2_spk_hex"]
+            )
+            if c_b1 == "CANCEL" or c_b2 == "CANCEL":
+                voluntary_rebind_events.append({
+                    "candidate_id": pending_reb["cand_id"],
+                    "outcome": "cancelled_restored",
+                })
+                if assert_binding_id is not None and assert_binding_id == pending_reb["cand_id"]:
+                    return "RECOVERY_FORBIDDEN"
+                pending_reb = None
+            return None
+
+        cur_h = int(bind_tx["confirmed_height"])
+        for _step in range(1024):
+            rec_spend_h: int | None = None
+            rec_spend_txid: str | None = None
+            rec_spend_tx: dict[str, Any] | None = None
+            if pending_rec is None:
+                rec_spend_h, rec_spend_txid, rec_spend_tx, r_err = _inspect_active_rec_seal()
+                if r_err is not None:
+                    return None, r_err
+
+            h_cands: set[int] = set()
+
+            def _add_cand(h_val: int | None, *, lo: int = cur_h, hi: int = eval_h) -> None:
+                if h_val is not None and int(h_val) in range(lo, hi + 1):
+                    h_cands.add(int(h_val))
+
+            if not is_autonomous and "guardian_policy" in op:
+                _add_cand(cap_confirmed_height)
+                act_nrec_em = chain.get_name_for_registration(active_binding["name"], active_binding["registration"], historical=True)
+                if isinstance(act_nrec_em, dict):
+                    for u_em in act_nrec_em.get("updates", []):
+                        _add_cand(u_em.get("confirmed_height"))
+            if awaiting_activation and awaiting_activation_since is not None:
+                act_nrec_s3 = chain.get_name_for_registration(active_binding["name"], active_binding["registration"], historical=True)
+                if isinstance(act_nrec_s3, dict):
+                    for u_s3 in act_nrec_s3.get("updates", []):
+                        _add_cand(u_s3.get("confirmed_height"), lo=max(cur_h, awaiting_activation_since))
+            if pending_rec is not None:
+                win_end = min(pending_rec["deadline"] - 1, eval_h)
+                nrec_pr = chain.get_name_for_registration(active_binding["name"], active_binding["registration"], historical=True)
+                if not self._binding_history_ok_until(nrec_pr, win_end):
+                    return None, "ORIGIN_STATUS_INCOMPLETE"
+                assert nrec_pr is not None
+                for u_pr in nrec_pr.get("updates", []):
+                    _add_cand(u_pr.get("confirmed_height"), hi=win_end)
+                _add_cand(pending_rec["deadline"])
+            if pending_reb is not None:
+                win_end_r = min(pending_reb["deadline"] - 1, eval_h)
+                for b_chk in (active_binding, pending_reb["cand"]):
+                    nrec_rb = chain.get_name_for_registration(b_chk["name"], b_chk["registration"], historical=True)
+                    if not self._binding_history_ok_until(nrec_rb, win_end_r):
+                        return None, "ORIGIN_STATUS_INCOMPLETE"
+                    assert nrec_rb is not None
+                    for u_rb in nrec_rb.get("updates", []):
+                        _add_cand(u_rb.get("confirmed_height"), hi=win_end_r)
+                _add_cand(pending_reb["deadline"])
+            _add_cand(rec_spend_h)
+            evs_13 = _collect_0x13_events(active_binding, cur_h)
+            for uh_13, _idx13, _cid13, _u13, _upds13 in evs_13:
+                h_cands.add(uh_13)
+
+            if not h_cands:
+                break
+            H = min(h_cands)
+
+            # ---- Phase 1: Status, Emancipation (incl. H_self > H_promo for B_rec), & Step 3 activation ----
+            if not is_autonomous and "guardian_policy" in op:
+                bt_h = _block_time_at(H)
+                cap_at_h = cap_confirmed_height is not None and H >= cap_confirmed_height
+                maj_at_h = (opened_majority is not None and bt_h is not None and bt_h >= opened_majority) or (
+                    majority_cutoff_reached and H == eval_h
+                )
+                if cap_at_h or maj_at_h:
+                    hok, hpol = self._check_emancipation_handover(
+                        active_binding["name"],
+                        active_binding["registration"],
+                        op["claims"]["intended_owner_policy"],
+                        subject_new_owner_policy,
+                        chain,
+                        active_binding=active_binding,
+                        at_height=H,
+                        cap_confirmed_height=cap_confirmed_height,
+                        last_recovery_promo_height=last_recovery_promo_height,
+                        last_recovery_promo_time=last_recovery_promo_time,
+                        majority_cutoff_reached=maj_at_h,
+                        opened_majority=opened_majority,
+                        pre_trigger_pks=pre_trigger_pks,
+                    )
+                    if hok and hpol is not None:
+                        is_autonomous = True
+                        h_emancipated = H
+                        emancipated_owner_policy = hpol
+            if awaiting_activation and awaiting_activation_since is not None:
+                s3_ok, s3_pol = self._check_b2_step3_activated(active_binding, origin_id, awaiting_activation_since, H, chain)
+                if s3_ok and s3_pol is not None:
+                    awaiting_activation = False
+                    awaiting_activation_since = None
+                    emancipated_owner_policy = s3_pol
+
+            # ---- Phase 2: Maturity of pending transitions (deadline == H) ----
+            if pending_rec is not None and pending_rec["deadline"] == H:
+                perr = _promote_pending_rec(pending_rec, H)
+                if perr is not None:
+                    return None, perr
+                pending_rec = None
+                # Re-inspect newly active recovery seal if it also has a spend on or after H
+                rec_spend_h, rec_spend_txid, rec_spend_tx, r_err2 = _inspect_active_rec_seal()
+                if r_err2 is not None:
+                    return None, r_err2
+            if pending_reb is not None and pending_reb["deadline"] == H:
+                ok_b2_mat, _ = self._validate_b2_invariant(
+                    pending_reb["cand"], chain, pending_reb["h_start"], H, origin_id, allow_origin_at_exact=origin_id
+                )
+                if ok_b2_mat:
+                    prev_id_rb = sl.object_id(active_binding)
+                    voluntary_rebind_events.append({
+                        "candidate_id": pending_reb["cand_id"],
+                        "outcome": "promoted",
+                        "superseded_id": prev_id_rb,
+                    })
+                    if assert_binding_id is not None and assert_binding_id == prev_id_rb:
+                        return None, "ORIGIN_BINDING_INVALID"
+                    active_binding = pending_reb["cand"]
+                    seen_binding_regs.add((active_binding["name"], _outpoint_key(active_binding["registration"])))
+                    awaiting_activation = True
+                    awaiting_activation_since = H
+                    s3_now, s3_now_pol = self._check_b2_step3_activated(active_binding, origin_id, H, H, chain)
+                    if s3_now and s3_now_pol is not None:
+                        awaiting_activation = False
+                        awaiting_activation_since = None
+                        emancipated_owner_policy = s3_now_pol
+                else:
+                    voluntary_rebind_events.append({
+                        "candidate_id": pending_reb["cand_id"],
+                        "outcome": "aborted_b2_invalid",
+                    })
+                pending_reb = None
+
+            # ---- Phase 3: Cancellations (0x10) & 0x0c intercepts of previously opened transitions (H < deadline) ----
+            opened_rec_at_h = False
+            opened_reb_at_h = False
+            if pending_rec is not None:
+                cancelled_r, cerr_r = _apply_0x10_cancel_rec(H)
+                if cerr_r is not None:
+                    return None, cerr_r
+                if cancelled_r:
+                    rec_spend_h, rec_spend_txid, rec_spend_tx, r_err3 = _inspect_active_rec_seal()
+                    if r_err3 is not None:
+                        return None, r_err3
+            if pending_reb is not None:
+                if rec_spend_h == H and rec_spend_txid is not None and rec_spend_tx is not None and not recovery_burned:
+                    new_prec, o_err = _try_open_0x0c(rec_spend_txid, rec_spend_tx, H)
+                    if o_err is not None:
+                        return None, o_err
+                    rec_spend_h = None
+                    if new_prec is not None:
+                        voluntary_rebind_events.append({
+                            "candidate_id": pending_reb["cand_id"],
+                            "outcome": "intercepted_by_0x0c",
+                        })
+                        pending_reb = None
+                        pending_rec = new_prec
+                        opened_rec_at_h = True
+                if pending_reb is not None:
+                    cerr_rb = _apply_0x10_cancel_reb(H)
+                    if cerr_rb is not None:
+                        return None, cerr_rb
+
+            # ---- Phase 4: New proposals (0x0c STRICTLY BEFORE 0x13) ----
+            started_0x0c_at_h = opened_rec_at_h
+            if pending_rec is None and pending_reb is None and rec_spend_h == H and rec_spend_txid is not None and rec_spend_tx is not None and not recovery_burned:
+                new_prec4, o_err4 = _try_open_0x0c(rec_spend_txid, rec_spend_tx, H)
+                if o_err4 is not None:
+                    return None, o_err4
+                rec_spend_h = None
+                if new_prec4 is not None:
+                    pending_rec = new_prec4
+                    opened_rec_at_h = True
+                    started_0x0c_at_h = True
+
+            for uh_13, idx13, cid13, u13, upds13 in _collect_0x13_events(active_binding, H):
+                if uh_13 != H:
+                    continue
+                processed_13_txids.add(u13["txid"])
+                cand_13 = rec_by_id.get(cid13)
+                if cand_13 is None:
+                    if cid13 in invalid_rec_preimages:
+                        voluntary_rebind_events.append({"candidate_id": cid13, "outcome": "rejected", "txid": u13["txid"]})
+                        continue
+                    return None, "ORIGIN_STATUS_INCOMPLETE"
+                precond_ok = (
+                    not started_0x0c_at_h
+                    and pending_rec is None
+                    and pending_reb is None
+                    and is_autonomous
+                    and not awaiting_activation
+                )
+                if precond_ok:
+                    ok_13, h_offer_13, eff_spk_1_hex = self._validate_voluntary_rebind_tx(
+                        cand_13, u13, idx13, upds13, active_binding, origin_id, nr, seen_binding_regs, chain, H
+                    )
+                else:
+                    ok_13, h_offer_13, eff_spk_1_hex = False, None, None
+                if not ok_13 or h_offer_13 is None or eff_spk_1_hex is None:
+                    voluntary_rebind_events.append({"candidate_id": cid13, "outcome": "rejected", "txid": u13["txid"]})
+                    continue
+                pending_reb = {
+                    "b2_spk_hex": sl.compile_script_policy(cand_13["owner_policy"])[0].hex(),
+                    "cand": cand_13,
+                    "cand_id": cid13,
+                    "deadline": H + cand_13["delay_blocks"],
+                    "eff_spk_1_hex": eff_spk_1_hex,
+                    "h_offer": h_offer_13,
+                    "h_start": H,
+                    "txid": u13["txid"],
+                }
+                opened_reb_at_h = True
+
+            # ---- Phase 4b: Same-block 0x10 on newly opened transitions at H (inclusive [h_start, deadline)) ----
+            if opened_rec_at_h and pending_rec is not None:
+                if pending_rec["deadline"] == H:
+                    perr_0 = _promote_pending_rec(pending_rec, H)
+                    if perr_0 is not None:
+                        return None, perr_0
+                    pending_rec = None
+                else:
+                    _, cerr_4b_r = _apply_0x10_cancel_rec(H)
+                    if cerr_4b_r is not None:
+                        return None, cerr_4b_r
+            if opened_reb_at_h and pending_reb is not None:
+                cerr_4b_rb = _apply_0x10_cancel_reb(H)
+                if cerr_4b_rb is not None:
+                    return None, cerr_4b_rb
+
+            # Re-check if active_recovery_seal advanced to a new seal also spent at H; otherwise strictly advance H + 1
+            if pending_rec is None and pending_reb is None and active_recovery_seal is not None and not recovery_burned:
+                next_rh, _, _, next_rerr = _inspect_active_rec_seal()
+                if next_rerr is not None:
+                    return None, next_rerr
+                if next_rh == H:
+                    cur_h = H
+                    continue
+            cur_h = H + 1
+
+        if pending_rec is not None or pending_reb is not None:
+            return None, "RECOVERY_FORBIDDEN"
+        if awaiting_activation:
+            return None, "ORIGIN_BINDING_INVALID"
+        if recovery_burned and assert_binding_id is not None and assert_binding_id != sl.object_id(active_binding):
+            return None, "RECOVERY_FORBIDDEN"
 
         # G-9: Verify presented card matches active_binding name
         if card_obj is not None and card_obj.get("name") != active_binding["name"]:
@@ -3400,25 +3979,32 @@ class Tier1Verifier:
         # Decision 1B / H-5 / M-9: Unified emancipation state machine for BOTH person & agent (R2G-02, R2G-04)
         emancipation_triggered = capacity_confirmed or majority_cutoff_reached
         if emancipation_triggered:
-            handover_ok, emancipated_owner_policy = self._check_emancipation_handover(
-                active_binding["name"],
-                active_binding["registration"],
-                op["claims"]["intended_owner_policy"],
-                subject_new_owner_policy,
-                chain,
-                active_binding=active_binding,
-                at_height=at_height,
-                cap_confirmed_height=cap_confirmed_height,
-                last_recovery_promo_height=last_recovery_promo_height,
-                last_recovery_promo_time=last_recovery_promo_time,
-                majority_cutoff_reached=majority_cutoff_reached,
-                opened_majority=opened_majority,
-                pre_trigger_pks=pre_trigger_pks,
-            )
-            if not handover_ok or emancipated_owner_policy is None:
-                return None, "GUARDIAN_TRANSFER_PENDING"
+            if active_binding.get("binding_mode") == "voluntary":
+                _, latest_b2_pol = self._check_b2_step3_activated(active_binding, origin_id, 0, eval_h, chain)
+                if latest_b2_pol is not None:
+                    emancipated_owner_policy = latest_b2_pol
+            else:
+                handover_ok, latest_em_pol = self._check_emancipation_handover(
+                    active_binding["name"],
+                    active_binding["registration"],
+                    op["claims"]["intended_owner_policy"],
+                    subject_new_owner_policy,
+                    chain,
+                    active_binding=active_binding,
+                    at_height=at_height,
+                    cap_confirmed_height=cap_confirmed_height,
+                    last_recovery_promo_height=last_recovery_promo_height,
+                    last_recovery_promo_time=last_recovery_promo_time,
+                    majority_cutoff_reached=majority_cutoff_reached,
+                    opened_majority=opened_majority,
+                    pre_trigger_pks=pre_trigger_pks,
+                )
+                if not handover_ok or latest_em_pol is None:
+                    return None, "GUARDIAN_TRANSFER_PENDING"
+                emancipated_owner_policy = latest_em_pol
             eff_binding = copy.deepcopy(active_binding)
-            eff_binding["owner_policy"] = copy.deepcopy(emancipated_owner_policy)
+            if emancipated_owner_policy is not None:
+                eff_binding["owner_policy"] = copy.deepcopy(emancipated_owner_policy)
             return {
                 "origin_id": origin_id,
                 "capacity": "autonomous",
@@ -3427,18 +4013,27 @@ class Tier1Verifier:
                 "active_recovery_seal": active_recovery_seal,
                 "recovery_burned": recovery_burned,
                 "recovery_events": recovery_events,
+                "voluntary_rebind_events": voluntary_rebind_events,
                 "emancipated_by_majority": emancipated_by_majority,
             }, None
 
         if "guardian_policy" not in op:
+            if active_binding.get("binding_mode") == "voluntary":
+                _, latest_b2_pol2 = self._check_b2_step3_activated(active_binding, origin_id, 0, eval_h, chain)
+                if latest_b2_pol2 is not None:
+                    emancipated_owner_policy = latest_b2_pol2
+            eff_b = copy.deepcopy(active_binding)
+            if emancipated_owner_policy is not None:
+                eff_b["owner_policy"] = copy.deepcopy(emancipated_owner_policy)
             return {
                 "origin_id": origin_id,
                 "capacity": "autonomous",
                 "binding": active_binding,
-                "effective_binding": active_binding,
+                "effective_binding": eff_b,
                 "active_recovery_seal": active_recovery_seal,
                 "recovery_burned": recovery_burned,
                 "recovery_events": recovery_events,
+                "voluntary_rebind_events": voluntary_rebind_events,
             }, None
 
         # Walk roster_seal chain & per-slot UTXO chains at eval_h (R1 #1, G-5, R2G-08, H-4, Decision 4)
@@ -4133,6 +4728,7 @@ class Tier1Verifier:
                 expected_registration=wb["registration"],
                 at_height=anchor_height,
                 require_writer=False,
+                allow_unresolved_voluntary_rebind=True,
             )
             if wnerr:
                 return VerifierResult("REFUSE", wnerr)
@@ -4145,7 +4741,7 @@ class Tier1Verifier:
                 return VerifierResult("ADMIT", None, outcome="executed", details={**details, "party_id": party["party_id"]})
         if "signing_policy" not in party:
             return VerifierResult("REFUSE", "CONTRACT_ASSENT_INVALID")
-        # H-32 / D-5: If autonomous party declares name_pin, verify party_name, name_pin, link.grant, 0x0b break, & history-based ward check!
+        # H-32 / D-5 / P0-1: If autonomous party declares name_pin, verify party_name, name_pin, link.grant, 0x0b break, & history-based origin/rebind check!
         if "name_pin" in party:
             npin = party["name_pin"]
             if "party_name" in ap and ap["party_name"] != npin["name"]:
@@ -4156,11 +4752,16 @@ class Tier1Verifier:
                 expected_owner_policy=npin["owner_policy"],
                 expected_registration=npin["registration"],
                 at_height=anchor_height,
+                allow_unresolved_voluntary_rebind=True,
             )
             if pnerr:
                 return VerifierResult("REFUSE", pnerr)
             assert pnrec is not None
-            # Reject ward masquerading as an autonomous party (B-12 / H-32)
+            eval_h_a = chain.tip_height if anchor_height is None else anchor_height
+            has_rebind_by_eval = any(
+                ev["confirmed_height"] <= eval_h_a for ev in pnrec.get("_voluntary_rebinds", [])
+            )
+            # Reject ward masquerading as an autonomous party OR superseded voluntary-rebind binding (B-12 / H-32 / P0-1)
             hist_oid = pnrec.get("_historical_origin_id")
             if hist_oid:
                 ob_p = self._pick_origin_bundle_for_oid(hist_oid, origin_bundle, origin_bundles_by_oid)
@@ -4172,6 +4773,10 @@ class Tier1Verifier:
                 assert pwstate is not None
                 if pwstate["capacity"] == "ward":
                     return VerifierResult("REFUSE", "WARD_AUTONOMOUS_FORBIDDEN")
+                if not _name_pin_equal(pwstate.get("effective_binding", pwstate["binding"]), npin):
+                    return VerifierResult("REFUSE", "ORIGIN_BINDING_INVALID")
+            elif has_rebind_by_eval:
+                return VerifierResult("REFUSE", "ORIGIN_STATUS_INCOMPLETE")
             rpol_p, rerr_p = self.resolve_role_policy(pnrec, "grant", party["signing_policy"])
             if rerr_p or rpol_p != _normalize_policy(party["signing_policy"]):
                 return VerifierResult("REFUSE", "CONTRACT_ASSENT_INVALID")
@@ -4352,8 +4957,10 @@ class Tier1Verifier:
         allowed_notaries: list[dict[str, Any]] | None = None,
         expected_notary_name: str | None = None,
         expected_child_binding: dict[str, Any] | None = None,
+        log_ctx: dict[str, Any] | None = None,
+        allow_reinstatement: bool = True,
     ) -> VerifierResult:
-        """Execute SPEC-05 §5 deterministic seallink-notary/1 verification (0x04/0x05/0x0b, B-4, H-24)."""
+        """Execute SPEC-05 §5 deterministic seallink-notary/1 verification (0x04/0x05/0x0b/0x14, B-4, H-24)."""
         ok_w, w_res = self._verify_object_wire(notary_env, expected_type="seallink-notary/1")
         if not ok_w:
             return VerifierResult("REFUSE", w_res)
@@ -4364,6 +4971,33 @@ class Tier1Verifier:
         obs_err = self.check_chain_observation(chain, risk_class=1)
         if obs_err:
             return VerifierResult("REFUSE", obs_err)
+        if np.get("act_kind") == "artifact-notarization":
+            if np["target_sha256"] != sl.artifact_target_id(np["details"]["artifact_identity"]):
+                return VerifierResult("REFUSE", "WIRE_MEMBER")
+        notary_pin = np["notary"]
+        if expected_notary_name is not None and notary_pin["name"] != expected_notary_name:
+            return VerifierResult("REFUSE", "NOTARY_REQUIRED")
+        if allowed_notaries is not None and not any(_name_pin_equal(notary_pin, an) for an in allowed_notaries):
+            return VerifierResult("REFUSE", "NOTARY_REQUIRED")
+        if journal is not None:
+            ncl = journal.lookup_closure({"subject_id": act_id, "subject_kind": "credential"}, legacy_key=act_id)
+            if ncl is not None:
+                return VerifierResult("REFUSE", ncl["cause"])
+        if np["lifecycle"] == "log_tracked":
+            ok_lt, lt_err, lt_det = self._verify_log_tracked_item(
+                notary_env,
+                np["log_id"],
+                "notary",
+                notary_pin,
+                f"act:{act_id}|*",
+                log_ctx,
+                chain,
+                journal=journal,
+                allow_reinstatement=allow_reinstatement,
+            )
+            if not ok_lt:
+                return VerifierResult("REFUSE", lt_err)
+            return VerifierResult("ADMIT", None, outcome="executed", details={"notary_act_id": act_id, "act_kind": np["act_kind"], **lt_det})
         atx = chain.get_tx(anchor_txid) if anchor_txid else None
         if self._decode_opreturn_tx(atx, expected_action="0x04", expected_commitment=sl.content_addr(notary_env)) is None:
             return VerifierResult("REFUSE", "CRED_ANCHOR_MISSING")
@@ -4371,20 +5005,11 @@ class Tier1Verifier:
         h_anchor = atx["confirmed_height"]
         if chain.tip_height - h_anchor + 1 < self.operator_min_depth:
             return VerifierResult("REFUSE", "CHAIN_DEPTH_INSUFFICIENT")
-        notary_pin = np["notary"]
-        if expected_notary_name is not None and notary_pin["name"] != expected_notary_name:
-            return VerifierResult("REFUSE", "NOTARY_REQUIRED")
-        if allowed_notaries is not None and not any(_name_pin_equal(notary_pin, an) for an in allowed_notaries):
-            return VerifierResult("REFUSE", "NOTARY_REQUIRED")
         n_err = self.verify_issuer_role_at_height(
             notary_pin, notary_env, "notary", h_anchor, chain, resolve_at_tip=(np["lifecycle"] != "eternal"), journal=journal
         )
         if n_err:
             return VerifierResult("REFUSE", n_err)
-        if journal is not None:
-            ncl = journal.lookup_closure({"subject_id": act_id, "subject_kind": "credential"}, legacy_key=act_id)
-            if ncl is not None:
-                return VerifierResult("REFUSE", ncl["cause"])
         if np["lifecycle"] == "revocable":
             seal = np["notary_seal"]
             out = chain.get_output(seal["txid"], seal["vout"])
@@ -4417,6 +5042,875 @@ class Tier1Verifier:
             ):
                 return VerifierResult("REFUSE", "NOTARY_REQUIRED")
         return VerifierResult("ADMIT", None, outcome="executed", details={"notary_act_id": act_id, "act_kind": np["act_kind"]})
+
+    # ------------------------------------------------------------------
+    # SPEC-05 §6..§8 Transparency/Denial Logs (0x14), Fraud Proofs & Releases
+    # ------------------------------------------------------------------
+
+    def _check_smt_denial(
+        self,
+        smt_proof: Any,
+        denials_root: str,
+        denial_key: str,
+        state_record: Any,
+        log_id: str,
+        role: str,
+        issuer_pin: dict[str, Any],
+        h_head: int,
+        chain: ChainView,
+        *,
+        journal: FencedJournal | None = None,
+        allow_reinstatement: bool = True,
+        proof_err: str = "CHAIN_FRAME_INVALID",
+        revoked_err: str = "CRED_REVOKED_FOR_CAUSE",
+    ) -> str | None:
+        """Verify canonical Fixed-Depth-256 SMT proof & optional LogStateRecord for `denial_key`."""
+        if (
+            not isinstance(smt_proof, dict)
+            or smt_proof.get("root") != denials_root
+            or smt_proof.get("key_str") != denial_key
+            or not sl.smt_verify_proof(smt_proof)
+        ):
+            return proof_err
+        if smt_proof["state"] == "absent":
+            return None
+        if not isinstance(state_record, dict):
+            return proof_err
+        ok_sr, sr_res = self._verify_object_wire(state_record)
+        if not ok_sr:
+            return proof_err
+        sp = sr_res.get("payload", {})
+        stype = sp.get("type")
+        if (
+            stype not in ("seallink-log-revocation/1", "seallink-log-reinstatement/1")
+            or sl.content_addr(state_record) != smt_proof["value"]
+            or sp["network"] != self.pinned_network
+            or sp["genesis"] != self.pinned_genesis
+            or sp["role"] != role
+            or sp["log_id"] != log_id
+            or sp["denial_key"] != denial_key
+            or not _name_pin_equal(sp["issuer"], issuer_pin)
+        ):
+            return proof_err
+        s_err = self.verify_issuer_role_at_height(sp["issuer"], state_record, role, h_head, chain, journal=journal)
+        if s_err:
+            return proof_err
+        if stype == "seallink-log-revocation/1" or not allow_reinstatement:
+            return revoked_err
+        return None
+
+    def verify_log_checkpoint(
+        self,
+        cp_env: dict[str, Any],
+        cp_txid: str | None,
+        chain: ChainView,
+        *,
+        prev_cp_env: dict[str, Any] | None = None,
+        prev_cp_txid: str | None = None,
+        genesis_seal: dict[str, Any] | None = None,
+        journal: FencedJournal | None = None,
+        required_depth: int | None = None,
+        is_head: bool = True,
+    ) -> VerifierResult:
+        """Verify a confirmed 0x14 seallink-log-checkpoint/1 with acyclic checkpoints_root, O(1) handover & reorg-safe log-head."""
+        ok_w, w_res = self._verify_object_wire(cp_env, expected_type="seallink-log-checkpoint/1")
+        if not ok_w:
+            return VerifierResult("REFUSE", w_res)
+        p = w_res["payload"]
+        if p["network"] != self.pinned_network or p["genesis"] != self.pinned_genesis:
+            return VerifierResult("REFUSE", "CHAIN_MISMATCH")
+        obs_err = self.check_chain_observation(chain, risk_class=1)
+        if obs_err:
+            return VerifierResult("REFUSE", obs_err)
+        log_id = p["log_id"]
+        if journal is not None:
+            jerr = journal.check_continuity()
+            if jerr:
+                return VerifierResult("REFUSE", jerr)
+            if journal.lookup_closure({"log_id": log_id, "role": p["role"], "subject_kind": "log"}) is not None:
+                return VerifierResult("REFUSE", "NOTARY_LOG_COMPROMISED")
+        cp_caddr = sl.content_addr(cp_env)
+        cp_tx = chain.get_tx(cp_txid) if isinstance(cp_txid, str) else None
+        if self._decode_opreturn_tx(cp_tx, expected_action="0x14", expected_commitment=cp_caddr) is None:
+            return VerifierResult("REFUSE", "CRED_ANCHOR_MISSING")
+        assert cp_tx is not None and cp_txid is not None
+        h_cp = int(cp_tx["confirmed_height"])
+        min_d = required_depth if required_depth is not None else self.operator_min_depth
+        if chain.tip_height - h_cp + 1 < min_d:
+            return VerifierResult("REFUSE", "CHAIN_DEPTH_INSUFFICIENT")
+        prev_op = p["prev_log_outpoint"]
+        prev_out = chain.get_output(prev_op["txid"], prev_op["vout"])
+        spent_ok = (
+            bool(prev_out)
+            and ((prev_out.get("spent_by_txid") == cp_txid) or self._tx_spends_outpoint(cp_tx, prev_op))
+            and not (prev_out.get("spent_by_txid") and prev_out["spent_by_txid"] != cp_txid)
+            and not (cp_tx.get("inputs") and not self._tx_spends_outpoint(cp_tx, prev_op))
+        )
+        if not spent_ok:
+            return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+        assert prev_out is not None
+        i_err = self.verify_issuer_role_at_height(p["issuer"], cp_env, p["role"], h_cp, chain, journal=journal)
+        if i_err:
+            return VerifierResult("REFUSE", i_err)
+        if p["batch_count"] == 0 and (p["batch_root"] != sl.EMPTY_BATCH_ROOT or p["denials_delta_root"] != sl.EMPTY_BATCH_ROOT):
+            return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+        if p["seq"] == 1:
+            exp_lid = sl.compute_log_id(p["network"], p["genesis"], p["role"], p["issuer"]["name"], p["issuer"]["registration"], prev_op)
+            if (
+                log_id != exp_lid
+                or p["checkpoints_root"] != sl.EMPTY_CHECKPOINTS_ROOT
+                or p["cumulative_entries_count"] != p["batch_count"]
+            ):
+                return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+            if genesis_seal is not None:
+                gs_spk = sl.compile_script_policy(genesis_seal["script_policy"])[0]
+                if prev_op != {"txid": genesis_seal["txid"], "vout": genesis_seal["vout"]} or prev_out.get("script_pubkey_hex") != gs_spk.hex():
+                    return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+            if "predecessor_log_id" in p:
+                if p["denials_root"] != p["predecessor_terminal_denials_root"] or p["denials_delta_root"] != sl.EMPTY_BATCH_ROOT:
+                    return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+        elif prev_cp_env is not None:
+            ok_p, p_res = self._verify_object_wire(prev_cp_env, expected_type="seallink-log-checkpoint/1")
+            prev_ok = False
+            if ok_p:
+                pp = p_res["payload"]
+                prev_caddr = sl.content_addr(prev_cp_env)
+                prev_ok = (
+                    pp["log_id"] == log_id
+                    and pp["role"] == p["role"]
+                    and pp["seq"] + 1 == p["seq"]
+                    and pp["terminal"] is False
+                    and p["prev_checkpoint_id"] == prev_caddr
+                    and p["cumulative_entries_count"] == pp["cumulative_entries_count"] + p["batch_count"]
+                    and (
+                        prev_cp_txid is None
+                        or (
+                            prev_op == {"txid": prev_cp_txid, "vout": pp["next_log_vout"]}
+                            and prev_out.get("script_pubkey_hex") == sl.compile_script_policy(pp["next_log_policy"])[0].hex()
+                        )
+                    )
+                    and (pp["seq"] != 1 or p["checkpoints_root"] == sl.ckpt_leaf(1, prev_caddr).hex())
+                )
+            if not prev_ok:
+                return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+        if p["terminal"] is False:
+            nxt_out = chain.get_output(cp_txid, p["next_log_vout"])
+            exp_nxt_spk = sl.compile_script_policy(p["next_log_policy"])[0]
+            if not nxt_out or nxt_out.get("script_pubkey_hex") != exp_nxt_spk.hex():
+                return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+        if journal is not None and is_head:
+            ex_head = journal.log_heads.get(log_id)
+            if ex_head is not None:
+                if p["seq"] < ex_head["max_seq"] or (p["seq"] == ex_head["max_seq"] and cp_caddr != ex_head["checkpoint_id"]):
+                    return VerifierResult("REFUSE", "NOTARY_LOG_COMPROMISED")
+            if (ex_head is None or p["seq"] > ex_head["max_seq"]) and isinstance(cp_tx.get("block_hash"), str) and len(cp_tx["block_hash"]) == 64:
+                _, jw_err = _append_journal_checked(journal, "log-head", {
+                    "block_hash": cp_tx["block_hash"],
+                    "checkpoint_id": cp_caddr,
+                    "checkpoint_txid": cp_txid,
+                    "checkpoints_root": p["checkpoints_root"],
+                    "confirmed_height": h_cp,
+                    "denials_root": p["denials_root"],
+                    "log_id": log_id,
+                    "max_seq": p["seq"],
+                    "role": p["role"],
+                    "terminal": p["terminal"],
+                })
+                if jw_err:
+                    return VerifierResult("REFUSE", jw_err)
+        return VerifierResult(
+            "ADMIT",
+            None,
+            outcome="executed",
+            details={
+                "checkpoint_id": cp_caddr,
+                "confirmed_height": h_cp,
+                "denials_root": p["denials_root"],
+                "log_id": log_id,
+                "seq": p["seq"],
+                "terminal": p["terminal"],
+            },
+        )
+
+    def verify_log_fraud(
+        self,
+        fraud_obj: dict[str, Any],
+        chain: ChainView,
+        *,
+        journal: FencedJournal | None = None,
+    ) -> VerifierResult:
+        """Verify 4-mode seallink-log-fraud/1 (P0-CORE-1, P0-CORE-2) & record unified 100% CLOSE closure(log, NOTARY_LOG_COMPROMISED)."""
+        ok_w, f_res = self._verify_object_wire(fraud_obj, expected_type="seallink-log-fraud/1")
+        if not ok_w:
+            return VerifierResult("REFUSE", f_res)
+        if f_res["network"] != self.pinned_network or f_res["genesis"] != self.pinned_genesis:
+            return VerifierResult("REFUSE", "CHAIN_MISMATCH")
+        obs_err = self.check_chain_observation(chain, risk_class=1)
+        if obs_err:
+            return VerifierResult("REFUSE", obs_err)
+        if journal is not None:
+            jerr = journal.check_continuity()
+            if jerr:
+                return VerifierResult("REFUSE", jerr)
+        log_id = f_res["log_id"]
+        role = f_res["role"]
+        mode = f_res["fraud_mode"]
+
+        def _auth_cp(cp_e: dict[str, Any], txid: str | None, *, require_confirmed: bool) -> tuple[int | None, str | None]:
+            cp_p = cp_e["payload"]
+            if cp_p["network"] != self.pinned_network or cp_p["genesis"] != self.pinned_genesis or cp_p["role"] != role or cp_p["log_id"] != log_id:
+                return None, "CHAIN_FRAME_INVALID"
+            if txid is not None:
+                tx = chain.get_tx(txid)
+                if self._decode_opreturn_tx(tx, expected_action="0x14", expected_commitment=sl.content_addr(cp_e)) is not None:
+                    assert tx is not None
+                    h_c = int(tx["confirmed_height"])
+                    if chain.tip_height - h_c + 1 < self.operator_min_depth:
+                        return None, "CHAIN_DEPTH_INSUFFICIENT"
+                    i_e = self.verify_issuer_role_at_height(cp_p["issuer"], cp_e, role, h_c, chain, journal=journal)
+                    return (None, i_e) if i_e else (h_c, None)
+            if require_confirmed:
+                return None, "CRED_ANCHOR_MISSING"
+            i_e = self.verify_issuer_role_at_height(cp_p["issuer"], cp_e, role, chain.tip_height, chain, resolve_at_tip=True, journal=journal)
+            return (None, i_e) if i_e else (None, None)
+
+        if mode == "equivocation":
+            cp_a, cp_b = f_res["cp_a"], f_res["cp_b"]
+            _, e_a = _auth_cp(cp_a, f_res.get("cp_a_txid"), require_confirmed=False)
+            if e_a:
+                return VerifierResult("REFUSE", e_a)
+            _, e_b = _auth_cp(cp_b, f_res.get("cp_b_txid"), require_confirmed=False)
+            if e_b:
+                return VerifierResult("REFUSE", e_b)
+            if cp_a["payload"]["seq"] != cp_b["payload"]["seq"] or sl.object_id(cp_a["payload"]) == sl.object_id(cp_b["payload"]):
+                return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+
+        elif mode == "revocation_omission":
+            cp_a, cp_b = f_res["cp_a"], f_res["cp_b"]
+            h_a, e_a = _auth_cp(cp_a, f_res["cp_a_txid"], require_confirmed=True)
+            if e_a:
+                return VerifierResult("REFUSE", e_a)
+            assert h_a is not None
+            _, e_b = _auth_cp(cp_b, f_res["cp_b_txid"], require_confirmed=True)
+            if e_b:
+                return VerifierResult("REFUSE", e_b)
+            rev = f_res["revocation"]
+            rp = rev["payload"]
+            r_err = self.verify_issuer_role_at_height(rp["issuer"], rev, role, h_a, chain, journal=journal)
+            if r_err:
+                return VerifierResult("REFUSE", r_err)
+            bp = f_res["batch_proof"]
+            exp_leaf = sl.log_entry_digest(0x02, sl.content_addr(rev))
+            seq_a, seq_b = cp_a["payload"]["seq"], cp_b["payload"]["seq"]
+            cpr = f_res.get("checkpoints_proof")
+            link_ok = (
+                (seq_b == seq_a and "checkpoints_proof" not in f_res and sl.content_addr(cp_a) == sl.content_addr(cp_b))
+                or (
+                    isinstance(cpr, dict)
+                    and cpr["leaf_index"] == seq_a - 1
+                    and cpr["tree_size"] == seq_b - 1
+                    and sl.rfc9162_verify_inclusion(sl.ckpt_leaf(seq_a, sl.content_addr(cp_a)), cpr["leaf_index"], cpr["tree_size"], cpr["hashes"], cp_b["payload"]["checkpoints_root"])
+                )
+            )
+            sp = f_res["smt_proof"]
+            om_ok = (
+                rp["network"] == self.pinned_network
+                and rp["genesis"] == self.pinned_genesis
+                and rp["role"] == role
+                and rp["log_id"] == log_id
+                and bp["root"] == cp_a["payload"]["batch_root"]
+                and bp["leaf_digest"] == exp_leaf
+                and sl.verify_merkle_proof(bp)
+                and link_ok
+                and sp["root"] == cp_b["payload"]["denials_root"]
+                and sp["key_str"] == rp["denial_key"]
+                and sp["state"] == "absent"
+                and sl.smt_verify_proof(sp)
+            )
+            if not om_ok:
+                return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+
+        elif mode == "illegal_reversion":
+            cp_a, cp_b = f_res["cp_a"], f_res["cp_b"]
+            h_a, e_a = _auth_cp(cp_a, f_res["cp_a_txid"], require_confirmed=True)
+            if e_a:
+                return VerifierResult("REFUSE", e_a)
+            assert h_a is not None
+            h_b, e_b = _auth_cp(cp_b, f_res["cp_b_txid"], require_confirmed=True)
+            if e_b:
+                return VerifierResult("REFUSE", e_b)
+            assert h_b is not None
+            rec_a = f_res["rec_a"]
+            rap = rec_a["payload"]
+            ra_err = self.verify_issuer_role_at_height(rap["issuer"], rec_a, role, h_a, chain, journal=journal)
+            if ra_err:
+                return VerifierResult("REFUSE", ra_err)
+            seq_a, seq_b = cp_a["payload"]["seq"], cp_b["payload"]["seq"]
+            cpr = f_res["checkpoints_proof"]
+            rec_a_ca = sl.content_addr(rec_a)
+            spa, spb = f_res["smt_proof_a"], f_res["smt_proof_b"]
+            base_ok = (
+                cpr["leaf_index"] == seq_a - 1
+                and cpr["tree_size"] == seq_b - 1
+                and sl.rfc9162_verify_inclusion(sl.ckpt_leaf(seq_a, sl.content_addr(cp_a)), cpr["leaf_index"], cpr["tree_size"], cpr["hashes"], cp_b["payload"]["checkpoints_root"])
+                and rap["network"] == self.pinned_network
+                and rap["genesis"] == self.pinned_genesis
+                and rap["role"] == role
+                and rap["log_id"] == log_id
+                and spa["root"] == cp_a["payload"]["denials_root"]
+                and spa["key_str"] == rap["denial_key"]
+                and spa["state"] == "included"
+                and spa["value"] == rec_a_ca
+                and sl.smt_verify_proof(spa)
+                and spb["root"] == cp_b["payload"]["denials_root"]
+                and spb["key_str"] == rap["denial_key"]
+                and sl.smt_verify_proof(spb)
+            )
+            rev_ok = False
+            if base_ok:
+                if spb["state"] == "absent":
+                    rev_ok = "rec_b" not in f_res
+                else:
+                    rec_b = f_res.get("rec_b")
+                    if isinstance(rec_b, dict) and sl.content_addr(rec_b) == spb["value"]:
+                        rbp = rec_b["payload"]
+                        rec_b_ca = sl.content_addr(rec_b)
+                        invalid_succ = (
+                            rbp["network"] != self.pinned_network
+                            or rbp["genesis"] != self.pinned_genesis
+                            or rbp["role"] != role
+                            or rbp["log_id"] != log_id
+                            or rbp["denial_key"] != rap["denial_key"]
+                            or self.verify_issuer_role_at_height(rbp["issuer"], rec_b, role, h_b, chain, journal=journal) is not None
+                        )
+                        rollback = rbp["state_seq"] <= rap["state_seq"] and rec_b_ca != rec_a_ca
+                        broken_adj = rbp["state_seq"] == rap["state_seq"] + 1 and rbp.get("prev_record_id") != rec_a_ca
+                        rev_ok = invalid_succ or rollback or broken_adj
+            if not rev_ok:
+                return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+
+        else:  # "invalid_checkpoint_chain"
+            cp_next = f_res["cp_next"]
+            _, e_n = _auth_cp(cp_next, f_res["cp_next_txid"], require_confirmed=True)
+            if e_n:
+                return VerifierResult("REFUSE", e_n)
+            np_c = cp_next["payload"]
+            if np_c["seq"] == 1:
+                bad_1 = "cp_prev" not in f_res and (
+                    np_c["checkpoints_root"] != sl.EMPTY_CHECKPOINTS_ROOT
+                    or np_c["cumulative_entries_count"] != np_c["batch_count"]
+                    or (
+                        "predecessor_log_id" in np_c
+                        and (np_c["denials_root"] != np_c["predecessor_terminal_denials_root"] or np_c["denials_delta_root"] != sl.EMPTY_BATCH_ROOT)
+                    )
+                )
+                if not bad_1:
+                    return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+            else:
+                if "cp_prev" not in f_res:
+                    return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+                cp_prev = f_res["cp_prev"]
+                _, e_p = _auth_cp(cp_prev, f_res["cp_prev_txid"], require_confirmed=True)
+                if e_p:
+                    return VerifierResult("REFUSE", e_p)
+                pp_c = cp_prev["payload"]
+                prev_ca = sl.content_addr(cp_prev)
+                k = np_c["seq"]
+                peaks = f_res["peaks"]
+                chain_proven = (
+                    pp_c["seq"] == k - 1
+                    and np_c.get("prev_checkpoint_id") == prev_ca
+                    and sl.rfc9162_root_from_peaks(peaks, k - 2) == pp_c["checkpoints_root"]
+                    and (
+                        np_c["checkpoints_root"] != sl.rfc9162_append_leaf_to_peaks(peaks, k - 2, sl.ckpt_leaf(k - 1, prev_ca))
+                        or np_c["cumulative_entries_count"] != pp_c["cumulative_entries_count"] + np_c["batch_count"]
+                    )
+                )
+                if not chain_proven:
+                    return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
+
+        # Unified 100% CLOSE across all modes upon proven fraud!
+        if journal is not None:
+            journal.record_closure(
+                {"log_id": log_id, "role": role, "subject_kind": "log"},
+                "NOTARY_LOG_COMPROMISED",
+                observed_at=chain.now,
+                observed_height=chain.tip_height,
+            )
+        return VerifierResult(
+            "ADMIT",
+            None,
+            outcome="executed",
+            details={"closure_cause": "NOTARY_LOG_COMPROMISED", "fraud_mode": mode, "fraud_proven": True, "log_id": log_id},
+        )
+
+    def _verify_log_tracked_item(
+        self,
+        item_env: dict[str, Any],
+        log_id: str,
+        role: str,
+        issuer_pin: dict[str, Any],
+        denial_key: str,
+        log_ctx: dict[str, Any] | None,
+        chain: ChainView,
+        *,
+        journal: FencedJournal | None = None,
+        allow_reinstatement: bool = True,
+        proof_err: str = "CHAIN_FRAME_INVALID",
+        revoked_err: str = "CRED_REVOKED_FOR_CAUSE",
+        heartbeat_max_blocks: int | None = None,
+        heartbeat_err: str = "CRED_WINDOW_CLOSED",
+    ) -> tuple[bool, str | None, dict[str, Any]]:
+        """Verify inclusion & SMT non-revocation of a log_tracked release or notary act inside a 0x14 log."""
+        if journal is not None and journal.lookup_closure({"log_id": log_id, "role": role, "subject_kind": "log"}) is not None:
+            return False, "NOTARY_LOG_COMPROMISED", {}
+        if not isinstance(log_ctx, dict):
+            return False, proof_err, {}
+        cp = log_ctx.get("checkpoint")
+        cp_txid = log_ctx.get("checkpoint_txid")
+        bp = log_ctx.get("batch_proof")
+        sp = log_ctx.get("smt_proof")
+        if not isinstance(cp, dict) or not isinstance(cp_txid, str) or not isinstance(bp, dict) or not isinstance(sp, dict):
+            return False, proof_err, {}
+        head_cp = log_ctx.get("head_checkpoint", cp)
+        head_cp_txid = log_ctx.get("head_checkpoint_txid", cp_txid)
+        is_cp_head = head_cp is cp and head_cp_txid == cp_txid
+        c_res = self.verify_log_checkpoint(cp, cp_txid, chain, journal=journal, is_head=is_cp_head)
+        if c_res.verdict != "ADMIT":
+            if c_res.refusal_code in ("NOTARY_LOG_COMPROMISED", "CHAIN_DEPTH_INSUFFICIENT", "CRED_ISSUER_CLOSED", "CHAIN_MISMATCH"):
+                return False, c_res.refusal_code, {}
+            return False, proof_err, {}
+        cp_p = cp["payload"]
+        if cp_p["log_id"] != log_id or cp_p["role"] != role or not _name_pin_equal(cp_p["issuer"], issuer_pin):
+            return False, proof_err, {}
+        exp_leaf = sl.log_entry_digest(0x01, sl.content_addr(item_env))
+        if bp.get("root") != cp_p["batch_root"] or bp.get("leaf_digest") != exp_leaf or not sl.verify_merkle_proof(bp):
+            return False, proof_err, {}
+        h_cp = int(c_res.details["confirmed_height"])
+        i_err = self.verify_issuer_role_at_height(issuer_pin, item_env, role, h_cp, chain, journal=journal)
+        if i_err:
+            return False, i_err, {}
+        if is_cp_head:
+            h_head = h_cp
+        else:
+            hc_res = self.verify_log_checkpoint(head_cp, head_cp_txid, chain, journal=journal)
+            if hc_res.verdict != "ADMIT":
+                if hc_res.refusal_code in ("NOTARY_LOG_COMPROMISED", "CHAIN_DEPTH_INSUFFICIENT", "CRED_ISSUER_CLOSED", "CHAIN_MISMATCH"):
+                    return False, hc_res.refusal_code, {}
+                return False, proof_err, {}
+            hp = head_cp["payload"]
+            if hp["log_id"] != log_id or hp["role"] != role or not _name_pin_equal(hp["issuer"], issuer_pin):
+                return False, proof_err, {}
+            if hp["seq"] == cp_p["seq"]:
+                if sl.content_addr(head_cp) != sl.content_addr(cp):
+                    return False, proof_err, {}
+            else:
+                cpr = log_ctx.get("checkpoints_proof")
+                if (
+                    not isinstance(cpr, dict)
+                    or cpr.get("leaf_index") != cp_p["seq"] - 1
+                    or cpr.get("tree_size") != hp["seq"] - 1
+                    or not sl.rfc9162_verify_inclusion(sl.ckpt_leaf(cp_p["seq"], sl.content_addr(cp)), cpr["leaf_index"], cpr["tree_size"], cpr.get("hashes", []), hp["checkpoints_root"])
+                ):
+                    return False, proof_err, {}
+            h_head = int(hc_res.details["confirmed_height"])
+        hp_final = head_cp["payload"]
+        if heartbeat_max_blocks is not None and not hp_final["terminal"] and (chain.tip_height - h_head) > heartbeat_max_blocks:
+            return False, heartbeat_err, {}
+        d_err = self._check_smt_denial(
+            sp,
+            hp_final["denials_root"],
+            denial_key,
+            log_ctx.get("state_record"),
+            log_id,
+            role,
+            issuer_pin,
+            h_head,
+            chain,
+            journal=journal,
+            allow_reinstatement=allow_reinstatement,
+            proof_err=proof_err,
+            revoked_err=revoked_err,
+        )
+        if d_err:
+            return False, d_err, {}
+        return True, None, {"head_denials_root": hp_final["denials_root"], "head_height": h_head, "log_id": log_id}
+
+    def verify_release(
+        self,
+        rel_env: dict[str, Any],
+        chain: ChainView,
+        *,
+        anchor_txid: str | None = None,
+        log_ctx: dict[str, Any] | None = None,
+        journal: FencedJournal | None = None,
+        allow_reinstatement: bool = True,
+        heartbeat_max_blocks: int | None = None,
+    ) -> VerifierResult:
+        """Verify a Core seallink-release/1 record (eternal 0x09 or log_tracked 0x14, link.release, canonical target_id)."""
+        ok_w, w_res = self._verify_object_wire(rel_env, expected_type="seallink-release/1")
+        if not ok_w:
+            return VerifierResult("REFUSE", w_res)
+        rp = w_res["payload"]
+        if rp["network"] != self.pinned_network or rp["genesis"] != self.pinned_genesis:
+            return VerifierResult("REFUSE", "CHAIN_MISMATCH")
+        obs_err = self.check_chain_observation(chain, risk_class=1)
+        if obs_err:
+            return VerifierResult("REFUSE", obs_err)
+        if rp["target_sha256"] != sl.artifact_target_id(rp["artifact_identity"]):
+            return VerifierResult("REFUSE", "WIRE_MEMBER")
+        rel_id = sl.object_id(rp)
+        if rp["lifecycle"] == "eternal":
+            atx = chain.get_tx(anchor_txid) if isinstance(anchor_txid, str) else None
+            if self._decode_opreturn_tx(atx, expected_action="0x09", expected_commitment=sl.content_addr(rel_env)) is None:
+                return VerifierResult("REFUSE", "CRED_ANCHOR_MISSING")
+            assert atx is not None
+            h_anchor = int(atx["confirmed_height"])
+            if chain.tip_height - h_anchor + 1 < self.operator_min_depth:
+                return VerifierResult("REFUSE", "CHAIN_DEPTH_INSUFFICIENT")
+            i_err = self.verify_issuer_role_at_height(rp["issuer"], rel_env, "release", h_anchor, chain, journal=journal)
+            if i_err:
+                return VerifierResult("REFUSE", i_err)
+        else:
+            ok_lt, lt_err, _ = self._verify_log_tracked_item(
+                rel_env,
+                rp["log_id"],
+                "release",
+                rp["issuer"],
+                f"rel:{rel_id}|*",
+                log_ctx,
+                chain,
+                journal=journal,
+                allow_reinstatement=allow_reinstatement,
+                heartbeat_max_blocks=heartbeat_max_blocks,
+            )
+            if not ok_lt:
+                return VerifierResult("REFUSE", lt_err)
+        return VerifierResult(
+            "ADMIT",
+            None,
+            outcome="executed",
+            details={"product_id": rp["product_id"], "release_id": rel_id, "release_seq": rp["release_seq"], "target_sha256": rp["target_sha256"]},
+        )
+
+    # ------------------------------------------------------------------
+    # PROFILE-artifact-v1 Gatekeeper & Tier-2 SPV Name History (Optional Module)
+    # ------------------------------------------------------------------
+
+    def verify_artifact_ticket(
+        self,
+        ticket_obj: dict[str, Any],
+        policy: dict[str, Any],
+        chain: ChainView,
+        *,
+        journal: FencedJournal | None = None,
+        provisional_revocations: list[dict[str, Any]] | None = None,
+    ) -> VerifierResult:
+        """Execute PROFILE-artifact-v1 Gatekeeper admission (m-of-n, inconclusive, absent-notary veto, release_floor, deny-wins)."""
+        ok_t, tp = self._verify_object_wire(ticket_obj, expected_type="seallink-ticket/1")
+        if not ok_t:
+            return VerifierResult("REFUSE", tp)
+        if self.enforce_schemas:
+            perr = validate_against_schema("schemas/profile-artifact.schema.json#/$defs/GatekeeperPolicy", policy, require_jsonschema=self.require_jsonschema)
+            if perr:
+                return VerifierResult("REFUSE", perr)
+        if tp["network"] != self.pinned_network or tp["genesis"] != self.pinned_genesis:
+            return VerifierResult("REFUSE", "CHAIN_MISMATCH")
+        obs_err = self.check_chain_observation(chain, risk_class=2)
+        if obs_err:
+            return VerifierResult("REFUSE", obs_err)
+        target_id = sl.artifact_target_id(tp["artifact_identity"])
+        if tp["target_sha256"] != target_id:
+            return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+        if "bootstrap_expires_at" in policy and chain.now >= policy["bootstrap_expires_at"]:
+            return VerifierResult("REFUSE", "ARTIFACT_POLICY_DENIED")
+
+        trusted_notaries = policy["trusted_notaries"]
+        trusted_rel_issuers = policy.get("trusted_release_issuers", [])
+        req_claims = set(policy["required_claims"])
+        allow_reinst = policy["allow_reinstatement"]
+        rel_id_opt = sl.object_id(tp["release"]["payload"]) if "release" in tp else None
+
+        # Provisional gossip deny-wins check (immediately blocks target:/rel: without mutating FencedJournal.log-head)
+        for prev in (provisional_revocations or []):
+            ok_pr, pr_res = self._verify_object_wire(prev, expected_type="seallink-log-revocation/1")
+            if not ok_pr:
+                continue
+            prp = pr_res["payload"]
+            if prp["network"] != self.pinned_network or prp["genesis"] != self.pinned_genesis:
+                continue
+            matched_trust = False
+            if prp["role"] == "notary":
+                matched_trust = any(
+                    _name_pin_equal(prp["issuer"], tn["notary_pin"]) and (tn.get("log_id") is None or tn["log_id"] == prp["log_id"])
+                    for tn in trusted_notaries
+                )
+            elif prp["role"] == "release":
+                matched_trust = any(
+                    _name_pin_equal(prp["issuer"], tr["issuer_pin"]) and (tr.get("log_id") is None or tr["log_id"] == prp["log_id"])
+                    for tr in trusted_rel_issuers
+                )
+            if not matched_trust:
+                continue
+            if self.verify_issuer_role_at_height(prp["issuer"], pr_res, prp["role"], chain.tip_height, chain, resolve_at_tip=True, journal=journal) is not None:
+                continue
+            dk = prp["denial_key"]
+            if (
+                dk == f"target:{target_id}|*"
+                or (rel_id_opt is not None and dk == f"rel:{rel_id_opt}|*")
+                or any(dk == f"target:{target_id}|cap:{c}" for c in req_claims)
+            ):
+                return VerifierResult("REFUSE", "ARTIFACT_POLICY_DENIED")
+
+        # Optional / required release verification + release_floor check
+        if "release" in tp:
+            rel_env = tp["release"]
+            rel_p = rel_env["payload"]
+            if rel_p["target_sha256"] != target_id:
+                return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+            tr_match = next(
+                (
+                    tr for tr in trusted_rel_issuers
+                    if _name_pin_equal(rel_p["issuer"], tr["issuer_pin"])
+                    and any(rel_p["product_id"].startswith(pref) for pref in tr["allowed_product_prefixes"])
+                    and (tr.get("log_id") is None or rel_p.get("log_id") == tr["log_id"])
+                ),
+                None,
+            )
+            if tr_match is None:
+                return VerifierResult("REFUSE", "ARTIFACT_POLICY_DENIED")
+            floor_map = policy.get("release_floor", {})
+            if rel_p["product_id"] in floor_map and rel_p["release_seq"] < floor_map[rel_p["product_id"]]:
+                return VerifierResult("REFUSE", "ARTIFACT_POLICY_DENIED")
+            rel_log_ctx = None
+            if rel_p["lifecycle"] == "log_tracked":
+                rel_log_ctx = {
+                    "batch_proof": tp.get("release_batch_proof"),
+                    "checkpoint": tp.get("release_checkpoint"),
+                    "checkpoint_txid": tp.get("release_checkpoint_txid"),
+                    "checkpoints_proof": tp.get("release_checkpoints_proof"),
+                    "head_checkpoint": tp.get("release_head_checkpoint", tp.get("release_checkpoint")),
+                    "head_checkpoint_txid": tp.get("release_head_checkpoint_txid", tp.get("release_checkpoint_txid")),
+                    "smt_proof": tp.get("release_smt_proof"),
+                    "state_record": tp.get("release_state_record"),
+                }
+            r_res = self.verify_release(
+                rel_env,
+                chain,
+                anchor_txid=tp.get("release_anchor_txid"),
+                log_ctx=rel_log_ctx,
+                journal=journal,
+                allow_reinstatement=allow_reinst,
+                heartbeat_max_blocks=tr_match.get("heartbeat_max_blocks"),
+            )
+            if r_res.verdict != "ADMIT":
+                if r_res.refusal_code == "NOTARY_LOG_COMPROMISED":
+                    return VerifierResult("REFUSE", "NOTARY_LOG_COMPROMISED")
+                if r_res.refusal_code in ("CRED_REVOKED_FOR_CAUSE", "CRED_WINDOW_CLOSED"):
+                    return VerifierResult("REFUSE", "ARTIFACT_POLICY_DENIED")
+                return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+        elif policy.get("require_release"):
+            return VerifierResult("REFUSE", "ARTIFACT_POLICY_DENIED")
+
+        # Present notarizations: verify acts, target: denial veto, verdict pass/fail/inconclusive
+        passed_claims_by_notary: dict[str, set[str]] = {}
+        seen_trusted_notaries: set[str] = set()
+        for ne in tp["notarizations"]:
+            n_env = ne["notary_act"]
+            np = n_env["payload"]
+            if np.get("act_kind") != "artifact-notarization" or np["target_sha256"] != target_id:
+                return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+            tn_match = next((tn for tn in trusted_notaries if _name_pin_equal(np["notary"], tn["notary_pin"])), None)
+            if tn_match is None:
+                continue
+            n_key = f"{np['notary']['name']}:{_outpoint_key(np['notary']['registration'])}"
+            if n_key in seen_trusted_notaries:
+                return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+            seen_trusted_notaries.add(n_key)
+            if tn_match.get("log_id") is not None and np.get("log_id") != tn_match["log_id"]:
+                return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+            if np["lifecycle"] == "log_tracked":
+                n_log_ctx = {
+                    "batch_proof": ne.get("batch_proof"),
+                    "checkpoint": ne.get("checkpoint"),
+                    "checkpoint_txid": ne.get("checkpoint_txid"),
+                    "checkpoints_proof": ne.get("checkpoints_proof"),
+                    "head_checkpoint": ne.get("head_checkpoint", ne.get("checkpoint")),
+                    "head_checkpoint_txid": ne.get("head_checkpoint_txid", ne.get("checkpoint_txid")),
+                    "smt_proof": ne.get("act_smt_proof"),
+                    "state_record": ne.get("act_state_record"),
+                }
+                ok_lt, lt_err, lt_det = self._verify_log_tracked_item(
+                    n_env,
+                    np["log_id"],
+                    "notary",
+                    np["notary"],
+                    f"act:{sl.object_id(np)}|*",
+                    n_log_ctx,
+                    chain,
+                    journal=journal,
+                    allow_reinstatement=allow_reinst,
+                    proof_err="TICKET_PROOF_INVALID",
+                    revoked_err="ARTIFACT_POLICY_DENIED",
+                    heartbeat_max_blocks=tn_match.get("heartbeat_max_blocks"),
+                    heartbeat_err="ARTIFACT_POLICY_DENIED",
+                )
+                if not ok_lt:
+                    return VerifierResult("REFUSE", lt_err)
+                # Mandatory target:<target_id>|* SMT denial check against head_denials_root
+                td_err = self._check_smt_denial(
+                    ne.get("target_smt_proof"),
+                    lt_det["head_denials_root"],
+                    f"target:{target_id}|*",
+                    ne.get("target_state_record"),
+                    np["log_id"],
+                    "notary",
+                    np["notary"],
+                    lt_det["head_height"],
+                    chain,
+                    journal=journal,
+                    allow_reinstatement=allow_reinst,
+                    proof_err="TICKET_PROOF_INVALID",
+                    revoked_err="ARTIFACT_POLICY_DENIED",
+                )
+                if td_err:
+                    return VerifierResult("REFUSE", td_err)
+            else:
+                n_res = self.verify_notary_act(n_env, ne.get("anchor_txid"), chain, journal=journal)
+                if n_res.verdict != "ADMIT":
+                    if n_res.refusal_code in ("CRED_REVOKED_FOR_CAUSE", "SEAL_SPENT"):
+                        return VerifierResult("REFUSE", "ARTIFACT_POLICY_DENIED")
+                    return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+            passed_here: set[str] = set()
+            for cl in np["details"]["claims"]:
+                if cl["verdict"] == "fail":
+                    return VerifierResult("REFUSE", "ARTIFACT_POLICY_DENIED")
+                if cl["verdict"] == "pass":
+                    passed_here.add(cl["claim_id"])
+            passed_claims_by_notary[n_key] = passed_here
+
+        # Absent-notary target: veto proofs (mandatory in hardened mode for every absent trusted notary with a pinned log_id)
+        absent_by_log: dict[str, dict[str, Any]] = {}
+        for ap_item in tp.get("absent_notary_proofs", []):
+            absent_by_log[ap_item["log_id"]] = ap_item
+        for tn in trusted_notaries:
+            tn_key = f"{tn['notary_pin']['name']}:{_outpoint_key(tn['notary_pin']['registration'])}"
+            tn_lid = tn.get("log_id")
+            if tn_key in seen_trusted_notaries or tn_lid is None:
+                continue
+            ap_item = absent_by_log.get(tn_lid)
+            if ap_item is None:
+                if policy["mode"] == "hardened":
+                    return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+                continue
+            h_res = self.verify_log_checkpoint(ap_item["head_checkpoint"], ap_item["head_checkpoint_txid"], chain, journal=journal)
+            if h_res.verdict != "ADMIT":
+                if h_res.refusal_code == "NOTARY_LOG_COMPROMISED":
+                    return VerifierResult("REFUSE", "NOTARY_LOG_COMPROMISED")
+                return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+            hp_a = ap_item["head_checkpoint"]["payload"]
+            if hp_a["log_id"] != tn_lid or hp_a["role"] != "notary" or not _name_pin_equal(hp_a["issuer"], tn["notary_pin"]):
+                return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+            hb_max = tn.get("heartbeat_max_blocks")
+            if hb_max is not None and not hp_a["terminal"] and (chain.tip_height - int(h_res.details["confirmed_height"])) > hb_max:
+                return VerifierResult("REFUSE", "ARTIFACT_POLICY_DENIED")
+            ad_err = self._check_smt_denial(
+                ap_item["target_smt_proof"],
+                hp_a["denials_root"],
+                f"target:{target_id}|*",
+                ap_item.get("target_state_record"),
+                tn_lid,
+                "notary",
+                tn["notary_pin"],
+                int(h_res.details["confirmed_height"]),
+                chain,
+                journal=journal,
+                allow_reinstatement=allow_reinst,
+                proof_err="TICKET_PROOF_INVALID",
+                revoked_err="ARTIFACT_POLICY_DENIED",
+            )
+            if ad_err:
+                return VerifierResult("REFUSE", ad_err)
+
+        # Quorum m-of-n evaluation over required_claims (inconclusive abstains!)
+        quorum_m = policy["quorum_m"]
+        if req_claims:
+            for rc in sorted(req_claims):
+                cnt = sum(1 for cs in passed_claims_by_notary.values() if rc in cs)
+                if cnt < quorum_m:
+                    return VerifierResult("REFUSE", "ARTIFACT_POLICY_DENIED")
+        elif len(passed_claims_by_notary) < quorum_m:
+            return VerifierResult("REFUSE", "ARTIFACT_POLICY_DENIED")
+
+        return VerifierResult(
+            "ADMIT",
+            None,
+            outcome="executed",
+            details={"target_sha256": target_id, "verified_notaries": sorted(passed_claims_by_notary.keys())},
+        )
+
+    def verify_tier2_name_history_page(
+        self,
+        page_obj: dict[str, Any],
+        expected_owner_policy: dict[str, Any],
+        *,
+        headers: list[dict[str, Any]] | None = None,
+    ) -> VerifierResult:
+        """Verify PROFILE-artifact-v1 Tier-2 SPV seallink-tier2-name-history/1 page (7 P0-CONS-1 checks + optional AuxPoW & retarget)."""
+        ok_p, pp = self._verify_object_wire(page_obj, expected_type="seallink-tier2-name-history/1")
+        if not ok_p:
+            return VerifierResult("REFUSE", pp)
+        if pp["network"] != self.pinned_network or pp["genesis"] != self.pinned_genesis:
+            return VerifierResult("REFUSE", "CHAIN_MISMATCH")
+        if len(pp["updates"]) > pp["limit"]:
+            return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+
+        header_hashes_by_h: dict[int, str] = {}
+        header_times_by_h: dict[int, int] = {}
+        if headers is not None:
+            prev_h: int | None = None
+            prev_hash_le: bytes | None = None
+            prev_bits: int | None = None
+            prev_ntime: int | None = None
+            for h_ent in headers:
+                hdr = bytes.fromhex(h_ent["header_hex"])
+                h_num = int(h_ent["height"])
+                ver, ntime, nbits = struct.unpack("<I", hdr[0:4])[0], struct.unpack("<I", hdr[68:72])[0], struct.unpack("<I", hdr[72:76])[0]
+                bhash_le = sl.dsha256(hdr)
+                if ver & 0x00000100:
+                    if "auxpow" not in h_ent or not sl.verify_namecoin_auxpow(h_ent["header_hex"], h_ent["auxpow"], network=pp["network"]):
+                        return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+                else:
+                    if not sl.verify_namecoin_header_pow(h_ent["header_hex"], network=pp["network"]):
+                        return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+                if prev_h is not None and h_num == prev_h + 1:
+                    if hdr[4:36] != prev_hash_le:
+                        return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+                    if h_num % 2016 == 0 and prev_bits is not None and prev_ntime is not None:
+                        ep_start = header_times_by_h.get(h_num - 2016, h_ent.get("epoch_start_time"))
+                        if ep_start is not None:
+                            exp_bits = sl.compute_namecoin_next_bits(prev_bits, int(ep_start), prev_ntime, network=pp["network"])
+                            if nbits != exp_bits:
+                                return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+                header_hashes_by_h[h_num] = bhash_le[::-1].hex()
+                header_times_by_h[h_num] = ntime
+                prev_h, prev_hash_le, prev_bits, prev_ntime = h_num, bhash_le, nbits, ntime
+
+        verified_updates: list[dict[str, Any]] = []
+        last_h = 0
+        for upd_p in pp["updates"]:
+            uh = int(upd_p["block_height"])
+            if uh < last_h:
+                return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+            if headers is not None and header_hashes_by_h.get(uh) != upd_p["block_hash"]:
+                return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+            ok_spv, spv_res = sl.verify_segwit_name_update_proof(upd_p, expected_owner_policy, pp["name"])
+            if not ok_spv or not isinstance(spv_res, dict):
+                return VerifierResult("REFUSE", "TICKET_PROOF_INVALID")
+            verified_updates.append({"block_height": uh, "txid": spv_res["txid"], "value": spv_res["parsed_update"]["value"]})
+            last_h = uh
+
+        return VerifierResult("ADMIT", None, outcome="executed", details={"name": pp["name"], "verified_updates": verified_updates})
 
     def verify_verdict(
         self,
@@ -5221,6 +6715,7 @@ class Tier1Verifier:
             chain,
             expected_owner_policy=iss_pin["owner_policy"],
             expected_registration=iss_pin["registration"],
+            allow_unresolved_voluntary_rebind=True,
         )
         if nerr:
             return False, VerifierResult("REFUSE", nerr), {}
@@ -5249,6 +6744,8 @@ class Tier1Verifier:
                 except Exception:
                     pass
         is_origin_cert = bool(hist_oid)
+        if not is_origin_cert and nrec.get("_voluntary_rebinds"):
+            return False, VerifierResult("REFUSE", "ORIGIN_STATUS_INCOMPLETE"), {}
         wstate: dict[str, Any] | None = None
         if is_origin_cert:
             assert hist_oid is not None

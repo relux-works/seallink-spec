@@ -19,7 +19,7 @@ import build_refusal_matrix as rm
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.10"
+VERSION = "1.0.0-draft.11"
 GENESIS_MAIN = rm.GENESIS_MAIN
 
 
@@ -87,6 +87,13 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             got_out = evs[-1].get("outcome") if evs else None
             if got_out != inp["expect_recovery_outcome"]:
                 return "REFUSE", f"RECOVERY_OUTCOME_MISMATCH:{got_out}"
+        if "expect_rebind_outcome" in inp:
+            evs_r = st.get("voluntary_rebind_events") or []
+            got_rb = evs_r[-1].get("outcome") if evs_r else None
+            if got_rb != inp["expect_rebind_outcome"]:
+                return "REFUSE", f"REBIND_OUTCOME_MISMATCH:{got_rb}"
+        if "expect_active_name" in inp and st.get("binding", {}).get("name") != inp["expect_active_name"]:
+            return "REFUSE", f"ACTIVE_NAME_MISMATCH:{st.get('binding', {}).get('name')}"
         return ("ADMIT_AUTONOMOUS" if st["capacity"] == "autonomous" else "ADMIT_WARD"), None
     if runner == "assent":
         chain = sv.ChainView(inp["chain"])
@@ -467,6 +474,78 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             allowed_notaries=inp.get("allowed_notaries"),
             expected_notary_name=inp.get("expected_notary_name"),
             expected_child_binding=inp.get("expected_child_binding"),
+            log_ctx=inp.get("log_ctx"),
+            allow_reinstatement=inp.get("allow_reinstatement", True),
+        )
+        return res.verdict, res.refusal_code
+    if runner == "log_checkpoint":
+        ch = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+        before_n = len(j.entries) if j is not None else 0
+        res = v.verify_log_checkpoint(
+            inp["checkpoint"],
+            inp.get("checkpoint_txid"),
+            ch,
+            prev_cp_env=inp.get("prev_checkpoint"),
+            prev_cp_txid=inp.get("prev_checkpoint_txid"),
+            genesis_seal=inp.get("genesis_seal"),
+            journal=j,
+            required_depth=inp.get("required_depth"),
+        )
+        if res.verdict == "ADMIT" and "expect_journal_writes" in inp and j is not None:
+            if len(j.entries) - before_n != int(inp["expect_journal_writes"]):
+                return "REFUSE", f"LOG_HEAD_WRITES_MISMATCH:{len(j.entries) - before_n}"
+        if res.verdict == "ADMIT" and inp.get("replay_restart_check") and j is not None:
+            j2 = sv.FencedJournal.replay_persisted_entries(
+                j.journal_id,
+                json.loads(json.dumps(j.entries)),
+                witness_pos=j.witness_pos,
+                witness_commitment=j.witness_commitment,
+                write_token_active=True,
+            )
+            if j2.check_continuity() is not None or j2.log_heads != j.log_heads:
+                return "REFUSE", "LOG_HEAD_REPLAY_MISMATCH"
+        return res.verdict, res.refusal_code
+    if runner == "log_fraud":
+        ch = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+        res = v.verify_log_fraud(inp["fraud"], ch, journal=j)
+        if res.verdict == "ADMIT" and j is not None and "post_fraud_ticket" in inp:
+            t_res = v.verify_artifact_ticket(inp["post_fraud_ticket"], inp["post_fraud_policy"], ch, journal=j)
+            return t_res.verdict, t_res.refusal_code
+        if res.verdict == "ADMIT" and j is not None and "post_fraud_release" in inp:
+            r_res = v.verify_release(inp["post_fraud_release"], ch, log_ctx=inp.get("post_fraud_log_ctx"), journal=j)
+            return r_res.verdict, r_res.refusal_code
+        return res.verdict, res.refusal_code
+    if runner == "release":
+        ch = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+        res = v.verify_release(
+            inp["release"],
+            ch,
+            anchor_txid=inp.get("anchor_txid"),
+            log_ctx=inp.get("log_ctx"),
+            journal=j,
+            allow_reinstatement=inp.get("allow_reinstatement", True),
+            heartbeat_max_blocks=inp.get("heartbeat_max_blocks"),
+        )
+        return res.verdict, res.refusal_code
+    if runner == "artifact_ticket":
+        ch = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+        res = v.verify_artifact_ticket(
+            inp["ticket"],
+            inp["policy"],
+            ch,
+            journal=j,
+            provisional_revocations=inp.get("provisional_revocations"),
+        )
+        return res.verdict, res.refusal_code
+    if runner == "tier2_name_history":
+        res = v.verify_tier2_name_history_page(
+            inp["page"],
+            inp["expected_owner_policy"],
+            headers=inp.get("headers"),
         )
         return res.verdict, res.refusal_code
     if runner == "verdict":
@@ -1565,6 +1644,8 @@ def build_security_conformance_suite() -> dict[str, Any]:
     bd9.add_draft9_conformance_cases(add)
     import build_draft10_suite as bd10
     bd10.add_draft10_conformance_cases(add)
+    import build_draft11_suite as bd11
+    bd11.add_draft11_conformance_cases(add)
 
     return {
         "suite": "security-conformance",

@@ -2704,7 +2704,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     new_pol_eh = {"kind": "key", "pk": _kp("d7-eh2-own")["comp"]}
     rec_s_eh = of_eh2["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]
     cand_eh = {
-        "genesis": GENESIS_MAIN, "name": "id/leo-adult", "network": "main",
+        "binding_mode": "recovery", "genesis": GENESIS_MAIN, "name": "id/leo-adult", "network": "main",
         "next_recovery_policy": rec_s_eh["script_policy"], "next_recovery_vout": 0,
         "origin_id": of_eh2["_origin_id"], "owner_policy": new_pol_eh, "registration": new_reg_eh,
         "seq": 2, "supersedes_binding_id": sl.object_id(of_eh2["origin_bundle"]["name_binding"]),

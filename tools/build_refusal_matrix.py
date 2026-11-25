@@ -20,7 +20,7 @@ import seallink_ref as sl
 import seallink_verifier as sv
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = "1.0.0-draft.10"
+VERSION = "1.0.0-draft.11"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 
 
@@ -397,6 +397,7 @@ def _build_base_origin_fixture() -> dict[str, Any]:
     origin_id = sl.object_id(origin_p)
 
     binding = {
+        "binding_mode": "initial",
         "genesis": GENESIS_MAIN,
         "name": "id/child-leo",
         "network": "main",
@@ -799,6 +800,31 @@ def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = True
         journal = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
         res = v.verify_federation_disclosure(inp["policy"], inp["peer_ctx"], inp["grant"], chain=chain, journal=journal)
         return res.refusal_code
+    if runner == "log_checkpoint":
+        chain = sv.ChainView(inp["chain"])
+        journal = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+        res = v.verify_log_checkpoint(
+            inp["checkpoint"],
+            inp.get("checkpoint_txid"),
+            chain,
+            prev_cp_env=inp.get("prev_checkpoint"),
+            prev_cp_txid=inp.get("prev_checkpoint_txid"),
+            genesis_seal=inp.get("genesis_seal"),
+            journal=journal,
+            required_depth=inp.get("required_depth"),
+        )
+        return res.refusal_code
+    if runner == "artifact_ticket":
+        chain = sv.ChainView(inp["chain"])
+        journal = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+        res = v.verify_artifact_ticket(
+            inp["ticket"],
+            inp["policy"],
+            chain,
+            journal=journal,
+            provisional_revocations=inp.get("provisional_revocations"),
+        )
+        return res.refusal_code
     raise ValueError(f"Unknown matrix runner: {runner}")
 
 
@@ -809,6 +835,8 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "SESSION_INVALID": "bearer-sessions",
         "SERVICE_MIGRATION_INVALID": "service-migration",
         "FEDERATION_POLICY_DENIED": "federated-screening",
+        "TICKET_PROOF_INVALID": "artifact-notarization",
+        "ARTIFACT_POLICY_DENIED": "artifact-notarization",
     }
 
     def add(code: str, rule: str, runner: str, inputs: dict[str, Any], *, module: str | None = None) -> None:
@@ -1252,6 +1280,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
 
     of = _base_origin_fixture()
     rec_binding = {
+        "binding_mode": "recovery",
         "genesis": GENESIS_MAIN,
         "name": "id/child-leo-recovered",
         "network": "main",
@@ -1876,6 +1905,122 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "journal": {"journal_id": _h32("au-j")},
     }, module="core")
 
+    # ---- draft.11: NOTARY_LOG_COMPROMISED, TICKET_PROOF_INVALID, ARTIFACT_POLICY_DENIED ----
+    not_own = _kp("mat-notary-own")
+    not_role = _kp("mat-notary-role")
+    not_seal = _kp("mat-notary-seal")
+    not_pol = {"kind": "key", "pk": not_own["comp"]}
+    not_seal_pol = {"kind": "key", "pk": not_seal["comp"]}
+    not_reg = {"txid": _h32("mat-notary-reg"), "vout": 0}
+    not_issuer = {"name": "id/notary-m1", "owner_policy": not_pol, "registration": not_reg, "role_policy": {"m": 1, "pks": [not_role["xonly"]]}}
+    not_pin = {"name": "id/notary-m1", "owner_policy": not_pol, "registration": not_reg}
+    gen_seal_tx = _h32("mat-log-gen-tx")
+    cp1_tx = _h32("mat-log-cp1-tx")
+    mat_log_id = sl.compute_log_id("main", GENESIS_MAIN, "notary", "id/notary-m1", not_reg, {"txid": gen_seal_tx, "vout": 0})
+    art_id_obj = {"digest": _h32("mat-artifact-bin"), "scheme": "sha256"}
+    art_tid = sl.artifact_target_id(art_id_obj)
+    nact_p = {
+        "act_kind": "artifact-notarization",
+        "attested_at": 1795220000,
+        "details": {"artifact_identity": art_id_obj, "claims": [{"claim_id": "seallink.org/build-repro", "verdict": "pass"}], "kind": "artifact-notarization"},
+        "genesis": GENESIS_MAIN,
+        "lifecycle": "log_tracked",
+        "log_id": mat_log_id,
+        "network": "main",
+        "notary": not_issuer,
+        "target_sha256": art_tid,
+        "tip_hash": fx_au["chain"]["tip_hash"],
+        "tip_height": fx_au["chain"]["tip_height"],
+        "type": "seallink-notary/1",
+    }
+    nact_env = sl.sign_envelope(nact_p, [not_role["sk"]])
+    b_root, b_proofs = sl.build_log_batch_root([sl.log_entry_digest(0x01, sl.content_addr(nact_env))])
+    cp1_p = {
+        "batch_count": 1,
+        "batch_root": b_root,
+        "checkpoints_root": sl.EMPTY_CHECKPOINTS_ROOT,
+        "cumulative_entries_count": 1,
+        "denials_delta_root": sl.EMPTY_BATCH_ROOT,
+        "denials_root": sl.SMT_EMPTY_ROOT,
+        "genesis": GENESIS_MAIN,
+        "issuer": not_issuer,
+        "log_id": mat_log_id,
+        "network": "main",
+        "next_log_policy": not_seal_pol,
+        "next_log_vout": 1,
+        "prev_log_outpoint": {"txid": gen_seal_tx, "vout": 0},
+        "role": "notary",
+        "seq": 1,
+        "terminal": False,
+        "type": "seallink-log-checkpoint/1",
+    }
+    cp1_env = sl.sign_envelope(cp1_p, [not_role["sk"]])
+    ch_log = copy.deepcopy(fx_au["chain"])
+    ch_log["names"]["id/notary-m1"] = sv.make_name_history(
+        "id/notary-m1", not_reg, not_pol, {"link": {"notary": not_role["xonly"]}}, first_height=749000, update_height=749100
+    )
+    ch_log["txs"][gen_seal_tx] = {"confirmed_height": 749150, "outputs": {"0": {"script_pubkey_hex": _spk_hex(not_seal_pol), "spent_by_txid": cp1_tx}}}
+    ch_log["txs"][cp1_tx] = {
+        "block_hash": _h32("mat-blk-749200"),
+        "confirmed_height": 749200,
+        "inputs": [sv.make_segwit_input(gen_seal_tx, 0)],
+        "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(cp1_env)).hex(),
+        "outputs": {"1": {"script_pubkey_hex": _spk_hex(not_seal_pol)}},
+    }
+    add("NOTARY_LOG_COMPROMISED", "SL-CONT-012", "log_checkpoint", {
+        "chain": ch_log,
+        "checkpoint": cp1_env,
+        "checkpoint_txid": cp1_tx,
+        "journal": {
+            "closures": {
+                f"log:{mat_log_id}": {
+                    "cause": "NOTARY_LOG_COMPROMISED",
+                    "observed_at": 1795220000,
+                    "subject": {"log_id": mat_log_id, "subject_kind": "log"},
+                }
+            },
+            "journal_id": _h32("mat-log-j"),
+        },
+    })
+    act_smt_ok = sl.smt_prove({}, f"act:{sl.object_id(nact_p)}|*")
+    tgt_smt_ok = sl.smt_prove({}, f"target:{art_tid}|*")
+    mat_ticket_ok = {
+        "artifact_identity": art_id_obj,
+        "genesis": GENESIS_MAIN,
+        "network": "main",
+        "notarizations": [{
+            "act_smt_proof": act_smt_ok,
+            "batch_proof": b_proofs[sl.log_entry_digest(0x01, sl.content_addr(nact_env))],
+            "checkpoint": cp1_env,
+            "checkpoint_txid": cp1_tx,
+            "notary_act": nact_env,
+            "target_smt_proof": tgt_smt_ok,
+        }],
+        "target_sha256": art_tid,
+        "type": "seallink-ticket/1",
+    }
+    mat_gk_pol = {
+        "allow_reinstatement": False,
+        "mode": "standard",
+        "quorum_m": 1,
+        "required_claims": ["seallink.org/build-repro"],
+        "trusted_notaries": [{"log_id": mat_log_id, "notary_pin": not_pin}],
+    }
+    mat_ticket_bad = copy.deepcopy(mat_ticket_ok)
+    mat_ticket_bad["target_sha256"] = _h32("wrong-target-sha")
+    add("TICKET_PROOF_INVALID", "SL-ARTF-001", "artifact_ticket", {
+        "chain": ch_log,
+        "policy": mat_gk_pol,
+        "ticket": mat_ticket_bad,
+    })
+    mat_gk_pol_quorum2 = copy.deepcopy(mat_gk_pol)
+    mat_gk_pol_quorum2["quorum_m"] = 2
+    add("ARTIFACT_POLICY_DENIED", "SL-ARTF-003", "artifact_ticket", {
+        "chain": ch_log,
+        "policy": mat_gk_pol_quorum2,
+        "ticket": mat_ticket_ok,
+    })
+
     # Verify 100% coverage against registry/refusal-codes.json
     reg_codes = {e["code"] for e in json.loads((ROOT / "registry" / "refusal-codes.json").read_text(encoding="utf-8"))["codes"]}
     built_codes = {c["code"] for c in cases}
@@ -1886,7 +2031,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     return {
         "suite": "refusal-coverage-matrix",
         "version": VERSION,
-        "description": "Executable 86/86 refusal-code conformance matrix with Draft 2020-12 schema-validated semantic fixtures, explicit module selection tags, and derived ChainView evidence.",
+        "description": "Executable 89/89 refusal-code conformance matrix with Draft 2020-12 schema-validated semantic fixtures, explicit module selection tags, and derived ChainView evidence.",
         "total_registered_codes": len(reg_codes),
         "total_covered_codes": len(built_codes),
         "cases": sorted(cases, key=lambda c: c["code"]),

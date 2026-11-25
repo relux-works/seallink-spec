@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Key Role & Custody Registry (SPEC-03). Coherent with registry/object-types.json (verified by tools/speclint.py).",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.10",
+  "version": "1.0.0-draft.11",
   "namecoin_coin_type": 7,
   "roles": [
     {
@@ -12,7 +12,7 @@
       "custody_tier": "cold",
       "derivation_recommendation": "Separate cold seed, m/84'/7'/0'/0/i (fresh key per name or per multisig participant)",
       "published_in": "Namecoin name UTXO ScriptPolicy",
-      "allowed_operations": ["OP_NAME_NEW", "OP_NAME_FIRSTUPDATE", "OP_NAME_UPDATE", "KEY_COMPROMISE_BREAK (0x0b)", "RECOVERY_CANCEL (0x10)"],
+      "allowed_operations": ["OP_NAME_NEW", "OP_NAME_FIRSTUPDATE", "OP_NAME_UPDATE", "KEY_COMPROMISE_BREAK (0x0b)", "RECOVERY_CANCEL (0x10)", "VOLUNTARY_REBIND (0x13)"],
       "forbidden_operations": ["seallink-grant/1", "seallink-auth-challenge/1", "messaging", "ordinary_fee_funding"]
     },
     {
@@ -65,10 +65,21 @@
       "scheme": "BIP-340 Schnorr",
       "pubkey_encoding": "xonly_64hex",
       "custody_tier": "isolated_signer_with_presence",
-      "derivation_recommendation": "Dedicated isolated key outside wallet accounts",
+      "derivation_recommendation": "Dedicated isolated key outside wallet accounts (native BIP-340 HSM or enclave; never HashiCorp Vault Transit)",
       "published_in": "Name value link.notary (direct x-only pubkey or ThresholdPolicy SHA-256 pin)",
-      "allowed_operations": ["seallink-notary/1"],
-      "forbidden_operations": ["seallink-grant/1", "seallink-credential/1", "chain_transactions", "seallink-auth-challenge/1"]
+      "allowed_operations": ["seallink-notary/1", "seallink-log-checkpoint/1", "seallink-log-revocation/1", "seallink-log-reinstatement/1"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-credential/1", "seallink-release/1", "chain_transactions", "seallink-auth-challenge/1"]
+    },
+    {
+      "role": "release",
+      "curve": "secp256k1",
+      "scheme": "BIP-340 Schnorr",
+      "pubkey_encoding": "xonly_64hex",
+      "custody_tier": "isolated_signer_with_presence",
+      "derivation_recommendation": "Dedicated isolated software-release signing key outside wallet accounts (native BIP-340 HSM or enclave)",
+      "published_in": "Name value link.release (direct x-only pubkey or ThresholdPolicy SHA-256 pin)",
+      "allowed_operations": ["seallink-release/1", "seallink-log-checkpoint/1", "seallink-log-revocation/1", "seallink-log-reinstatement/1"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-credential/1", "seallink-notary/1", "chain_transactions", "seallink-auth-challenge/1"]
     },
     {
       "role": "auth",
@@ -234,6 +245,28 @@
       "published_in": "seallink-origin/1, seallink-guardian-roster/1, seallink-contract/1",
       "allowed_operations": ["2-of-2 guardian appointment (0x0d)", "2-of-2 roster transition (0x0f)", "2-of-2 name recovery (0x0c)", "arbiter contract termination (0x08)"],
       "forbidden_operations": ["unilateral_guardian_appointment", "grant_widening", "seallink-grant/1"]
+    },
+    {
+      "role": "log_seal",
+      "curve": "secp256k1",
+      "scheme": "ECDSA (P2WPKH / P2WSH SIGHASH_ALL)",
+      "pubkey_encoding": "compressed_66hex",
+      "custody_tier": "isolated_signer_with_presence",
+      "derivation_recommendation": "Dedicated isolated ECDSA HSM/KMS account strictly separated from hot funding keys",
+      "published_in": "manifest.notary.notary_log.genesis_seal, manifest.release.release_log.genesis_seal, and seallink-log-checkpoint/1 next_log_policy",
+      "allowed_operations": ["LOG_CHECKPOINT (0x14)"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-notary/1", "seallink-release/1", "ordinary_fee_funding"]
+    },
+    {
+      "role": "notary_seal",
+      "curve": "secp256k1",
+      "scheme": "ECDSA (P2WPKH / P2WSH SIGHASH_ALL)",
+      "pubkey_encoding": "compressed_66hex",
+      "custody_tier": "isolated_signer_with_presence",
+      "derivation_recommendation": "Dedicated notary seal account >= 10'",
+      "published_in": "seallink-notary/1 notary_seal.script_policy",
+      "allowed_operations": ["NOTARY_WITHDRAWAL_FOR_CAUSE (0x05)"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-notary/1", "ordinary_fee_funding"]
     },
     {
       "role": "funding",

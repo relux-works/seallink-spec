@@ -265,6 +265,507 @@
       "runner": "bearer_session"
     },
     {
+      "code": "ARTIFACT_POLICY_DENIED",
+      "expected_refusal": "ARTIFACT_POLICY_DENIED",
+      "inputs": {
+        "chain": {
+          "best_header_height": 750010,
+          "blocks": {
+            "543a756ce9eaf98201ccb6afbe71c0ba8e119818fea89209ed0e6a2d80c7b564": 749990
+          },
+          "clock_watermark": 1795219000,
+          "comparison_peers": [
+            {
+              "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "healthy": true,
+              "height": 750010,
+              "id": "peer-1"
+            }
+          ],
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
+          "manifests": {
+            "d4b1220f59889c2a09e6302c4acbaa4dc08127b2fdcd6f8db0c2a7c4cfde098f": {
+              "network": "main",
+              "owner": "id/mail-host-a",
+              "seq": 1,
+              "service": {
+                "actions": [
+                  "mail/list",
+                  "mail/read",
+                  "mail/send"
+                ],
+                "endpoint": "https://mail-a.example/seallink/v1",
+                "receipt_key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
+                "service_type": "mail",
+                "tls_spki_sha256": "5d6be3856dce5c449bb5edf7ad97a36137a1f76409ad38ac2920c9bb26f1d445"
+              },
+              "type": "seallink-manifest/1"
+            },
+            "e46c81013bdfb7df483ebd1a301cd378132a5925d02bf63187fb13297a045dca": {
+              "network": "main",
+              "owner": "id/alice",
+              "providers": [
+                {
+                  "label": "work",
+                  "provider": {
+                    "name": "id/mail-host-a",
+                    "owner_policy": {
+                      "kind": "key",
+                      "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                    },
+                    "registration": {
+                      "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                      "vout": 0
+                    }
+                  },
+                  "service_type": "mail"
+                }
+              ],
+              "seq": 1,
+              "type": "seallink-manifest/1"
+            }
+          },
+          "names": {
+            "id/alice": {
+              "registration": {
+                "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 748000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "520869642f616c69636514d7cf29331fa142da7710e5787836c3a18af03d524ca87b226c696e6b223a7b226772616e74223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337227d2c226d223a7b2268223a2265343663383130313362646662376466343833656264316133303163643337383133326135393235643032626636333138376662313332393761303435646361222c2273223a317d7d6d6d00145146d95d43f56374709f6e1535b76efa260f3783",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
+                  },
+                  "prev_input": null,
+                  "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "530869642f616c6963654ca87b226c696e6b223a7b226772616e74223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337227d2c226d223a7b2268223a2265343663383130313362646662376466343833656264316133303163643337383133326135393235643032626636333138376662313332393761303435646361222c2273223a317d7d6d7500145146d95d43f56374709f6e1535b76efa260f3783",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
+                    }
+                  },
+                  "txid": "d64a8e1b13e909ff17aa176831e51d80df991c313cb5f5da6d4d9a7ced3abb01",
+                  "vout": 0
+                }
+              ]
+            },
+            "id/alice-acct-agent": {
+              "registration": {
+                "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 748000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "521369642f616c6963652d616363742d6167656e741478cdc8ea064148bfecd727764db0c9b78cdc0f894c4c7b226e6f737472223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037227d6d6d0014d0174a960143676a0bce41b924d1aeb0e626168b",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
+                  },
+                  "prev_input": null,
+                  "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "531369642f616c6963652d616363742d6167656e744c4c7b226e6f737472223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037227d6d750014d0174a960143676a0bce41b924d1aeb0e626168b",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
+                    }
+                  },
+                  "txid": "983d44c274dc053751917132ba3c1d373605ed3ff5ac935c7648e8403f51f2d9",
+                  "vout": 0
+                }
+              ]
+            },
+            "id/mail-host-a": {
+              "registration": {
+                "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 748000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "520e69642f6d61696c2d686f73742d6114d40f221b864c45b83ad824fa2dd20e164dce0b994c547b226d223a7b2268223a2264346231323230663539383839633261303965363330326334616362616134646330383132376232666463643666386462306332613763346366646530393866222c2273223a317d7d6d6d001439182066c15ca099fe831d16d18edef5a42b7a37",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                  },
+                  "prev_input": null,
+                  "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "530e69642f6d61696c2d686f73742d614c547b226d223a7b2268223a2264346231323230663539383839633261303965363330326334616362616134646330383132376232666463643666386462306332613763346366646530393866222c2273223a317d7d6d75001439182066c15ca099fe831d16d18edef5a42b7a37",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                    }
+                  },
+                  "txid": "d2ae9928874791c1fd1d1fa62b4e85ad75401075be157ab5e6c05723095677a0",
+                  "vout": 0
+                }
+              ]
+            },
+            "id/notary-m1": {
+              "registration": {
+                "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "520c69642f6e6f746172792d6d3114d715f4a0681ff28705e3e7018004638fdecd59264c567b226c696e6b223a7b226e6f74617279223a2261633333333431366431373932653864393330336462323566306165323766636466666239666239333136373635383732366138303864316633346636303366227d7d6d6d00143a2209134a027f18dec191afd9a050e92aafce5d",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                  },
+                  "prev_input": null,
+                  "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749100,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "530c69642f6e6f746172792d6d314c567b226c696e6b223a7b226e6f74617279223a2261633333333431366431373932653864393330336462323566306165323766636466666239666239333136373635383732366138303864316633346636303366227d7d6d7500143a2209134a027f18dec191afd9a050e92aafce5d",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                    }
+                  },
+                  "txid": "de25bb99e4035bb597d03091ab3f8004d71e62067acec1c18976b248af968595",
+                  "vout": 0
+                }
+              ]
+            }
+          },
+          "network": "main",
+          "node_reachable": true,
+          "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
+          "tip_first_sight": 1795220005,
+          "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+          "tip_header_time": 1795220000,
+          "tip_height": 750010,
+          "tip_median_time_past": 1795219900,
+          "txindex": true,
+          "txs": {
+            "04151ce3dfa357e4d3f1eaffa019a7055f29284d52fb600b372dfe773768ec58": {
+              "confirmed_height": 749150,
+              "outputs": {
+                "0": {
+                  "script_pubkey_hex": "0014c8214084b632b0495dc66cdc5ecd7221d24c0fe6",
+                  "spent_by_txid": "f0d72fd385adb4fbd38836a2072b4703d494409bacdfa85471d80e8b5abfba4e"
+                }
+              }
+            },
+            "13ba8c1099dcd48c609c62445f503cddceb3cf871f6ba32ee8aba91b3467a3cf": {
+              "confirmed_height": 749995,
+              "inputs": [
+                {
+                  "prev_txid": "ee28aaff80dc02e2d175cb7ba88bd82a6d4f765b579a2ebecdef28dcb7aa42d2",
+                  "prev_vout": 0,
+                  "script_sig_hex": "",
+                  "witness": [
+                    "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                    "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  ]
+                }
+              ],
+              "outputs": {
+                "0": {
+                  "script_pubkey_hex": "00148bd108ec2a48baa40c1eeb83c6378336b1143922"
+                },
+                "1": {
+                  "script_pubkey_hex": "00145146d95d43f56374709f6e1535b76efa260f3783"
+                }
+              }
+            },
+            "33425504179ee36cecd2de7261e4951d1f7b208afc1f823237df169f15bbc193": {
+              "confirmed_height": 749998,
+              "inputs": [
+                {
+                  "prev_txid": "13ba8c1099dcd48c609c62445f503cddceb3cf871f6ba32ee8aba91b3467a3cf",
+                  "prev_vout": 1,
+                  "script_sig_hex": "",
+                  "witness": [
+                    "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                    "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  ]
+                }
+              ],
+              "opreturn_hex": "6a05534c4e4b012201b1e79e46875b9f3875824f11d46c1c9478dd73340cc5f04bdc26a9f02eb86b4f00",
+              "outputs": {}
+            },
+            "f0d72fd385adb4fbd38836a2072b4703d494409bacdfa85471d80e8b5abfba4e": {
+              "block_hash": "9724d43af50a7029f1c03e483d0213ca716713c535b438dc28888d308c580d59",
+              "confirmed_height": 749200,
+              "inputs": [
+                {
+                  "prev_txid": "04151ce3dfa357e4d3f1eaffa019a7055f29284d52fb600b372dfe773768ec58",
+                  "prev_vout": 0,
+                  "script_sig_hex": "",
+                  "witness": [
+                    "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                    "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  ]
+                }
+              ],
+              "opreturn_hex": "6a05534c4e4b142201de2ddf2e10f743aee4fe4b5b988e971611e6aeb0a248237aa94531b1f0542cc900",
+              "outputs": {
+                "1": {
+                  "script_pubkey_hex": "0014c8214084b632b0495dc66cdc5ecd7221d24c0fe6"
+                }
+              }
+            }
+          }
+        },
+        "policy": {
+          "allow_reinstatement": false,
+          "mode": "standard",
+          "quorum_m": 2,
+          "required_claims": [
+            "seallink.org/build-repro"
+          ],
+          "trusted_notaries": [
+            {
+              "log_id": "ac2119a6c08ea97b598cdbd9386a09d20205a61f59d9261211a20a5e6c362b3d",
+              "notary_pin": {
+                "name": "id/notary-m1",
+                "owner_policy": {
+                  "kind": "key",
+                  "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                },
+                "registration": {
+                  "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                  "vout": 0
+                }
+              }
+            }
+          ]
+        },
+        "ticket": {
+          "artifact_identity": {
+            "digest": "616c26ca04904e6cb5e3e63689bb22e8d48aae0e3506d459da3b67ea712e62ff",
+            "scheme": "sha256"
+          },
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "network": "main",
+          "notarizations": [
+            {
+              "act_smt_proof": {
+                "bitmap_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "key_str": "act:c94fc25f37e466d8467b86ee3bdb2fb721ab723a092553a385a0f8e4ca1050cd|*",
+                "root": "eb70f696a4410a79b11b5d39d4ed57f16bf79a5dda3a630a98afcfc3caccdd16",
+                "siblings": [],
+                "state": "absent"
+              },
+              "batch_proof": {
+                "leaf_digest": "01d1ff00fc08f93c4d675c72e06b0de5f785edfb2af01e179ad8f0fc2097e0a8",
+                "root": "5698e1dc7effff6590197317dff85153abe49dc23b80ed4453599536fb7aee48",
+                "steps": []
+              },
+              "checkpoint": {
+                "payload": {
+                  "batch_count": 1,
+                  "batch_root": "5698e1dc7effff6590197317dff85153abe49dc23b80ed4453599536fb7aee48",
+                  "checkpoints_root": "879764857a8da79fec30dd6ca78d608e114e090f6d844dc485e8a35a7944fb19",
+                  "cumulative_entries_count": 1,
+                  "denials_delta_root": "9d3bb7c7f17316c64266e25abb574ffd2047e71b93862cb75c6d6c307cfa500d",
+                  "denials_root": "eb70f696a4410a79b11b5d39d4ed57f16bf79a5dda3a630a98afcfc3caccdd16",
+                  "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+                  "issuer": {
+                    "name": "id/notary-m1",
+                    "owner_policy": {
+                      "kind": "key",
+                      "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                    },
+                    "registration": {
+                      "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                      "vout": 0
+                    },
+                    "role_policy": {
+                      "m": 1,
+                      "pks": [
+                        "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f"
+                      ]
+                    }
+                  },
+                  "log_id": "ac2119a6c08ea97b598cdbd9386a09d20205a61f59d9261211a20a5e6c362b3d",
+                  "network": "main",
+                  "next_log_policy": {
+                    "kind": "key",
+                    "pk": "02edd07469673ff81abc71a80ad3b9105a44dc976d2228b9403ee2d4c74779ed0b"
+                  },
+                  "next_log_vout": 1,
+                  "prev_log_outpoint": {
+                    "txid": "04151ce3dfa357e4d3f1eaffa019a7055f29284d52fb600b372dfe773768ec58",
+                    "vout": 0
+                  },
+                  "role": "notary",
+                  "seq": 1,
+                  "terminal": false,
+                  "type": "seallink-log-checkpoint/1"
+                },
+                "signatures": {
+                  "policy": {
+                    "m": 1,
+                    "pks": [
+                      "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f"
+                    ]
+                  },
+                  "sigs": [
+                    {
+                      "pk": "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f",
+                      "sig": "d68b786147c2acb81b763ebfc27f190cab4567c219a6ea682190799545cbe5050a96b4a91a6cde46bbdc01e6dda6f131c30d4bf3b277bdb2a18e3b094176ca87"
+                    }
+                  ]
+                }
+              },
+              "checkpoint_txid": "f0d72fd385adb4fbd38836a2072b4703d494409bacdfa85471d80e8b5abfba4e",
+              "notary_act": {
+                "payload": {
+                  "act_kind": "artifact-notarization",
+                  "attested_at": 1795220000,
+                  "details": {
+                    "artifact_identity": {
+                      "digest": "616c26ca04904e6cb5e3e63689bb22e8d48aae0e3506d459da3b67ea712e62ff",
+                      "scheme": "sha256"
+                    },
+                    "claims": [
+                      {
+                        "claim_id": "seallink.org/build-repro",
+                        "verdict": "pass"
+                      }
+                    ],
+                    "kind": "artifact-notarization"
+                  },
+                  "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+                  "lifecycle": "log_tracked",
+                  "log_id": "ac2119a6c08ea97b598cdbd9386a09d20205a61f59d9261211a20a5e6c362b3d",
+                  "network": "main",
+                  "notary": {
+                    "name": "id/notary-m1",
+                    "owner_policy": {
+                      "kind": "key",
+                      "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                    },
+                    "registration": {
+                      "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                      "vout": 0
+                    },
+                    "role_policy": {
+                      "m": 1,
+                      "pks": [
+                        "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f"
+                      ]
+                    }
+                  },
+                  "target_sha256": "e85f315b8fe63f1ea1e63bd43f227dbf7dadeb360b8c38638983674029db0d1d",
+                  "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+                  "tip_height": 750010,
+                  "type": "seallink-notary/1"
+                },
+                "signatures": {
+                  "policy": {
+                    "m": 1,
+                    "pks": [
+                      "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f"
+                    ]
+                  },
+                  "sigs": [
+                    {
+                      "pk": "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f",
+                      "sig": "8e71dc0e35e697bc91780695206a858ecefcfc376bb5ac52b8b221d83fca311cc98776c2042f1c5af19fcd6269c02bcf853b638d998a839816f7794cbe4dea46"
+                    }
+                  ]
+                }
+              },
+              "target_smt_proof": {
+                "bitmap_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "key_str": "target:e85f315b8fe63f1ea1e63bd43f227dbf7dadeb360b8c38638983674029db0d1d|*",
+                "root": "eb70f696a4410a79b11b5d39d4ed57f16bf79a5dda3a630a98afcfc3caccdd16",
+                "siblings": [],
+                "state": "absent"
+              }
+            }
+          ],
+          "target_sha256": "e85f315b8fe63f1ea1e63bd43f227dbf7dadeb360b8c38638983674029db0d1d",
+          "type": "seallink-ticket/1"
+        }
+      },
+      "module": "artifact-notarization",
+      "rule": "SL-ARTF-003",
+      "runner": "artifact_ticket"
+    },
+    {
       "code": "AUTH_CHALLENGE_EXPIRED",
       "expected_refusal": "AUTH_CHALLENGE_EXPIRED",
       "inputs": {
@@ -16610,7 +17111,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b0c22018dafa9b69e1937a2e106a18ca4f6546c9a2c0083135b3ae7ae908eb42472798500",
+              "opreturn_hex": "6a05534c4e4b0c22018bf83d8c00cf8980e74bf93862911670c14d820099c600ec21e136ae10bc244400",
               "outputs": {}
             },
             "d4ac778ba4605c427d610077bc2c2ed06e06d738138b0075911c3e5f24e4b649": {
@@ -16828,6 +17329,7 @@
           },
           "majority_salt_hex": "e7a110158d700cf100f49a4ae23e54dfe0fbee319b92ce8d9d6e297fab995c44",
           "name_binding": {
+            "binding_mode": "initial",
             "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "name": "id/child-leo",
             "network": "main",
@@ -17322,7 +17824,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b0c22018dafa9b69e1937a2e106a18ca4f6546c9a2c0083135b3ae7ae908eb42472798500",
+              "opreturn_hex": "6a05534c4e4b0c22018bf83d8c00cf8980e74bf93862911670c14d820099c600ec21e136ae10bc244400",
               "outputs": {}
             },
             "d4ac778ba4605c427d610077bc2c2ed06e06d738138b0075911c3e5f24e4b649": {
@@ -17540,6 +18042,7 @@
           },
           "majority_salt_hex": "e7a110158d700cf100f49a4ae23e54dfe0fbee319b92ce8d9d6e297fab995c44",
           "name_binding": {
+            "binding_mode": "initial",
             "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "name": "id/child-leo",
             "network": "main",
@@ -17992,7 +18495,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b0c22018dafa9b69e1937a2e106a18ca4f6546c9a2c0083135b3ae7ae908eb42472798500",
+              "opreturn_hex": "6a05534c4e4b0c22018bf83d8c00cf8980e74bf93862911670c14d820099c600ec21e136ae10bc244400",
               "outputs": {}
             },
             "d4ac778ba4605c427d610077bc2c2ed06e06d738138b0075911c3e5f24e4b649": {
@@ -18137,6 +18640,7 @@
           },
           "majority_salt_hex": "e7a110158d700cf100f49a4ae23e54dfe0fbee319b92ce8d9d6e297fab995c44",
           "name_binding": {
+            "binding_mode": "initial",
             "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "name": "id/child-leo",
             "network": "main",
@@ -18589,7 +19093,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b0c22018dafa9b69e1937a2e106a18ca4f6546c9a2c0083135b3ae7ae908eb42472798500",
+              "opreturn_hex": "6a05534c4e4b0c22018bf83d8c00cf8980e74bf93862911670c14d820099c600ec21e136ae10bc244400",
               "outputs": {}
             },
             "d4ac778ba4605c427d610077bc2c2ed06e06d738138b0075911c3e5f24e4b649": {
@@ -18734,6 +19238,7 @@
           },
           "majority_salt_hex": "e7a110158d700cf100f49a4ae23e54dfe0fbee319b92ce8d9d6e297fab995c44",
           "name_binding": {
+            "binding_mode": "initial",
             "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "name": "id/child-leo",
             "network": "main",
@@ -25929,6 +26434,405 @@
       "runner": "invocation"
     },
     {
+      "code": "NOTARY_LOG_COMPROMISED",
+      "expected_refusal": "NOTARY_LOG_COMPROMISED",
+      "inputs": {
+        "chain": {
+          "best_header_height": 750010,
+          "blocks": {
+            "543a756ce9eaf98201ccb6afbe71c0ba8e119818fea89209ed0e6a2d80c7b564": 749990
+          },
+          "clock_watermark": 1795219000,
+          "comparison_peers": [
+            {
+              "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "healthy": true,
+              "height": 750010,
+              "id": "peer-1"
+            }
+          ],
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
+          "manifests": {
+            "d4b1220f59889c2a09e6302c4acbaa4dc08127b2fdcd6f8db0c2a7c4cfde098f": {
+              "network": "main",
+              "owner": "id/mail-host-a",
+              "seq": 1,
+              "service": {
+                "actions": [
+                  "mail/list",
+                  "mail/read",
+                  "mail/send"
+                ],
+                "endpoint": "https://mail-a.example/seallink/v1",
+                "receipt_key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
+                "service_type": "mail",
+                "tls_spki_sha256": "5d6be3856dce5c449bb5edf7ad97a36137a1f76409ad38ac2920c9bb26f1d445"
+              },
+              "type": "seallink-manifest/1"
+            },
+            "e46c81013bdfb7df483ebd1a301cd378132a5925d02bf63187fb13297a045dca": {
+              "network": "main",
+              "owner": "id/alice",
+              "providers": [
+                {
+                  "label": "work",
+                  "provider": {
+                    "name": "id/mail-host-a",
+                    "owner_policy": {
+                      "kind": "key",
+                      "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                    },
+                    "registration": {
+                      "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                      "vout": 0
+                    }
+                  },
+                  "service_type": "mail"
+                }
+              ],
+              "seq": 1,
+              "type": "seallink-manifest/1"
+            }
+          },
+          "names": {
+            "id/alice": {
+              "registration": {
+                "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 748000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "520869642f616c69636514d7cf29331fa142da7710e5787836c3a18af03d524ca87b226c696e6b223a7b226772616e74223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337227d2c226d223a7b2268223a2265343663383130313362646662376466343833656264316133303163643337383133326135393235643032626636333138376662313332393761303435646361222c2273223a317d7d6d6d00145146d95d43f56374709f6e1535b76efa260f3783",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
+                  },
+                  "prev_input": null,
+                  "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "530869642f616c6963654ca87b226c696e6b223a7b226772616e74223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337227d2c226d223a7b2268223a2265343663383130313362646662376466343833656264316133303163643337383133326135393235643032626636333138376662313332393761303435646361222c2273223a317d7d6d7500145146d95d43f56374709f6e1535b76efa260f3783",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
+                    }
+                  },
+                  "txid": "d64a8e1b13e909ff17aa176831e51d80df991c313cb5f5da6d4d9a7ced3abb01",
+                  "vout": 0
+                }
+              ]
+            },
+            "id/alice-acct-agent": {
+              "registration": {
+                "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 748000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "521369642f616c6963652d616363742d6167656e741478cdc8ea064148bfecd727764db0c9b78cdc0f894c4c7b226e6f737472223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037227d6d6d0014d0174a960143676a0bce41b924d1aeb0e626168b",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
+                  },
+                  "prev_input": null,
+                  "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "531369642f616c6963652d616363742d6167656e744c4c7b226e6f737472223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037227d6d750014d0174a960143676a0bce41b924d1aeb0e626168b",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
+                    }
+                  },
+                  "txid": "983d44c274dc053751917132ba3c1d373605ed3ff5ac935c7648e8403f51f2d9",
+                  "vout": 0
+                }
+              ]
+            },
+            "id/mail-host-a": {
+              "registration": {
+                "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 748000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "520e69642f6d61696c2d686f73742d6114d40f221b864c45b83ad824fa2dd20e164dce0b994c547b226d223a7b2268223a2264346231323230663539383839633261303965363330326334616362616134646330383132376232666463643666386462306332613763346366646530393866222c2273223a317d7d6d6d001439182066c15ca099fe831d16d18edef5a42b7a37",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                  },
+                  "prev_input": null,
+                  "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "530e69642f6d61696c2d686f73742d614c547b226d223a7b2268223a2264346231323230663539383839633261303965363330326334616362616134646330383132376232666463643666386462306332613763346366646530393866222c2273223a317d7d6d75001439182066c15ca099fe831d16d18edef5a42b7a37",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                    }
+                  },
+                  "txid": "d2ae9928874791c1fd1d1fa62b4e85ad75401075be157ab5e6c05723095677a0",
+                  "vout": 0
+                }
+              ]
+            },
+            "id/notary-m1": {
+              "registration": {
+                "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "520c69642f6e6f746172792d6d3114d715f4a0681ff28705e3e7018004638fdecd59264c567b226c696e6b223a7b226e6f74617279223a2261633333333431366431373932653864393330336462323566306165323766636466666239666239333136373635383732366138303864316633346636303366227d7d6d6d00143a2209134a027f18dec191afd9a050e92aafce5d",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                  },
+                  "prev_input": null,
+                  "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749100,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "530c69642f6e6f746172792d6d314c567b226c696e6b223a7b226e6f74617279223a2261633333333431366431373932653864393330336462323566306165323766636466666239666239333136373635383732366138303864316633346636303366227d7d6d7500143a2209134a027f18dec191afd9a050e92aafce5d",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                    }
+                  },
+                  "txid": "de25bb99e4035bb597d03091ab3f8004d71e62067acec1c18976b248af968595",
+                  "vout": 0
+                }
+              ]
+            }
+          },
+          "network": "main",
+          "node_reachable": true,
+          "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
+          "tip_first_sight": 1795220005,
+          "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+          "tip_header_time": 1795220000,
+          "tip_height": 750010,
+          "tip_median_time_past": 1795219900,
+          "txindex": true,
+          "txs": {
+            "04151ce3dfa357e4d3f1eaffa019a7055f29284d52fb600b372dfe773768ec58": {
+              "confirmed_height": 749150,
+              "outputs": {
+                "0": {
+                  "script_pubkey_hex": "0014c8214084b632b0495dc66cdc5ecd7221d24c0fe6",
+                  "spent_by_txid": "f0d72fd385adb4fbd38836a2072b4703d494409bacdfa85471d80e8b5abfba4e"
+                }
+              }
+            },
+            "13ba8c1099dcd48c609c62445f503cddceb3cf871f6ba32ee8aba91b3467a3cf": {
+              "confirmed_height": 749995,
+              "inputs": [
+                {
+                  "prev_txid": "ee28aaff80dc02e2d175cb7ba88bd82a6d4f765b579a2ebecdef28dcb7aa42d2",
+                  "prev_vout": 0,
+                  "script_sig_hex": "",
+                  "witness": [
+                    "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                    "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  ]
+                }
+              ],
+              "outputs": {
+                "0": {
+                  "script_pubkey_hex": "00148bd108ec2a48baa40c1eeb83c6378336b1143922"
+                },
+                "1": {
+                  "script_pubkey_hex": "00145146d95d43f56374709f6e1535b76efa260f3783"
+                }
+              }
+            },
+            "33425504179ee36cecd2de7261e4951d1f7b208afc1f823237df169f15bbc193": {
+              "confirmed_height": 749998,
+              "inputs": [
+                {
+                  "prev_txid": "13ba8c1099dcd48c609c62445f503cddceb3cf871f6ba32ee8aba91b3467a3cf",
+                  "prev_vout": 1,
+                  "script_sig_hex": "",
+                  "witness": [
+                    "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                    "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  ]
+                }
+              ],
+              "opreturn_hex": "6a05534c4e4b012201b1e79e46875b9f3875824f11d46c1c9478dd73340cc5f04bdc26a9f02eb86b4f00",
+              "outputs": {}
+            },
+            "f0d72fd385adb4fbd38836a2072b4703d494409bacdfa85471d80e8b5abfba4e": {
+              "block_hash": "9724d43af50a7029f1c03e483d0213ca716713c535b438dc28888d308c580d59",
+              "confirmed_height": 749200,
+              "inputs": [
+                {
+                  "prev_txid": "04151ce3dfa357e4d3f1eaffa019a7055f29284d52fb600b372dfe773768ec58",
+                  "prev_vout": 0,
+                  "script_sig_hex": "",
+                  "witness": [
+                    "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                    "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  ]
+                }
+              ],
+              "opreturn_hex": "6a05534c4e4b142201de2ddf2e10f743aee4fe4b5b988e971611e6aeb0a248237aa94531b1f0542cc900",
+              "outputs": {
+                "1": {
+                  "script_pubkey_hex": "0014c8214084b632b0495dc66cdc5ecd7221d24c0fe6"
+                }
+              }
+            }
+          }
+        },
+        "checkpoint": {
+          "payload": {
+            "batch_count": 1,
+            "batch_root": "5698e1dc7effff6590197317dff85153abe49dc23b80ed4453599536fb7aee48",
+            "checkpoints_root": "879764857a8da79fec30dd6ca78d608e114e090f6d844dc485e8a35a7944fb19",
+            "cumulative_entries_count": 1,
+            "denials_delta_root": "9d3bb7c7f17316c64266e25abb574ffd2047e71b93862cb75c6d6c307cfa500d",
+            "denials_root": "eb70f696a4410a79b11b5d39d4ed57f16bf79a5dda3a630a98afcfc3caccdd16",
+            "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+            "issuer": {
+              "name": "id/notary-m1",
+              "owner_policy": {
+                "kind": "key",
+                "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+              },
+              "registration": {
+                "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                "vout": 0
+              },
+              "role_policy": {
+                "m": 1,
+                "pks": [
+                  "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f"
+                ]
+              }
+            },
+            "log_id": "ac2119a6c08ea97b598cdbd9386a09d20205a61f59d9261211a20a5e6c362b3d",
+            "network": "main",
+            "next_log_policy": {
+              "kind": "key",
+              "pk": "02edd07469673ff81abc71a80ad3b9105a44dc976d2228b9403ee2d4c74779ed0b"
+            },
+            "next_log_vout": 1,
+            "prev_log_outpoint": {
+              "txid": "04151ce3dfa357e4d3f1eaffa019a7055f29284d52fb600b372dfe773768ec58",
+              "vout": 0
+            },
+            "role": "notary",
+            "seq": 1,
+            "terminal": false,
+            "type": "seallink-log-checkpoint/1"
+          },
+          "signatures": {
+            "policy": {
+              "m": 1,
+              "pks": [
+                "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f"
+              ]
+            },
+            "sigs": [
+              {
+                "pk": "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f",
+                "sig": "d68b786147c2acb81b763ebfc27f190cab4567c219a6ea682190799545cbe5050a96b4a91a6cde46bbdc01e6dda6f131c30d4bf3b277bdb2a18e3b094176ca87"
+              }
+            ]
+          }
+        },
+        "checkpoint_txid": "f0d72fd385adb4fbd38836a2072b4703d494409bacdfa85471d80e8b5abfba4e",
+        "journal": {
+          "closures": {
+            "log:ac2119a6c08ea97b598cdbd9386a09d20205a61f59d9261211a20a5e6c362b3d": {
+              "cause": "NOTARY_LOG_COMPROMISED",
+              "observed_at": 1795220000,
+              "subject": {
+                "log_id": "ac2119a6c08ea97b598cdbd9386a09d20205a61f59d9261211a20a5e6c362b3d",
+                "subject_kind": "log"
+              }
+            }
+          },
+          "journal_id": "ca809e1fb345306aa90b4a3030ed82df5fb94d69ca165d9d5dbafa8ee3914aa3"
+        }
+      },
+      "module": "core",
+      "rule": "SL-CONT-012",
+      "runner": "log_checkpoint"
+    },
+    {
       "code": "NOTARY_REQUIRED",
       "expected_refusal": "NOTARY_REQUIRED",
       "inputs": {
@@ -26838,7 +27742,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b0c22018dafa9b69e1937a2e106a18ca4f6546c9a2c0083135b3ae7ae908eb42472798500",
+              "opreturn_hex": "6a05534c4e4b0c22018bf83d8c00cf8980e74bf93862911670c14d820099c600ec21e136ae10bc244400",
               "outputs": {}
             },
             "d4ac778ba4605c427d610077bc2c2ed06e06d738138b0075911c3e5f24e4b649": {
@@ -26983,6 +27887,7 @@
           },
           "majority_salt_hex": "e7a110158d700cf100f49a4ae23e54dfe0fbee319b92ce8d9d6e297fab995c44",
           "name_binding": {
+            "binding_mode": "initial",
             "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "name": "id/child-leo",
             "network": "main",
@@ -27441,7 +28346,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b0c22018dafa9b69e1937a2e106a18ca4f6546c9a2c0083135b3ae7ae908eb42472798500",
+              "opreturn_hex": "6a05534c4e4b0c22018bf83d8c00cf8980e74bf93862911670c14d820099c600ec21e136ae10bc244400",
               "outputs": {}
             },
             "d4ac778ba4605c427d610077bc2c2ed06e06d738138b0075911c3e5f24e4b649": {
@@ -27586,6 +28491,7 @@
           },
           "majority_salt_hex": "e7a110158d700cf100f49a4ae23e54dfe0fbee319b92ce8d9d6e297fab995c44",
           "name_binding": {
+            "binding_mode": "initial",
             "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "name": "id/child-leo",
             "network": "main",
@@ -28038,7 +28944,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b0c22018dafa9b69e1937a2e106a18ca4f6546c9a2c0083135b3ae7ae908eb42472798500",
+              "opreturn_hex": "6a05534c4e4b0c22018bf83d8c00cf8980e74bf93862911670c14d820099c600ec21e136ae10bc244400",
               "outputs": {}
             },
             "d4ac778ba4605c427d610077bc2c2ed06e06d738138b0075911c3e5f24e4b649": {
@@ -28183,6 +29089,7 @@
           },
           "majority_salt_hex": "e7a110158d700cf100f49a4ae23e54dfe0fbee319b92ce8d9d6e297fab995c44",
           "name_binding": {
+            "binding_mode": "initial",
             "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "name": "id/child-leo",
             "network": "main",
@@ -29316,7 +30223,7 @@
       "code": "RECOVERY_FORBIDDEN",
       "expected_refusal": "RECOVERY_FORBIDDEN",
       "inputs": {
-        "assert_binding_id": "af207a57f31534f059ca6788382110ae9fc78347e55091215bc7bd3014d40ffb",
+        "assert_binding_id": "780fff8d9543634611cc2b5131c561a5f971df9d8a4fc05a6909370d4fee2e9b",
         "chain": {
           "best_header_height": 750100,
           "blocks": {},
@@ -29395,7 +30302,7 @@
                   "block_time": 1795220000,
                   "confirmed_height": 750060,
                   "op": "NAME_UPDATE",
-                  "opreturn_hex": "6a05534c4e4b102201af207a57f31534f059ca6788382110ae9fc78347e55091215bc7bd3014d40ffb00",
+                  "opreturn_hex": "6a05534c4e4b102201780fff8d9543634611cc2b5131c561a5f971df9d8a4fc05a6909370d4fee2e9b00",
                   "output_script_hex": "530c69642f6368696c642d6c656f4c567b226c696e6b223a7b226f726967696e223a2237653065356337313366626136366335306639643335316536666135323630663364623466333137346437306335323564653832306364373766653436663533227d7d6d750020b271653fcc7bcd46c8d9709809f6cfddd6c42535187aeb77922e104530249b05",
                   "owner_policy": {
                     "kind": "multisig",
@@ -29560,7 +30467,7 @@
             },
             "5ed7436924390365b66c1aa1d47a8310179c42148a263ff8f80686ac2079b0d2": {
               "confirmed_height": 750050,
-              "opreturn_hex": "6a05534c4e4b0c2201af207a57f31534f059ca6788382110ae9fc78347e55091215bc7bd3014d40ffb00",
+              "opreturn_hex": "6a05534c4e4b0c2201780fff8d9543634611cc2b5131c561a5f971df9d8a4fc05a6909370d4fee2e9b00",
               "outputs": {
                 "0": {
                   "script_pubkey_hex": "00202e29db98a35c51b2442a7c4ed4961610d00aef90e9fd56894e2542a9c72fe05b"
@@ -29602,7 +30509,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b0c22018dafa9b69e1937a2e106a18ca4f6546c9a2c0083135b3ae7ae908eb42472798500",
+              "opreturn_hex": "6a05534c4e4b0c22018bf83d8c00cf8980e74bf93862911670c14d820099c600ec21e136ae10bc244400",
               "outputs": {}
             },
             "d4ac778ba4605c427d610077bc2c2ed06e06d738138b0075911c3e5f24e4b649": {
@@ -29748,6 +30655,7 @@
           },
           "majority_salt_hex": "e7a110158d700cf100f49a4ae23e54dfe0fbee319b92ce8d9d6e297fab995c44",
           "name_binding": {
+            "binding_mode": "initial",
             "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "name": "id/child-leo",
             "network": "main",
@@ -29936,6 +30844,7 @@
           "origin_anchor_txid": "9b8acc384e0a6913f62bdcff7902d3632c543d0b81d7c6a9a800a5439e67d578",
           "recovery_bindings": [
             {
+              "binding_mode": "recovery",
               "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
               "name": "id/child-leo-recovered",
               "network": "main",
@@ -29963,7 +30872,7 @@
                 "vout": 0
               },
               "seq": 2,
-              "supersedes_binding_id": "8dafa9b69e1937a2e106a18ca4f6546c9a2c0083135b3ae7ae908eb424727985",
+              "supersedes_binding_id": "8bf83d8c00cf8980e74bf93862911670c14d820099c600ec21e136ae10bc2444",
               "type": "seallink-name-binding/1"
             }
           ],
@@ -32261,7 +33170,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b0c22018dafa9b69e1937a2e106a18ca4f6546c9a2c0083135b3ae7ae908eb42472798500",
+              "opreturn_hex": "6a05534c4e4b0c22018bf83d8c00cf8980e74bf93862911670c14d820099c600ec21e136ae10bc244400",
               "outputs": {}
             },
             "d4ac778ba4605c427d610077bc2c2ed06e06d738138b0075911c3e5f24e4b649": {
@@ -32452,6 +33361,7 @@
           },
           "majority_salt_hex": "e7a110158d700cf100f49a4ae23e54dfe0fbee319b92ce8d9d6e297fab995c44",
           "name_binding": {
+            "binding_mode": "initial",
             "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "name": "id/child-leo",
             "network": "main",
@@ -32657,6 +33567,507 @@
       "module": "core",
       "rule": "SL-ORIG-012",
       "runner": "origin_status"
+    },
+    {
+      "code": "TICKET_PROOF_INVALID",
+      "expected_refusal": "TICKET_PROOF_INVALID",
+      "inputs": {
+        "chain": {
+          "best_header_height": 750010,
+          "blocks": {
+            "543a756ce9eaf98201ccb6afbe71c0ba8e119818fea89209ed0e6a2d80c7b564": 749990
+          },
+          "clock_watermark": 1795219000,
+          "comparison_peers": [
+            {
+              "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "healthy": true,
+              "height": 750010,
+              "id": "peer-1"
+            }
+          ],
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
+          "manifests": {
+            "d4b1220f59889c2a09e6302c4acbaa4dc08127b2fdcd6f8db0c2a7c4cfde098f": {
+              "network": "main",
+              "owner": "id/mail-host-a",
+              "seq": 1,
+              "service": {
+                "actions": [
+                  "mail/list",
+                  "mail/read",
+                  "mail/send"
+                ],
+                "endpoint": "https://mail-a.example/seallink/v1",
+                "receipt_key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
+                "service_type": "mail",
+                "tls_spki_sha256": "5d6be3856dce5c449bb5edf7ad97a36137a1f76409ad38ac2920c9bb26f1d445"
+              },
+              "type": "seallink-manifest/1"
+            },
+            "e46c81013bdfb7df483ebd1a301cd378132a5925d02bf63187fb13297a045dca": {
+              "network": "main",
+              "owner": "id/alice",
+              "providers": [
+                {
+                  "label": "work",
+                  "provider": {
+                    "name": "id/mail-host-a",
+                    "owner_policy": {
+                      "kind": "key",
+                      "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                    },
+                    "registration": {
+                      "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                      "vout": 0
+                    }
+                  },
+                  "service_type": "mail"
+                }
+              ],
+              "seq": 1,
+              "type": "seallink-manifest/1"
+            }
+          },
+          "names": {
+            "id/alice": {
+              "registration": {
+                "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 748000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "520869642f616c69636514d7cf29331fa142da7710e5787836c3a18af03d524ca87b226c696e6b223a7b226772616e74223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337227d2c226d223a7b2268223a2265343663383130313362646662376466343833656264316133303163643337383133326135393235643032626636333138376662313332393761303435646361222c2273223a317d7d6d6d00145146d95d43f56374709f6e1535b76efa260f3783",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
+                  },
+                  "prev_input": null,
+                  "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "530869642f616c6963654ca87b226c696e6b223a7b226772616e74223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337227d2c226d223a7b2268223a2265343663383130313362646662376466343833656264316133303163643337383133326135393235643032626636333138376662313332393761303435646361222c2273223a317d7d6d7500145146d95d43f56374709f6e1535b76efa260f3783",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
+                    }
+                  },
+                  "txid": "d64a8e1b13e909ff17aa176831e51d80df991c313cb5f5da6d4d9a7ced3abb01",
+                  "vout": 0
+                }
+              ]
+            },
+            "id/alice-acct-agent": {
+              "registration": {
+                "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 748000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "521369642f616c6963652d616363742d6167656e741478cdc8ea064148bfecd727764db0c9b78cdc0f894c4c7b226e6f737472223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037227d6d6d0014d0174a960143676a0bce41b924d1aeb0e626168b",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
+                  },
+                  "prev_input": null,
+                  "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "531369642f616c6963652d616363742d6167656e744c4c7b226e6f737472223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037227d6d750014d0174a960143676a0bce41b924d1aeb0e626168b",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
+                    }
+                  },
+                  "txid": "983d44c274dc053751917132ba3c1d373605ed3ff5ac935c7648e8403f51f2d9",
+                  "vout": 0
+                }
+              ]
+            },
+            "id/mail-host-a": {
+              "registration": {
+                "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 748000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "520e69642f6d61696c2d686f73742d6114d40f221b864c45b83ad824fa2dd20e164dce0b994c547b226d223a7b2268223a2264346231323230663539383839633261303965363330326334616362616134646330383132376232666463643666386462306332613763346366646530393866222c2273223a317d7d6d6d001439182066c15ca099fe831d16d18edef5a42b7a37",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                  },
+                  "prev_input": null,
+                  "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "530e69642f6d61696c2d686f73742d614c547b226d223a7b2268223a2264346231323230663539383839633261303965363330326334616362616134646330383132376232666463643666386462306332613763346366646530393866222c2273223a317d7d6d75001439182066c15ca099fe831d16d18edef5a42b7a37",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                    }
+                  },
+                  "txid": "d2ae9928874791c1fd1d1fa62b4e85ad75401075be157ab5e6c05723095677a0",
+                  "vout": 0
+                }
+              ]
+            },
+            "id/notary-m1": {
+              "registration": {
+                "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "520c69642f6e6f746172792d6d3114d715f4a0681ff28705e3e7018004638fdecd59264c567b226c696e6b223a7b226e6f74617279223a2261633333333431366431373932653864393330336462323566306165323766636466666239666239333136373635383732366138303864316633346636303366227d7d6d6d00143a2209134a027f18dec191afd9a050e92aafce5d",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                  },
+                  "prev_input": null,
+                  "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749100,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "530c69642f6e6f746172792d6d314c567b226c696e6b223a7b226e6f74617279223a2261633333333431366431373932653864393330336462323566306165323766636466666239666239333136373635383732366138303864316633346636303366227d7d6d7500143a2209134a027f18dec191afd9a050e92aafce5d",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                    }
+                  },
+                  "txid": "de25bb99e4035bb597d03091ab3f8004d71e62067acec1c18976b248af968595",
+                  "vout": 0
+                }
+              ]
+            }
+          },
+          "network": "main",
+          "node_reachable": true,
+          "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
+          "tip_first_sight": 1795220005,
+          "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+          "tip_header_time": 1795220000,
+          "tip_height": 750010,
+          "tip_median_time_past": 1795219900,
+          "txindex": true,
+          "txs": {
+            "04151ce3dfa357e4d3f1eaffa019a7055f29284d52fb600b372dfe773768ec58": {
+              "confirmed_height": 749150,
+              "outputs": {
+                "0": {
+                  "script_pubkey_hex": "0014c8214084b632b0495dc66cdc5ecd7221d24c0fe6",
+                  "spent_by_txid": "f0d72fd385adb4fbd38836a2072b4703d494409bacdfa85471d80e8b5abfba4e"
+                }
+              }
+            },
+            "13ba8c1099dcd48c609c62445f503cddceb3cf871f6ba32ee8aba91b3467a3cf": {
+              "confirmed_height": 749995,
+              "inputs": [
+                {
+                  "prev_txid": "ee28aaff80dc02e2d175cb7ba88bd82a6d4f765b579a2ebecdef28dcb7aa42d2",
+                  "prev_vout": 0,
+                  "script_sig_hex": "",
+                  "witness": [
+                    "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                    "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  ]
+                }
+              ],
+              "outputs": {
+                "0": {
+                  "script_pubkey_hex": "00148bd108ec2a48baa40c1eeb83c6378336b1143922"
+                },
+                "1": {
+                  "script_pubkey_hex": "00145146d95d43f56374709f6e1535b76efa260f3783"
+                }
+              }
+            },
+            "33425504179ee36cecd2de7261e4951d1f7b208afc1f823237df169f15bbc193": {
+              "confirmed_height": 749998,
+              "inputs": [
+                {
+                  "prev_txid": "13ba8c1099dcd48c609c62445f503cddceb3cf871f6ba32ee8aba91b3467a3cf",
+                  "prev_vout": 1,
+                  "script_sig_hex": "",
+                  "witness": [
+                    "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                    "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  ]
+                }
+              ],
+              "opreturn_hex": "6a05534c4e4b012201b1e79e46875b9f3875824f11d46c1c9478dd73340cc5f04bdc26a9f02eb86b4f00",
+              "outputs": {}
+            },
+            "f0d72fd385adb4fbd38836a2072b4703d494409bacdfa85471d80e8b5abfba4e": {
+              "block_hash": "9724d43af50a7029f1c03e483d0213ca716713c535b438dc28888d308c580d59",
+              "confirmed_height": 749200,
+              "inputs": [
+                {
+                  "prev_txid": "04151ce3dfa357e4d3f1eaffa019a7055f29284d52fb600b372dfe773768ec58",
+                  "prev_vout": 0,
+                  "script_sig_hex": "",
+                  "witness": [
+                    "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                    "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  ]
+                }
+              ],
+              "opreturn_hex": "6a05534c4e4b142201de2ddf2e10f743aee4fe4b5b988e971611e6aeb0a248237aa94531b1f0542cc900",
+              "outputs": {
+                "1": {
+                  "script_pubkey_hex": "0014c8214084b632b0495dc66cdc5ecd7221d24c0fe6"
+                }
+              }
+            }
+          }
+        },
+        "policy": {
+          "allow_reinstatement": false,
+          "mode": "standard",
+          "quorum_m": 1,
+          "required_claims": [
+            "seallink.org/build-repro"
+          ],
+          "trusted_notaries": [
+            {
+              "log_id": "ac2119a6c08ea97b598cdbd9386a09d20205a61f59d9261211a20a5e6c362b3d",
+              "notary_pin": {
+                "name": "id/notary-m1",
+                "owner_policy": {
+                  "kind": "key",
+                  "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                },
+                "registration": {
+                  "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                  "vout": 0
+                }
+              }
+            }
+          ]
+        },
+        "ticket": {
+          "artifact_identity": {
+            "digest": "616c26ca04904e6cb5e3e63689bb22e8d48aae0e3506d459da3b67ea712e62ff",
+            "scheme": "sha256"
+          },
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "network": "main",
+          "notarizations": [
+            {
+              "act_smt_proof": {
+                "bitmap_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "key_str": "act:c94fc25f37e466d8467b86ee3bdb2fb721ab723a092553a385a0f8e4ca1050cd|*",
+                "root": "eb70f696a4410a79b11b5d39d4ed57f16bf79a5dda3a630a98afcfc3caccdd16",
+                "siblings": [],
+                "state": "absent"
+              },
+              "batch_proof": {
+                "leaf_digest": "01d1ff00fc08f93c4d675c72e06b0de5f785edfb2af01e179ad8f0fc2097e0a8",
+                "root": "5698e1dc7effff6590197317dff85153abe49dc23b80ed4453599536fb7aee48",
+                "steps": []
+              },
+              "checkpoint": {
+                "payload": {
+                  "batch_count": 1,
+                  "batch_root": "5698e1dc7effff6590197317dff85153abe49dc23b80ed4453599536fb7aee48",
+                  "checkpoints_root": "879764857a8da79fec30dd6ca78d608e114e090f6d844dc485e8a35a7944fb19",
+                  "cumulative_entries_count": 1,
+                  "denials_delta_root": "9d3bb7c7f17316c64266e25abb574ffd2047e71b93862cb75c6d6c307cfa500d",
+                  "denials_root": "eb70f696a4410a79b11b5d39d4ed57f16bf79a5dda3a630a98afcfc3caccdd16",
+                  "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+                  "issuer": {
+                    "name": "id/notary-m1",
+                    "owner_policy": {
+                      "kind": "key",
+                      "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                    },
+                    "registration": {
+                      "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                      "vout": 0
+                    },
+                    "role_policy": {
+                      "m": 1,
+                      "pks": [
+                        "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f"
+                      ]
+                    }
+                  },
+                  "log_id": "ac2119a6c08ea97b598cdbd9386a09d20205a61f59d9261211a20a5e6c362b3d",
+                  "network": "main",
+                  "next_log_policy": {
+                    "kind": "key",
+                    "pk": "02edd07469673ff81abc71a80ad3b9105a44dc976d2228b9403ee2d4c74779ed0b"
+                  },
+                  "next_log_vout": 1,
+                  "prev_log_outpoint": {
+                    "txid": "04151ce3dfa357e4d3f1eaffa019a7055f29284d52fb600b372dfe773768ec58",
+                    "vout": 0
+                  },
+                  "role": "notary",
+                  "seq": 1,
+                  "terminal": false,
+                  "type": "seallink-log-checkpoint/1"
+                },
+                "signatures": {
+                  "policy": {
+                    "m": 1,
+                    "pks": [
+                      "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f"
+                    ]
+                  },
+                  "sigs": [
+                    {
+                      "pk": "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f",
+                      "sig": "d68b786147c2acb81b763ebfc27f190cab4567c219a6ea682190799545cbe5050a96b4a91a6cde46bbdc01e6dda6f131c30d4bf3b277bdb2a18e3b094176ca87"
+                    }
+                  ]
+                }
+              },
+              "checkpoint_txid": "f0d72fd385adb4fbd38836a2072b4703d494409bacdfa85471d80e8b5abfba4e",
+              "notary_act": {
+                "payload": {
+                  "act_kind": "artifact-notarization",
+                  "attested_at": 1795220000,
+                  "details": {
+                    "artifact_identity": {
+                      "digest": "616c26ca04904e6cb5e3e63689bb22e8d48aae0e3506d459da3b67ea712e62ff",
+                      "scheme": "sha256"
+                    },
+                    "claims": [
+                      {
+                        "claim_id": "seallink.org/build-repro",
+                        "verdict": "pass"
+                      }
+                    ],
+                    "kind": "artifact-notarization"
+                  },
+                  "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+                  "lifecycle": "log_tracked",
+                  "log_id": "ac2119a6c08ea97b598cdbd9386a09d20205a61f59d9261211a20a5e6c362b3d",
+                  "network": "main",
+                  "notary": {
+                    "name": "id/notary-m1",
+                    "owner_policy": {
+                      "kind": "key",
+                      "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
+                    },
+                    "registration": {
+                      "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
+                      "vout": 0
+                    },
+                    "role_policy": {
+                      "m": 1,
+                      "pks": [
+                        "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f"
+                      ]
+                    }
+                  },
+                  "target_sha256": "e85f315b8fe63f1ea1e63bd43f227dbf7dadeb360b8c38638983674029db0d1d",
+                  "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+                  "tip_height": 750010,
+                  "type": "seallink-notary/1"
+                },
+                "signatures": {
+                  "policy": {
+                    "m": 1,
+                    "pks": [
+                      "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f"
+                    ]
+                  },
+                  "sigs": [
+                    {
+                      "pk": "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f",
+                      "sig": "8e71dc0e35e697bc91780695206a858ecefcfc376bb5ac52b8b221d83fca311cc98776c2042f1c5af19fcd6269c02bcf853b638d998a839816f7794cbe4dea46"
+                    }
+                  ]
+                }
+              },
+              "target_smt_proof": {
+                "bitmap_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+                "key_str": "target:e85f315b8fe63f1ea1e63bd43f227dbf7dadeb360b8c38638983674029db0d1d|*",
+                "root": "eb70f696a4410a79b11b5d39d4ed57f16bf79a5dda3a630a98afcfc3caccdd16",
+                "siblings": [],
+                "state": "absent"
+              }
+            }
+          ],
+          "target_sha256": "66519ca44c627a7457d547eec8c8464295cca0464bdfb5812322aa19da17b866",
+          "type": "seallink-ticket/1"
+        }
+      },
+      "module": "artifact-notarization",
+      "rule": "SL-ARTF-001",
+      "runner": "artifact_ticket"
     },
     {
       "code": "WARD_AUTONOMOUS_FORBIDDEN",
@@ -32933,7 +34344,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b0c22018dafa9b69e1937a2e106a18ca4f6546c9a2c0083135b3ae7ae908eb42472798500",
+              "opreturn_hex": "6a05534c4e4b0c22018bf83d8c00cf8980e74bf93862911670c14d820099c600ec21e136ae10bc244400",
               "outputs": {}
             },
             "d4ac778ba4605c427d610077bc2c2ed06e06d738138b0075911c3e5f24e4b649": {
@@ -33151,6 +34562,7 @@
           },
           "majority_salt_hex": "e7a110158d700cf100f49a4ae23e54dfe0fbee319b92ce8d9d6e297fab995c44",
           "name_binding": {
+            "binding_mode": "initial",
             "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "name": "id/child-leo",
             "network": "main",
@@ -33489,9 +34901,9 @@
       "runner": "wire_raw"
     }
   ],
-  "description": "Executable 86/86 refusal-code conformance matrix with Draft 2020-12 schema-validated semantic fixtures, explicit module selection tags, and derived ChainView evidence.",
+  "description": "Executable 89/89 refusal-code conformance matrix with Draft 2020-12 schema-validated semantic fixtures, explicit module selection tags, and derived ChainView evidence.",
   "suite": "refusal-coverage-matrix",
-  "total_covered_codes": 86,
-  "total_registered_codes": 86,
-  "version": "1.0.0-draft.10"
+  "total_covered_codes": 89,
+  "total_registered_codes": 89,
+  "version": "1.0.0-draft.11"
 }

@@ -200,10 +200,13 @@ def _collect_wire_hints(
     if not isinstance(obj, dict):
         return
 
-    # Record dual_party_delayed recovery delay_blocks so quiet maturity blocks `h_rec + delay_blocks` get MTP fetched
+    # Record dual_party_delayed / voluntary rebind delay_blocks so quiet maturity blocks `h + delay_blocks` get MTP fetched
     if (
         recovery_delays is not None
-        and obj.get("mode") == "dual_party_delayed"
+        and (
+            obj.get("mode") == "dual_party_delayed"
+            or (obj.get("type") == "seallink-name-binding/1" and obj.get("binding_mode") == "voluntary")
+        )
         and isinstance(obj.get("delay_blocks"), int)
         and not isinstance(obj.get("delay_blocks"), bool)
         and 0 <= obj["delay_blocks"] <= 100000
@@ -233,6 +236,13 @@ def _collect_wire_hints(
                         vset.add(s_item["new_vacant_vout"])
             elif ptype == "seallink-capacity/1" and isinstance(payload.get("next_status_vout"), int):
                 continuation_vouts_by_frame.setdefault(("0x09", ca), set()).add(payload["next_status_vout"])
+            elif (
+                ptype == "seallink-log-checkpoint/1"
+                and payload.get("terminal") is False
+                and isinstance(payload.get("next_log_vout"), int)
+                and not isinstance(payload.get("next_log_vout"), bool)
+            ):
+                continuation_vouts_by_frame.setdefault(("0x14", ca), set()).add(payload["next_log_vout"])
     elif obj.get("type") == "seallink-name-binding/1" and isinstance(obj.get("next_recovery_vout"), int):
         try:
             bid = sl.object_id(obj)
@@ -282,8 +292,13 @@ def _collect_wire_hints(
             txids.add(obj["stop_txid"])
             for v in range(obj["stop_first"], obj["stop_first"] + obj["count"]):
                 outpoints.add((obj["stop_txid"], v))
-    # Explicit txid references in proof_path / origin_bundle
-    for tk in ("issuance_txid", "origin_anchor_txid", "name_binding_txid", "anchor_txid", "use_txid"):
+    # Explicit txid references in proof_path / origin_bundle / log checkpoints & fraud proofs
+    for tk in (
+        "issuance_txid", "origin_anchor_txid", "name_binding_txid", "anchor_txid", "use_txid",
+        "cp_a_txid", "cp_b_txid", "cp_next_txid", "cp_prev_txid",
+        "checkpoint_txid", "head_checkpoint_txid",
+        "release_anchor_txid", "release_checkpoint_txid", "release_head_checkpoint_txid",
+    ):
         tv = obj.get(tk)
         if isinstance(tv, str) and len(tv) == 64:
             txids.add(tv)
@@ -727,6 +742,9 @@ class ColdNamecoinObserver:
             "inputs": inputs_v,
             "outputs": outputs_v,
         }
+        raw_ver = txd.get("version")
+        if isinstance(raw_ver, int) and not isinstance(raw_ver, bool):
+            obj["version"] = raw_ver
         if block_hash is not None:
             obj["block_hash"] = block_hash
         if block_time is not None:
@@ -815,6 +833,9 @@ class ColdNamecoinObserver:
                     "txid": mtx["txid"],
                     "vout": int(vo["n"]),
                 }
+                raw_mver = mtx.get("version")
+                if isinstance(raw_mver, int) and not isinstance(raw_mver, bool):
+                    mu["version"] = raw_mver
                 oprets = _extract_opreturns(mtx.get("vout", []))
                 if oprets:
                     mu["opreturns"] = oprets
@@ -860,12 +881,14 @@ class ColdNamecoinObserver:
                 return []
             # R2-A-01 / D8-M2: Transient/RPC failure or -32601 Method not found MUST fail closed with history_truncated=True!
             return [{
+                "first_error_height": 0,
                 "history_truncated": True,
                 "registration": {"txid": "0" * 64, "vout": 0},
                 "updates": [],
             }]
         if not isinstance(raw_hist, list):
             return [{
+                "first_error_height": 0,
                 "history_truncated": True,
                 "registration": {"txid": "0" * 64, "vout": 0},
                 "updates": [],
@@ -874,10 +897,16 @@ class ColdNamecoinObserver:
             return []
 
         mempool_set = set(mempool_txs.keys())
-        # R2-A-02: Track parse/fetch errors by raw_hist index so truncation scopes to the affected lineage!
+        # R2-A-02 / P0-4: Track parse/fetch errors & first_error_height per registration lineage!
         raw_lineages: list[list[tuple[int, int, dict[str, Any], int, dict[str, Any]]]] = []
         lin_truncated: list[bool] = []
+        lin_first_err: list[int | None] = []
         pre_lineage_error = False
+        pre_lineage_err_h: int | None = None
+
+        def _min_h(cur: int | None, cand: int) -> int:
+            eff = cand if 0 <= cand < 10**12 else 0
+            return eff if cur is None else min(cur, eff)
 
         # Sort raw_hist deterministically by (height if int else tip+1, original idx) while keeping unparseables in place
         indexed_items = list(enumerate(raw_hist))
@@ -930,14 +959,19 @@ class ColdNamecoinObserver:
                     # A non-SegWit (e.g. P2PKH) OP_NAME_FIRSTUPDATE starts a NEW truncated lineage, never poisoning an expired prior lineage!
                     raw_lineages.append([])
                     lin_truncated.append(True)
+                    lin_first_err.append(_min_h(None, h_conf))
                 elif raw_lineages:
                     lin_truncated[-1] = True
+                    lin_first_err[-1] = _min_h(lin_first_err[-1], h_conf)
                 else:
                     pre_lineage_error = True
+                    pre_lineage_err_h = _min_h(pre_lineage_err_h, h_conf)
                 continue
             if parsed["op"] == "NAME_FIRSTUPDATE":
                 raw_lineages.append([(h_conf, b_time, txd, vout_n, parsed)])
-                lin_truncated.append(pre_lineage_error and len(raw_lineages) == 1)
+                has_pre = pre_lineage_error and len(raw_lineages) == 1
+                lin_truncated.append(has_pre)
+                lin_first_err.append(pre_lineage_err_h if has_pre else None)
             elif parsed["op"] == "NAME_UPDATE" and raw_lineages:
                 in_ops = {(v.get("txid"), int(v.get("vout", -1))) for v in txd.get("vin", []) if "txid" in v}
                 attached = False
@@ -952,13 +986,16 @@ class ColdNamecoinObserver:
                         break
                 if not attached:
                     lin_truncated[-1] = True
+                    lin_first_err[-1] = _min_h(lin_first_err[-1], h_conf)
                     if raw_lineages[-1]:
                         raw_lineages[-1].append((h_conf, b_time, txd, vout_n, parsed))
             else:
                 if raw_lineages:
                     lin_truncated[-1] = True
+                    lin_first_err[-1] = _min_h(lin_first_err[-1], h_conf)
                 else:
                     pre_lineage_error = True
+                    pre_lineage_err_h = _min_h(pre_lineage_err_h, h_conf)
 
         lineages_out: list[dict[str, Any]] = []
         for l_idx, lin in enumerate(raw_lineages):
@@ -994,6 +1031,9 @@ class ColdNamecoinObserver:
                     "txid": txd["txid"],
                     "vout": vout_n,
                 }
+                raw_uver = txd.get("version")
+                if isinstance(raw_uver, int) and not isinstance(raw_uver, bool):
+                    u_obj["version"] = raw_uver
                 if b_time is not None:
                     u_obj["block_time"] = b_time
                 if pos > 0:
@@ -1034,9 +1074,11 @@ class ColdNamecoinObserver:
                     lin_rec["mempool_updates"] = mem_updates
                 if lin_truncated[l_idx]:
                     lin_rec["history_truncated"] = True
+                    lin_rec["first_error_height"] = lin_first_err[l_idx] if lin_first_err[l_idx] is not None else 0
                 lineages_out.append(lin_rec)
             elif lin_truncated[l_idx]:
                 lineages_out.append({
+                    "first_error_height": lin_first_err[l_idx] if lin_first_err[l_idx] is not None else 0,
                     "history_truncated": True,
                     "registration": {"txid": "0" * 64, "vout": 0},
                     "updates": [],
@@ -1045,6 +1087,7 @@ class ColdNamecoinObserver:
         if not lineages_out and pre_lineage_error:
             first_it = raw_hist[0] if isinstance(raw_hist[0], dict) else {}
             lineages_out.append({
+                "first_error_height": pre_lineage_err_h if pre_lineage_err_h is not None else 0,
                 "history_truncated": True,
                 "registration": {"txid": str(first_it.get("txid", "0" * 64)), "vout": int(first_it.get("vout", 0))},
                 "updates": [],
@@ -1289,7 +1332,7 @@ class ColdNamecoinObserver:
                         dec_m = sl.decode_opreturn(bytes.fromhex(opret_h))
                     except ValueError:
                         continue
-                    if dec_m["action"] == "0x0c":
+                    if dec_m["action"] in ("0x0c", "0x13"):
                         for d_blk in recovery_delays:
                             h_mat = int(h_tx) + d_blk
                             if 0 <= h_mat <= tip_h:
@@ -1691,6 +1734,8 @@ def self_test() -> None:
                 raise RuntimeError("namecoin-cli gettxout failed: RPC timeout")
             if state["bad_gettxout"]:
                 return {}
+            if (txid_q, vout_q) in state.get("spent_utxos", set()):
+                return None
             if txid_q == vac_txid and vout_q == 0:
                 return None
             if txid_q == pend_txid and vout_q == 2:
@@ -1930,13 +1975,83 @@ def self_test() -> None:
     state["strip_mediantime"] = False
     obs._invalidate_caches()
 
+    # Test 15 (draft.11): 0x14 next_log_vout continuation + 0x13 quiet maturity MTP + nVersion preservation + first_error_height!
+    log_gen_txid = hashlib.sha256(b"log-gen-tx").hexdigest()
+    log_cp1_txid = hashlib.sha256(b"log-cp1-tx").hexdigest()
+    log_cp2_txid = hashlib.sha256(b"log-cp2-tx").hexdigest()
+    reb13_txid = hashlib.sha256(b"reb-13-tx").hexdigest()
+    log_id_t = sl.compute_log_id("regtest", gen, "notary", "id/school", {"txid": fu2_txid, "vout": 0}, {"txid": log_gen_txid, "vout": 0})
+    cp1_p = {
+        "batch_count": 0,
+        "batch_root": sl.EMPTY_BATCH_ROOT,
+        "checkpoints_root": sl.EMPTY_CHECKPOINTS_ROOT,
+        "cumulative_entries_count": 0,
+        "denials_delta_root": sl.EMPTY_BATCH_ROOT,
+        "denials_root": sl.SMT_EMPTY_ROOT,
+        "genesis": gen,
+        "issuer": {"name": "id/school", "owner_policy": pol2, "registration": {"txid": fu2_txid, "vout": 0}, "role_policy": {"m": 1, "pks": [sl.xonly_pubkey(reg_sk)]}},
+        "log_id": log_id_t,
+        "network": "regtest",
+        "next_log_policy": pol2,
+        "next_log_vout": 2,
+        "prev_log_outpoint": {"txid": log_gen_txid, "vout": 0},
+        "role": "notary",
+        "seq": 1,
+        "terminal": False,
+        "type": "seallink-log-checkpoint/1",
+    }
+    cp1_env = sl.sign_envelope(cp1_p, [reg_sk])
+    cp2_p = dict(cp1_p, seq=2, prev_checkpoint_id=sl.content_addr(cp1_env), prev_log_outpoint={"txid": log_cp1_txid, "vout": 2}, terminal=True, checkpoints_root=sl.rfc9162_mth([sl.ckpt_leaf(1, sl.content_addr(cp1_env))]).hex())
+    cp2_p.pop("next_log_vout")
+    cp2_p.pop("next_log_policy")
+    cp2_env = sl.sign_envelope(cp2_p, [reg_sk])
+    txs[log_gen_txid] = {"txid": log_gen_txid, "version": 2, "blockhash": b200, "confirmations": 5, "vin": [], "vout": [{"n": 0, "scriptPubKey": {"hex": spk1.hex()}}]}
+    txs[log_cp1_txid] = {
+        "txid": log_cp1_txid, "version": 2, "blockhash": b200, "confirmations": 5,
+        "vin": [{"txid": log_gen_txid, "vout": 0, "sequence": 0xFFFFFFFF, "scriptSig": {"hex": ""}, "txinwitness": [fake_sig, pk1]}],
+        "vout": [
+            {"n": 0, "value": 0.0, "scriptPubKey": {"hex": sl.encode_opreturn(0x14, sl.content_addr(cp1_env)).hex()}},
+            {"n": 1, "scriptPubKey": {"hex": other_spk.hex()}},
+            {"n": 2, "scriptPubKey": {"hex": spk2.hex()}},
+        ],
+    }
+    txs[log_cp2_txid] = {
+        "txid": log_cp2_txid, "version": 2, "blockhash": b204, "confirmations": 1,
+        "vin": [{"txid": log_cp1_txid, "vout": 2, "sequence": 0xFFFFFFFF, "scriptSig": {"hex": ""}, "txinwitness": [fake_sig, pk2]}],
+        "vout": [{"n": 0, "value": 0.0, "scriptPubKey": {"hex": sl.encode_opreturn(0x14, sl.content_addr(cp2_env)).hex()}}],
+    }
+    txs[reb13_txid] = {
+        "txid": reb13_txid, "version": 0x7100, "blockhash": b200, "confirmations": 5,
+        "vin": [], "vout": [{"n": 0, "value": 0.0, "scriptPubKey": {"hex": sl.encode_opreturn(0x13, "44" * 32).hex()}}],
+    }
+    blocks_by_h[200]["tx"].extend([txs[log_gen_txid], txs[log_cp1_txid]])
+    blocks_by_h[204]["tx"].append(txs[log_cp2_txid])
+    state["spent_utxos"] = {(log_gen_txid, 0), (log_cp1_txid, 2)}
+    txs[u2_txid]["version"] = 0x7100
+    state["corrupt_second_reg"] = True
+    reb_hint = {"type": "seallink-name-binding/1", "binding_mode": "voluntary", "delay_blocks": 3}
+    cv_d11 = obs.build_chain_view(
+        wire_objects=[cp1_env, cp2_env, reb_hint],
+        extra_names=["id/school"],
+        extra_txids=[reb13_txid],
+        extra_policies=[pol1, pol2],
+    )
+    assert cv_d11["txs"][log_gen_txid]["outputs"]["0"]["spent_by_txid"] == log_cp1_txid
+    assert cv_d11["txs"][log_cp1_txid]["outputs"]["2"]["spent_by_txid"] == log_cp2_txid
+    assert cv_d11["txs"][reb13_txid]["version"] == 0x7100
+    assert cv_d11["block_times"].get("203") == 1795218777
+    assert cv_d11["names"]["id/school"]["first_error_height"] == 204
+    assert cv_d11["names"]["id/school"]["updates"][-1]["version"] == 0x7100
+    state["corrupt_second_reg"] = False
+
 
 if __name__ == "__main__":
     self_test()
     print(
         "nc_rpc_adapter self_test PASS "
-        "(multi-reg + pending_vout=2 + bracket/retry + R1-B transactional clock & recheck + "
-        "R3-H1 no-resurrection + A-1 absent_from_utxo + A-2 orphan filter + A-3 cache invalidation + "
-        "A-4/R2-A-01/02 scoped truncated history + A-5/R2-A-03 mempool name update + A-9 mainnet clock guard + "
-        "A-11 chain/txindex + A-13 strict gettxout + H-23 dup SLNK + quiet maturity MTP + no header.time fallback)"
+        "(multi-reg + pending_vout=2 + 0x14 next_log_vout + 0x13 quiet maturity MTP + first_error_height + "
+        "nVersion + bracket/retry + R1-B transactional clock & recheck + R3-H1 no-resurrection + "
+        "A-1 absent_from_utxo + A-2 orphan filter + A-3 cache invalidation + A-4/R2-A-01/02 scoped truncated history + "
+        "A-5/R2-A-03 mempool name update + A-9 mainnet clock guard + A-11 chain/txindex + A-13 strict gettxout + "
+        "H-23 dup SLNK + no header.time fallback)"
     )

@@ -1,12 +1,22 @@
 {
   "$comment": "SealLink v1.0 Canonical Object Type Registry. Authoritative SSOT for object types, byte limits, signing roles, and schema targets. Signing domain tag equals the exact type string under SPEC-01.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.10",
+  "version": "1.0.0-draft.11",
   "reserved_internal_domains": [
     "seallink-clause/1",
     "seallink-journal/1",
     "seallink-merkle-leaf/1",
-    "seallink-merkle-node/1"
+    "seallink-merkle-node/1",
+    "seallink-artifact-id/1",
+    "seallink-log-id/1",
+    "seallink-log-entry/1",
+    "seallink-batch-empty/1",
+    "seallink-log-ckpt-leaf/1",
+    "seallink-log-ckpt-node/1",
+    "seallink-log-ckpt-empty/1",
+    "seallink-smt-empty/1",
+    "seallink-smt-leaf/1",
+    "seallink-smt-node/1"
   ],
   "types": [
     {
@@ -278,6 +288,69 @@
       "owning_spec": "SPEC-07",
       "schema": "schemas/invocation.schema.json#/$defs/MigrationManifest",
       "description": "Replaceable-service portable state and accounting handover manifest signed by the source provider's receipt key, paired with holder seallink-assent/1 and destination seallink-statement/1 (migration-accept)."
+    },
+    {
+      "type": "seallink-release/1",
+      "signed": true,
+      "signer_roles": ["release"],
+      "max_bytes": 65536,
+      "owning_spec": "SPEC-05",
+      "schema": "schemas/log.schema.json#/$defs/ReleaseRecord",
+      "description": "Publisher-signed software or artifact release attestation under link.release, binding product_id, version_str, monotonic release_seq, canonical artifact_identity, and target_sha256, anchored via 0x09 (eternal) or 0x14 (log_tracked)."
+    },
+    {
+      "type": "seallink-log-checkpoint/1",
+      "signed": true,
+      "signer_roles": ["notary", "release"],
+      "max_bytes": 16384,
+      "owning_spec": "SPEC-05",
+      "schema": "schemas/log.schema.json#/$defs/LogCheckpoint",
+      "description": "UTXO-chained transparency and denial log checkpoint anchored by OP_RETURN 0x14 committing batch_root, denials_delta_root, Fixed-Depth-256 SMT denials_root, and acyclic RFC 9162 checkpoints_root over predecessors 1..(seq-1)."
+    },
+    {
+      "type": "seallink-log-revocation/1",
+      "signed": true,
+      "signer_roles": ["notary", "release"],
+      "max_bytes": 8192,
+      "owning_spec": "SPEC-05",
+      "schema": "schemas/log.schema.json#/$defs/LogRevocation",
+      "description": "Signed denial/revocation entry recorded in a notary or release log SMT under key act:<id>|*, rel:<id>|*, or target:<target_id>|* (including mandatory fail -> target: entries)."
+    },
+    {
+      "type": "seallink-log-reinstatement/1",
+      "signed": true,
+      "signer_roles": ["notary", "release"],
+      "max_bytes": 8192,
+      "owning_spec": "SPEC-05",
+      "schema": "schemas/log.schema.json#/$defs/LogReinstatement",
+      "description": "Signed monotonic state-advancing reinstatement (state_seq >= 2, chained via prev_record_id) for a previously revoked log denial_key without ever deleting the SMT leaf back to E."
+    },
+    {
+      "type": "seallink-log-fraud/1",
+      "signed": false,
+      "auth_mechanism": "publicly_verifiable_fraud_proof",
+      "max_bytes": 65536,
+      "owning_spec": "SPEC-05",
+      "schema": "schemas/log.schema.json#/$defs/LogFraudProof",
+      "description": "Publicly verifiable 4-mode fraud proof (equivocation, revocation_omission, illegal_reversion, invalid_checkpoint_chain) permanently closing a compromised notary or release log_id with NOTARY_LOG_COMPROMISED."
+    },
+    {
+      "type": "seallink-ticket/1",
+      "signed": false,
+      "auth_mechanism": "bundle_of_verified_anchors_and_proofs",
+      "max_bytes": 524288,
+      "owning_spec": "PROFILE-artifact-v1",
+      "schema": "schemas/profile-artifact.schema.json#/$defs/ArtifactTicket",
+      "description": "Offline-verifiable artifact admission bundle carrying canonical artifact_identity, optional seallink-release/1, 0..N log-tracked or eternal notary attestations, SMT absence proofs, and optional absent-notary veto absence proofs."
+    },
+    {
+      "type": "seallink-tier2-name-history/1",
+      "signed": false,
+      "auth_mechanism": "spv_segwit_name_update_proofs",
+      "max_bytes": 1048576,
+      "owning_spec": "PROFILE-artifact-v1",
+      "schema": "schemas/profile-artifact.schema.json#/$defs/Tier2NameHistoryPage",
+      "description": "Paginated Tier-2 SPV response carrying consensus-exact SegWitNameUpdateProof entries (coinbase depth, BIP-141 wtxid commitment, stripped BIP-143 scriptCode, strict BIP-66 DER + SIGHASH_ALL) for a Namecoin registration lineage."
     }
   ]
 }
