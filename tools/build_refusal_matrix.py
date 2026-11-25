@@ -20,7 +20,7 @@ import seallink_ref as sl
 import seallink_verifier as sv
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = "1.0.0-draft.9"
+VERSION = "1.0.0-draft.10"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 
 
@@ -35,6 +35,40 @@ def _kp(label: str) -> dict[str, Any]:
         "xonly": sl.xonly_pubkey(sk),
         "comp": sl.compressed_pubkey(sk),
     }
+
+
+def sync_chain_tip(chain: dict[str, Any], height: int | None = None, tip_hash: str | None = None) -> dict[str, Any]:
+    """Keep ChainViewSnapshot fields (tip_height, best_header_height, observation_bracket, comparison_peers) self-consistent (H-1)."""
+    if height is not None:
+        chain["tip_height"] = height
+    if tip_hash is not None:
+        chain["tip_hash"] = tip_hash
+    h = chain["tip_height"]
+    th = chain["tip_hash"]
+    chain.setdefault("in_ibd", False)
+    chain.setdefault("txindex", True)
+    chain.setdefault("node_reachable", True)
+    chain["best_header_height"] = h
+    if "now" in chain:
+        chain.setdefault("clock_watermark", int(chain["now"]) - 1000)
+        chain.setdefault("tip_header_time", int(chain["now"]) - 10)
+        chain.setdefault("tip_first_sight", int(chain["now"]) - 5)
+    chain["observation_bracket"] = {
+        "consistent": True,
+        "start": {"height": h, "hash": th},
+        "end": {"height": h, "hash": th},
+    }
+    peers = chain.get("comparison_peers")
+    if isinstance(peers, list) and peers:
+        for idx, p in enumerate(peers):
+            if isinstance(p, dict):
+                p.setdefault("id", f"peer-{idx + 1}")
+                if p.get("healthy", True):
+                    p["height"] = h
+                    p["hash_at_tip"] = th
+    else:
+        chain["comparison_peers"] = [{"id": "peer-1", "healthy": True, "height": h, "hash_at_tip": th}]
+    return chain
 
 
 def _spk_hex(policy: dict[str, Any]) -> str:
@@ -178,7 +212,12 @@ def _build_base_invocation_fixture() -> dict[str, Any]:
         "txindex": True,
         "node_reachable": True,
         "best_header_height": 750010,
-        "comparison_peers": [{"healthy": True, "height": 750010, "hash_at_tip": _h32("tip-750010")}],
+        "observation_bracket": {
+            "consistent": True,
+            "start": {"height": 750010, "hash": _h32("tip-750010")},
+            "end": {"height": 750010, "hash": _h32("tip-750010")},
+        },
+        "comparison_peers": [{"id": "peer-1", "healthy": True, "height": 750010, "hash_at_tip": _h32("tip-750010")}],
         "blocks": {recent_blk: 749990},
         "names": {
             "id/alice": sv.make_name_history("id/alice", alice_reg, alice_owner_pol, alice_val_obj, first_height=748000, update_height=749000),
@@ -235,6 +274,7 @@ def _build_base_invocation_fixture() -> dict[str, Any]:
         "chain": chain_state,
         "journal": journal_state,
         "executor_cfg": executor_cfg,
+        "actual_message_meta": {"folder": "Invoices"},
         "_keys": keys,
         "_alice_man": alice_man,
         "_host_man": host_man,
@@ -430,8 +470,18 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         "tip_median_time_past": 1795219900,
         "tip_first_sight": 1795220005,
         "now": 1795220010,
+        "clock_watermark": 1795219000,
+        "in_ibd": False,
+        "txindex": True,
+        "node_reachable": True,
+        "best_header_height": 750100,
+        "observation_bracket": {
+            "consistent": True,
+            "start": {"height": 750100, "hash": _h32("otip-750100")},
+            "end": {"height": 750100, "hash": _h32("otip-750100")},
+        },
         "credible_utc_interval": [1795220000, 1795220020],
-        "comparison_peers": [{"healthy": True, "height": 750100, "hash_at_tip": _h32("otip-750100")}],
+        "comparison_peers": [{"id": "peer-1", "healthy": True, "height": 750100, "hash_at_tip": _h32("otip-750100")}],
         "names": {
             "id/civil-registry": sv.make_name_history(
                 "id/civil-registry", reg_outpoint, reg_owner_pol, {"link": {"cred": reg_cred["xonly"]}}, first_height=748000, update_height=748500
@@ -475,7 +525,6 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         "origin_bundle": origin_bundle,
         "contract": contract,
         "chain": chain,
-        "trusted_origin_issuers": ["id/civil-registry"],
         "trusted_origin_issuer_pins": [{"name": "id/civil-registry", "owner_policy": reg_owner_pol, "registration": reg_outpoint}],
         "_keys": {
             "reg_own": reg_own, "reg_cred": reg_cred, "disp": disp, "arb": arb,
@@ -659,7 +708,6 @@ def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = True
         pinned_genesis=inp.get("pinned_genesis", GENESIS_MAIN),
         operator_min_depth=inp.get("operator_min_depth", 1),
         allow_window_only=inp.get("allow_window_only", False),
-        trusted_origin_issuers=inp.get("trusted_origin_issuers"),
         trusted_origin_issuer_pins=inp.get("trusted_origin_issuer_pins"),
         enforce_schemas=True,
         require_jsonschema=require_jsonschema,
@@ -691,6 +739,7 @@ def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = True
             journal,
             inp["executor_cfg"],
             use_txid=inp.get("use_txid"),
+            actual_message_meta=inp.get("actual_message_meta"),
         )
         return res.refusal_code
     if runner == "assent":
@@ -717,16 +766,37 @@ def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = True
     if runner == "bearer_session":
         chain = sv.ChainView(inp["chain"])
         journal = sv.FencedJournal.from_dict(inp["journal"])
-        res = v.verify_bearer_session(inp["token"], inp["slot_binding"], chain, journal)
+        res = v.verify_bearer_session(
+            inp["token"],
+            inp["slot_binding"],
+            chain,
+            journal,
+            grant_env=inp.get("grant_env"),
+            parent_grant_env=inp.get("parent_grant_env"),
+            contract_env=inp.get("contract_env"),
+            action=inp.get("action"),
+            target=inp.get("target"),
+            arguments=inp.get("arguments"),
+            actual_message_meta=inp.get("actual_message_meta"),
+        )
         return res.refusal_code
     if runner == "migration":
         chain = sv.ChainView(inp["chain"])
         journal = sv.FencedJournal.from_dict(inp["journal"])
-        res = v.verify_migration(inp["migration"], inp["export_bundle"], journal, chain, inp.get("manifests"))
+        res = v.verify_migration(
+            inp["migration"],
+            inp["export_bundle"],
+            journal,
+            chain,
+            inp.get("manifests"),
+            local_executor_pin=inp.get("local_executor_pin"),
+            mode=inp.get("mode", "activate"),
+        )
         return res.refusal_code
     if runner == "federation":
         chain = sv.ChainView(inp["chain"]) if "chain" in inp else None
-        res = v.verify_federation_disclosure(inp["policy"], inp["peer_ctx"], inp["grant"], chain=chain)
+        journal = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+        res = v.verify_federation_disclosure(inp["policy"], inp["peer_ctx"], inp["grant"], chain=chain, journal=journal)
         return res.refusal_code
     raise ValueError(f"Unknown matrix runner: {runner}")
 
@@ -1032,10 +1102,15 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
 
     # ---- 4. ORIGIN_*, WARD_*, GUARDIAN_*, SUBJECT_*, RECOVERY_* (10 codes) ----
     of = _base_origin_fixture()
+    other_reg_k = _kp("other-trusted-reg")
     add("ORIGIN_UNVERIFIED", "SL-ORIG-002", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
-        "trusted_origin_issuers": ["id/other-trusted-registry"],
+        "trusted_origin_issuer_pins": [{
+            "name": "id/other-trusted-registry",
+            "owner_policy": {"kind": "key", "pk": other_reg_k["comp"]},
+            "registration": {"txid": _h32("other-reg-tx"), "vout": 0},
+        }],
     })
 
     of = _base_origin_fixture()
@@ -1043,7 +1118,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("ORIGIN_BINDING_INVALID", "SL-ORIG-003", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
-        "trusted_origin_issuers": of["trusted_origin_issuers"],
+        "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"],
     })
 
     of = _base_origin_fixture()
@@ -1052,7 +1127,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("ORIGIN_STATUS_INCOMPLETE", "SL-ORIG-002", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
-        "trusted_origin_issuers": of["trusted_origin_issuers"],
+        "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"],
     })
 
     of = _base_origin_fixture()
@@ -1077,7 +1152,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "contract": of["contract"],
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
-        "trusted_origin_issuers": of["trusted_origin_issuers"],
+        "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"],
     })
 
     of = _base_origin_fixture()
@@ -1103,7 +1178,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "contract": of["contract"],
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
-        "trusted_origin_issuers": of["trusted_origin_issuers"],
+        "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"],
     })
 
     of = _base_origin_fixture()
@@ -1129,7 +1204,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "contract": of["contract"],
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
-        "trusted_origin_issuers": of["trusted_origin_issuers"],
+        "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"],
     })
 
     of = _base_origin_fixture()
@@ -1138,7 +1213,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("GUARDIAN_TRANSFER_PENDING", "SL-ORIG-011", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
-        "trusted_origin_issuers": of["trusted_origin_issuers"],
+        "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"],
     })
 
     of = _base_origin_fixture()
@@ -1146,7 +1221,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("GUARDIAN_TIME_BOUNDARY", "SL-ORIG-010", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
-        "trusted_origin_issuers": of["trusted_origin_issuers"],
+        "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"],
     })
 
     of = _base_origin_fixture()
@@ -1171,7 +1246,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("SUBJECT_ENDED", "SL-ORIG-012", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
-        "trusted_origin_issuers": of["trusted_origin_issuers"],
+        "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"],
     })
 
     of = _base_origin_fixture()
@@ -1206,6 +1281,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "txid": _h32("leo-0x10-cancel-tx"),
         "vout": 0,
         "confirmed_height": 750060,
+        "block_time": 1795220000,
         "owner_policy": prev_leo["owner_policy"],
         "output_script_hex": sl.encode_name_output("NAME_UPDATE", cancel_spk, name=b"id/child-leo", value=cancel_val).hex(),
         "prev_input": {"txid": prev_leo["txid"], "vout": prev_leo["vout"], "witness_policy": prev_leo["owner_policy"], "sighash_bytes": [0x01]},
@@ -1215,7 +1291,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("RECOVERY_FORBIDDEN", "SL-ORIG-014", "origin_status", {
         "origin_bundle": of["origin_bundle"],
         "chain": of["chain"],
-        "trusted_origin_issuers": of["trusted_origin_issuers"],
+        "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"],
         "assert_binding_id": rec_id,
     })
 
@@ -1357,7 +1433,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
                 "value": {"link": {"cred": _kp("cred-iss-cr-new")["xonly"]}},
                 "opreturn_hex": sl.encode_opreturn(0x0B, sl.signing_digest(brk_obj).hex(), 0x00, h_c=break_h_c).hex(),
             }]
-        chain = {
+        chain = sync_chain_tip({
             "network": "main",
             "genesis": GENESIS_MAIN,
             "tip_height": 750010,
@@ -1365,7 +1441,6 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             "tip_header_time": 1795220000,
             "tip_first_sight": 1795220005,
             "now": 1795220010,
-            "comparison_peers": [{"healthy": True, "height": 750010, "hash_at_tip": _h32("ctip")}],
             "names": {
                 "id/issuer-a": sv.make_name_history(
                     "id/issuer-a", iss_reg, iss_owner_pol, {"link": {"cred": iss_cr["xonly"]}},
@@ -1376,7 +1451,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
                 atx: {"confirmed_height": 749500, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(c_env)).hex(), "outputs": {}},
                 _h32("cr-seal-tx"): {"confirmed_height": 749400, "outputs": {"0": {"script_pubkey_hex": _spk_hex(cseal_pol)}}},
             },
-        }
+        })
         return {"credential": c_env, "anchor_txid": atx, "chain": chain}
 
     cf = _cred_fx()
@@ -1387,8 +1462,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("CRED_ISSUER_CLOSED", "SL-CONT-009", "credential", cf)
 
     cf = _cred_fx()
-    cf["chain"]["tip_height"] = 760000
-    cf["chain"]["comparison_peers"] = [{"healthy": True, "height": 760000, "hash_at_tip": _h32("ctip")}]
+    sync_chain_tip(cf["chain"], height=760000)
     add("CRED_WINDOW_CLOSED", "SL-CONT-010", "credential", cf)
 
     cf = _cred_fx("revocable")
@@ -1509,8 +1583,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("GRANT_CLOSED", "SL-GRNT-012", "invocation", fx)
 
     fx = _base_invocation_fixture()
-    fx["chain"]["tip_height"] = 760000
-    fx["chain"]["comparison_peers"] = [{"healthy": True, "height": 760000, "hash_at_tip": _h32("tip-750010")}]
+    sync_chain_tip(fx["chain"], height=760000)
     add("GRANT_WINDOW_CLOSED", "SL-GRNT-004", "invocation", fx)
 
     fx = _base_invocation_fixture()
@@ -1649,14 +1722,15 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     fx["journal"]["quota_watermarks"] = {"seallink/count|mailbox:id/alice:work|reads|seconds:3600": fx["chain"]["now"] + 60}
     add("QUOTA_CLOCK_REGRESSION", "SL-GRNT-007", "invocation", fx)
 
+    exp_tok = _h32("expired-bearer-token")
     add("SESSION_INVALID", "SL-GRNT-013", "bearer_session", {
-        "token": "secret-bearer-token-xyz",
+        "token": exp_tok,
         "slot_binding": "slot-1",
         "chain": fx["chain"],
         "journal": {
             "journal_id": _h32("sj"),
             "sessions": {
-                sl.sha256(b"secret-bearer-token-xyz").hex(): {"grant_id": _h32("g"), "slot_binding": "slot-1", "exp": 1795219000, "closed": False}
+                sl.sha256(exp_tok.encode("utf-8")).hex(): {"grant_id": _h32("g"), "slot_binding": "slot-1", "exp": 1795219000, "closed": False}
             },
         },
     })
@@ -1684,18 +1758,24 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     fx["chain"]["manifests"][em_h] = empty_man
     add("SERVICE_PROVIDER_UNBOUND", "SL-SERV-001", "invocation", fx)
 
-    # SERVICE_MIGRATION_INVALID: Draft 2020-12 schema-valid MigrationManifest signed by real source_executor receipt_key,
-    # with derived export files[] leaking a forbidden dkim_key!
+    # SERVICE_MIGRATION_INVALID: Draft 2020-12 schema-valid MigrationManifest & MigrationExportBundle signed by real source_executor
+    # receipt_key, carrying a canonical MigrationInventory leaking a forbidden dkim.pem execution secret!
     fx_mig = _base_invocation_fixture()
     dest_own = _kp("mail-host-b-own")
-    export_files = [
-        {"content_sha256": _h32("msg-blob-1"), "kind": "mail_blob", "media_type": "message/rfc822", "path": "mail/msg-1.eml"},
-        {"content_sha256": _h32("leaked-dkim"), "kind": "dkim_key", "media_type": "application/x-pem-file", "path": "secrets/dkim.pem"},
-    ]
-    inv_sha = sl.sha256(sl.jcs_encode({"files": export_files})).hex()
+    dest_pin_mig = {"name": "id/mail-host-b", "owner_policy": {"kind": "key", "pk": dest_own["comp"]}, "registration": {"txid": _h32("host-b-reg"), "vout": 0}}
+    mig_inv_obj = {
+        "holder_name": "id/alice",
+        "items": [
+            {"media_type": "message/rfc822", "path": "mail/msg-1.eml", "sha256": _h32("msg-blob-1"), "size_bytes": "512"},
+            {"media_type": "application/x-pem-file", "path": "secrets/dkim.pem", "sha256": _h32("leaked-dkim"), "size_bytes": "1024"},
+        ],
+        "migration_id": _h32("mig-id-1"),
+        "service_type": "mail",
+    }
+    inv_sha = sl.sha256(sl.jcs_encode(mig_inv_obj)).hex()
     mig_env = sl.sign_envelope(
         {
-            "dest_executor": {"name": "id/mail-host-b", "owner_policy": {"kind": "key", "pk": dest_own["comp"]}, "registration": {"txid": _h32("host-b-reg"), "vout": 0}},
+            "dest_executor": dest_pin_mig,
             "genesis": GENESIS_MAIN,
             "holder": {"name": "id/alice", "owner_policy": fx_mig["_alice_owner_pol"], "registration": fx_mig["_alice_reg"]},
             "inventory_sha256": inv_sha,
@@ -1713,12 +1793,11 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     )
     add("SERVICE_MIGRATION_INVALID", "SL-SERV-002", "migration", {
         "migration": mig_env,
+        "local_executor_pin": dest_pin_mig,
         "export_bundle": {
-            "files": export_files,
-            "open_predecessor_grants": [],
+            "inventory": mig_inv_obj,
             "source_journal_commitment": _h32("jc"),
             "source_journal_pos": 10,
-            "source_write_token_fenced": True,
         },
         "chain": fx_mig["chain"],
         "manifests": fx_mig["bundle"]["manifests"],
@@ -1772,6 +1851,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("FEDERATION_POLICY_DENIED", "SL-SERV-004", "federation", {
         "policy": {"require_contour_a": True, "trusted_peers": ["id/peer-b"]},
         "peer_ctx": {
+            "fields_sha256": _h32("pii-fields"),
             "phase": "pii_disclosure",
             "route_hops": [
                 {"actor": "id/screener-bot", "role": "screening_agent"},
@@ -1782,6 +1862,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         },
         "grant": fx_fed["bundle"]["grants"][0],
         "chain": fx_fed["chain"],
+        "journal": {"journal_id": _h32("fed-j")},
     })
 
     # ACTION_UNSUPPORTED: core-only verifier (optional modules disabled) MUST refuse optional module requests fail-closed (D8-B3)

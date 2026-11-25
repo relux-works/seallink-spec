@@ -1,6 +1,6 @@
 # SealLink Conformance Requirements
 
-- **Version:** `1.0.0-draft.9`
+- **Version:** `1.0.0-draft.10`
 - **Status:** `draft`
 - **Normative Language:** [RFC2119], [RFC8174]
 
@@ -22,14 +22,14 @@ An implementation claiming conformance to SealLink v1.0 **MUST** declare which o
 
 The following three subsystems are fully specified, schema-validated, and vector-tested in SealLink v1.0, and are declared independently as **optional conformance modules**. A base service (for example, a standalone mail host) is NOT required to implement an optional module it does not advertise; any implementation that declares support for a module **MUST** implement its full specification and pass 100% of its conformance vectors.
 
-- **Disabled-module refusal behavior (fail-closed):** An implementation that does **NOT** declare a given optional module MUST refuse any incoming request targeting that module's object type or operation without mutating journal state, returning **`ACTION_UNSUPPORTED`** (or **`WIRE_TYPE`** if the disabled module's object type is omitted from its parser table).
-- **Vector selection tags (`module` / `role`):** Every vector case in `vectors/` belongs to `module = "core"` unless tagged with one of the three optional module tags below (`bearer-sessions`, `service-migration`, `federated-screening`), enabling Rust/Go conformance runners to select exact suites by declared role and enabled modules.
+- **Disabled-module refusal behavior (fail-closed):** An implementation that does **NOT** declare a given optional module MUST refuse any incoming request targeting that module's object type, discriminated sub-kind (`approve-pii-disclosure`, `migration-accept`, `migration-fence`, `assent` with `target_type = "seallink-migration/1"`), or verification entry point without mutating journal state, returning strictly **`ACTION_UNSUPPORTED`** (`SPEC-01 §7` Step 7b).
+- **Vector selection tags (`module` / `role`) & runner input contract:** Every vector case in `vectors/` belongs to `module = "core"` unless tagged with one of the three optional module tags below (`bearer-sessions`, `service-migration`, `federated-screening`), enabling Rust/Go conformance runners to select exact suites by declared role and enabled modules. Every `module = "core"` vector MUST pass with `enabled_modules = {"core"}`. Conformance runners MUST supply each vector's explicit inputs (`trusted_origin_issuer_pins` as full `NamePin` objects, `executor_cfg.pin`, `actual_message_meta`, `actual_quota_usage`, `contract_env`, `framework_contract_env`, `local_executor_pin`, `observation_bracket`) verbatim with `require_observation_bracket = true` by default and NEVER infer missing security context from implementation-private defaults.
 
 | Optional Module (`module` tag) | Normative Specification | Canonical Objects & Rules | Primary Refusal Code |
 | --- | --- | --- | --- |
-| **Bearer Sessions** (`bearer-sessions`) | `SPEC-06 §5` (`SL-GRNT-013`) | `seallink-session-open/1` (`open`/`extend`/`close`), full `§4` backing-grant open, CSPRNG 32B token, journal `session-state` & `session-use` debits across `session`/`own`/`row`, mandatory live `grant_env` recheck on `use` | `SESSION_INVALID` |
-| **Service Migration & Exclusive Cut-Over** (`service-migration`) | `SPEC-07 §2` (`SL-SERV-002`, `SL-SERV-003`) | `seallink-migration/1`, canonical `MigrationInventory` only, separated `stage` vs `activate` (4 mandatory proofs: `local_executor_pin`, `holder_assent`, confirmed holder manifest, signed `migration-accept` statement), journal `migration-applied` | `SERVICE_MIGRATION_INVALID` |
-| **Federated Screening & Progressive PII Disclosure** (`federated-screening`) | `SPEC-07 §3` (`SL-SERV-004`) | Phase 1 quota-bounded screening + Phase 2 L2 `approve-pii-disclosure` owner command (mandatory verified holder manifest + `sets.devices` + strict single direct hop `len(hops) == 1`) | `FEDERATION_POLICY_DENIED` |
+| **Bearer Sessions** (`bearer-sessions`) | `SPEC-06 §5` (`SL-GRNT-013`) | `seallink-session-open/1` (`open`/`extend`/`close`), full `§4` backing-grant open, strict 64-lowercase-hex CSPRNG token, journal `session-state` & `session-use` debits across matched capability's `session`/`own`/`row`, mandatory live root issuer/`0x0b`/`grant_env`/`parent_grant_env`/stop-coin/contract/framework/`where` recheck on `use` | `SESSION_INVALID` |
+| **Service Migration & Exclusive Cut-Over** (`service-migration`) | `SPEC-07 §2` (`SL-SERV-002`, `SL-SERV-003`) | `seallink-migration/1`, closed `MigrationExportBundle` + canonical `MigrationInventory`, separated `stage` vs `activate` (4 mandatory proofs: `local_executor_pin` checked first, source-signed `migration-fence` statement + on-chain spend of `predecessor_grant_seals[]`, `holder_assent`, confirmed holder manifest, signed `migration-accept` statement), journal `migration-applied` | `SERVICE_MIGRATION_INVALID` |
+| **Federated Screening & Progressive PII Disclosure** (`federated-screening`) | `SPEC-07 §3` (`SL-SERV-004`) | Mandatory `ChainView` & `FencedJournal`, grant window & live seal in both phases, Phase 1 quota-bounded screening + Phase 2 L2 `approve-pii-disclosure` owner command (mandatory verified holder manifest + `sets.devices` preserving `DEVICE_UNAUTHORIZED` + strict single direct hop `len(hops) == 1` & `hops[0].actor == grant.recipient.name`) | `FEDERATION_POLICY_DENIED` |
 
 ---
 

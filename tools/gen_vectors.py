@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.9.
+Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.10.
 
 Produces nine executable JSON vector suites under vectors/:
   1. wire-jcs-and-hashes.json
@@ -30,7 +30,7 @@ import build_security_suite as sec
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.9"
+VERSION = "1.0.0-draft.10"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 VECTORS_DIR = ROOT / "vectors"
 
@@ -842,6 +842,15 @@ def build_trace_01_mail() -> dict[str, Any]:
         "tip_first_sight": 1795220005,
         "now": 1795220010,
         "clock_watermark": 1795219000,
+        "best_header_height": 750010,
+        "in_ibd": False,
+        "txindex": True,
+        "node_reachable": True,
+        "observation_bracket": {
+            "consistent": True,
+            "start": {"height": 750010, "hash": h32("t1-tip-750010")},
+            "end": {"height": 750010, "hash": h32("t1-tip-750010")},
+        },
         "comparison_peers": [{"healthy": True, "height": 750010, "hash_at_tip": h32("t1-tip-750010")}],
         "blocks": {recent_blk: 749990},
         "names": {
@@ -873,7 +882,12 @@ def build_trace_01_mail() -> dict[str, Any]:
             sl.content_addr(host_manifest): host_manifest,
         },
     }
-    executor_config = {"name": "id/mail-host-a", "key": host_receipt["xonly_pk"], "actions": ["mail/list", "mail/read", "mail/send"]}
+    executor_config = {
+        "name": "id/mail-host-a",
+        "key": host_receipt["xonly_pk"],
+        "pin": make_name_pin("id/mail-host-a", "t1-host-reg", host_owner_pol),
+        "actions": ["mail/list", "mail/read", "mail/send"],
+    }
     initial_journal_state = {"journal_id": jid}
 
     # Execute through Tier1Verifier to derive exact journal writes and assert every step!
@@ -906,6 +920,12 @@ def build_trace_01_mail() -> dict[str, Any]:
     step3_patch = {
         "tip_height": 750011,
         "tip_hash": h32("t1-tip-750011"),
+        "best_header_height": 750011,
+        "observation_bracket": {
+            "consistent": True,
+            "start": {"height": 750011, "hash": h32("t1-tip-750011")},
+            "end": {"height": 750011, "hash": h32("t1-tip-750011")},
+        },
         "tip_header_time": 1795220480,
         "tip_first_sight": 1795220490,
         "now": 1795220500,
@@ -948,6 +968,7 @@ def build_trace_01_mail() -> dict[str, Any]:
                 "step": 1,
                 "name": "offline_issuer_admit_mail_read",
                 "invocation": envelope_record(inv_ok, "schemas/invocation.schema.json#/$defs/Invocation"),
+                "actual_message_meta": {"folder": "Invoices", "sender_domain": "vendor.example", "size_bytes": str(len(mime_bytes))},
                 "profile_args_schema": "schemas/profile-mail.schema.json#/$defs/MailReadArgs",
                 "result_object": unsigned_record(mail_result, "schemas/profile-mail.schema.json#/$defs/MailReadResult"),
                 "expected_verdict": "ADMIT",
@@ -1345,6 +1366,16 @@ def build_trace_02_guardian() -> dict[str, Any]:
         "tip_median_time_past": 1795219900,
         "tip_first_sight": 1795220005,
         "now": 1795220010,
+        "clock_watermark": 1795219000,
+        "best_header_height": 750600,
+        "in_ibd": False,
+        "txindex": True,
+        "node_reachable": True,
+        "observation_bracket": {
+            "consistent": True,
+            "start": {"height": 750600, "hash": h32("t2-tip-750600")},
+            "end": {"height": 750600, "hash": h32("t2-tip-750600")},
+        },
         "credible_utc_interval": [1795220000, 1795220020],
         "comparison_peers": [{"healthy": True, "height": 750600, "hash_at_tip": h32("t2-tip-750600")}],
         "names": {
@@ -1504,6 +1535,12 @@ def build_trace_02_guardian() -> dict[str, Any]:
     ch_rec_b_raw = copy.deepcopy(ch_rec_a_raw)
     ch_rec_b_raw["tip_height"] = 752100
     ch_rec_b_raw["tip_hash"] = h32("t2-tip-752100")
+    ch_rec_b_raw["best_header_height"] = 752100
+    ch_rec_b_raw["observation_bracket"] = {
+        "consistent": True,
+        "start": {"height": 752100, "hash": h32("t2-tip-752100")},
+        "end": {"height": 752100, "hash": h32("t2-tip-752100")},
+    }
     ch_rec_b_raw["comparison_peers"] = [{"healthy": True, "height": 752100, "hash_at_tip": h32("t2-tip-752100")}]
     ch_rec_b_raw["names"]["id/child-leo-recovered-final"] = sv.make_name_history(
         "id/child-leo-recovered-final", b3["registration"], b3_owner_pol,
@@ -1527,7 +1564,6 @@ def build_trace_02_guardian() -> dict[str, Any]:
         "version": VERSION,
         "description": "Executable RFC 8448-style trace: private origin/1 + status_seal, initial slot activation (0x12) + incoming guardian assent -> fast halt -> acyclic Stage 1 (0x0d) -> Stage 2 (0x0e) -> roster transition (0x0f), ward contract assent via guardian_approvals[] + party_id, co-tenant same-role party_id contract coverage, and both positive name_recovery continuation branches (0x10 cancel restores B1; post-delay promotes B3).",
         "chain_state": chain_state,
-        "trusted_origin_issuers": ["id/civil-registry"],
         "trusted_origin_issuer_pins": [reg_issuer_pin],
         "origin": envelope_record(origin_env, "schemas/origin.schema.json"),
         "origin_anchor_txid": origin_txid,
@@ -1938,6 +1974,16 @@ def build_trace_03_delegation() -> dict[str, Any]:
         "tip_header_time": 1795220040,
         "tip_first_sight": 1795220045,
         "now": 1795220050,
+        "clock_watermark": 1795219000,
+        "best_header_height": 750110,
+        "in_ibd": False,
+        "txindex": True,
+        "node_reachable": True,
+        "observation_bracket": {
+            "consistent": True,
+            "start": {"height": 750110, "hash": h32("t3-tip-750110")},
+            "end": {"height": 750110, "hash": h32("t3-tip-750110")},
+        },
         "comparison_peers": [{"healthy": True, "height": 750110, "hash_at_tip": h32("t3-tip-750110")}],
         "blocks": {recent_blk: 750000},
         "names": {
@@ -2486,6 +2532,16 @@ def build_trace_04_agent_guardian_intake() -> dict[str, Any]:
         "tip_median_time_past": 1795219900,
         "tip_first_sight": 1795220005,
         "now": 1795220020,
+        "clock_watermark": 1795219000,
+        "best_header_height": 750010,
+        "in_ibd": False,
+        "txindex": True,
+        "node_reachable": True,
+        "observation_bracket": {
+            "consistent": True,
+            "start": {"height": 750010, "hash": h32("t4-tip-750010")},
+            "end": {"height": 750010, "hash": h32("t4-tip-750010")},
+        },
         "comparison_peers": [{"healthy": True, "height": 750010, "hash_at_tip": h32("t4-tip-750010")}],
         "blocks": {recent_blk: 749990},
         "names": {
@@ -2579,7 +2635,6 @@ def build_trace_04_agent_guardian_intake() -> dict[str, Any]:
         "version": VERSION,
         "description": "Executable PROFILE-agent-v1 trace for agent/guardian-message: strict_drop rejects unauthenticated caller (WIRE_SIGNATURE), inactive guardian slot (GUARDIAN_INACTIVE), downgraded routine_read event_class (GUARDIAN_QUORUM_UNMET), and admits 2-of-2 effect_grant guardian_approvals[] into an Authority Frame.",
         "executor_config": exec_cfg,
-        "trusted_origin_issuers": ["id/agent-registry"],
         "trusted_origin_issuer_pins": [ag_reg_issuer_pin],
         "initial_chain_state": initial_chain,
         "initial_journal_state": {"journal_id": jid},

@@ -79,15 +79,13 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     dip_exp = sl.sign_envelope(dip_exp_p, [sch1_cred["sk"]])
     dip_exp_tx = _h32("hr-dip-exp-tx")
 
-    ch_hr = {
+    ch_hr = rm.sync_chain_tip({
         "best_header_height": 204,
         "blocks": {},
         "clock_watermark": 1795219900,
         "comparison_peers": [{"hash_at_tip": _h32("hr-tip"), "healthy": True, "height": 204, "id": "peer-a"}],
-        "future_bound_s": 600,
         "genesis": GENESIS_REGTEST,
         "in_ibd": False,
-        "lag_limit": 1,
         "manifests": {},
         "name_registrations": {"id/school-hist": [lin1, lin2]},
         "names": {"id/school-hist": lin2},
@@ -103,7 +101,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
             dip_ok_tx: {"confirmed_height": 157, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(dip_ok)).hex(), "outputs": {}},
             dip_exp_tx: {"confirmed_height": 181, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(dip_exp)).hex(), "outputs": {}},
         },
-    }
+    })
     add(
         "accept-historical-eternal-credential-survives-expiry-and-reregistration",
         ["SL-LDGR-002", "SL-CONT-010"],
@@ -529,13 +527,13 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     of_maj_hi = copy.deepcopy(of_maj)
     of_maj_hi["chain"]["credible_utc_interval"] = [maj_u - 10, maj_u]
     add("bnd-majority-interval-t-high-eq-T-refuse", ["SL-ORIG-010"], "origin_status",
-        {"origin_bundle": of_maj_hi["origin_bundle"], "chain": of_maj_hi["chain"], "trusted_origin_issuers": of_maj_hi["trusted_origin_issuers"]},
+        {"origin_bundle": of_maj_hi["origin_bundle"], "chain": of_maj_hi["chain"], "trusted_origin_issuer_pins": of_maj_hi["trusted_origin_issuer_pins"]},
         "REFUSE", "GUARDIAN_TIME_BOUNDARY", "Credible UTC interval with t_high == T MUST refuse GUARDIAN_TIME_BOUNDARY.")
     # t_low == maj_u (without capacity/1, Decision 1B) -> GUARDIAN_TRANSFER_PENDING (kills t_low >= T -> >!)
     of_maj_eq = copy.deepcopy(of_maj)
     of_maj_eq["chain"]["credible_utc_interval"] = [maj_u, maj_u + 10]
     add("bnd-majority-interval-t-low-eq-T-autonomous", ["SL-ORIG-010", "SL-ORIG-011"], "origin_status",
-        {"origin_bundle": of_maj_eq["origin_bundle"], "chain": of_maj_eq["chain"], "trusted_origin_issuers": of_maj_eq["trusted_origin_issuers"]},
+        {"origin_bundle": of_maj_eq["origin_bundle"], "chain": of_maj_eq["chain"], "trusted_origin_issuer_pins": of_maj_eq["trusted_origin_issuer_pins"]},
         "REFUSE", "GUARDIAN_TRANSFER_PENDING", "Decision 1B: Credible UTC interval with exact t_low == T enters State 3 (GUARDIAN_TRANSFER_PENDING) without capacity/1.")
 
     # Recovery deadline exact boundary: cancel at confirmed_height == deadline fails cancel -> tip == deadline promotes B_2 (kills L1593 & L1604!)
@@ -572,7 +570,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     of_rec["origin_bundle"]["recovery_bindings"] = [cand_b2]
     # Assert B_2 IS promoted (would refuse RECOVERY_FORBIDDEN if L1593 cancelled at == deadline OR if L1604 rejected tip == deadline!)
     add("bnd-recovery-cancel-at-exact-deadline-not-cancelled-and-tip-eq-deadline-promotes", ["SL-ORIG-013"], "origin_status",
-        {"origin_bundle": of_rec["origin_bundle"], "chain": of_rec["chain"], "trusted_origin_issuers": of_rec["trusted_origin_issuers"], "assert_binding_id": cand_b2_id},
+        {"origin_bundle": of_rec["origin_bundle"], "chain": of_rec["chain"], "trusted_origin_issuer_pins": of_rec["trusted_origin_issuer_pins"], "assert_binding_id": cand_b2_id},
         "ADMIT_WARD", None, "0x10 cancel at exact height == deadline is too late, and tip_height == deadline promotes successor binding B_2.")
 
     # Guardian incoming assent expires_at == issued_at -> slot fails (kills L1396 <= -> <!)
@@ -601,7 +599,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
         [{"slot": 1, "revision": 1, "guardian_name": "id/parent-a", "signers": [of_ga_eq["_keys"]["g1_gr"]["sk"]]}],
     )
     add("bnd-guardian-incoming-assent-exp-eq-iat-refuse", ["SL-ORIG-007"], "assent",
-        {"assent": wa_1of2_b, "contract": c_1of2_b, "origin_bundle": of_ga_eq["origin_bundle"], "chain": of_ga_eq["chain"], "trusted_origin_issuers": of_ga_eq["trusted_origin_issuers"]},
+        {"assent": wa_1of2_b, "contract": c_1of2_b, "origin_bundle": of_ga_eq["origin_bundle"], "chain": of_ga_eq["chain"], "trusted_origin_issuer_pins": of_ga_eq["trusted_origin_issuer_pins"]},
         "REFUSE", "GUARDIAN_INACTIVE", "Incoming guardian assent with expires_at == issued_at MUST prevent slot activation.")
 
     # Guardian calendar term exact boundaries (L2059: tip == ceiling_height AND now == not_after_unix!)
@@ -612,14 +610,12 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
         of_cal["origin_bundle"]["guardian_records"] = [grec_cal]
         of_cal["origin_bundle"]["guardian_assents"] = [sl.sign_envelope({**of_ga_eq["origin_bundle"]["guardian_assents"][0]["payload"], "expires_at": 1795400000, "issued_at": 1795220000, "target_id": sl.object_id(grec_cal_p)}, [of_ga_eq["_keys"]["g1_gr"]["sk"]])]
         of_cal["chain"]["txs"][rm._h32("og1-init-0x12")]["opreturn_hex"] = sl.encode_opreturn(0x12, sl.content_addr(grec_cal)).hex()
-        of_cal["chain"]["tip_height"] = 750000
-        of_cal["chain"]["best_header_height"] = 750000
-        of_cal["chain"]["comparison_peers"][0]["height"] = 750000
+        rm.sync_chain_tip(of_cal["chain"], height=750000)
         of_cal["chain"]["now"] = 1795220010
         of_cal["chain"]["tip_header_time"] = 1795220000
         of_cal["chain"]["tip_first_sight"] = 1795220000
         add(f"bnd-guardian-calendar-term-exact-{tag_t}-refuse", ["SL-ORIG-005"], "assent",
-            {"assent": wa_1of2_b, "contract": c_1of2_b, "origin_bundle": of_cal["origin_bundle"], "chain": of_cal["chain"], "trusted_origin_issuers": of_cal["trusted_origin_issuers"]},
+            {"assent": wa_1of2_b, "contract": c_1of2_b, "origin_bundle": of_cal["origin_bundle"], "chain": of_cal["chain"], "trusted_origin_issuer_pins": of_cal["trusted_origin_issuer_pins"]},
             "REFUSE", "GUARDIAN_INACTIVE", f"Calendar guardian term at exact {tag_t} boundary MUST refuse GUARDIAN_INACTIVE.")
 
     # Pending CSV exact delay_blocks (L1920) & Roster exact effective_delay_blocks (L2006)!
@@ -668,7 +664,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
         [{"slot": 1, "revision": 2, "guardian_name": "id/parent-a", "signers": [of_pr["_keys"]["g1_gr"]["sk"]]}],
     )
     add("bnd-guardian-pending-exact-csv-delay-admit", ["SL-ORIG-008"], "assent",
-        {"assent": wa_pr, "contract": of_pr["contract"], "origin_bundle": of_pr["origin_bundle"], "chain": of_pr["chain"], "trusted_origin_issuers": of_pr["trusted_origin_issuers"]},
+        {"assent": wa_pr, "contract": of_pr["contract"], "origin_bundle": of_pr["origin_bundle"], "chain": of_pr["chain"], "trusted_origin_issuer_pins": of_pr["trusted_origin_issuer_pins"]},
         "ADMIT", None, "Stage-2 0x0e activation at exact confirmed_height == pending_height + delay_blocks MUST activate guardian.")
 
     # Exact roster effective_delay_blocks (rtx at tip - 144, delay=144, tip == rtx + delay, retain_active slot 1 -> rev 2 active at exact tip == rtx + delay!)
@@ -694,7 +690,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
         [{"slot": 1, "revision": 2, "guardian_name": "id/parent-a", "signers": [of_re["_keys"]["g1_gr"]["sk"]]}],
     )
     add("bnd-roster-exact-effective-delay-admit", ["SL-ORIG-015"], "assent",
-        {"assent": wa_re, "contract": of_re["contract"], "origin_bundle": of_re["origin_bundle"], "chain": of_re["chain"], "trusted_origin_issuers": of_re["trusted_origin_issuers"]},
+        {"assent": wa_re, "contract": of_re["contract"], "origin_bundle": of_re["origin_bundle"], "chain": of_re["chain"], "trusted_origin_issuer_pins": of_re["trusted_origin_issuer_pins"]},
         "ADMIT", None, "Roster transition at exact tip_height == rtx_height + effective_delay_blocks MUST activate new revision.")
 
     # 3l. Credential exact operator_min_depth (L2221) & exact not_before_height == tip_height (L2231)
@@ -724,8 +720,9 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     inv_eq_iat = sl.sign_envelope({**fx_inv_b["invocation"]["payload"], "iat": now_i, "nonce": _h32("bi-iat")}, [fx_inv_b["_keys"]["agent_req"]["sk"]])
     add("bnd-inv-now-eq-iat-and-settle-eq-0-admit", ["SL-GRNT-004", "SL-GRNT-007"], "invocation",
         {"invocation": inv_eq_iat, "bundle": fx_inv_b["bundle"], "chain": fx_inv_b["chain"], "journal": {"journal_id": _h32("bi-j1")}, "executor_cfg": fx_inv_b["executor_cfg"],
+         "actual_message_meta": {"folder": "Invoices"},
          "actual_quota_usage": {"seallink/count|mail/read|calls|term": 0}},
-        "ADMIT", None, "Invocation at exact now == iat with settle == 0 (full release) MUST admit.")
+        "ADMIT", None, "Invocation at exact now == iat with verified mail/read folder metadata and settle == 0 (full release) MUST admit.")
     inv_eq_exp = sl.sign_envelope({**fx_inv_b["invocation"]["payload"], "exp": now_i, "iat": now_i - 60, "nonce": _h32("bi-exp")}, [fx_inv_b["_keys"]["agent_req"]["sk"]])
     add("bnd-inv-now-eq-exp-refuse", ["SL-GRNT-007"], "invocation",
         {"invocation": inv_eq_exp, "bundle": fx_inv_b["bundle"], "chain": fx_inv_b["chain"], "journal": {"journal_id": _h32("bi-j2")}, "executor_cfg": fx_inv_b["executor_cfg"]},
@@ -769,7 +766,8 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     inv_gb = sl.sign_envelope({**fx_gb["invocation"]["payload"], "nonce": _h32("bi-gb"), "proof_path": [{"grant_id": gid_gb, "issuance_txid": itx_gb}]}, [fx_gb["_keys"]["agent_req"]["sk"]])
     add("bnd-grant-exact-window-recency-rk-depth-admit", ["SL-GRNT-003", "SL-LDGR-008", "SL-CONT-005"], "invocation",
         {"invocation": inv_gb, "bundle": {**fx_gb["bundle"], "grants": [g_gb], "contract": c_gb, "contract_assents": [ac_gb1, ac_gb2]},
-         "chain": fx_gb["chain"], "journal": {"journal_id": _h32("bi-jgb")}, "executor_cfg": fx_gb["executor_cfg"], "operator_min_depth": 3},
+         "chain": fx_gb["chain"], "journal": {"journal_id": _h32("bi-jgb")}, "executor_cfg": fx_gb["executor_cfg"], "operator_min_depth": 3,
+         "actual_message_meta": {"folder": "Invoices"}},
         "ADMIT", None,
         "Grant at exact not_before==tip, exact contract window endpoints, exact recency A==R+432, and exact issuance depth==3 MUST admit.")
 
@@ -944,7 +942,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
             of_bk["origin_bundle"]["capacity_record"] = crec
             of_bk["chain"]["txs"][spend_stx] = {"confirmed_height": 749950, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(crec)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(stat_seal["script_policy"])}}}
         add(f"bnd-origin-{rec_kind}-record-issuer-0x0b-closed-refuse", ["SL-ORIG-012", "SL-CONT-009"], "origin_status",
-            {"origin_bundle": of_bk["origin_bundle"], "chain": of_bk["chain"], "trusted_origin_issuers": of_bk["trusted_origin_issuers"]},
+            {"origin_bundle": of_bk["origin_bundle"], "chain": of_bk["chain"], "trusted_origin_issuer_pins": of_bk["trusted_origin_issuer_pins"]},
             "REFUSE", "CRED_ISSUER_CLOSED",
             f"A {rec_kind} record anchored at h >= h_c under a 0x0b-compromised registry key MUST refuse CRED_ISSUER_CLOSED.")
 
@@ -987,10 +985,10 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
             "journal_id": _h32("s0-jid"),
             "executor_cfg": fx_s0["executor_cfg"],
             "pre_restart_steps": [
-                {"label": "call1-settle-zero", "chain": fx_s0["chain"], "invocation": inv_s0_1, "bundle": {**fx_s0["bundle"], "grants": [g_s0]}, "receipt_env": rcpt_s0_1, "actual_quota_usage": {"seallink/count|mail/read|calls|term": 0}, "want_verdict": "ADMIT", "want_refusal": None},
+                {"label": "call1-settle-zero", "chain": fx_s0["chain"], "invocation": inv_s0_1, "bundle": {**fx_s0["bundle"], "grants": [g_s0]}, "receipt_env": rcpt_s0_1, "actual_quota_usage": {"seallink/count|mail/read|calls|term": 0}, "actual_message_meta": {"folder": "Invoices"}, "want_verdict": "ADMIT", "want_refusal": None},
             ],
             "post_restart_steps": [
-                {"label": "call2-after-full-release", "chain": fx_s0["chain"], "invocation": inv_s0_2, "bundle": {**fx_s0["bundle"], "grants": [g_s0]}, "want_verdict": "ADMIT", "want_refusal": None},
+                {"label": "call2-after-full-release", "chain": fx_s0["chain"], "invocation": inv_s0_2, "bundle": {**fx_s0["bundle"], "grants": [g_s0]}, "actual_message_meta": {"folder": "Invoices"}, "want_verdict": "ADMIT", "want_refusal": None},
             ],
         },
         "ADMIT", None,
@@ -1061,7 +1059,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     u2_3 = {"confirmed_height": 749910, "op": "NAME_UPDATE", "output_script_hex": sl.encode_name_output("NAME_UPDATE", ad3_spk, name=b"id/child-leo", value=l3_val).hex(), "owner_policy": ad3_pol, "prev_input": {"sighash_bytes": [0x01], "txid": u1_3["txid"], "vout": 0, "witness_policy": ad3_pol}, "txid": _h32("bnd-3u-2"), "vout": 0}
     of_3u["chain"]["names"]["id/child-leo"]["updates"] = [u0_3, u1_3, u2_3]
     add("bnd-emancipation-exact-3-updates-handover-autonomous", ["SL-ORIG-011"], "origin_status",
-        {"origin_bundle": of_3u["origin_bundle"], "chain": of_3u["chain"], "trusted_origin_issuers": of_3u["trusted_origin_issuers"]},
+        {"origin_bundle": of_3u["origin_bundle"], "chain": of_3u["chain"], "trusted_origin_issuer_pins": of_3u["trusted_origin_issuer_pins"]},
         "ADMIT_AUTONOMOUS", None,
         "Emancipation handover completing in exact minimum 3 name updates (FIRSTUPDATE, transfer, subject update) MUST admit autonomous capacity.")
 
@@ -1200,7 +1198,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
         {
             "journal_id": _h32("gm-rr-jid"),
             "executor_cfg": gm_exec_cfg,
-            "trusted_origin_issuers": of_gm["trusted_origin_issuers"],
+            "trusted_origin_issuer_pins": of_gm["trusted_origin_issuer_pins"],
             "pre_restart_steps": [
                 {"label": "pre-gm", "chain": of_gm["chain"], "invocation": gm_inv, "bundle": gm_bundle, "receipt_env": gm_rcpt, "raw_message_hex": gm_raw_msg.hex(), "want_verdict": "ADMIT", "want_refusal": None},
             ],
@@ -1211,11 +1209,13 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
         "ADMIT", None,
         "A completed quota-free agent/guardian-message MUST commit a terminal settlement entry referencing receipt_sha256 so restart replay restores invocation_id -> receipt and returns the exact signed receipt with 0 writes.")
 
-    # Strict observation bracket checks (SL-LDGR-008): missing rebracket_tip or mid-read tip mismatch -> CHAIN_OBSERVATION_VOID!
+    # Strict observation bracket checks (SL-LDGR-008): missing observation_bracket/rebracket_tip or mid-read tip mismatch -> CHAIN_OBSERVATION_VOID!
+    ch_no_ob = copy.deepcopy(fx0["chain"])
+    ch_no_ob.pop("observation_bracket", None)
     add("bnd-chain-obs-require-bracket-missing-rebracket-refuse", ["SL-LDGR-008"], "chain_obs",
-        {"chain": fx0["chain"], "require_observation_bracket": True, "risk_class": 1},
+        {"chain": ch_no_ob, "require_observation_bracket": True, "risk_class": 1},
         "REFUSE", "CHAIN_OBSERVATION_VOID",
-        "When require_observation_bracket=True, a ChainView omitting closing rebracket_tip MUST refuse CHAIN_OBSERVATION_VOID.")
+        "When require_observation_bracket=True, a ChainView omitting closing observation_bracket/rebracket_tip MUST refuse CHAIN_OBSERVATION_VOID.")
     ch_ob_void = copy.deepcopy(fx0["chain"])
     ch_ob_void["observation_bracket"] = {"consistent": False}
     ch_ob_void["rebracket_tip"] = {"hash": _h32("different-end-tip"), "height": ch_ob_void["tip_height"] + 1, "now": ch_ob_void["now"]}

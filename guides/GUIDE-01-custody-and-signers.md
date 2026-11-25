@@ -1,6 +1,6 @@
 # GUIDE-01: Custody, Signers, Namecoin PSBT, and Agent Runtime Integration
 
-- **Version:** `1.0.0-draft.9`
+- **Version:** `1.0.0-draft.10`
 - **Status:** Informative Implementation Guide (non-normative)
 - **Purpose:** Collects unobservable local operator duties, hardware custody guidance, Namecoin `namepsbt` workflows, and Agent Isolation Runtime integration patterns that intentionally remain outside the normative wire specification (`spec/SPEC-00`…`SPEC-07`).
 

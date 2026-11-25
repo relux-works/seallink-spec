@@ -145,7 +145,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
     fx_b2["chain"]["names"].update(of_b2["chain"]["names"])
     fx_b2["chain"]["txs"].update(of_b2["chain"]["txs"])
     fx_b2["bundle"]["origin_bundle"] = of_b2["origin_bundle"]
-    fx_b2["trusted_origin_issuers"] = of_b2["trusted_origin_issuers"]
+    fx_b2["trusted_origin_issuer_pins"] = of_b2["trusted_origin_issuer_pins"]
     gp_b2 = copy.deepcopy(fx_b2["bundle"]["grants"][0]["payload"])
     gp_b2["guardian_context"] = {"event_class": "routine_read", "origin_id": of_b2["_origin_id"], "revision": 1, "ward_name": "id/child-leo"}
     gp_b2["issuer"].pop("role_policy", None)
@@ -231,7 +231,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             "chain": of_b3["chain"],
             "journal": {"journal_id": _h32("d7-b3-j1")},
             "executor_cfg": {"key": gm_st["xonly"], "name": "id/station-b3", "pinned_ward_origin_id": of_b3["_origin_id"]},
-            "trusted_origin_issuers": of_b3["trusted_origin_issuers"],
+            "trusted_origin_issuer_pins": of_b3["trusted_origin_issuer_pins"],
             "raw_message_hex": raw_m_b3.hex(),
         },
         "REFUSE",
@@ -308,7 +308,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             "chain": of_b3_xy["chain"],
             "journal": {"journal_id": _h32("d7-b3-j2")},
             "executor_cfg": {"key": gm_st["xonly"], "name": "id/station-b3", "pinned_ward_origin_id": oid_y},
-            "trusted_origin_issuers": of_b3_xy["trusted_origin_issuers"],
+            "trusted_origin_issuer_pins": of_b3_xy["trusted_origin_issuer_pins"],
             "raw_message_hex": raw_m_b3.hex(),
         },
         "REFUSE",
@@ -457,7 +457,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-b05-unspent-binding-seal-forged-0x0c-refuse",
         ["SL-ORIG-003"],
         "origin_status",
-        {"origin_bundle": of_b5_unspent["origin_bundle"], "chain": of_b5_unspent["chain"], "trusted_origin_issuers": of_b5_unspent["trusted_origin_issuers"]},
+        {"origin_bundle": of_b5_unspent["origin_bundle"], "chain": of_b5_unspent["chain"], "trusted_origin_issuer_pins": of_b5_unspent["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_BINDING_INVALID",
         "PR #1 B-5 closed: initial 0x0c name-binding anchored WITHOUT spending origin.binding_seal MUST refuse ORIGIN_BINDING_INVALID.",
@@ -469,7 +469,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-r3b3-firstupdate-before-origin-refuse",
         ["SL-ORIG-003"],
         "origin_status",
-        {"origin_bundle": of_b5_pre["origin_bundle"], "chain": of_b5_pre["chain"], "trusted_origin_issuers": of_b5_pre["trusted_origin_issuers"]},
+        {"origin_bundle": of_b5_pre["origin_bundle"], "chain": of_b5_pre["chain"], "trusted_origin_issuer_pins": of_b5_pre["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_BINDING_INVALID",
         "R3-B3 closed: ward name FIRSTUPDATE height <= h_origin MUST refuse ORIGIN_BINDING_INVALID.",
@@ -609,6 +609,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             "invocation": fx_tp["invocation"],
             "bundle": fx_tp["bundle"],
             "executor_cfg": fx_tp["executor_cfg"],
+            "actual_message_meta": {"folder": "Invoices"},
             "receipt_env": rcpt_tp,
             "expect_cached_receipt_ca": sl.content_addr(rcpt_tp),
         },
@@ -626,6 +627,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             "invocation": fx_tp["invocation"],
             "bundle": fx_tp["bundle"],
             "executor_cfg": fx_tp["executor_cfg"],
+            "actual_message_meta": {"folder": "Invoices"},
             "retry_before_commit": True,
         },
         "UNCERTAIN",
@@ -642,6 +644,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             "invocation": fx_tp["invocation"],
             "bundle": fx_tp["bundle"],
             "executor_cfg": fx_tp["executor_cfg"],
+            "actual_message_meta": {"folder": "Invoices"},
             "receipt_env": rcpt_tp,
             "drop_receipt_blob_on_restart": True,
         },
@@ -661,6 +664,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             "invocation": fx_tp["invocation"],
             "bundle": fx_tp["bundle"],
             "executor_cfg": fx_tp["executor_cfg"],
+            "actual_message_meta": {"folder": "Invoices"},
             "receipt_env": rcpt_forged,
         },
         "REFUSE",
@@ -683,8 +687,8 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             "journal": {"journal_id": _h32("d7-qnr-j")},
             "executor_cfg": fx_qnr["executor_cfg"],
             "steps": [
-                {"label": "first-quota-call", "invocation": inv_qnr_1, "bundle": fx_qnr["bundle"], "want_verdict": "ADMIT", "want_refusal": None},
-                {"label": "reused-nonce-diff-inv", "invocation": inv_qnr_2, "bundle": fx_qnr["bundle"], "want_verdict": "REFUSE", "want_refusal": "INVOKE_REPLAY"},
+                {"label": "first-quota-call", "invocation": inv_qnr_1, "bundle": fx_qnr["bundle"], "actual_message_meta": {"folder": "Invoices"}, "want_verdict": "ADMIT", "want_refusal": None},
+                {"label": "reused-nonce-diff-inv", "invocation": inv_qnr_2, "bundle": fx_qnr["bundle"], "actual_message_meta": {"folder": "Invoices"}, "want_verdict": "REFUSE", "want_refusal": "INVOKE_REPLAY"},
             ],
             "check_balances": [],
         },
@@ -898,7 +902,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             "assents": [ass_w1, ass_w2],
             "origin_bundles_by_oid": {oid_w1: of_w1["origin_bundle"], oid_w2: ob_w2},
             "chain": ch_mw,
-            "trusted_origin_issuers": of_w1["trusted_origin_issuers"],
+            "trusted_origin_issuer_pins": of_w1["trusted_origin_issuer_pins"],
             "anchor_time": 1795220100,
         },
         "ADMIT",
@@ -914,7 +918,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             "assents": [ass_w1, ass_w2],
             "origin_bundles_by_oid": {oid_w1: of_w1["origin_bundle"]},
             "chain": ch_mw,
-            "trusted_origin_issuers": of_w1["trusted_origin_issuers"],
+            "trusted_origin_issuer_pins": of_w1["trusted_origin_issuer_pins"],
             "anchor_time": 1795220100,
         },
         "REFUSE",
@@ -930,7 +934,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             "assents": [ass_w1, ass_w2],
             "origin_bundles_by_oid": {oid_w1: of_w1["origin_bundle"], oid_w2: ob_w2},
             "chain": ch_mw,
-            "trusted_origin_issuers": of_w1["trusted_origin_issuers"],
+            "trusted_origin_issuer_pins": of_w1["trusted_origin_issuer_pins"],
             "anchor_time": 1795220000 + 259201,  # > 72h after issued_at!
         },
         "REFUSE",
@@ -1043,7 +1047,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-b13-unsalted-opened-majority-on-agent-ignored-stays-ward",
         ["SL-ORIG-011"],
         "origin_status",
-        {"origin_bundle": of_b13_ag["origin_bundle"], "chain": of_b13_ag["chain"], "trusted_origin_issuers": of_b13_ag["trusted_origin_issuers"]},
+        {"origin_bundle": of_b13_ag["origin_bundle"], "chain": of_b13_ag["chain"], "trusted_origin_issuer_pins": of_b13_ag["trusted_origin_issuer_pins"]},
         "ADMIT_WARD",
         None,
         "PR #1 B-13 closed: presenter-injected opened_majority_unix on agent origin without majority_commitment MUST be ignored (remains ward).",
@@ -1095,7 +1099,11 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-b14-end-record-by-unrelated-issuer-refuse",
         ["SL-ORIG-012"],
         "origin_status",
-        {"origin_bundle": of_b14["origin_bundle"], "chain": of_b14["chain"], "trusted_origin_issuers": of_b14["trusted_origin_issuers"] + ["id/rogue-registry"]},
+        {
+            "origin_bundle": of_b14["origin_bundle"],
+            "chain": of_b14["chain"],
+            "trusted_origin_issuer_pins": of_b14["trusted_origin_issuer_pins"] + [{"name": "id/rogue-registry", "owner_policy": rogue_opol, "registration": rogue_reg}],
+        },
         "REFUSE",
         "ORIGIN_STATUS_INCOMPLETE",
         "PR #1 B-14 closed: end/1 signed by unrelated trusted issuer (not origin.issuer) MUST refuse ORIGIN_STATUS_INCOMPLETE.",
@@ -1132,7 +1140,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-b15-roster-effective-delay-below-appointment-delay-refuse",
         ["SL-ORIG-015"],
         "origin_status",
-        {"origin_bundle": of_b15["origin_bundle"], "chain": of_b15["chain"], "trusted_origin_issuers": of_b15["trusted_origin_issuers"]},
+        {"origin_bundle": of_b15["origin_bundle"], "chain": of_b15["chain"], "trusted_origin_issuer_pins": of_b15["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_STATUS_INCOMPLETE",
         "PR #1 B-15 closed: guardian-roster/1 with effective_delay_blocks < appointment_delay_blocks MUST refuse ORIGIN_STATUS_INCOMPLETE.",
@@ -1202,7 +1210,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-6a-branch-key-spec-native-p2wsh-2of3-admit",
         ["SL-LDGR-011", "SL-ORIG-005"],
         "origin_status",
-        {"origin_bundle": of_6a["origin_bundle"], "chain": of_6a["chain"], "trusted_origin_issuers": of_6a["trusted_origin_issuers"]},
+        {"origin_bundle": of_6a["origin_bundle"], "chain": of_6a["chain"], "trusted_origin_issuer_pins": of_6a["trusted_origin_issuer_pins"]},
         "ADMIT_WARD",
         None,
         "Decision 6A (OQ-007): institutional 2-of-3 native P2WSH BranchKeySpec for disposer_pk/arbiter_pk/challenger_pk compiles and verifies end-to-end.",
@@ -1218,8 +1226,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
     cr_sub_pol = {"kind": "key", "pk": cr_sub_own["comp"]}
     cr_sub_reg = {"txid": _h32("d7-cr-sub-reg"), "vout": 0}
     ch_d6 = copy.deepcopy(fx_b1_ctrl["chain"])
-    ch_d6["tip_height"] = 800000
-    ch_d6["comparison_peers"] = [{"healthy": True, "height": 800000, "hash_at_tip": ch_d6["tip_hash"]}]
+    rm.sync_chain_tip(ch_d6, height=800000)
     ch_d6["names"]["id/uni-d6"] = sv.make_name_history("id/uni-d6", cr_iss_reg, cr_iss_pol, {"link": {"cred": cr_iss_k["xonly"]}}, first_height=740000, update_height=741000)
     # Subject id/grad-d6 was live at h_anchor=745000 (expires at 741000+36000=777000 < tip 800000!), expired by tip!
     ch_d6["names"]["id/grad-d6"] = sv.make_name_history("id/grad-d6", cr_sub_reg, cr_sub_pol, {"link": {"grant": _kp("d7-grad-gr")["xonly"]}}, first_height=740000, update_height=741000)
@@ -1271,7 +1278,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-d6-credential-subject-origin-mode-admit",
         ["SL-CONT-010", "SL-ORIG-002"],
         "credential",
-        {"credential": cr_orig, "anchor_txid": cr_orig_tx, "chain": of_d6o["chain"], "origin_bundle": of_d6o["origin_bundle"], "trusted_origin_issuers": of_d6o["trusted_origin_issuers"]},
+        {"credential": cr_orig, "anchor_txid": cr_orig_tx, "chain": of_d6o["chain"], "origin_bundle": of_d6o["origin_bundle"], "trusted_origin_issuer_pins": of_d6o["trusted_origin_issuer_pins"]},
         "ADMIT",
         None,
         "Decision D-6: credential with subject.mode='origin' verifies against origin_bundle and admits.",
@@ -1286,7 +1293,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-r3h8-credential-not-after-unix-expired-refuse",
         ["SL-CONT-010"],
         "credential",
-        {"credential": cr_uexp, "anchor_txid": cr_uexp_tx, "chain": of_d6o["chain"], "origin_bundle": of_d6o["origin_bundle"], "trusted_origin_issuers": of_d6o["trusted_origin_issuers"]},
+        {"credential": cr_uexp, "anchor_txid": cr_uexp_tx, "chain": of_d6o["chain"], "origin_bundle": of_d6o["origin_bundle"], "trusted_origin_issuer_pins": of_d6o["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CRED_WINDOW_CLOSED",
         "R3-H8: credential past not_after_unix MUST refuse CRED_WINDOW_CLOSED.",
@@ -1312,7 +1319,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-obj-credential-withdrawal-0x0a-refuse",
         ["SL-CONT-010"],
         "credential",
-        {"credential": cr_rev, "anchor_txid": cr_rev_tx, "chain": ch_w, "withdrawal_doc": w_doc, "origin_bundle": of_d6o["origin_bundle"], "trusted_origin_issuers": of_d6o["trusted_origin_issuers"]},
+        {"credential": cr_rev, "anchor_txid": cr_rev_tx, "chain": ch_w, "withdrawal_doc": w_doc, "origin_bundle": of_d6o["origin_bundle"], "trusted_origin_issuer_pins": of_d6o["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CRED_REVOKED_FOR_CAUSE",
         "H-24 / R3-H8: revocable credential withdrawn via 0x0a seallink-credential-withdrawal/1 MUST refuse CRED_REVOKED_FOR_CAUSE.",
@@ -1399,7 +1406,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
     so_ext = sl.sign_envelope({**so_open_p, "exp": fx_so["chain"]["now"] + 2400, "nonce": _h32("d7-so-n2"), "op": "extend", "session_id": sid_so}, [fx_so["_keys"]["agent_req"]["sk"]])
     so_cls = sl.sign_envelope({**so_open_p, "nonce": _h32("d7-so-n3"), "op": "close", "session_id": sid_so}, [fx_so["_keys"]["agent_req"]["sk"]])
     so_over = sl.sign_envelope({**so_open_p, "nonce": _h32("d7-so-n4"), "quotas": [{"kind": "seallink/count", "max": "11", "resource": "mailbox:id/alice:work", "unit": "reads", "window": "term"}]}, [fx_so["_keys"]["agent_req"]["sk"]])
-    tok_so = "d7-bearer-session-tok-1"
+    tok_so = _h32("d7-bearer-session-tok-1")
     add(
         "d7-obj-session-open-full-lifecycle-admit",
         ["SL-GRNT-013"],
@@ -1410,10 +1417,10 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             "steps": [
                 {"label": "over-quota-refuse", "kind": "session_open", "chain": fx_so["chain"], "session_open": so_over, "bundle": fx_so["bundle"], "want_verdict": "REFUSE", "want_refusal": "SESSION_INVALID"},
                 {"label": "open", "kind": "session_open", "chain": fx_so["chain"], "session_open": so_open, "bundle": fx_so["bundle"], "bearer_token": tok_so, "want_verdict": "ADMIT", "want_refusal": None},
-                {"label": "use-open", "kind": "bearer_session", "chain": fx_so["chain"], "grant_env": g_so, "token": tok_so, "slot_binding": "tls-slot-a", "want_verdict": "ADMIT", "want_refusal": None},
+                {"label": "use-open", "kind": "bearer_session", "action": "mail/read", "target": "mailbox:id/alice:work", "arguments": {"folder": "Invoices", "message_id": "m1"}, "actual_message_meta": {"folder": "Invoices"}, "chain": fx_so["chain"], "grant_env": g_so, "token": tok_so, "slot_binding": "tls-slot-a", "want_verdict": "ADMIT", "want_refusal": None},
                 {"label": "extend", "kind": "session_open", "chain": fx_so["chain"], "session_open": so_ext, "bundle": fx_so["bundle"], "want_verdict": "ADMIT", "want_refusal": None},
                 {"label": "close", "kind": "session_open", "chain": fx_so["chain"], "session_open": so_cls, "bundle": fx_so["bundle"], "want_verdict": "ADMIT", "want_refusal": None},
-                {"label": "use-after-close", "kind": "bearer_session", "chain": fx_so["chain"], "token": tok_so, "slot_binding": "tls-slot-a", "want_verdict": "REFUSE", "want_refusal": "SESSION_INVALID"},
+                {"label": "use-after-close", "kind": "bearer_session", "action": "mail/read", "target": "mailbox:id/alice:work", "arguments": {"folder": "Invoices", "message_id": "m2"}, "actual_message_meta": {"folder": "Invoices"}, "chain": fx_so["chain"], "token": tok_so, "slot_binding": "tls-slot-a", "want_verdict": "REFUSE", "want_refusal": "SESSION_INVALID"},
             ],
         },
         "ADMIT",
@@ -1654,6 +1661,28 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         },
         [dest_rcpt["sk"]],
     )
+    f_stmt_m4 = sl.sign_envelope(
+        {
+            "genesis": GENESIS_MAIN,
+            "issuer": src_pin,
+            "network": "main",
+            "not_after": fx_m4["chain"]["now"] + 3600,
+            "not_before": fx_m4["chain"]["now"] - 10,
+            "seq": 1,
+            "statement_kind": "migration-fence",
+            "subject": {
+                "dest_executor": dest_pin,
+                "holder": holder_pin,
+                "inventory_sha256": mig_inv_sha,
+                "migration_id": mig_id,
+                "predecessor_grant_seals": [],
+                "source_journal_commitment": _h32("d7-m4-jc"),
+                "source_journal_pos": 42,
+            },
+            "type": "seallink-statement/1",
+        },
+        [fx_m4["_keys"]["host_rcpt"]["sk"]],
+    )
     add(
         "d7-obj-migration-4step-cutover-admit",
         ["SL-SERV-002"],
@@ -1661,11 +1690,10 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         {
             "migration": mig_env,
             "export_bundle": {
+                "fencing_statement": f_stmt_m4,
                 "inventory": mig_inv,
-                "open_predecessor_grants": [],
                 "source_journal_commitment": _h32("d7-m4-jc"),
                 "source_journal_pos": 42,
-                "source_write_token_fenced": True,
             },
             "holder_assent": h_assent,
             "dest_accept_stmt": d_accept,
@@ -1676,7 +1704,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         },
         "ADMIT",
         None,
-        "Decision 6B / H-13: full 4-step exclusive migration cut-over with MigrationInventory, holder assent, holder manifest provider cut-over, and destination migration-accept statement admits.",
+        "Decision 6B / H-14: full 4-step exclusive migration cut-over with signed migration-fence Statement, MigrationInventory, holder assent, holder manifest provider cut-over, and destination migration-accept statement admits.",
     )
     # Path traversal item in MigrationInventory -> SERVICE_MIGRATION_INVALID
     bad_mig_inv = copy.deepcopy(mig_inv)
@@ -1688,12 +1716,11 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "migration",
         {
             "migration": sl.sign_envelope(bad_mig_p, [fx_m4["_keys"]["host_rcpt"]["sk"]]),
+            "local_executor_pin": dest_pin,
             "export_bundle": {
                 "inventory": bad_mig_inv,
-                "open_predecessor_grants": [],
                 "source_journal_commitment": _h32("d7-m4-jc"),
                 "source_journal_pos": 42,
-                "source_write_token_fenced": True,
             },
             "chain": fx_m4["chain"],
             "manifests": fx_m4["bundle"]["manifests"],
@@ -1701,7 +1728,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         },
         "REFUSE",
         "SERVICE_MIGRATION_INVALID",
-        "Decision 6B / H-13: MigrationInventory path containing '..' traversal MUST refuse SERVICE_MIGRATION_INVALID.",
+        "Decision 6B / H-14: MigrationInventory path containing '..' traversal MUST refuse SERVICE_MIGRATION_INVALID.",
     )
 
     # 7. seallink-card/1 positive wire admission
@@ -1830,7 +1857,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-b13-path-b-capacity-handover-exact-policy-autonomous",
         ["SL-ORIG-011"],
         "origin_status",
-        {"origin_bundle": of_pb_ok["origin_bundle"], "chain": of_pb_ok["chain"], "trusted_origin_issuers": of_pb_ok["trusted_origin_issuers"]},
+        {"origin_bundle": of_pb_ok["origin_bundle"], "chain": of_pb_ok["chain"], "trusted_origin_issuer_pins": of_pb_ok["trusted_origin_issuer_pins"]},
         "ADMIT_AUTONOMOUS",
         None,
         "B-13 Path B: confirmed capacity/1 + handover to exact subject_new_owner_policy admits autonomous capacity.",
@@ -1840,7 +1867,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-b13-path-b-capacity-handover-wrong-policy-pending",
         ["SL-ORIG-011"],
         "origin_status",
-        {"origin_bundle": of_pb_bad["origin_bundle"], "chain": of_pb_bad["chain"], "trusted_origin_issuers": of_pb_bad["trusted_origin_issuers"]},
+        {"origin_bundle": of_pb_bad["origin_bundle"], "chain": of_pb_bad["chain"], "trusted_origin_issuer_pins": of_pb_bad["trusted_origin_issuer_pins"]},
         "REFUSE",
         "GUARDIAN_TRANSFER_PENDING",
         "B-13 Path B: confirmed capacity/1 with handover to a policy != subject_new_owner_policy MUST refuse GUARDIAN_TRANSFER_PENDING.",
@@ -1898,7 +1925,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-b15-pre-effective-0x0d-on-new-vacant-burns-slot",
         ["SL-ORIG-015"],
         "assent",
-        {"assent": wa_pe, "contract": of_pe["contract"], "origin_bundle": of_pe["origin_bundle"], "chain": of_pe["chain"], "trusted_origin_issuers": of_pe["trusted_origin_issuers"]},
+        {"assent": wa_pe, "contract": of_pe["contract"], "origin_bundle": of_pe["origin_bundle"], "chain": of_pe["chain"], "trusted_origin_issuer_pins": of_pe["trusted_origin_issuer_pins"]},
         "REFUSE",
         "GUARDIAN_INACTIVE",
         "B-15: 0x0d appointment spending new_vacant BEFORE roster effective_delay_blocks elapses burns the slot (GUARDIAN_INACTIVE).",
@@ -1912,7 +1939,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-r3h4-0x0e-without-bip68-csv-sequence-refuse",
         ["SL-ORIG-008"],
         "assent",
-        {"assent": wa_pe, "contract": of_h4["contract"], "origin_bundle": of_h4["origin_bundle"], "chain": of_h4["chain"], "trusted_origin_issuers": of_h4["trusted_origin_issuers"]},
+        {"assent": wa_pe, "contract": of_h4["contract"], "origin_bundle": of_h4["origin_bundle"], "chain": of_h4["chain"], "trusted_origin_issuer_pins": of_h4["trusted_origin_issuer_pins"]},
         "REFUSE",
         "GUARDIAN_INACTIVE",
         "R3-H4: 0x0e activation tx lacking valid BIP-68 CSV sequence >= delay_blocks (veto-branch spoof) MUST refuse GUARDIAN_INACTIVE.",
@@ -2081,6 +2108,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     )
     ch_br = copy.deepcopy(fx_sz["chain"])
     ch_br.pop("rebracket_tip", None)
+    ch_br.pop("observation_bracket", None)
     add(
         "d7-r1b-rebracket-missing-with-require-bracket-refuse",
         ["SL-LDGR-008"],
@@ -2359,7 +2387,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-origin-min-depth-1-lt-2-refuse",
         ["SL-ORIG-002", "SL-LDGR-008"],
         "origin_status",
-        {"chain": of_md_o["chain"], "operator_min_depth": 2, "origin_bundle": of_md_o["origin_bundle"], "trusted_origin_issuers": of_md_o["trusted_origin_issuers"]},
+        {"chain": of_md_o["chain"], "operator_min_depth": 2, "origin_bundle": of_md_o["origin_bundle"], "trusted_origin_issuer_pins": of_md_o["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CHAIN_DEPTH_INSUFFICIENT",
         "Exact boundary: origin anchor at depth 1 with operator_min_depth=2 refuses CHAIN_DEPTH_INSUFFICIENT.",
@@ -2371,7 +2399,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-binding-min-depth-1-lt-2-refuse",
         ["SL-ORIG-002", "SL-LDGR-008"],
         "origin_status",
-        {"chain": of_md_b["chain"], "operator_min_depth": 2, "origin_bundle": of_md_b["origin_bundle"], "trusted_origin_issuers": of_md_b["trusted_origin_issuers"]},
+        {"chain": of_md_b["chain"], "operator_min_depth": 2, "origin_bundle": of_md_b["origin_bundle"], "trusted_origin_issuer_pins": of_md_b["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CHAIN_DEPTH_INSUFFICIENT",
         "Exact boundary: name-binding 0x0c at depth 1 with operator_min_depth=2 refuses CHAIN_DEPTH_INSUFFICIENT.",
@@ -2389,7 +2417,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-binding-exact-min-depth-2-and-eq-h-fu-admit",
         ["SL-ORIG-002", "SL-LDGR-008"],
         "origin_status",
-        {"chain": of_md_exact["chain"], "operator_min_depth": 2, "origin_bundle": of_md_exact["origin_bundle"], "trusted_origin_issuers": of_md_exact["trusted_origin_issuers"]},
+        {"chain": of_md_exact["chain"], "operator_min_depth": 2, "origin_bundle": of_md_exact["origin_bundle"], "trusted_origin_issuer_pins": of_md_exact["trusted_origin_issuer_pins"]},
         "ADMIT_WARD",
         None,
         "Exact boundary: bind_tx at depth == operator_min_depth (2) and bind_h == h_fu == h_origin + 1 admits (kills < -> <=).",
@@ -2409,7 +2437,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-origin-depth-eq-2-then-bind-eq-origin-refuse",
         ["SL-ORIG-002"],
         "origin_status",
-        {"chain": of_md_o2["chain"], "operator_min_depth": 2, "origin_bundle": of_md_o2["origin_bundle"], "trusted_origin_issuers": of_md_o2["trusted_origin_issuers"]},
+        {"chain": of_md_o2["chain"], "operator_min_depth": 2, "origin_bundle": of_md_o2["origin_bundle"], "trusted_origin_issuer_pins": of_md_o2["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_BINDING_INVALID",
         "Exact boundary: origin at depth == operator_min_depth (2) passes depth check and refuses ORIGIN_BINDING_INVALID when bind_h == h_origin (kills both < -> <= and <= -> <).",
@@ -2422,7 +2450,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-firstupdate-eq-origin-height-refuse",
         ["SL-ORIG-002"],
         "origin_status",
-        {"chain": of_fu_eq["chain"], "origin_bundle": of_fu_eq["origin_bundle"], "trusted_origin_issuers": of_fu_eq["trusted_origin_issuers"]},
+        {"chain": of_fu_eq["chain"], "origin_bundle": of_fu_eq["origin_bundle"], "trusted_origin_issuer_pins": of_fu_eq["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_BINDING_INVALID",
         "Exact boundary: h_firstupdate == h_origin refuses ORIGIN_BINDING_INVALID (kills <= -> <).",
@@ -2441,7 +2469,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-status-spend-depth-1-lt-2-refuse",
         ["SL-ORIG-002", "SL-LDGR-008"],
         "origin_status",
-        {"chain": of_end_d["chain"], "operator_min_depth": 2, "origin_bundle": of_end_d["origin_bundle"], "trusted_origin_issuers": of_end_d["trusted_origin_issuers"]},
+        {"chain": of_end_d["chain"], "operator_min_depth": 2, "origin_bundle": of_end_d["origin_bundle"], "trusted_origin_issuer_pins": of_end_d["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CHAIN_DEPTH_INSUFFICIENT",
         "Exact boundary: status_seal spend at depth 1 with operator_min_depth=2 refuses CHAIN_DEPTH_INSUFFICIENT.",
@@ -2452,7 +2480,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-status-spend-depth-eq-2-subject-ended",
         ["SL-ORIG-002", "SL-ORIG-012"],
         "origin_status",
-        {"chain": of_end_d2["chain"], "operator_min_depth": 2, "origin_bundle": of_end_d2["origin_bundle"], "trusted_origin_issuers": of_end_d2["trusted_origin_issuers"]},
+        {"chain": of_end_d2["chain"], "operator_min_depth": 2, "origin_bundle": of_end_d2["origin_bundle"], "trusted_origin_issuer_pins": of_end_d2["trusted_origin_issuer_pins"]},
         "REFUSE",
         "SUBJECT_ENDED",
         "Exact boundary: status_seal spend at depth == operator_min_depth (2) reaches SUBJECT_ENDED (kills < -> <=).",
@@ -2468,7 +2496,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-end-record-chain-mismatch-refuse",
         ["SL-ORIG-012"],
         "origin_status",
-        {"chain": of_end_cm["chain"], "origin_bundle": of_end_cm["origin_bundle"], "trusted_origin_issuers": of_end_cm["trusted_origin_issuers"]},
+        {"chain": of_end_cm["chain"], "origin_bundle": of_end_cm["origin_bundle"], "trusted_origin_issuer_pins": of_end_cm["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CHAIN_MISMATCH",
         "seallink-end/1 with wrong genesis refuses CHAIN_MISMATCH.",
@@ -2484,7 +2512,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-capacity-record-chain-mismatch-refuse",
         ["SL-ORIG-011"],
         "origin_status",
-        {"chain": of_cap_cm["chain"], "origin_bundle": of_cap_cm["origin_bundle"], "trusted_origin_issuers": of_cap_cm["trusted_origin_issuers"]},
+        {"chain": of_cap_cm["chain"], "origin_bundle": of_cap_cm["origin_bundle"], "trusted_origin_issuer_pins": of_cap_cm["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CHAIN_MISMATCH",
         "seallink-capacity/1 with wrong genesis refuses CHAIN_MISMATCH.",
@@ -2496,7 +2524,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-binding-chain-mismatch-refuse",
         ["SL-ORIG-002"],
         "origin_status",
-        {"chain": of_bnd_cm["chain"], "origin_bundle": of_bnd_cm["origin_bundle"], "trusted_origin_issuers": of_bnd_cm["trusted_origin_issuers"]},
+        {"chain": of_bnd_cm["chain"], "origin_bundle": of_bnd_cm["origin_bundle"], "trusted_origin_issuer_pins": of_bnd_cm["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CHAIN_MISMATCH",
         "seallink-name-binding/1 with wrong genesis refuses CHAIN_MISMATCH.",
@@ -2508,7 +2536,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-status-seal-absent-from-utxo-refuse",
         ["SL-ORIG-002"],
         "origin_status",
-        {"chain": of_abs_s["chain"], "origin_bundle": of_abs_s["origin_bundle"], "trusted_origin_issuers": of_abs_s["trusted_origin_issuers"]},
+        {"chain": of_abs_s["chain"], "origin_bundle": of_abs_s["origin_bundle"], "trusted_origin_issuer_pins": of_abs_s["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_STATUS_INCOMPLETE",
         "Unattributed missing status_seal (absent_from_utxo=True) refuses ORIGIN_STATUS_INCOMPLETE.",
@@ -2520,7 +2548,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-roster-seal-absent-from-utxo-refuse",
         ["SL-ORIG-015"],
         "origin_status",
-        {"chain": of_abs_r["chain"], "origin_bundle": of_abs_r["origin_bundle"], "trusted_origin_issuers": of_abs_r["trusted_origin_issuers"]},
+        {"chain": of_abs_r["chain"], "origin_bundle": of_abs_r["origin_bundle"], "trusted_origin_issuer_pins": of_abs_r["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_STATUS_INCOMPLETE",
         "Unattributed missing roster_seal (absent_from_utxo=True) refuses ORIGIN_STATUS_INCOMPLETE.",
@@ -2533,7 +2561,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-b13-majority-commitment-omitted-disclosure-refuse",
         ["SL-ORIG-010"],
         "origin_status",
-        {"chain": of_mj_miss["chain"], "origin_bundle": of_mj_miss["origin_bundle"], "trusted_origin_issuers": of_mj_miss["trusted_origin_issuers"]},
+        {"chain": of_mj_miss["chain"], "origin_bundle": of_mj_miss["origin_bundle"], "trusted_origin_issuer_pins": of_mj_miss["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_STATUS_INCOMPLETE",
         "B-13: omitting opened_majority_unix when origin.claims.majority_commitment is present refuses ORIGIN_STATUS_INCOMPLETE.",
@@ -2546,7 +2574,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-majority-mtp-eq-t-refuse",
         ["SL-ORIG-010"],
         "origin_status",
-        {"chain": of_mtp_eq["chain"], "origin_bundle": of_mtp_eq["origin_bundle"], "trusted_origin_issuers": of_mtp_eq["trusted_origin_issuers"]},
+        {"chain": of_mtp_eq["chain"], "origin_bundle": of_mtp_eq["origin_bundle"], "trusted_origin_issuer_pins": of_mtp_eq["trusted_origin_issuer_pins"]},
         "REFUSE",
         "GUARDIAN_TIME_BOUNDARY",
         "B-13 exact boundary: tip_median_time_past == T while t_low < T refuses GUARDIAN_TIME_BOUNDARY (kills >= -> >).",
@@ -2557,7 +2585,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-majority-mtp-lt-t-admit-ward",
         ["SL-ORIG-010"],
         "origin_status",
-        {"chain": of_mtp_lt["chain"], "origin_bundle": of_mtp_lt["origin_bundle"], "trusted_origin_issuers": of_mtp_lt["trusted_origin_issuers"]},
+        {"chain": of_mtp_lt["chain"], "origin_bundle": of_mtp_lt["origin_bundle"], "trusted_origin_issuer_pins": of_mtp_lt["trusted_origin_issuer_pins"]},
         "ADMIT_WARD",
         None,
         "B-13 exact boundary: t_low < T and tip_median_time_past == T - 1 admits ward capacity.",
@@ -2571,7 +2599,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-d01-recovery-burned-assert-wrong-binding-refuse",
         ["SL-ORIG-013"],
         "origin_status",
-        {"assert_binding_id": _h32("wrong-binding"), "chain": of_d1_ab["chain"], "origin_bundle": of_d1_ab["origin_bundle"], "trusted_origin_issuers": of_d1_ab["trusted_origin_issuers"]},
+        {"assert_binding_id": _h32("wrong-binding"), "chain": of_d1_ab["chain"], "origin_bundle": of_d1_ab["origin_bundle"], "trusted_origin_issuer_pins": of_d1_ab["trusted_origin_issuer_pins"]},
         "REFUSE",
         "RECOVERY_FORBIDDEN",
         "Decision D-1 / R2G-01: when recovery_seal is provably burned by a confirmed malformed spend and assert_binding_id != active B_k, refuse RECOVERY_FORBIDDEN.",
@@ -2617,7 +2645,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-roster-spend-depth-1-lt-2-refuse",
         ["SL-ORIG-015", "SL-LDGR-008"],
         "origin_status",
-        {"chain": of_r_d["chain"], "operator_min_depth": 2, "origin_bundle": of_r_d["origin_bundle"], "trusted_origin_issuers": of_r_d["trusted_origin_issuers"]},
+        {"chain": of_r_d["chain"], "operator_min_depth": 2, "origin_bundle": of_r_d["origin_bundle"], "trusted_origin_issuer_pins": of_r_d["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CHAIN_DEPTH_INSUFFICIENT",
         "Exact boundary: roster 0x0f spend at depth 1 with operator_min_depth=2 refuses CHAIN_DEPTH_INSUFFICIENT.",
@@ -2628,7 +2656,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-roster-spend-depth-eq-2-admit",
         ["SL-ORIG-015", "SL-LDGR-008"],
         "origin_status",
-        {"chain": of_r_d2["chain"], "operator_min_depth": 2, "origin_bundle": of_r_d2["origin_bundle"], "trusted_origin_issuers": of_r_d2["trusted_origin_issuers"]},
+        {"chain": of_r_d2["chain"], "operator_min_depth": 2, "origin_bundle": of_r_d2["origin_bundle"], "trusted_origin_issuer_pins": of_r_d2["trusted_origin_issuer_pins"]},
         "ADMIT_WARD",
         None,
         "Exact boundary: roster 0x0f spend at depth == operator_min_depth (2) admits (kills < -> <=).",
@@ -2653,7 +2681,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-b15-exact-min-appoint-height-and-slot-depth-2-admit",
         ["SL-ORIG-015", "SL-ORIG-008"],
         "assent",
-        {"assent": wa_rd, "chain": of_pe_ok["chain"], "contract": of_pe_ok["contract"], "operator_min_depth": 2, "origin_bundle": of_pe_ok["origin_bundle"], "trusted_origin_issuers": of_pe_ok["trusted_origin_issuers"]},
+        {"assent": wa_rd, "chain": of_pe_ok["chain"], "contract": of_pe_ok["contract"], "operator_min_depth": 2, "origin_bundle": of_pe_ok["origin_bundle"], "trusted_origin_issuer_pins": of_pe_ok["trusted_origin_issuer_pins"]},
         "ADMIT",
         None,
         "B-15 exact boundary: 0x0d at h == roster_eff_h and 0x0e at depth == operator_min_depth (2) admits (kills both < -> <=).",
@@ -2664,7 +2692,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-slot-0x0e-depth-1-lt-2-inactive",
         ["SL-ORIG-008", "SL-LDGR-008"],
         "assent",
-        {"assent": wa_rd, "chain": of_pe_d1["chain"], "contract": of_pe_d1["contract"], "operator_min_depth": 2, "origin_bundle": of_pe_d1["origin_bundle"], "trusted_origin_issuers": of_pe_d1["trusted_origin_issuers"]},
+        {"assent": wa_rd, "chain": of_pe_d1["chain"], "contract": of_pe_d1["contract"], "operator_min_depth": 2, "origin_bundle": of_pe_d1["origin_bundle"], "trusted_origin_issuer_pins": of_pe_d1["trusted_origin_issuer_pins"]},
         "REFUSE",
         "GUARDIAN_INACTIVE",
         "Exact boundary: slot 0x0e at depth 1 with operator_min_depth=2 remains pending (GUARDIAN_INACTIVE).",
@@ -2685,6 +2713,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     rec_tx_eh = _h32("d7-eh2-rec-tx")
     of_eh2["chain"]["txs"][rec_s_eh["txid"]]["outputs"]["0"]["spent_by_txid"] = rec_tx_eh
     of_eh2["chain"]["txs"][rec_tx_eh] = {"confirmed_height": tip_md - 200, "opreturn_hex": sl.encode_opreturn(0x0C, sl.object_id(cand_eh)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(rec_s_eh["script_policy"])}}}
+    of_eh2["chain"].setdefault("block_times", {})[str((tip_md - 200) + 144)] = of_eh2["_maj_unix"] + 10
     of_eh2["origin_bundle"]["recovery_bindings"] = [cand_eh]
     of_eh2["chain"]["credible_utc_interval"] = [of_eh2["_maj_unix"] + 100, of_eh2["_maj_unix"] + 200]
     of_eh2["chain"]["names"]["id/leo-adult"] = sv.make_name_history("id/leo-adult", new_reg_eh, new_pol_eh, {"link": {"grant": of_eh2["_keys"]["ward_gr"]["xonly"], "origin": of_eh2["_origin_id"]}}, first_height=749700, update_height=749850)
@@ -2692,7 +2721,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-emancipation-handover-seq2-2-updates-autonomous",
         ["SL-ORIG-011", "SL-ORIG-013"],
         "origin_status",
-        {"chain": of_eh2["chain"], "origin_bundle": of_eh2["origin_bundle"], "trusted_origin_issuers": of_eh2["trusted_origin_issuers"]},
+        {"chain": of_eh2["chain"], "origin_bundle": of_eh2["origin_bundle"], "trusted_origin_issuer_pins": of_eh2["trusted_origin_issuer_pins"]},
         "ADMIT_AUTONOMOUS",
         None,
         "Exact boundary: emancipated handover via seq==2 promoted recovery binding with len(updates)==2 admits autonomous (kills both >= 2 -> > 2).",
@@ -2707,7 +2736,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-assent-chain-mismatch-refuse",
         ["SL-CONT-004"],
         "assent",
-        {"assent": sl.sign_envelope({**a_sch_base, "genesis": _h32("wrong-as-gen")}, [of_as["_keys"]["sch_gr"]["sk"]]), "chain": of_as["chain"], "contract": c_as, "origin_bundle": of_as["origin_bundle"], "trusted_origin_issuers": of_as["trusted_origin_issuers"]},
+        {"assent": sl.sign_envelope({**a_sch_base, "genesis": _h32("wrong-as-gen")}, [of_as["_keys"]["sch_gr"]["sk"]]), "chain": of_as["chain"], "contract": c_as, "origin_bundle": of_as["origin_bundle"], "trusted_origin_issuer_pins": of_as["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CHAIN_MISMATCH",
         "seallink-assent/1 with wrong genesis refuses CHAIN_MISMATCH.",
@@ -2716,7 +2745,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-assent-exp-eq-iat-refuse",
         ["SL-CONT-004"],
         "assent",
-        {"assent": sl.sign_envelope({**a_sch_base, "expires_at": 1795220000, "nonce": _h32("d7-as-n2")}, [of_as["_keys"]["sch_gr"]["sk"]]), "chain": of_as["chain"], "contract": c_as, "origin_bundle": of_as["origin_bundle"], "trusted_origin_issuers": of_as["trusted_origin_issuers"]},
+        {"assent": sl.sign_envelope({**a_sch_base, "expires_at": 1795220000, "nonce": _h32("d7-as-n2")}, [of_as["_keys"]["sch_gr"]["sk"]]), "chain": of_as["chain"], "contract": c_as, "origin_bundle": of_as["origin_bundle"], "trusted_origin_issuer_pins": of_as["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CONTRACT_ASSENT_INVALID",
         "Exact boundary: assent with expires_at == issued_at refuses CONTRACT_ASSENT_INVALID (kills <= -> <).",
@@ -2731,7 +2760,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-assent-ward-party-name-pin-mismatch-refuse",
         ["SL-CONT-004", "SL-ORIG-002"],
         "assent",
-        {"assent": a_wnp, "chain": of_as["chain"], "contract": c_as_wnp, "origin_bundle": of_as["origin_bundle"], "trusted_origin_issuers": of_as["trusted_origin_issuers"]},
+        {"assent": a_wnp, "chain": of_as["chain"], "contract": c_as_wnp, "origin_bundle": of_as["origin_bundle"], "trusted_origin_issuer_pins": of_as["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_BINDING_INVALID",
         "Contract ward party whose name_pin disagrees with verified origin binding refuses ORIGIN_BINDING_INVALID.",
@@ -2744,7 +2773,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-h32-autonomous-party-ward-missing-origin-bundle-refuse",
         ["SL-CONT-004", "SL-ORIG-006"],
         "assent",
-        {"assent": a_masq, "chain": of_as["chain"], "contract": c_masq, "trusted_origin_issuers": of_as["trusted_origin_issuers"]},
+        {"assent": a_masq, "chain": of_as["chain"], "contract": c_masq, "trusted_origin_issuer_pins": of_as["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_UNVERIFIED",
         "H-32: autonomous contract party whose name has historical link.origin with omitted origin_bundle refuses ORIGIN_UNVERIFIED.",
@@ -2753,7 +2782,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-h32-autonomous-party-masquerading-as-ward-refuse",
         ["SL-CONT-004", "SL-ORIG-006"],
         "assent",
-        {"assent": a_masq, "chain": of_as["chain"], "contract": c_masq, "origin_bundle": of_as["origin_bundle"], "trusted_origin_issuers": of_as["trusted_origin_issuers"]},
+        {"assent": a_masq, "chain": of_as["chain"], "contract": c_masq, "origin_bundle": of_as["origin_bundle"], "trusted_origin_issuer_pins": of_as["trusted_origin_issuer_pins"]},
         "REFUSE",
         "WARD_AUTONOMOUS_FORBIDDEN",
         "H-32: ward name listed as autonomous party without ward_origin_id refuses WARD_AUTONOMOUS_FORBIDDEN.",
@@ -2784,7 +2813,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-d6-credential-subject-origin-mismatch-refuse",
         ["SL-CONT-010"],
         "credential",
-        {"anchor_txid": cr_bad_o_tx, "chain": of_cr["chain"], "credential": cr_bad_o, "origin_bundle": of_cr["origin_bundle"], "trusted_origin_issuers": of_cr["trusted_origin_issuers"]},
+        {"anchor_txid": cr_bad_o_tx, "chain": of_cr["chain"], "credential": cr_bad_o, "origin_bundle": of_cr["origin_bundle"], "trusted_origin_issuer_pins": of_cr["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_UNVERIFIED",
         "D-6: credential subject.origin_id disagreeing with verified origin_bundle refuses ORIGIN_UNVERIFIED.",
@@ -2796,7 +2825,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-credential-not-after-unix-eq-now-refuse",
         ["SL-CONT-010"],
         "credential",
-        {"anchor_txid": cr_nu_eq_tx, "chain": of_cr["chain"], "credential": cr_nu_eq, "origin_bundle": of_cr["origin_bundle"], "trusted_origin_issuers": of_cr["trusted_origin_issuers"]},
+        {"anchor_txid": cr_nu_eq_tx, "chain": of_cr["chain"], "credential": cr_nu_eq, "origin_bundle": of_cr["origin_bundle"], "trusted_origin_issuer_pins": of_cr["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CRED_WINDOW_CLOSED",
         "Exact boundary: credential not_after_unix == chain.now refuses CRED_WINDOW_CLOSED (kills >= -> >).",
@@ -2813,7 +2842,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-r3h8-credential-withdrawal-mismatched-doc-refuse",
         ["SL-CONT-010"],
         "credential",
-        {"anchor_txid": cr_w2_tx, "chain": of_cr["chain"], "credential": cr_w2, "origin_bundle": of_cr["origin_bundle"], "trusted_origin_issuers": of_cr["trusted_origin_issuers"], "withdrawal_doc": w_doc_bad},
+        {"anchor_txid": cr_w2_tx, "chain": of_cr["chain"], "credential": cr_w2, "origin_bundle": of_cr["origin_bundle"], "trusted_origin_issuer_pins": of_cr["trusted_origin_issuer_pins"], "withdrawal_doc": w_doc_bad},
         "REFUSE",
         "CHAIN_FRAME_INVALID",
         "R3-H8: 0x0a withdrawal_doc with mismatched credential_id refuses CHAIN_FRAME_INVALID.",
@@ -2894,7 +2923,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     fx_ib["chain"]["txs"].update(of_ib["chain"]["txs"])
     fx_ib["chain"]["credible_utc_interval"] = of_ib["chain"]["credible_utc_interval"]
     fx_ib["bundle"]["origin_bundle"] = of_ib["origin_bundle"]
-    fx_ib["trusted_origin_issuers"] = of_ib["trusted_origin_issuers"]
+    fx_ib["trusted_origin_issuer_pins"] = of_ib["trusted_origin_issuer_pins"]
     add("d7-b02-issuer-origin-binding-name-mismatch-refuse", ["SL-ORIG-002", "SL-GRNT-001"], "invocation", fx_ib, "REFUSE", "ORIGIN_BINDING_INVALID", "B-2: origin_bundle whose active_binding disagrees with root grant issuer refuses ORIGIN_BINDING_INVALID.")
 
     # 5c. Contract & framework checks: CHAIN_MISMATCH, nested framework_id, window boundaries, not_after_unix boundaries, 0x07 bad anchor, D-5 party mismatch, MachineClauseTerms boundaries, missing config_sha256
@@ -3131,10 +3160,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     fx_gm_w = copy.deepcopy(fx_gm_auto)
     fx_gm_w["chain"]["names"].update(of_gm2["chain"]["names"])
     fx_gm_w["chain"]["txs"].update(of_gm2["chain"]["txs"])
-    fx_gm_w["chain"]["tip_height"] = of_gm2["chain"]["tip_height"]
-    fx_gm_w["chain"]["best_header_height"] = of_gm2["chain"]["tip_height"]
-    fx_gm_w["chain"]["comparison_peers"] = of_gm2["chain"]["comparison_peers"]
-    fx_gm_w["chain"]["tip_hash"] = of_gm2["chain"]["tip_hash"]
+    rm.sync_chain_tip(fx_gm_w["chain"], height=of_gm2["chain"]["tip_height"], tip_hash=of_gm2["chain"]["tip_hash"])
     fx_gm_w["chain"]["now"] = of_gm2["chain"]["now"]
     fx_gm_w["executor_cfg"]["pinned_ward_origin_id"] = gm2_oid
     gm_gp_w = {
@@ -3148,7 +3174,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     fx_gm_w["chain"]["txs"][gm_itx]["opreturn_hex"] = sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(gm_g_w), "grant_id": gm_gid_w, "type": "seallink-issuance/1"}).hex()).hex()
     fx_gm_w["bundle"]["grants"] = [gm_g_w]
     fx_gm_w["bundle"]["origin_bundle"] = of_gm2["origin_bundle"]
-    fx_gm_w["trusted_origin_issuers"] = of_gm2["trusted_origin_issuers"]
+    fx_gm_w["trusted_origin_issuer_pins"] = of_gm2["trusted_origin_issuer_pins"]
     raw_gm_b = b"guardian-mismatch-msg"
     gm_inv_bad_arg = {**gm_inv_p, "arguments": {**gm_inv_p["arguments"], "message_sha256": sl.sha256(raw_gm_b).hex(), "origin_id": _h32("wrong-arg-oid")}, "exp": of_gm2["chain"]["now"] + 300, "iat": of_gm2["chain"]["now"] - 10, "nonce": _h32("d7-gm-n2"), "proof_path": [{"grant_id": gm_gid_w, "issuance_txid": gm_itx}], "target": f"ward:{gm2_oid}"}
     fx_gm_w["invocation"] = sl.sign_envelope(gm_inv_bad_arg, [fx_gm["_keys"]["agent_req"]["sk"]])
@@ -3180,9 +3206,9 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         [fx_cr2["_keys"]["host_rcpt"]["sk"]],
     )
     rcpt_cr2_bad = sl.sign_envelope({**rcpt_cr2_ok["payload"], "grant_id": _h32("wrong-gid")}, [fx_cr2["_keys"]["host_rcpt"]["sk"]])
-    add("d7-r1a-commit-result-wrong-grant-id-refuse", ["SL-GRNT-014"], "two_phase_commit", {"bundle": fx_cr2["bundle"], "chain": fx_cr2["chain"], "executor_cfg": fx_cr2["executor_cfg"], "invocation": fx_cr2["invocation"], "journal_id": _h32("d7-cr2-j1"), "receipt_env": rcpt_cr2_bad}, "REFUSE", "WIRE_MEMBER", "R1-A: commit_result with receipt grant_id mismatch refuses WIRE_MEMBER.")
-    add("d7-bnd-commit-result-actual-eq-reserve-admit", ["SL-GRNT-007", "SL-GRNT-014"], "two_phase_commit", {"actual_quota_usage": {"seallink/count|mailbox:id/alice:work|reads|term": 1}, "bundle": fx_cr2["bundle"], "chain": fx_cr2["chain"], "executor_cfg": fx_cr2["executor_cfg"], "invocation": fx_cr2["invocation"], "journal_id": _h32("d7-cr2-j2"), "receipt_env": rcpt_cr2_ok}, "ADMIT", None, "Exact boundary: commit_result with actual_quota_usage == reserve admits (kills > -> >=).")
-    add("d7-bnd-commit-result-actual-gt-reserve-refuse", ["SL-GRNT-007", "SL-GRNT-014"], "two_phase_commit", {"actual_quota_usage": {"seallink/count|mailbox:id/alice:work|reads|term": 2}, "bundle": fx_cr2["bundle"], "chain": fx_cr2["chain"], "executor_cfg": fx_cr2["executor_cfg"], "invocation": fx_cr2["invocation"], "journal_id": _h32("d7-cr2-j3"), "receipt_env": rcpt_cr2_ok}, "REFUSE", "QUOTA_EXCEEDED", "Exact boundary: commit_result with actual_quota_usage > reserve refuses QUOTA_EXCEEDED.")
+    add("d7-r1a-commit-result-wrong-grant-id-refuse", ["SL-GRNT-014"], "two_phase_commit", {"actual_message_meta": {"folder": "Invoices"}, "bundle": fx_cr2["bundle"], "chain": fx_cr2["chain"], "executor_cfg": fx_cr2["executor_cfg"], "invocation": fx_cr2["invocation"], "journal_id": _h32("d7-cr2-j1"), "receipt_env": rcpt_cr2_bad}, "REFUSE", "WIRE_MEMBER", "R1-A: commit_result with receipt grant_id mismatch refuses WIRE_MEMBER.")
+    add("d7-bnd-commit-result-actual-eq-reserve-admit", ["SL-GRNT-007", "SL-GRNT-014"], "two_phase_commit", {"actual_message_meta": {"folder": "Invoices"}, "actual_quota_usage": {"seallink/count|mailbox:id/alice:work|reads|term": 1}, "bundle": fx_cr2["bundle"], "chain": fx_cr2["chain"], "executor_cfg": fx_cr2["executor_cfg"], "invocation": fx_cr2["invocation"], "journal_id": _h32("d7-cr2-j2"), "receipt_env": rcpt_cr2_ok}, "ADMIT", None, "Exact boundary: commit_result with actual_quota_usage == reserve admits (kills > -> >=).")
+    add("d7-bnd-commit-result-actual-gt-reserve-refuse", ["SL-GRNT-007", "SL-GRNT-014"], "two_phase_commit", {"actual_message_meta": {"folder": "Invoices"}, "actual_quota_usage": {"seallink/count|mailbox:id/alice:work|reads|term": 2}, "bundle": fx_cr2["bundle"], "chain": fx_cr2["chain"], "executor_cfg": fx_cr2["executor_cfg"], "invocation": fx_cr2["invocation"], "journal_id": _h32("d7-cr2-j3"), "receipt_env": rcpt_cr2_ok}, "REFUSE", "QUOTA_EXCEEDED", "Exact boundary: commit_result with actual_quota_usage > reserve refuses QUOTA_EXCEEDED.")
 
     # 5h. Decision 6B: verify_session_open & verify_bearer_session exhaustive boundaries + refusals
     fx_s6 = rm._base_invocation_fixture()
@@ -3194,15 +3220,15 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     nb_s6, na_s6 = gp_s6["not_before_height"], gp_s6["not_after_height"]
     so6_p = {"executor": fx_s6["invocation"]["payload"]["executor"], "exp": now_s6 + 3600, "genesis": GENESIS_MAIN, "iat": now_s6, "network": "main", "nonce": _h32("d7-s6-n1"), "op": "open", "proof_path": [{"grant_id": gid_s6, "issuance_txid": itx_s6}], "quotas": [{"kind": "seallink/count", "max": "2", "resource": "mailbox:id/alice:work", "unit": "reads", "window": "term"}], "slot_binding": "tls-6", "type": "seallink-session-open/1"}
     so6_ok = sl.sign_envelope(so6_p, [fx_s6["_keys"]["agent_req"]["sk"]])
-    ch_s6_nb = {**copy.deepcopy(fx_s6["chain"]), "best_header_height": nb_s6, "comparison_peers": [{"hash_at_tip": fx_s6["chain"]["tip_hash"], "healthy": True, "height": nb_s6, "id": "p"}], "tip_height": nb_s6}
-    ch_s6_na1 = {**copy.deepcopy(fx_s6["chain"]), "best_header_height": na_s6 - 1, "comparison_peers": [{"hash_at_tip": fx_s6["chain"]["tip_hash"], "healthy": True, "height": na_s6 - 1, "id": "p"}], "tip_height": na_s6 - 1}
-    ch_s6_na = {**copy.deepcopy(fx_s6["chain"]), "best_header_height": na_s6, "comparison_peers": [{"hash_at_tip": fx_s6["chain"]["tip_hash"], "healthy": True, "height": na_s6, "id": "p"}], "tip_height": na_s6}
+    ch_s6_nb = rm.sync_chain_tip(copy.deepcopy(fx_s6["chain"]), height=nb_s6)
+    ch_s6_na1 = rm.sync_chain_tip(copy.deepcopy(fx_s6["chain"]), height=na_s6 - 1)
+    ch_s6_na = rm.sync_chain_tip(copy.deepcopy(fx_s6["chain"]), height=na_s6)
     # Ensure seal is confirmed <= nb_s6 so evaluate_seal succeeds at nb_s6!
     seal_tx_s6 = gp_s6["revocation"]["seal"]["txid"]
     ch_s6_nb["txs"][seal_tx_s6]["confirmed_height"] = nb_s6 - 5
     ch_s6_na1["txs"][seal_tx_s6]["confirmed_height"] = nb_s6 - 5
     ch_s6_na["txs"][seal_tx_s6]["confirmed_height"] = nb_s6 - 5
-    tok_s6 = "d7-s6-tok"
+    tok_s6 = _h32("d7-s6-tok")
     add(
         "d7-bnd-6b-session-open-and-bearer-all-boundaries-admit",
         ["SL-GRNT-013"],
@@ -3225,13 +3251,13 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
                 # Replayed identical open -> INVOKE_REPLAY!
                 {"bundle": fx_s6["bundle"], "chain": ch_s6_nb, "kind": "session_open", "label": "replay-open", "session_open": so6_ok, "want_refusal": "INVOKE_REPLAY", "want_verdict": "REFUSE"},
                 # Bearer use #1 at tip == not_before_height with live grant_env + quota (used 1 <= 2 -> ADMIT)
-                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m1"}, "chain": ch_s6_nb, "grant_env": g_s6, "kind": "bearer_session", "label": "use-1-nb", "slot_binding": "tls-6", "token": tok_s6, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m1"}, "chain": ch_s6_nb, "grant_env": g_s6, "kind": "bearer_session", "label": "use-1-nb", "slot_binding": "tls-6", "target": "mailbox:id/alice:work", "token": tok_s6, "want_refusal": None, "want_verdict": "ADMIT"},
                 # Bearer use #2 at tip == not_after_height - 1 with live grant_env + quota (used 2 == max 2 -> ADMIT; kills > -> >= and < -> <=!)
-                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": ch_s6_na1, "grant_env": g_s6, "kind": "bearer_session", "label": "use-2-na1", "slot_binding": "tls-6", "token": tok_s6, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": ch_s6_na1, "grant_env": g_s6, "kind": "bearer_session", "label": "use-2-na1", "slot_binding": "tls-6", "target": "mailbox:id/alice:work", "token": tok_s6, "want_refusal": None, "want_verdict": "ADMIT"},
                 # Bearer use #3 exceeds session quota (used 3 > 2 -> QUOTA_EXCEEDED!)
-                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m3"}, "chain": ch_s6_na1, "grant_env": g_s6, "kind": "bearer_session", "label": "use-3-over", "slot_binding": "tls-6", "token": tok_s6, "want_refusal": "QUOTA_EXCEEDED", "want_verdict": "REFUSE"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m3"}, "chain": ch_s6_na1, "grant_env": g_s6, "kind": "bearer_session", "label": "use-3-over", "slot_binding": "tls-6", "target": "mailbox:id/alice:work", "token": tok_s6, "want_refusal": "QUOTA_EXCEEDED", "want_verdict": "REFUSE"},
                 # Bearer use at tip == not_after_height with live grant_env -> SESSION_INVALID!
-                {"chain": ch_s6_na, "grant_env": g_s6, "kind": "bearer_session", "label": "use-win-closed", "slot_binding": "tls-6", "token": tok_s6, "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m4"}, "chain": ch_s6_na, "grant_env": g_s6, "kind": "bearer_session", "label": "use-win-closed", "slot_binding": "tls-6", "target": "mailbox:id/alice:work", "token": tok_s6, "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
             ],
         },
         "ADMIT",
@@ -3289,7 +3315,29 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     mig5_p = {"dest_executor": dest_pin5, "genesis": GENESIS_MAIN, "holder": h_pin5, "inventory_sha256": mig5_sha, "issued_at": fx_m5["chain"]["now"], "journal_commitment": _h32("d7-m5-jc"), "journal_pos": 10, "migration_id": mig5_id, "network": "main", "outstanding_exposure": [], "service_type": "mail", "source_executor": s_pin5, "type": "seallink-migration/1"}
     mig5_env = sl.sign_envelope(mig5_p, [fx_m5["_keys"]["host_rcpt"]["sk"]])
     ha5_ok = sl.sign_envelope({"expires_at": fx_m5["chain"]["now"] + 3600, "genesis": GENESIS_MAIN, "issued_at": fx_m5["chain"]["now"] - 10, "network": "main", "nonce": _h32("d7-m5-ha"), "party_id": "h", "party_name": "id/alice", "party_role": "holder", "target_id": sl.object_id(mig5_p), "target_type": "seallink-migration/1", "type": "seallink-assent/1"}, [fx_m5["_keys"]["alice_gr"]["sk"]])
-    eb5 = {"inventory": mig5_inv, "open_predecessor_grants": [], "source_journal_commitment": _h32("d7-m5-jc"), "source_journal_pos": 10, "source_write_token_fenced": True}
+    f_stmt5 = sl.sign_envelope(
+        {
+            "genesis": GENESIS_MAIN,
+            "issuer": s_pin5,
+            "network": "main",
+            "not_after": fx_m5["chain"]["now"] + 3600,
+            "not_before": fx_m5["chain"]["now"] - 10,
+            "seq": 1,
+            "statement_kind": "migration-fence",
+            "subject": {
+                "dest_executor": dest_pin5,
+                "holder": h_pin5,
+                "inventory_sha256": mig5_sha,
+                "migration_id": mig5_id,
+                "predecessor_grant_seals": [],
+                "source_journal_commitment": _h32("d7-m5-jc"),
+                "source_journal_pos": 10,
+            },
+            "type": "seallink-statement/1",
+        },
+        [fx_m5["_keys"]["host_rcpt"]["sk"]],
+    )
+    eb5 = {"fencing_statement": f_stmt5, "inventory": mig5_inv, "source_journal_commitment": _h32("d7-m5-jc"), "source_journal_pos": 10}
     # Alice's manifest still points to id/mail-host-a, NOT dest id/mail-host-c -> SERVICE_PROVIDER_UNBOUND!
     add("d7-6b-migration-holder-manifest-unbound-dest-refuse", ["SL-SERV-002"], "migration", {"chain": fx_m5["chain"], "export_bundle": eb5, "holder_assent": ha5_ok, "journal": {"journal_id": _h32("d7-m5-j1")}, "local_executor_pin": dest_pin5, "manifests": fx_m5["bundle"]["manifests"], "migration": mig5_env}, "REFUSE", "SERVICE_PROVIDER_UNBOUND", "Decision 6B: migration when holder manifest does not bind dest_executor refuses SERVICE_PROVIDER_UNBOUND.")
     # Bad holder assent signer -> SERVICE_MIGRATION_INVALID
@@ -3320,13 +3368,13 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     st_unk_tx = _h32("d7-st-unk-tx")
     of_st_unk["chain"]["txs"][st_s["txid"]]["outputs"]["0"]["spent_by_txid"] = st_unk_tx
     of_st_unk["chain"]["txs"][st_unk_tx] = {"confirmed_height": tip_md - 5, "opreturn_hex": sl.encode_opreturn(0x09, _h32("unknown-status-commit")).hex(), "outputs": {}}
-    add("d7-status-seal-unknown-0x09-commitment-refuse", ["SL-ORIG-002"], "origin_status", {"chain": of_st_unk["chain"], "origin_bundle": of_st_unk["origin_bundle"], "trusted_origin_issuers": of_st_unk["trusted_origin_issuers"]}, "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Confirmed 0x09 status_seal spend whose commitment matches neither end/1 nor capacity/1 refuses ORIGIN_STATUS_INCOMPLETE.")
+    add("d7-status-seal-unknown-0x09-commitment-refuse", ["SL-ORIG-002"], "origin_status", {"chain": of_st_unk["chain"], "origin_bundle": of_st_unk["origin_bundle"], "trusted_origin_issuer_pins": of_st_unk["trusted_origin_issuer_pins"]}, "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Confirmed 0x09 status_seal spend whose commitment matches neither end/1 nor capacity/1 refuses ORIGIN_STATUS_INCOMPLETE.")
 
     # F4 (L2283): Exact t_low == opened_majority AND tip_median_time_past == opened_majority -> emancipated (GUARDIAN_TRANSFER_PENDING, NOT GUARDIAN_TIME_BOUNDARY!)
     of_tlow_eq = rm._base_origin_fixture()
     of_tlow_eq["chain"]["credible_utc_interval"] = [t_maj, t_maj + 10]
     of_tlow_eq["chain"]["tip_median_time_past"] = t_maj
-    add("d7-bnd-majority-tlow-eq-t-with-mtp-eq-t-emancipates", ["SL-ORIG-010", "SL-ORIG-011"], "origin_status", {"chain": of_tlow_eq["chain"], "origin_bundle": of_tlow_eq["origin_bundle"], "trusted_origin_issuers": of_tlow_eq["trusted_origin_issuers"]}, "REFUSE", "GUARDIAN_TRANSFER_PENDING", "Exact boundary: t_low == T with tip_median_time_past == T emancipates into handover check rather than GUARDIAN_TIME_BOUNDARY (kills t_low < T -> <=).")
+    add("d7-bnd-majority-tlow-eq-t-with-mtp-eq-t-emancipates", ["SL-ORIG-010", "SL-ORIG-011"], "origin_status", {"chain": of_tlow_eq["chain"], "origin_bundle": of_tlow_eq["origin_bundle"], "trusted_origin_issuer_pins": of_tlow_eq["trusted_origin_issuer_pins"]}, "REFUSE", "GUARDIAN_TRANSFER_PENDING", "Exact boundary: t_low == T with tip_median_time_past == T emancipates into handover check rather than GUARDIAN_TIME_BOUNDARY (kills t_low < T -> <=).")
 
     # F5 (L2505): trace_slot 0x12 initial activation exact operator_min_depth == 2 (ADMIT at tip-1 vs GUARDIAN_INACTIVE at tip)
     of_s12 = rm._base_origin_fixture()
@@ -3353,15 +3401,15 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
          "target_id": sl.object_id(c_s12), "target_type": "seallink-contract/1", "type": "seallink-assent/1"},
         [{"guardian_name": "id/parent-a", "revision": 1, "signers": [of_s12["_keys"]["g1_gr"]["sk"]], "slot": 1}],
     )
-    add("d7-bnd-slot-0x12-depth-eq-2-admit", ["SL-ORIG-008", "SL-LDGR-008"], "assent", {"assent": wa_s12, "chain": of_s12["chain"], "contract": c_s12, "operator_min_depth": 2, "origin_bundle": of_s12["origin_bundle"], "trusted_origin_issuers": of_s12["trusted_origin_issuers"]}, "ADMIT", None, "Exact boundary: 0x12 initial activation at depth == operator_min_depth (2) admits (kills < -> <=).")
+    add("d7-bnd-slot-0x12-depth-eq-2-admit", ["SL-ORIG-008", "SL-LDGR-008"], "assent", {"assent": wa_s12, "chain": of_s12["chain"], "contract": c_s12, "operator_min_depth": 2, "origin_bundle": of_s12["origin_bundle"], "trusted_origin_issuer_pins": of_s12["trusted_origin_issuer_pins"]}, "ADMIT", None, "Exact boundary: 0x12 initial activation at depth == operator_min_depth (2) admits (kills < -> <=).")
     of_s12_d1 = copy.deepcopy(of_s12)
     of_s12_d1["chain"]["txs"][init12_txid]["confirmed_height"] = tip_md  # depth 1 < 2 -> GUARDIAN_INACTIVE!
-    add("d7-bnd-slot-0x12-depth-1-lt-2-inactive", ["SL-ORIG-008", "SL-LDGR-008"], "assent", {"assent": wa_s12, "chain": of_s12_d1["chain"], "contract": c_s12, "operator_min_depth": 2, "origin_bundle": of_s12_d1["origin_bundle"], "trusted_origin_issuers": of_s12_d1["trusted_origin_issuers"]}, "REFUSE", "GUARDIAN_INACTIVE", "Exact boundary: 0x12 initial activation at depth 1 with operator_min_depth=2 remains inactive.")
+    add("d7-bnd-slot-0x12-depth-1-lt-2-inactive", ["SL-ORIG-008", "SL-LDGR-008"], "assent", {"assent": wa_s12, "chain": of_s12_d1["chain"], "contract": c_s12, "operator_min_depth": 2, "origin_bundle": of_s12_d1["origin_bundle"], "trusted_origin_issuer_pins": of_s12_d1["trusted_origin_issuer_pins"]}, "REFUSE", "GUARDIAN_INACTIVE", "Exact boundary: 0x12 initial activation at depth 1 with operator_min_depth=2 remains inactive.")
 
     # F6 (L2764): roster 0x0f next_roster_vout wrong script -> ORIGIN_STATUS_INCOMPLETE
     of_r_badnxt = copy.deepcopy(of_r_d2)
     of_r_badnxt["chain"]["txs"][rtx_rd]["outputs"]["0"]["script_pubkey_hex"] = "0014" + "00" * 20
-    add("d7-roster-0x0f-wrong-next-roster-script-refuse", ["SL-ORIG-015"], "origin_status", {"chain": of_r_badnxt["chain"], "origin_bundle": of_r_badnxt["origin_bundle"], "trusted_origin_issuers": of_r_badnxt["trusted_origin_issuers"]}, "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Roster 0x0f spend whose next_roster_vout script disagrees with next_roster_policy refuses ORIGIN_STATUS_INCOMPLETE.")
+    add("d7-roster-0x0f-wrong-next-roster-script-refuse", ["SL-ORIG-015"], "origin_status", {"chain": of_r_badnxt["chain"], "origin_bundle": of_r_badnxt["origin_bundle"], "trusted_origin_issuer_pins": of_r_badnxt["trusted_origin_issuer_pins"]}, "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Roster 0x0f spend whose next_roster_vout script disagrees with next_roster_policy refuses ORIGIN_STATUS_INCOMPLETE.")
 
     # F7 (L3488/L3489): Step 2 invocation time window MUST precede Step 4 CHAIN_UNHEALTHY (both refusal & exact iat == now boundary!)
     fx_t2_exp = rm._base_invocation_fixture()
@@ -3404,7 +3452,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "txid": _h32("d7-reg-0x0b-tx"),
         "vout": 0,
     })
-    add("d7-roster-0x0f-issuer-0x0b-compromised-refuse", ["SL-ORIG-015", "SL-CONT-009"], "origin_status", {"chain": of_r_0b["chain"], "origin_bundle": of_r_0b["origin_bundle"], "trusted_origin_issuers": of_r_0b["trusted_origin_issuers"]}, "REFUSE", "CRED_ISSUER_CLOSED", "SL-CONT-009: roster 0x0f record signed by cred policy compromised at h_c <= h_0x0f refuses CRED_ISSUER_CLOSED.")
+    add("d7-roster-0x0f-issuer-0x0b-compromised-refuse", ["SL-ORIG-015", "SL-CONT-009"], "origin_status", {"chain": of_r_0b["chain"], "origin_bundle": of_r_0b["origin_bundle"], "trusted_origin_issuer_pins": of_r_0b["trusted_origin_issuer_pins"]}, "REFUSE", "CRED_ISSUER_CLOSED", "SL-CONT-009: roster 0x0f record signed by cred policy compromised at h_c <= h_0x0f refuses CRED_ISSUER_CLOSED.")
 
     # F10 (L3247 wrong-code): standalone verify_notary_act with expected_child_binding mismatch -> NOTARY_REQUIRED
     add("d7-na-standalone-wrong-child-binding-refuse", ["SL-CONT-011"], "notary_act", {"anchor_txid": na_tx, "chain": fx_na["chain"], "expected_child_binding": {"child_grant_id": _h32("c-x"), "ordinal": 1, "parent_grant_id": _h32("p-x")}, "notary": na_ok}, "REFUSE", "NOTARY_REQUIRED", "Standalone verify_notary_act with expected_child_binding mismatch refuses NOTARY_REQUIRED.")

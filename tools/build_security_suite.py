@@ -19,7 +19,7 @@ import build_refusal_matrix as rm
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.9"
+VERSION = "1.0.0-draft.10"
 GENESIS_MAIN = rm.GENESIS_MAIN
 
 
@@ -45,12 +45,11 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         pinned_genesis=inp.get("pinned_genesis", GENESIS_MAIN),
         operator_min_depth=inp.get("operator_min_depth", 1),
         allow_window_only=inp.get("allow_window_only", False),
-        trusted_origin_issuers=inp.get("trusted_origin_issuers"),
         trusted_origin_issuer_pins=inp.get("trusted_origin_issuer_pins"),
         enforce_schemas=True,
         require_jsonschema=require_jsonschema,
         max_history_steps=inp.get("max_history_steps", 500),
-        require_observation_bracket=inp.get("require_observation_bracket", False),
+        require_observation_bracket=inp.get("require_observation_bracket", True),
         enabled_modules=inp.get("enabled_modules"),
     )
     if runner == "origin_status":
@@ -63,6 +62,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             journal=j,
             at_height=inp.get("at_height"),
             at_time=inp.get("at_time"),
+            historical_existence_only=inp.get("historical_existence_only", False),
         )
         if err is not None:
             return "REFUSE", err
@@ -110,6 +110,8 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
 
             journal.append = _racy_append  # type: ignore[method-assign]
         raw_msg = bytes.fromhex(inp["raw_message_hex"]) if "raw_message_hex" in inp else None
+        before_cl = len(journal.closures)
+        before_entries = len(journal.entries)
         res = v.verify_invocation(
             inp["invocation"],
             inp["bundle"],
@@ -121,6 +123,10 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             actual_quota_usage=inp.get("actual_quota_usage"),
             actual_message_meta=inp.get("actual_message_meta"),
         )
+        if inp.get("expect_zero_closures") and len(journal.closures) != before_cl:
+            return "REFUSE", f"UNEXPECTED_CLOSURES:{len(journal.closures) - before_cl}"
+        if inp.get("expect_zero_writes") and len(journal.entries) != before_entries:
+            return "REFUSE", f"UNEXPECTED_WRITES:{len(journal.entries) - before_entries}"
         return res.verdict, res.refusal_code
     if runner == "migration":
         chain = sv.ChainView(inp["chain"]) if inp.get("chain") is not None else None
@@ -199,6 +205,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 journal,
                 inp["executor_cfg"],
                 use_txid=step.get("use_txid"),
+                actual_message_meta=step.get("actual_message_meta"),
             )
             if (res.verdict, res.refusal_code) != (step["want_verdict"], step.get("want_refusal")):
                 return "REFUSE", f"STEP_MISMATCH:{step['label']}:{(res.verdict, res.refusal_code)}"
@@ -326,8 +333,12 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             grant_env=inp.get("grant_env"),
             parent_grant_env=inp.get("parent_grant_env"),
             contract_env=inp.get("contract_env"),
+            framework_contract_env=inp.get("framework_contract_env"),
+            origin_bundle=inp.get("origin_bundle"),
             action=inp.get("action"),
+            target=inp.get("target"),
             arguments=inp.get("arguments"),
+            actual_message_meta=inp.get("actual_message_meta"),
         )
         if inp.get("expect_zero_writes") and len(journal.entries) != before_n:
             return "REFUSE", f"UNEXPECTED_BEARER_WRITES:{len(journal.entries) - before_n}"
@@ -350,6 +361,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 receipt_env_for_cache=step.get("receipt_env"),
                 raw_message_bytes=raw_msg,
                 actual_quota_usage=step.get("actual_quota_usage"),
+                actual_message_meta=step.get("actual_message_meta"),
             )
             if (res.verdict, res.refusal_code) != (step["want_verdict"], step.get("want_refusal")):
                 return "REFUSE", f"PRE_STEP_MISMATCH:{step['label']}:{(res.verdict, res.refusal_code)}"
@@ -383,6 +395,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 use_txid=step.get("use_txid"),
                 raw_message_bytes=raw_msg,
                 actual_quota_usage=step.get("actual_quota_usage"),
+                actual_message_meta=step.get("actual_message_meta"),
             )
             if (res.verdict, res.refusal_code) != (step["want_verdict"], step.get("want_refusal")):
                 return "REFUSE", f"POST_STEP_MISMATCH:{step['label']}:{(res.verdict, res.refusal_code)}"
@@ -512,9 +525,12 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                     grant_env=step.get("grant_env"),
                     parent_grant_env=step.get("parent_grant_env"),
                     contract_env=step.get("contract_env"),
+                    framework_contract_env=step.get("framework_contract_env"),
+                    origin_bundle=step.get("origin_bundle"),
                     action=step.get("action"),
                     target=step.get("target"),
                     arguments=step.get("arguments"),
+                    actual_message_meta=step.get("actual_message_meta"),
                 )
             else:
                 raise ValueError(f"Unknown session_lifecycle step kind: {op_kind}")
@@ -526,6 +542,11 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 got_d = len(res.journal_writes[-1]["entry"]["body"].get("debits", []))
                 if got_d != step["expect_debit_count"]:
                     return "REFUSE", f"SESSION_DEBIT_COUNT:{step['label']}:{got_d}"
+            for bspec in step.get("check_balances", []):
+                key = (bspec["scope"], bspec["qkey"], bspec["bucket_id"])
+                got_b = j.quotas_used.get(key, 0)
+                if got_b != bspec["expected"]:
+                    return "REFUSE", f"SESSION_BAL:{step['label']}:{bspec['scope']}:{got_b}"
         return "ADMIT", None
     if runner == "two_phase_commit":
         # Exercises R1-A atomic admit_and_reserve() -> optional retry while unsettled (UNCERTAIN) ->
@@ -565,12 +586,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             inp["executor_cfg"],
             invocation_id=p1.details["invocation_id"],
             grant_id=p1.details["grant_id"],
-            reserved_ops=p1.details["reserved_ops"],
             actual_quota_usage=inp.get("actual_quota_usage"),
-            single_use=p1.details["single_use"],
-            use_txid=p1.details["use_txid"],
-            recorded_at=p1.details["recorded_at"],
-            tip_height=p1.details["tip_height"],
         )
         if p2.verdict != "ADMIT":
             return p2.verdict, p2.refusal_code
@@ -596,6 +612,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             inp["executor_cfg"],
             use_txid=inp.get("use_txid"),
             raw_message_bytes=raw_msg,
+            actual_message_meta=inp.get("actual_message_meta"),
         )
         if len(restarted.entries) != before_n:
             return "REFUSE", "UNEXPECTED_WRITE_ON_POST_RESTART_RETRY"
@@ -635,6 +652,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             j,
             inp["executor_cfg"],
             use_txid=inp.get("use_txid"),
+            actual_message_meta=inp.get("actual_message_meta"),
         )
         if p1.verdict != "ADMIT":
             return p1.verdict, p1.refusal_code
@@ -650,34 +668,15 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             rep_err = j.check_continuity()
             if rep_err is not None:
                 return "REFUSE", rep_err
-            # Intentionally omit single_use & use_txid to prove 100% self-contained recovery from persisted JournalEntry[]!
-            p2 = v.commit_result(
-                inp["receipt_env"],
-                j,
-                inp["executor_cfg"],
-                invocation_id=p1.details["invocation_id"],
-                grant_id=inp.get("override_grant_id", p1.details["grant_id"]),
-                actual_quota_usage=inp.get("actual_quota_usage"),
-                single_use=False,
-                use_txid=None,
-                recorded_at=p1.details["recorded_at"],
-                tip_height=p1.details["tip_height"],
-                expected_action=inp.get("expected_action"),
-            )
-        else:
-            p2 = v.commit_result(
-                inp["receipt_env"],
-                j,
-                inp["executor_cfg"],
-                invocation_id=p1.details["invocation_id"],
-                grant_id=inp.get("override_grant_id", p1.details["grant_id"]),
-                actual_quota_usage=inp.get("actual_quota_usage"),
-                single_use=inp.get("override_single_use", p1.details["single_use"]),
-                use_txid=inp.get("override_use_txid", p1.details["use_txid"]),
-                recorded_at=p1.details["recorded_at"],
-                tip_height=p1.details["tip_height"],
-                expected_action=inp.get("expected_action"),
-            )
+        # H-7 / M-5: commit_result derives action, single_use, use_txid strictly from durable reservation, and recorded_at strictly from signed receipt!
+        p2 = v.commit_result(
+            inp["receipt_env"],
+            j,
+            inp["executor_cfg"],
+            invocation_id=p1.details["invocation_id"],
+            grant_id=inp.get("override_grant_id", p1.details["grant_id"]),
+            actual_quota_usage=inp.get("actual_quota_usage"),
+        )
         if p2.verdict != "ADMIT":
             return p2.verdict, p2.refusal_code
         if "expect_total_entries" in inp and len(j.entries) != inp["expect_total_entries"]:
@@ -691,7 +690,36 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 return "REFUSE", f"SETTLEMENT_ORDER_MISMATCH:{got_ord}"
         if "expect_head_commitment" in inp and j.commitment != inp["expect_head_commitment"]:
             return "REFUSE", f"COMMITMENT_MISMATCH:{j.commitment}"
+        if "expect_settlement_recorded_at" in inp:
+            settle_entries = [e for e in j.entries if e.get("kind") == "settlement"]
+            if not settle_entries or settle_entries[-1]["body"].get("recorded_at") != inp["expect_settlement_recorded_at"]:
+                return "REFUSE", f"SETTLEMENT_RECORDED_AT_MISMATCH:{settle_entries[-1]['body'].get('recorded_at') if settle_entries else None}"
+        if inp.get("admit_replay_after_p2"):
+            r_mid = v.admit_and_reserve(
+                inp["invocation"],
+                inp["bundle"],
+                ch,
+                j,
+                inp["executor_cfg"],
+                use_txid=inp.get("use_txid"),
+                actual_message_meta=inp.get("actual_message_meta"),
+            )
+            want_mid = inp["admit_replay_after_p2"]
+            if (r_mid.verdict, r_mid.refusal_code) != (want_mid["want_verdict"], want_mid.get("want_refusal")):
+                return "REFUSE", f"MID_REPLAY_MISMATCH:{(r_mid.verdict, r_mid.refusal_code)}"
         for ec in inp.get("extra_commits", []):
+            if ec.get("restart_before"):
+                j = sv.FencedJournal.replay_persisted_entries(
+                    j.journal_id,
+                    json.loads(json.dumps(j.entries)),
+                    receipt_store=json.loads(json.dumps(j.receipt_store)),
+                    witness_pos=j.witness_pos,
+                    witness_commitment=j.witness_commitment,
+                    write_token_active=True,
+                )
+                rep_err = j.check_continuity()
+                if rep_err is not None:
+                    return "REFUSE", rep_err
             before_n = len(j.entries)
             before_c = j.commitment
             ec_res = v.commit_result(
@@ -700,7 +728,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 inp["executor_cfg"],
                 invocation_id=p1.details["invocation_id"],
                 grant_id=p1.details["grant_id"],
-                recorded_at=ec.get("recorded_at", p1.details["recorded_at"]),
+                actual_quota_usage=ec.get("actual_quota_usage"),
             )
             if (ec_res.verdict, ec_res.refusal_code) != (ec["want_verdict"], ec.get("want_refusal")):
                 return "REFUSE", f"EXTRA_COMMIT_MISMATCH:{ec['label']}:{(ec_res.verdict, ec_res.refusal_code)}"
@@ -713,6 +741,10 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 got_b = j.quotas_used.get(key, 0)
                 if got_b != bspec["expected"]:
                     return "REFUSE", f"EXTRA_COMMIT_BAL:{ec['label']}:{got_b}"
+        if "expect_single_use_closure_count" in inp:
+            su_cnt = sum(1 for e in j.entries if e.get("kind") == "settlement" and e["body"].get("single_use_consumed") is True)
+            if su_cnt != inp["expect_single_use_closure_count"]:
+                return "REFUSE", f"SINGLE_USE_CLOSURE_COUNT:{su_cnt}"
         if inp.get("second_receipt_env") is not None:
             before_n = len(j.entries)
             before_c = j.commitment
@@ -723,10 +755,6 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 invocation_id=p1.details["invocation_id"],
                 grant_id=p1.details["grant_id"],
                 actual_quota_usage=inp.get("actual_quota_usage"),
-                single_use=p1.details["single_use"],
-                use_txid=p1.details["use_txid"],
-                recorded_at=p1.details["recorded_at"],
-                tip_height=p1.details["tip_height"],
             )
             if p2b.verdict == "ADMIT" and (len(j.entries) != before_n or j.commitment != before_c):
                 return "REFUSE", "IDEMPOTENT_COMMIT_MUTATED_JOURNAL"
@@ -746,9 +774,59 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 restarted,
                 inp["executor_cfg"],
                 use_txid=inp.get("use_txid"),
+                actual_message_meta=inp.get("actual_message_meta"),
             )
             return r_new.verdict, r_new.refusal_code
         return p2.verdict, p2.refusal_code
+    if runner == "multi_step_journal":
+        j = sv.FencedJournal.from_dict(inp.get("journal", {"journal_id": _h32("msj-j")}))
+        for step in inp["steps"]:
+            op = step["kind"]
+            if op == "replay_restart":
+                j = sv.FencedJournal.replay_persisted_entries(
+                    j.journal_id,
+                    json.loads(json.dumps(j.entries)),
+                    receipt_store=json.loads(json.dumps(j.receipt_store)),
+                    witness_pos=j.witness_pos,
+                    witness_commitment=j.witness_commitment,
+                    write_token_active=True,
+                )
+                rep_err = j.check_continuity()
+                if rep_err is not None:
+                    return "REFUSE", f"MSJ_REPLAY_ERR:{rep_err}"
+                continue
+            ch = sv.ChainView(step["chain"])
+            before_cl = len(j.closures)
+            before_ent = len(j.entries)
+            if op == "invocation":
+                res = v.verify_invocation(
+                    step["invocation"],
+                    step["bundle"],
+                    ch,
+                    j,
+                    step["executor_cfg"],
+                    use_txid=step.get("use_txid"),
+                    actual_message_meta=step.get("actual_message_meta"),
+                )
+            elif op == "credential":
+                res = v.verify_credential(
+                    step["credential"],
+                    step.get("anchor_txid"),
+                    ch,
+                    journal=j,
+                    origin_bundle=step.get("origin_bundle"),
+                )
+            else:
+                raise ValueError(f"Unknown multi_step_journal op: {op}")
+            if (res.verdict, res.refusal_code) != (step["want_verdict"], step.get("want_refusal")):
+                return "REFUSE", f"MSJ_MISMATCH:{step['label']}:{(res.verdict, res.refusal_code)}"
+            if "expect_closures_delta" in step and (len(j.closures) - before_cl) != step["expect_closures_delta"]:
+                return "REFUSE", f"MSJ_CL_DELTA:{step['label']}:{len(j.closures) - before_cl}"
+            if "expect_entries_delta" in step and (len(j.entries) - before_ent) != step["expect_entries_delta"]:
+                return "REFUSE", f"MSJ_ENT_DELTA:{step['label']}:{len(j.entries) - before_ent}"
+        if "expect_head_commitment" in inp and j.commitment != inp["expect_head_commitment"]:
+            return "REFUSE", f"MSJ_COMMITMENT_MISMATCH:{j.commitment}"
+        return "ADMIT", None
     if runner == "journal_cas_fence":
         jid = inp["journal_id"]
         ext: dict[str, Any] = {
@@ -790,12 +868,12 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
     if runner == "single_use_anti_dos":
         ch = sv.ChainView(inp["chain"])
         j = sv.FencedJournal(inp["journal_id"])
-        r_bad = v.verify_invocation(inp["foreign_invocation"], inp["bundle"], ch, j, inp["executor_cfg"], use_txid=inp["foreign_use_txid"])
+        r_bad = v.verify_invocation(inp["foreign_invocation"], inp["bundle"], ch, j, inp["executor_cfg"], use_txid=inp["foreign_use_txid"], actual_message_meta=inp.get("actual_message_meta"))
         if r_bad.verdict != "REFUSE" or r_bad.refusal_code != "SEAL_SPENT":
             return "REFUSE", f"FOREIGN_UNEXPECTED:{(r_bad.verdict, r_bad.refusal_code)}"
         if j.entries:
             return "REFUSE", f"FOREIGN_WROTE_CLOSURE:{len(j.entries)}"
-        r_ok = v.verify_invocation(inp["good_invocation"], inp["bundle"], ch, j, inp["executor_cfg"], use_txid=inp["good_use_txid"])
+        r_ok = v.verify_invocation(inp["good_invocation"], inp["bundle"], ch, j, inp["executor_cfg"], use_txid=inp["good_use_txid"], actual_message_meta=inp.get("actual_message_meta"))
         return r_ok.verdict, r_ok.refusal_code
     raise ValueError(f"Unknown security runner: {runner}")
 
@@ -855,7 +933,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "stranger-signed-origin-rejected",
         ["SL-ORIG-002", "SL-WIRE-013"],
         "origin_status",
-        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuers": of["trusted_origin_issuers"]},
+        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"]},
         "REFUSE",
         "WIRE_SIGNATURE",
         "Origin signed by stranger key (even if anchored by stranger and claiming trusted issuer name) MUST fail against issuer link.cred at h_origin.",
@@ -867,7 +945,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "empty-trusted-origin-issuers-refuses",
         ["SL-ORIG-002"],
         "origin_status",
-        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuers": []},
+        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuer_pins": []},
         "REFUSE",
         "ORIGIN_UNVERIFIED",
         "Verifier with empty trusted_origin_issuers MUST refuse ORIGIN_UNVERIFIED.",
@@ -906,7 +984,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "stranger-signed-guardian-initial-rejected",
         ["SL-ORIG-007", "SL-ORIG-008", "SL-WIRE-013"],
         "assent",
-        {"assent": assent_s1, "contract": of["contract"], "origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuers": of["trusted_origin_issuers"]},
+        {"assent": assent_s1, "contract": of["contract"], "origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"]},
         "REFUSE",
         "GUARDIAN_INACTIVE",
         "Guardian record signed by stranger key MUST fail link.cred verification at anchor height, leaving slot contested_burned.",
@@ -919,7 +997,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "missing-guardian-assent-blocks-activation",
         ["SL-ORIG-007"],
         "assent",
-        {"assent": assent_s1, "contract": of["contract"], "origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuers": of["trusted_origin_issuers"]},
+        {"assent": assent_s1, "contract": of["contract"], "origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"]},
         "REFUSE",
         "GUARDIAN_INACTIVE",
         "Initial activation 0x12 without incoming guardian's verified seallink-assent/1 MUST NOT activate slot.",
@@ -962,7 +1040,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "stranger-signed-roster-transition-rejected",
         ["SL-ORIG-015", "SL-ORIG-008", "SL-WIRE-013"],
         "origin_status",
-        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuers": of["trusted_origin_issuers"]},
+        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"]},
         "REFUSE",
         "WIRE_SIGNATURE",
         "Roster transition 0x0f signed by stranger key MUST fail authoritative issuer link.cred check.",
@@ -1009,7 +1087,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "disposer-rotation-forbids-retain-active",
         ["SL-ORIG-015", "SL-ORIG-016"],
         "origin_status",
-        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuers": of["trusted_origin_issuers"]},
+        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"]},
         "REFUSE",
         "CHAIN_SCRIPT_UNSUPPORTED",
         "Changing disposer_pk in 0x0f roster transition MUST forbid retain_active and require new_vacant under new keys.",
@@ -1034,7 +1112,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "disposer-rotation-with-new-vacant-admits",
         ["SL-ORIG-015", "SL-ORIG-016"],
         "origin_status",
-        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuers": of["trusted_origin_issuers"]},
+        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"]},
         "ADMIT_WARD",
         None,
         "Changing disposer_pk in 0x0f roster transition succeeds when all slots use new_vacant locked to both_of_2(new_disposer_pk, arbiter_pk).",
@@ -1071,7 +1149,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "stranger-signed-capacity-rejected",
         ["SL-ORIG-002", "SL-ORIG-011", "SL-WIRE-013"],
         "origin_status",
-        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuers": of["trusted_origin_issuers"]},
+        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_STATUS_INCOMPLETE",
         "seallink-capacity/1 signed by stranger key MUST fail closed with ORIGIN_STATUS_INCOMPLETE.",
@@ -1117,7 +1195,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "emancipation-handover-completed-admits-autonomous",
         ["SL-ORIG-002", "SL-ORIG-011"],
         "origin_status",
-        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuers": of["trusted_origin_issuers"]},
+        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"]},
         "ADMIT_AUTONOMOUS",
         None,
         "Valid capacity/1 + confirmed transfer to subject_new_owner_policy + subject-authored SIGHASH_ALL update transitions ward to autonomous.",
@@ -1151,7 +1229,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "stranger-signed-end-record-rejected",
         ["SL-ORIG-002", "SL-ORIG-012", "SL-WIRE-013"],
         "origin_status",
-        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuers": of["trusted_origin_issuers"]},
+        {"origin_bundle": of["origin_bundle"], "chain": of["chain"], "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_STATUS_INCOMPLETE",
         "seallink-end/1 signed by stranger key MUST fail authoritative issuer check (ORIGIN_STATUS_INCOMPLETE), never returning SUBJECT_ENDED.",
@@ -1160,12 +1238,18 @@ def build_security_conformance_suite() -> dict[str, Any]:
     # 11. Stranger-signed seallink-migration/1 -> WIRE_SIGNATURE
     fx_m = rm._base_invocation_fixture()
     dest_own = _kp("sec-mail-host-b-own")
-    ok_files = [{"content_sha256": _h32("msg-blob-1"), "kind": "mail_blob", "media_type": "message/rfc822", "path": "mail/msg-1.eml"}]
+    dest_pin_sec = {"name": "id/mail-host-b", "owner_policy": {"kind": "key", "pk": dest_own["comp"]}, "registration": {"txid": _h32("sec-hb-reg"), "vout": 0}}
+    ok_inv = {
+        "holder_name": "id/alice",
+        "items": [{"media_type": "message/rfc822", "path": "mail/msg-1.eml", "sha256": _h32("msg-blob-1"), "size_bytes": "512"}],
+        "migration_id": _h32("sec-mig-1"),
+        "service_type": "mail",
+    }
     mig_p = {
-        "dest_executor": {"name": "id/mail-host-b", "owner_policy": {"kind": "key", "pk": dest_own["comp"]}, "registration": {"txid": _h32("sec-hb-reg"), "vout": 0}},
+        "dest_executor": dest_pin_sec,
         "genesis": GENESIS_MAIN,
         "holder": {"name": "id/alice", "owner_policy": fx_m["_alice_owner_pol"], "registration": fx_m["_alice_reg"]},
-        "inventory_sha256": sl.sha256(sl.jcs_encode({"files": ok_files})).hex(),
+        "inventory_sha256": sl.sha256(sl.jcs_encode(ok_inv)).hex(),
         "issued_at": 1795220000,
         "journal_commitment": _h32("sec-jc"),
         "journal_pos": 10,
@@ -1183,7 +1267,8 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "migration",
         {
             "migration": mig_forged,
-            "export_bundle": {"files": ok_files, "open_predecessor_grants": [], "source_journal_commitment": _h32("sec-jc"), "source_journal_pos": 10, "source_write_token_fenced": True},
+            "local_executor_pin": dest_pin_sec,
+            "export_bundle": {"inventory": ok_inv, "source_journal_commitment": _h32("sec-jc"), "source_journal_pos": 10},
             "chain": fx_m["chain"],
             "manifests": fx_m["bundle"]["manifests"],
             "journal": {"journal_id": _h32("sec-mj")},
@@ -1425,6 +1510,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
             },
             "grant": fed_grant_env,
             "chain": fx_fed_pos["chain"],
+            "journal": {"journal_id": _h32("sec-fed-j")},
         },
         "ADMIT",
         None,
@@ -1441,6 +1527,8 @@ def build_security_conformance_suite() -> dict[str, Any]:
     bd8.add_draft8_conformance_cases(add)
     import build_draft9_suite as bd9
     bd9.add_draft9_conformance_cases(add)
+    import build_draft10_suite as bd10
+    bd10.add_draft10_conformance_cases(add)
 
     return {
         "suite": "security-conformance",
@@ -1479,18 +1567,14 @@ def run_verifier_mutation_tests(
     finally:
         sv.Tier1Verifier.verify_issuer_role_at_height = orig_fn  # type: ignore[method-assign]
 
-    # Mutation 2: Empty trusted_origin_issuers defaults to trusting all -> must fail empty-trusted-origin-issuers-refuses
-    orig_init = sv.Tier1Verifier.__init__
+    # Mutation 2: Empty trusted_origin_issuer_pins defaults to trusting all -> must fail empty-trusted-origin-issuers-refuses
+    orig_tr = sv.Tier1Verifier._is_trusted_origin_issuer
     try:
-        def mut_init(self: Any, *a: Any, **kw: Any) -> None:
-            orig_init(self, *a, **kw)
-            if not self.trusted_origin_issuers:
-                self.trusted_origin_issuers = {"id/civil-registry"}
-        sv.Tier1Verifier.__init__ = mut_init  # type: ignore[method-assign]
+        sv.Tier1Verifier._is_trusted_origin_issuer = lambda self, pin: True  # type: ignore[method-assign]
         c = sec_by_id["empty-trusted-origin-issuers-refuses"]
         assert_killed("trust-all-when-empty-issuers", lambda: execute_security_case(c, require_jsonschema=require_jsonschema) != (c["expected_verdict"], c["expected_refusal"]))
     finally:
-        sv.Tier1Verifier.__init__ = orig_init  # type: ignore[method-assign]
+        sv.Tier1Verifier._is_trusted_origin_issuer = orig_tr  # type: ignore[method-assign]
 
     # Mutation 3: Bypass incoming guardian assent -> must fail missing-guardian-assent-blocks-activation
     orig_ga = sv.Tier1Verifier._verify_guardian_incoming_assent
@@ -1517,7 +1601,7 @@ def run_verifier_mutation_tests(
     orig_obs = sv.Tier1Verifier.check_chain_observation
     try:
         def mut_obs(self: Any, chain: sv.ChainView, risk_class: int = 1) -> str | None:
-            patched = sv.ChainView({**chain.raw, "comparison_peers": [{"healthy": True, "height": chain.tip_height, "hash_at_tip": chain.tip_hash}]})
+            patched = sv.ChainView({**chain.raw, "comparison_peers": [{"id": "peer-1", "healthy": True, "height": chain.tip_height, "hash_at_tip": chain.tip_hash}]})
             return orig_obs(self, patched, risk_class)
         sv.Tier1Verifier.check_chain_observation = mut_obs  # type: ignore[method-assign]
         c = sec_by_id["zero-comparison-peers-refuses-chain-unhealthy"]

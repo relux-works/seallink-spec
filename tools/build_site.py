@@ -899,7 +899,7 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
 """
     if archived_releases:
         arch_rows = "\n".join(
-            f'<tr><td><code>{html.escape(t)}</code></td>'
+            f'<tr><td><a href="/releases/{html.escape(t)}/"><code>{html.escape(t)}</code></a></td>'
             f'<td><a href="/releases/{html.escape(t)}/schemas/common.schema.json"><code>/releases/{html.escape(t)}/schemas/…</code></a> ({len(sfiles)} schemas)</td>'
             f'<td><a href="/releases/{html.escape(t)}/registry/object-types.json"><code>/releases/{html.escape(t)}/registry/…</code></a></td>'
             f'<td><a href="https://github.com/relux-works/seallink-spec/releases/tag/{html.escape(t)}" target="_blank" rel="noopener">GitHub Release</a></td></tr>'
@@ -916,6 +916,79 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
         render_page("SealLink Protocol Specification", version, index_body), encoding="utf-8"
     )
 
+    # 6b. Emit per-release index pages (/releases/<version>/index.html, /releases/<prev_tag>/index.html, /releases/index.html)
+    cur_rel_body = (
+        '<section class="hero">'
+        f'<span class="badge">Immutable Release {html.escape(version)}</span>'
+        f'<h1>SealLink Release {html.escape(version)}</h1>'
+        '<p class="lead">Canonical immutable schemas, registries, conformance vectors, and standalone specification bundles for this release.</p>'
+        '<div class="btn-row">'
+        f'<a class="btn btn-primary" href="/releases/{html.escape(version)}/{html.escape(html_name)}">Full HTML / PDF</a>'
+        f'<a class="btn" href="/releases/{html.escape(version)}/{html.escape(md_name)}">Single-File Markdown</a>'
+        f'<a class="btn" href="https://github.com/relux-works/seallink-spec/releases/tag/{html.escape(version)}" target="_blank" rel="noopener">GitHub Release</a>'
+        '</div></section>\n'
+        f'<h2>Schemas ({len(schema_files)})</h2><ul>{schema_links}</ul>\n'
+        f'<h2>Registries ({len(registry_files)})</h2><ul>{registry_links}</ul>\n'
+        f'<h2>Conformance Vectors ({len(vector_files)})</h2><div class="table-wrap"><table>'
+        f'<thead><tr><th>Suite</th><th>Size</th><th>SHA-256</th><th>Summary</th></tr></thead><tbody>{"".join(vector_rows)}</tbody></table></div>\n'
+        f'<h2>Release Checksums</h2><pre><code>{bundle_sha}  {html.escape(md_name)}\n{full_html_sha}  {html.escape(html_name)}</code></pre>\n'
+    )
+    (rel_base / "index.html").write_text(
+        render_page(f"SealLink {version}", version, cur_rel_body), encoding="utf-8"
+    )
+    for prev_tag, prev_schemas in archived_releases:
+        pdir = out_dir / "releases" / prev_tag
+        ps_links = "".join(
+            f'<li><a href="/releases/{html.escape(prev_tag)}/schemas/{html.escape(s)}"><code>{html.escape(s)}</code></a></li>'
+            for s in prev_schemas
+        )
+        pr_files = sorted((pdir / "registry").glob("*.json")) if (pdir / "registry").is_dir() else []
+        pr_links = "".join(
+            f'<li><a href="/releases/{html.escape(prev_tag)}/registry/{html.escape(f.name)}"><code>{html.escape(f.name)}</code></a></li>'
+            for f in pr_files
+        )
+        pv_files = sorted((pdir / "vectors").glob("*.json")) if (pdir / "vectors").is_dir() else []
+        pv_links = "".join(
+            f'<li><a href="/releases/{html.escape(prev_tag)}/vectors/{html.escape(f.name)}"><code>{html.escape(f.name)}</code></a></li>'
+            for f in pv_files
+        )
+        prev_body = (
+            '<section class="hero">'
+            f'<span class="badge">Archived Release {html.escape(prev_tag)}</span>'
+            f'<h1>SealLink Release {html.escape(prev_tag)}</h1>'
+            '<p class="lead">Preserved immutable schemas, registries, and conformance vectors for this historical release.</p>'
+            '<div class="btn-row">'
+            f'<a class="btn btn-primary" href="/releases/{html.escape(version)}/">Latest ({html.escape(version)})</a>'
+            f'<a class="btn" href="https://github.com/relux-works/seallink-spec/releases/tag/{html.escape(prev_tag)}" target="_blank" rel="noopener">GitHub Release</a>'
+            '</div></section>\n'
+            f'<h2>Schemas ({len(prev_schemas)})</h2><ul>{ps_links}</ul>\n'
+            f'<h2>Registries ({len(pr_files)})</h2><ul>{pr_links}</ul>\n'
+            f'<h2>Conformance Vectors ({len(pv_files)})</h2><ul>{pv_links}</ul>\n'
+        )
+        (pdir / "index.html").write_text(
+            render_page(f"SealLink {prev_tag}", version, prev_body), encoding="utf-8"
+        )
+    all_rel_rows = [
+        f'<tr><td><a href="/releases/{html.escape(version)}/"><code>{html.escape(version)}</code></a> (current)</td>'
+        f'<td>{len(schema_files)} schemas</td>'
+        f'<td><a href="https://github.com/relux-works/seallink-spec/releases/tag/{html.escape(version)}" target="_blank" rel="noopener">GitHub Release</a></td></tr>'
+    ] + [
+        f'<tr><td><a href="/releases/{html.escape(t)}/"><code>{html.escape(t)}</code></a></td>'
+        f'<td>{len(sfiles)} schemas</td>'
+        f'<td><a href="https://github.com/relux-works/seallink-spec/releases/tag/{html.escape(t)}" target="_blank" rel="noopener">GitHub Release</a></td></tr>'
+        for t, sfiles in reversed(archived_releases)
+    ]
+    rel_idx_body = (
+        '<section class="hero"><span class="badge">Releases</span>'
+        '<h1>SealLink Specification Releases</h1>'
+        '<p class="lead">Immutable published specification releases and preserved historical <code>$id</code> endpoints.</p></section>\n'
+        '<div class="table-wrap"><table><thead><tr><th>Tag</th><th>Schemas</th><th>GitHub</th></tr></thead>'
+        f'<tbody>{"".join(all_rel_rows)}</tbody></table></div>\n'
+    )
+    (out_dir / "releases" / "index.html").write_text(
+        render_page("SealLink Releases", version, rel_idx_body), encoding="utf-8"
+    )
+
     # 7. Cloudflare Pages _headers:
     # - NEVER put wildcard Content-Type overrides on /releases/*, /schemas/*, /registry/*, or /vectors/*,
     #   so 404.html ALWAYS serves text/html; charset=utf-8 for nonexistent paths.
@@ -924,6 +997,7 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
     header_blocks: list[str] = [
         "/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer",
         "/releases/*\n  Access-Control-Allow-Origin: *\n  Cache-Control: public, max-age=31536000, immutable",
+        "/releases/index.html\n  Cache-Control: public, max-age=300",
         "/schemas/*\n  Access-Control-Allow-Origin: *\n  Cache-Control: public, max-age=300",
         "/registry/*\n  Access-Control-Allow-Origin: *\n  Cache-Control: public, max-age=300",
         "/.well-known/seallink/*\n  Access-Control-Allow-Origin: *\n  Cache-Control: public, max-age=31536000, immutable",
@@ -984,7 +1058,7 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build static website & live schema host for seallink.org.")
-    parser.add_argument("--version", default="v1.0.0-draft.9", help="Release version label (e.g. v1.0.0-draft.9)")
+    parser.add_argument("--version", default="v1.0.0-draft.10", help="Release version label (e.g. v1.0.0-draft.10)")
     parser.add_argument("--out", default=str(ROOT / "site"), help="Output directory for generated static site")
     parser.add_argument(
         "--archive-tags",

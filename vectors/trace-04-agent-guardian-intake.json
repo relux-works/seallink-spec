@@ -237,9 +237,11 @@
     }
   ],
   "initial_chain_state": {
+    "best_header_height": 750010,
     "blocks": {
       "2e22a8cc1bf0c85cdc7c4737a8c949b39083622f747b933a79170573eb7a36d2": 749990
     },
+    "clock_watermark": 1795219000,
     "comparison_peers": [
       {
         "hash_at_tip": "4554e70697ed3716583a0f5e90522a322e23d091b62d20c51859ddd6ad7663f4",
@@ -248,6 +250,7 @@
       }
     ],
     "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+    "in_ibd": false,
     "names": {
       "id/agent-nova": {
         "registration": {
@@ -431,12 +434,25 @@
       }
     },
     "network": "main",
+    "node_reachable": true,
     "now": 1795220020,
+    "observation_bracket": {
+      "consistent": true,
+      "end": {
+        "hash": "4554e70697ed3716583a0f5e90522a322e23d091b62d20c51859ddd6ad7663f4",
+        "height": 750010
+      },
+      "start": {
+        "hash": "4554e70697ed3716583a0f5e90522a322e23d091b62d20c51859ddd6ad7663f4",
+        "height": 750010
+      }
+    },
     "tip_first_sight": 1795220005,
     "tip_hash": "4554e70697ed3716583a0f5e90522a322e23d091b62d20c51859ddd6ad7663f4",
     "tip_header_time": 1795220000,
     "tip_height": 750010,
     "tip_median_time_past": 1795219900,
+    "txindex": true,
     "txs": {
       "049462f9de891622ad8843550a9342555adab987a54326bb07c400fa17443d6c": {
         "confirmed_height": 749000,
@@ -1187,10 +1203,7 @@
       }
     }
   ],
-  "trusted_origin_issuers": [
-    "id/agent-registry"
-  ],
-  "version": "1.0.0-draft.9",
+  "version": "1.0.0-draft.10",
   "ward_grant_downgraded": {
     "canonical_jcs": "{\"guardian_approvals\":[{\"guardian_name\":\"id/guardian-a\",\"revision\":1,\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"11b67dd92e87f1f7e0c66877029988b8380e45097e4fb766498552900d0bbe2c\"]},\"sigs\":[{\"pk\":\"11b67dd92e87f1f7e0c66877029988b8380e45097e4fb766498552900d0bbe2c\",\"sig\":\"b22f2db18f30386f42260184baaab78eec5d3ee92fbfb0c7dbf599f5f8101725a2538b3efddce5b0f22de16241bee7df97e66ff4f35edfd7f8b209289c10baad\"}]},\"slot\":1}],\"payload\":{\"capabilities\":[{\"action\":\"agent/guardian-message\",\"target\":\"ward:5bb73547e103a8b6e4f7de55eea8cf05c2ab764c975ca4650cc8b0f98f0cdce5\",\"where\":{\"channel\":{\"eq\":\"nostr-dm\"},\"delivery_mode\":{\"eq\":\"strict_drop\"},\"message_sha256\":{\"hash_eq\":\"9346ab861bf40df12bbf2362c6388915d97dc5710032fdb189ce11e21fe3da8b\"},\"origin_id\":{\"eq\":\"5bb73547e103a8b6e4f7de55eea8cf05c2ab764c975ca4650cc8b0f98f0cdce5\"},\"subject_ward_name\":{\"eq\":\"id/agent-nova\"}}}],\"executor\":{\"key\":\"ce550d46e7f0e98785b6b564ec9373860e44d9d9c5fb857262911308ceca2130\",\"name\":\"id/station-nova\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"guardian_context\":{\"event_class\":\"routine_read\",\"origin_id\":\"5bb73547e103a8b6e4f7de55eea8cf05c2ab764c975ca4650cc8b0f98f0cdce5\",\"revision\":1,\"ward_name\":\"id/agent-nova\"},\"issuer\":{\"name\":\"id/agent-nova\",\"owner_policy\":{\"kind\":\"multisig\",\"m\":2,\"pks\":[\"02d002a927f117fdae4329bd32ac410d1b0cf17fa5d7d53f1ab7993baf0ed264e3\",\"038a6ec46e16d2a6898564dd03c1943a38ef97a517a2033856b8b026fd160e0600\"]},\"registration\":{\"txid\":\"a06b44926b6076d2753eebdc3661e39e854b005d145619b55d9e5ca3267f72e2\",\"vout\":0}},\"network\":\"main\",\"not_after_height\":760000,\"not_before_height\":750000,\"recent_block\":\"2e22a8cc1bf0c85cdc7c4737a8c949b39083622f747b933a79170573eb7a36d2\",\"recipient\":{\"key\":\"a87e87842f47147102e8d1476f096f429855136f4c9799f7d4756347885d8e3f\",\"mode\":\"key\"},\"revocation\":{\"construction\":\"W\",\"kind\":\"revocable\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"kind\":\"key\",\"pk\":\"03b136a460fde0c04ce0a4a2ed348dbf86c17e8f6663b58218943fde331c6e6687\"},\"txid\":\"6ee43bdcd9c0c8218a28600f868cc15d05c6d2e0d6abe1c60be16cdc9486ca48\",\"vout\":0}},\"type\":\"seallink-grant/1\"}}",
     "content_addr": "29499d5090e1bfa1db7fd62791f19d2f343a84b8aa24afaba783a630fb38fe21",

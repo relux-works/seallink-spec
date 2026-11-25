@@ -158,6 +158,8 @@
     }
   ],
   "chain_state": {
+    "best_header_height": 750600,
+    "clock_watermark": 1795219000,
     "comparison_peers": [
       {
         "hash_at_tip": "ea2aac743d9503ea1552c8522636a35b8b9cc4fa24946dd639a2105298381f9b",
@@ -170,6 +172,7 @@
       1795220020
     ],
     "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+    "in_ibd": false,
     "names": {
       "id/child-leo": {
         "registration": {
@@ -356,12 +359,25 @@
       }
     },
     "network": "main",
+    "node_reachable": true,
     "now": 1795220010,
+    "observation_bracket": {
+      "consistent": true,
+      "end": {
+        "hash": "ea2aac743d9503ea1552c8522636a35b8b9cc4fa24946dd639a2105298381f9b",
+        "height": 750600
+      },
+      "start": {
+        "hash": "ea2aac743d9503ea1552c8522636a35b8b9cc4fa24946dd639a2105298381f9b",
+        "height": 750600
+      }
+    },
     "tip_first_sight": 1795220005,
     "tip_hash": "ea2aac743d9503ea1552c8522636a35b8b9cc4fa24946dd639a2105298381f9b",
     "tip_header_time": 1795220000,
     "tip_height": 750600,
     "tip_median_time_past": 1795219900,
+    "txindex": true,
     "txs": {
       "244dfb959df538f7906851e4ec767de8c00a47f8400fab084ce7f0a58052dcb8": {
         "confirmed_height": 749300,
@@ -839,6 +855,8 @@
   "name_recovery_positive_traces": {
     "branch_a_timely_0x10_cancel_restores_b1": {
       "chain_state": {
+        "best_header_height": 750600,
+        "clock_watermark": 1795219000,
         "comparison_peers": [
           {
             "hash_at_tip": "ea2aac743d9503ea1552c8522636a35b8b9cc4fa24946dd639a2105298381f9b",
@@ -851,6 +869,7 @@
           1795220020
         ],
         "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+        "in_ibd": false,
         "names": {
           "id/child-leo": {
             "registration": {
@@ -1071,12 +1090,25 @@
           }
         },
         "network": "main",
+        "node_reachable": true,
         "now": 1795220010,
+        "observation_bracket": {
+          "consistent": true,
+          "end": {
+            "hash": "ea2aac743d9503ea1552c8522636a35b8b9cc4fa24946dd639a2105298381f9b",
+            "height": 750600
+          },
+          "start": {
+            "hash": "ea2aac743d9503ea1552c8522636a35b8b9cc4fa24946dd639a2105298381f9b",
+            "height": 750600
+          }
+        },
         "tip_first_sight": 1795220005,
         "tip_hash": "ea2aac743d9503ea1552c8522636a35b8b9cc4fa24946dd639a2105298381f9b",
         "tip_header_time": 1795220000,
         "tip_height": 750600,
         "tip_median_time_past": 1795219900,
+        "txindex": true,
         "txs": {
           "244dfb959df538f7906851e4ec767de8c00a47f8400fab084ce7f0a58052dcb8": {
             "confirmed_height": 749300,
@@ -1232,6 +1264,8 @@
     },
     "branch_b_post_delay_recovery_promotes_b3": {
       "chain_state": {
+        "best_header_height": 752100,
+        "clock_watermark": 1795219000,
         "comparison_peers": [
           {
             "hash_at_tip": "4bf2c143350fa88031f8032de8b7be3743b47df13a19335081eef1d50b4b470c",
@@ -1244,6 +1278,7 @@
           1795220020
         ],
         "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+        "in_ibd": false,
         "names": {
           "id/child-leo": {
             "registration": {
@@ -1506,12 +1541,25 @@
           }
         },
         "network": "main",
+        "node_reachable": true,
         "now": 1795220010,
+        "observation_bracket": {
+          "consistent": true,
+          "end": {
+            "hash": "4bf2c143350fa88031f8032de8b7be3743b47df13a19335081eef1d50b4b470c",
+            "height": 752100
+          },
+          "start": {
+            "hash": "4bf2c143350fa88031f8032de8b7be3743b47df13a19335081eef1d50b4b470c",
+            "height": 752100
+          }
+        },
         "tip_first_sight": 1795220005,
         "tip_hash": "4bf2c143350fa88031f8032de8b7be3743b47df13a19335081eef1d50b4b470c",
         "tip_header_time": 1795220000,
         "tip_height": 752100,
         "tip_median_time_past": 1795219900,
+        "txindex": true,
         "txs": {
           "244dfb959df538f7906851e4ec767de8c00a47f8400fab084ce7f0a58052dcb8": {
             "confirmed_height": 749300,
@@ -2303,8 +2351,5 @@
       }
     }
   ],
-  "trusted_origin_issuers": [
-    "id/civil-registry"
-  ],
-  "version": "1.0.0-draft.9"
+  "version": "1.0.0-draft.10"
 }

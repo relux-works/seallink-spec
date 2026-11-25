@@ -165,7 +165,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
             "chain": of_hist["chain"],
             "contract": of_hist["contract"],
             "origin_bundle": of_hist["origin_bundle"],
-            "trusted_origin_issuers": of_hist["trusted_origin_issuers"],
+            "trusted_origin_issuer_pins": of_hist["trusted_origin_issuer_pins"],
         },
         "ADMIT",
         None,
@@ -206,7 +206,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
             "chain": of_b["chain"],
             "contract": of_b["contract"],
             "origin_bundle": of_b["origin_bundle"],
-            "trusted_origin_issuers": of_b["trusted_origin_issuers"],
+            "trusted_origin_issuer_pins": of_b["trusted_origin_issuer_pins"],
         }
 
     add(
@@ -244,7 +244,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
             "chain": of_hist["chain"],
             "contract": of_hist["contract"],
             "origin_bundle": of_hist["origin_bundle"],
-            "trusted_origin_issuers": of_hist["trusted_origin_issuers"],
+            "trusted_origin_issuer_pins": of_hist["trusted_origin_issuer_pins"],
         },
         "REFUSE",
         "CONTRACT_ASSENT_INVALID",
@@ -294,6 +294,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-GRNT-007", "SL-GRNT-014"],
         "commit_edge",
         {
+            "actual_message_meta": {"folder": "Invoices"},
             "bundle": fx_ce["bundle"],
             "chain": fx_ce["chain"],
             "executor_cfg": fx_ce["executor_cfg"],
@@ -311,6 +312,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-GRNT-007", "SL-GRNT-014"],
         "commit_edge",
         {
+            "actual_message_meta": {"folder": "Invoices"},
             "bundle": fx_ce["bundle"],
             "chain": fx_ce["chain"],
             "executor_cfg": fx_ce["executor_cfg"],
@@ -343,6 +345,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-GRNT-007", "SL-GRNT-008"],
         "commit_edge",
         {
+            "actual_message_meta": {"folder": "Invoices"},
             "bundle": fx_ce["bundle"],
             "chain": fx_ce["chain"],
             "executor_cfg": fx_ce["executor_cfg"],
@@ -398,6 +401,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-LDGR-012", "SL-GRNT-007", "SL-GRNT-014"],
         "commit_edge",
         {
+            "actual_message_meta": {"folder": "Invoices"},
             "bundle": fx_su["bundle"],
             "chain": fx_su["chain"],
             "executor_cfg": fx_su["executor_cfg"],
@@ -425,6 +429,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "journal_entry_wire",
         {
             "body": {
+                "action": "agent/tool",
                 "expires_at": 1795221000,
                 "grant_id": _h32("d8-j64-g"),
                 "invocation_id": _h32("d8-j64-inv"),
@@ -475,7 +480,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-r2g01-unconfirmed-recovery-spend-incomplete-refuse",
         ["SL-ORIG-013"],
         "origin_status",
-        {"chain": of_r1["chain"], "origin_bundle": of_r1["origin_bundle"], "trusted_origin_issuers": of_r1["trusted_origin_issuers"]},
+        {"chain": of_r1["chain"], "origin_bundle": of_r1["origin_bundle"], "trusted_origin_issuer_pins": of_r1["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_STATUS_INCOMPLETE",
         "R2G-01: Unconfirmed mempool spend of recovery_seal MUST return ORIGIN_STATUS_INCOMPLETE (never permanently burning recovery).",
@@ -494,7 +499,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-r2g01-confirmed-0x0c-withheld-candidate-incomplete-refuse",
         ["SL-ORIG-013"],
         "origin_status",
-        {"chain": of_r2["chain"], "origin_bundle": of_r2["origin_bundle"], "trusted_origin_issuers": of_r2["trusted_origin_issuers"]},
+        {"chain": of_r2["chain"], "origin_bundle": of_r2["origin_bundle"], "trusted_origin_issuer_pins": of_r2["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_STATUS_INCOMPLETE",
         "R2G-01: Confirmed valid 0x0c + continuation spend where presenter withholds the candidate NameBinding MUST return ORIGIN_STATUS_INCOMPLETE (never reverting to B_1).",
@@ -509,7 +514,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-r2g01-confirmed-malformed-recovery-spend-burns-b1-survives",
         ["SL-ORIG-013"],
         "origin_status",
-        {"chain": of_r3["chain"], "expect_recovery_burned": True, "origin_bundle": of_r3["origin_bundle"], "trusted_origin_issuers": of_r3["trusted_origin_issuers"]},
+        {"chain": of_r3["chain"], "expect_recovery_burned": True, "origin_bundle": of_r3["origin_bundle"], "trusted_origin_issuer_pins": of_r3["trusted_origin_issuer_pins"]},
         "ADMIT_WARD",
         None,
         "R2G-01: Confirmed provably malformed recovery_seal spend sets recovery_burned=True while preserving live binding B_1.",
@@ -542,7 +547,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-r2g01-confirmed-0x0c-invalid-preimage-seq-burns-b1-survives",
         ["SL-ORIG-013"],
         "origin_status",
-        {"chain": of_r4["chain"], "expect_recovery_burned": True, "origin_bundle": of_r4["origin_bundle"], "trusted_origin_issuers": of_r4["trusted_origin_issuers"]},
+        {"chain": of_r4["chain"], "expect_recovery_burned": True, "origin_bundle": of_r4["origin_bundle"], "trusted_origin_issuer_pins": of_r4["trusted_origin_issuer_pins"]},
         "ADMIT_WARD",
         None,
         "R2G-01: Confirmed 0x0c spend whose verified preimage violates seq == prev.seq + 1 burns recovery while preserving B_1.",
@@ -567,7 +572,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-1b-person-majority-custodian-transfer-without-capacity-refuse",
         ["SL-ORIG-011"],
         "origin_status",
-        {"chain": of_rt["chain"], "origin_bundle": of_rt["origin_bundle"], "trusted_origin_issuers": of_rt["trusted_origin_issuers"]},
+        {"chain": of_rt["chain"], "origin_bundle": of_rt["origin_bundle"], "trusted_origin_issuer_pins": of_rt["trusted_origin_issuer_pins"]},
         "REFUSE",
         "GUARDIAN_TRANSFER_PENDING",
         "Decision 1B / R2G-02: Calendar majority T alone without capacity/1 or 0x0c recovery NEVER admits State 4 even if custodians transfer the name.",
@@ -634,16 +639,13 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
 
         fx_s4["chain"]["names"].update(of_s4["chain"]["names"])
         fx_s4["chain"]["txs"].update(of_s4["chain"]["txs"])
-        fx_s4["chain"]["tip_height"] = of_s4["chain"]["tip_height"]
-        fx_s4["chain"]["best_header_height"] = of_s4["chain"]["tip_height"]
-        fx_s4["chain"]["tip_hash"] = of_s4["chain"]["tip_hash"]
-        fx_s4["chain"]["comparison_peers"] = of_s4["chain"]["comparison_peers"]
+        rm.sync_chain_tip(fx_s4["chain"], height=of_s4["chain"]["tip_height"], tip_hash=of_s4["chain"]["tip_hash"])
         fx_s4["chain"]["credible_utc_interval"] = of_s4["chain"]["credible_utc_interval"]
         fx_s4["chain"]["tip_median_time_past"] = of_s4["chain"]["tip_median_time_past"]
         fx_s4["chain"]["manifests"][leo_man_h] = leo_man
         fx_s4["bundle"]["manifests"][leo_man_h] = leo_man
         fx_s4["bundle"]["origin_bundle"] = of_s4["origin_bundle"]
-        fx_s4["trusted_origin_issuers"] = of_s4["trusted_origin_issuers"]
+        fx_s4["trusted_origin_issuer_pins"] = of_s4["trusted_origin_issuer_pins"]
 
         gp_s4 = copy.deepcopy(fx_s4["bundle"]["grants"][0]["payload"])
         gp_s4["issuer"] = {
@@ -700,7 +702,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-r2g03-majority-commitment-mismatched-opening-origin-unverified",
         ["SL-ORIG-002"],
         "origin_status",
-        {"chain": of_mm["chain"], "origin_bundle": of_mm["origin_bundle"], "trusted_origin_issuers": of_mm["trusted_origin_issuers"]},
+        {"chain": of_mm["chain"], "origin_bundle": of_mm["origin_bundle"], "trusted_origin_issuer_pins": of_mm["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_UNVERIFIED",
         "R2G-03: Presented majority_commitment opening that mismatches the hash MUST refuse ORIGIN_UNVERIFIED.",
@@ -758,7 +760,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-r2g05-non-retroactive-0x10-before-t-stays-cancelled-after-t",
         ["SL-ORIG-014"],
         "origin_status",
-        {"assert_binding_id": b2_nr10_id, "chain": of_nr10_after_t["chain"], "origin_bundle": of_nr10_after_t["origin_bundle"], "trusted_origin_issuers": of_nr10_after_t["trusted_origin_issuers"]},
+        {"assert_binding_id": b2_nr10_id, "chain": of_nr10_after_t["chain"], "origin_bundle": of_nr10_after_t["origin_bundle"], "trusted_origin_issuer_pins": of_nr10_after_t["trusted_origin_issuer_pins"]},
         "REFUSE",
         "RECOVERY_FORBIDDEN",
         "R2G-05: A valid 0x10 cancel confirmed at block_time < T MUST NOT be retroactively invalidated after T (cancelled B_2 stays RECOVERY_FORBIDDEN).",
@@ -782,7 +784,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-h29-full-history-0x10-survives-later-update-admit-ward",
         ["SL-ORIG-014"],
         "origin_status",
-        {"chain": of_h29["chain"], "origin_bundle": of_h29["origin_bundle"], "trusted_origin_issuers": of_h29["trusted_origin_issuers"]},
+        {"chain": of_h29["chain"], "origin_bundle": of_h29["origin_bundle"], "trusted_origin_issuer_pins": of_h29["trusted_origin_issuer_pins"]},
         "ADMIT_WARD",
         None,
         "H-29: Full-history 0x10 scan preserves a valid cancel confirmed during [h_rec, h_rec+delay) even after subsequent name updates.",
@@ -795,7 +797,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-r2g06-missing-tip-mtp-fails-closed-refuse",
         ["SL-ORIG-010"],
         "origin_status",
-        {"chain": of_nomtp["chain"], "origin_bundle": of_nomtp["origin_bundle"], "trusted_origin_issuers": of_nomtp["trusted_origin_issuers"]},
+        {"chain": of_nomtp["chain"], "origin_bundle": of_nomtp["origin_bundle"], "trusted_origin_issuer_pins": of_nomtp["trusted_origin_issuer_pins"]},
         "REFUSE",
         "GUARDIAN_TIME_BOUNDARY",
         "R2G-06: Omitting tip_median_time_past when evaluating a ward origin with majority_commitment MUST fail closed with GUARDIAN_TIME_BOUNDARY.",
@@ -825,7 +827,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-h31-capacity-wrong-status-prev-outpoint-refuse",
         ["SL-ORIG-002"],
         "origin_status",
-        {"chain": of_h31["chain"], "origin_bundle": of_h31["origin_bundle"], "trusted_origin_issuers": of_h31["trusted_origin_issuers"]},
+        {"chain": of_h31["chain"], "origin_bundle": of_h31["origin_bundle"], "trusted_origin_issuer_pins": of_h31["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_STATUS_INCOMPLETE",
         "H-31: seallink-capacity/1 whose status_prev_outpoint mismatches the spent status_seal outpoint MUST refuse ORIGIN_STATUS_INCOMPLETE.",
@@ -878,7 +880,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-r2l02-0x0e-spoofed-truthy-selector-refuse",
         ["SL-ORIG-007", "SL-LDGR-004"],
         "assent",
-        {"assent": wa_l02, "chain": of_l02["chain"], "contract": of_l02["contract"], "origin_bundle": of_l02["origin_bundle"], "trusted_origin_issuers": of_l02["trusted_origin_issuers"]},
+        {"assent": wa_l02, "chain": of_l02["chain"], "contract": of_l02["contract"], "origin_bundle": of_l02["origin_bundle"], "trusted_origin_issuer_pins": of_l02["trusted_origin_issuer_pins"]},
         "REFUSE",
         "GUARDIAN_INACTIVE",
         "R2-L-02: 0x0e activation with truthy P2WSH branch selector (disposer/challenger branch spoof) MUST fail closed as GUARDIAN_INACTIVE.",
@@ -895,7 +897,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-r2-05-trusted-origin-issuer-pin-wrong-registration-refuse",
         ["SL-ORIG-002"],
         "origin_status",
-        {"chain": of_pin["chain"], "origin_bundle": of_pin["origin_bundle"], "trusted_origin_issuer_pins": [wrong_reg_pin], "trusted_origin_issuers": []},
+        {"chain": of_pin["chain"], "origin_bundle": of_pin["origin_bundle"], "trusted_origin_issuer_pins": [wrong_reg_pin]},
         "REFUSE",
         "ORIGIN_UNVERIFIED",
         "R2-05: trusted_origin_issuer_pins MUST match full NamePin (name, registration, owner_policy) and refuse a re-registered name string with ORIGIN_UNVERIFIED.",
@@ -979,6 +981,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-LDGR-012"],
         "single_use_anti_dos",
         {
+            "actual_message_meta": {"folder": "Invoices"},
             "bundle": fx_ados["bundle"],
             "chain": fx_ados["chain"],
             "executor_cfg": fx_ados["executor_cfg"],
@@ -1210,7 +1213,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-r2-03-credential-origin-mode-missing-bundle-refuse",
         ["SL-CONT-008", "SL-CONT-010"],
         "credential",
-        {"anchor_txid": cred_atx, "chain": ch_cred, "credential": cred_orig_env, "trusted_origin_issuers": of_cred["trusted_origin_issuers"]},
+        {"anchor_txid": cred_atx, "chain": ch_cred, "credential": cred_orig_env, "trusted_origin_issuer_pins": of_cred["trusted_origin_issuer_pins"]},
         "REFUSE",
         "ORIGIN_UNVERIFIED",
         "R2-03: seallink-credential/1 with subject.mode='origin' lacking origin_bundle MUST fail closed with ORIGIN_UNVERIFIED.",
@@ -1237,7 +1240,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "d8-d6-eternal-origin-credential-survives-subject-end-and-open-claims-admit",
         ["SL-CONT-008", "SL-CONT-010", "SL-WIRE-012"],
         "credential",
-        {"anchor_txid": cred_atx, "chain": ch_cred_end, "credential": cred_orig_env, "origin_bundle": ob_cred_end, "trusted_origin_issuers": of_cred["trusted_origin_issuers"]},
+        {"anchor_txid": cred_atx, "chain": ch_cred_end, "credential": cred_orig_env, "origin_bundle": ob_cred_end, "trusted_origin_issuer_pins": of_cred["trusted_origin_issuer_pins"]},
         "ADMIT",
         None,
         "D-6 / R2-10: Eternal credential with subject.mode='origin' (and open claims key named 'pk') survives later seallink-end/1 by verifying historical origin existence at h_origin <= h_anchor.",
@@ -1324,7 +1327,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
     }
     so_bs_open = sl.sign_envelope(so_bs_p, [fx_bs["_keys"]["agent_req"]["sk"]])
     sid_bs = sl.object_id(so_bs_p)
-    tok_bs = "d8-2a-durable-bearer-tok"
+    tok_bs = _h32("d8-2a-durable-bearer-tok")
     # Forged backing grant (signed by stranger) -> verify_session_open MUST run full §4 admission and refuse WIRE_SIGNATURE!
     stranger_bs = _kp("d8-2a-bs-stranger")
     forged_g_bs = sl.sign_envelope(gp_bs, [stranger_bs["sk"]])
@@ -1358,11 +1361,11 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
             "steps": [
                 {"bearer_token": tok_bs, "bundle": fx_bs["bundle"], "chain": fx_bs["chain"], "kind": "session_open", "label": "open", "session_open": so_bs_open, "want_refusal": None, "want_verdict": "ADMIT"},
                 {"bundle": fx_bs["bundle"], "chain": fx_bs["chain"], "kind": "session_open", "label": "extend-widen-refuse", "session_open": so_bs_widen, "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
-                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m1"}, "chain": fx_bs["chain"], "grant_env": g_bs, "kind": "bearer_session", "label": "use-1-pre-restart", "slot_binding": "tls-d8-bs", "token": tok_bs, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m1"}, "chain": fx_bs["chain"], "grant_env": g_bs, "kind": "bearer_session", "label": "use-1-pre-restart", "slot_binding": "tls-d8-bs", "target": "mailbox:id/alice:work", "token": tok_bs, "want_refusal": None, "want_verdict": "ADMIT"},
                 {"kind": "replay_restart", "label": "restart"},
-                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": fx_bs["chain"], "grant_env": None, "kind": "bearer_session", "label": "use-no-grant-env", "slot_binding": "tls-d8-bs", "token": tok_bs, "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
-                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": fx_bs["chain"], "grant_env": g_bs, "kind": "bearer_session", "label": "use-2-post-restart", "slot_binding": "tls-d8-bs", "token": tok_bs, "want_refusal": None, "want_verdict": "ADMIT"},
-                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m3"}, "chain": fx_bs["chain"], "grant_env": g_bs, "kind": "bearer_session", "label": "use-3-exceed-post-restart", "slot_binding": "tls-d8-bs", "token": tok_bs, "want_refusal": "QUOTA_EXCEEDED", "want_verdict": "REFUSE"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": fx_bs["chain"], "grant_env": None, "kind": "bearer_session", "label": "use-no-grant-env", "slot_binding": "tls-d8-bs", "target": "mailbox:id/alice:work", "token": tok_bs, "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": fx_bs["chain"], "grant_env": g_bs, "kind": "bearer_session", "label": "use-2-post-restart", "slot_binding": "tls-d8-bs", "target": "mailbox:id/alice:work", "token": tok_bs, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m3"}, "chain": fx_bs["chain"], "grant_env": g_bs, "kind": "bearer_session", "label": "use-3-exceed-post-restart", "slot_binding": "tls-d8-bs", "target": "mailbox:id/alice:work", "token": tok_bs, "want_refusal": "QUOTA_EXCEEDED", "want_verdict": "REFUSE"},
             ],
         },
         "ADMIT",
@@ -1407,12 +1410,33 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
     mg_id = _h32("d8-mg-id")
     inv_obj = {"holder_name": "id/alice", "items": [{"media_type": "message/rfc822", "path": "Invoices/msg1.eml", "sha256": _h32("d8-mg-m1"), "size_bytes": "128"}], "migration_id": mg_id, "service_type": "mail"}
     inv_h = sl.sha256(sl.jcs_encode(inv_obj)).hex()
+    mg_fence = sl.sign_envelope(
+        {
+            "genesis": GENESIS_MAIN,
+            "issuer": src_pin,
+            "network": "main",
+            "not_after": fx_mg["chain"]["now"] + 600,
+            "not_before": fx_mg["chain"]["now"] - 10,
+            "seq": 1,
+            "statement_kind": "migration-fence",
+            "subject": {
+                "dest_executor": dest_pin,
+                "holder": holder_pin,
+                "inventory_sha256": inv_h,
+                "migration_id": mg_id,
+                "predecessor_grant_seals": [],
+                "source_journal_commitment": _h32("d8-mg-jc"),
+                "source_journal_pos": 5,
+            },
+            "type": "seallink-statement/1",
+        },
+        [fx_mg["_keys"]["host_rcpt"]["sk"]],
+    )
     mg_export = {
+        "fencing_statement": mg_fence,
         "inventory": inv_obj,
-        "open_predecessor_grants": [],
         "source_journal_commitment": _h32("d8-mg-jc"),
         "source_journal_pos": 5,
-        "source_write_token_fenced": True,
     }
     mg_p = {
         "dest_executor": dest_pin,
@@ -1541,6 +1565,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         {
             "chain": fx_fd["chain"],
             "grant": fx_fd["bundle"]["grants"][0],
+            "journal": {"journal_id": _h32("d8-fed-j1")},
             "peer_ctx": {
                 "approval_command": l2_fd_cmd,
                 "device_list": dev_list_fd,
@@ -1562,6 +1587,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         {
             "chain": fx_fd["chain"],
             "grant": fx_fd["bundle"]["grants"][0],
+            "journal": {"journal_id": _h32("d8-fed-j2")},
             "peer_ctx": {
                 "approval_command": l2_fd_cmd,
                 "device_list": dev_list_fd,
@@ -1583,6 +1609,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         {
             "chain": fx_fd["chain"],
             "grant": fx_fd["bundle"]["grants"][0],
+            "journal": {"journal_id": _h32("d8-fed-j3")},
             "peer_ctx": {
                 "approval_command": l2_fd_cmd,
                 "device_list": dev_list_fd,
@@ -1607,6 +1634,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         {
             "chain": fx_fd_nod["chain"],
             "grant": fx_fd_nod["bundle"]["grants"][0],
+            "journal": {"journal_id": _h32("d8-fed-j4")},
             "peer_ctx": {
                 "approval_command": l2_fd_cmd,
                 "device_list": dev_list_fd,
@@ -1678,7 +1706,8 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     )
     add("d8-mk-session-open-dup-quota-wire-constraint", ["SL-WIRE-010", "SL-GRNT-013"], "raw_wire",
         {"expected_type": "seallink-session-open/1", "raw_bytes_hex": sl.jcs_encode(so_dup_env).hex()}, "REFUSE", "WIRE_CONSTRAINT",
-        "seallink-session-open/1 with duplicate (kind, resource, unit, window) quota tuple MUST refuse WIRE_CONSTRAINT.")
+        "seallink-session-open/1 with duplicate (kind, resource, unit, window) quota tuple MUST refuse WIRE_CONSTRAINT.",
+        module="bearer-sessions")
 
     rcpt_bad_rc = sl.sign_envelope(
         {"action": "mail/read", "executor_name": fx_w0["executor_cfg"]["name"], "genesis": GENESIS_MAIN, "grant_id": _h32("g"), "invocation_id": _h32("i"), "network": "main", "outcome": "refused", "recorded_at": fx_w0["chain"]["now"], "refusal_code": "FAKE_UNREGISTERED_CODE", "tip_hash": fx_w0["chain"]["tip_hash"], "tip_height": fx_w0["chain"]["tip_height"], "type": "seallink-receipt/1"},
@@ -1717,49 +1746,49 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     # =========================================================================
     of0 = rm._base_origin_fixture()
     add("d8-mk-origin-card-non-dict", ["SL-ORIG-002"], "origin_status",
-        {"chain": of0["chain"], "origin_bundle": {**copy.deepcopy(of0["origin_bundle"]), "card": "not-a-dict"}, "trusted_origin_issuers": of0["trusted_origin_issuers"]},
+        {"chain": of0["chain"], "origin_bundle": {**copy.deepcopy(of0["origin_bundle"]), "card": "not-a-dict"}, "trusted_origin_issuer_pins": of0["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_UNVERIFIED", "Non-dict card in origin_bundle MUST refuse ORIGIN_UNVERIFIED.")
 
     bad_card = {"contact": "", "display": "Wrong Name", "kind": "person", "name": "id/wrong-name", "network": "main", "relays": [], "replaces": 0, "role": "", "seq": 1, "transports": [], "type": "seallink-card/1"}
     add("d8-mk-origin-card-name-mismatch", ["SL-ORIG-002"], "origin_status",
-        {"chain": of0["chain"], "origin_bundle": {**copy.deepcopy(of0["origin_bundle"]), "card": bad_card}, "trusted_origin_issuers": of0["trusted_origin_issuers"]},
+        {"chain": of0["chain"], "origin_bundle": {**copy.deepcopy(of0["origin_bundle"]), "card": bad_card}, "trusted_origin_issuer_pins": of0["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_UNVERIFIED", "Presented seallink-card/1 whose name mismatches active_binding.name MUST refuse ORIGIN_UNVERIFIED.")
 
     h_orig_0 = of0["chain"]["txs"][of0["origin_bundle"]["origin_anchor_txid"]]["confirmed_height"]
     h_bind_0 = of0["chain"]["txs"][of0["origin_bundle"]["name_binding_txid"]]["confirmed_height"]
     add("d8-mk-origin-after-eval-h", ["SL-ORIG-002"], "origin_status",
-        {"at_height": h_orig_0 - 1, "chain": of0["chain"], "origin_bundle": of0["origin_bundle"], "trusted_origin_issuers": of0["trusted_origin_issuers"]},
+        {"at_height": h_orig_0 - 1, "chain": of0["chain"], "origin_bundle": of0["origin_bundle"], "trusted_origin_issuer_pins": of0["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_UNVERIFIED", "Origin anchored strictly after historical eval_h MUST refuse ORIGIN_UNVERIFIED.")
 
     add("d8-mk-origin-binding-after-eval-h", ["SL-ORIG-003"], "origin_status",
-        {"at_height": h_bind_0 - 1, "chain": of0["chain"], "origin_bundle": of0["origin_bundle"], "trusted_origin_issuers": of0["trusted_origin_issuers"]},
+        {"at_height": h_bind_0 - 1, "chain": of0["chain"], "origin_bundle": of0["origin_bundle"], "trusted_origin_issuer_pins": of0["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_BINDING_INVALID", "Initial NameBinding anchored strictly after historical eval_h MUST refuse ORIGIN_BINDING_INVALID.")
 
     j_ocl = sv.FencedJournal(_h32("d8-mk-ocl"))
     j_ocl.record_closure({"subject_id": of0["_origin_id"], "subject_kind": "origin"}, "SUBJECT_ENDED", observed_at=of0["chain"]["now"], observed_height=of0["chain"]["tip_height"])
     add("d8-mk-origin-persisted-closure", ["SL-ORIG-012"], "origin_status",
-        {"chain": of0["chain"], "journal": {"closures": j_ocl.closures, "journal_id": j_ocl.journal_id}, "origin_bundle": of0["origin_bundle"], "trusted_origin_issuers": of0["trusted_origin_issuers"]},
+        {"chain": of0["chain"], "journal": {"closures": j_ocl.closures, "journal_id": j_ocl.journal_id}, "origin_bundle": of0["origin_bundle"], "trusted_origin_issuer_pins": of0["trusted_origin_issuer_pins"]},
         "REFUSE", "SUBJECT_ENDED", "Persisted durable origin closure in FencedJournal MUST refuse SUBJECT_ENDED.")
 
     ch_nb = copy.deepcopy(of0["chain"])
     del ch_nb["names"]["id/child-leo"]
     add("d8-mk-origin-binding-name-missing", ["SL-ORIG-003"], "origin_status",
-        {"chain": ch_nb, "origin_bundle": of0["origin_bundle"], "trusted_origin_issuers": of0["trusted_origin_issuers"]},
+        {"chain": ch_nb, "origin_bundle": of0["origin_bundle"], "trusted_origin_issuer_pins": of0["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_BINDING_INVALID", "Missing ward name record for initial NameBinding MUST refuse ORIGIN_BINDING_INVALID.")
 
     add("d8-mk-origin-recovery-bindings-non-list", ["SL-ORIG-013"], "origin_status",
-        {"chain": of0["chain"], "origin_bundle": {**copy.deepcopy(of0["origin_bundle"]), "recovery_bindings": "bad"}, "trusted_origin_issuers": of0["trusted_origin_issuers"]},
+        {"chain": of0["chain"], "origin_bundle": {**copy.deepcopy(of0["origin_bundle"]), "recovery_bindings": "bad"}, "trusted_origin_issuer_pins": of0["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Malformed non-list recovery_bindings MUST refuse ORIGIN_STATUS_INCOMPLETE.")
 
     ch_rabs = copy.deepcopy(of0["chain"])
     rec_s0 = of0["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]
     ch_rabs["txs"][rec_s0["txid"]]["outputs"][str(rec_s0["vout"])]["absent_from_utxo"] = True
     add("d8-mk-origin-recovery-seal-absent-from-utxo", ["SL-ORIG-013"], "origin_status",
-        {"chain": ch_rabs, "origin_bundle": of0["origin_bundle"], "trusted_origin_issuers": of0["trusted_origin_issuers"]},
+        {"chain": ch_rabs, "origin_bundle": of0["origin_bundle"], "trusted_origin_issuer_pins": of0["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "recovery_seal absent_from_utxo without spending tx MUST refuse ORIGIN_STATUS_INCOMPLETE.")
 
     add("d8-mk-origin-roster-records-non-list", ["SL-ORIG-006"], "origin_status",
-        {"chain": of0["chain"], "origin_bundle": {**copy.deepcopy(of0["origin_bundle"]), "roster_records": "bad"}, "trusted_origin_issuers": of0["trusted_origin_issuers"]},
+        {"chain": of0["chain"], "origin_bundle": {**copy.deepcopy(of0["origin_bundle"]), "roster_records": "bad"}, "trusted_origin_issuer_pins": of0["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Malformed non-list roster_records MUST refuse ORIGIN_STATUS_INCOMPLETE.")
 
     # Point credible_utc_interval [t, t] (kills interval[0] > interval[1] -> >=) & mtp=0 (kills mtp < 0 -> <=)
@@ -1767,12 +1796,12 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     ch_pt["credible_utc_interval"] = [0, 0]
     ch_pt["tip_median_time_past"] = 0
     add("d8-mk-origin-point-interval-and-mtp-zero-admit", ["SL-ORIG-010"], "origin_status",
-        {"chain": ch_pt, "origin_bundle": of0["origin_bundle"], "trusted_origin_issuers": of0["trusted_origin_issuers"]},
+        {"chain": ch_pt, "origin_bundle": of0["origin_bundle"], "trusted_origin_issuer_pins": of0["trusted_origin_issuer_pins"]},
         "ADMIT_WARD", None, "Exact point interval [0, 0] with tip_median_time_past == 0 (< majority_unix) MUST admit ward.")
 
     # Historical at_time == opened_majority -> GUARDIAN_TRANSFER_PENDING (kills eval_t >= opened_majority -> >!)
     add("d8-mk-origin-at-time-eq-majority-pending", ["SL-ORIG-011"], "origin_status",
-        {"at_height": of0["chain"]["tip_height"], "at_time": of0["_maj_unix"], "chain": of0["chain"], "origin_bundle": of0["origin_bundle"], "trusted_origin_issuers": of0["trusted_origin_issuers"]},
+        {"at_height": of0["chain"]["tip_height"], "at_time": of0["_maj_unix"], "chain": of0["chain"], "origin_bundle": of0["origin_bundle"], "trusted_origin_issuer_pins": of0["trusted_origin_issuer_pins"]},
         "REFUSE", "GUARDIAN_TRANSFER_PENDING", "Historical at_time == opened_majority enters State 3 GUARDIAN_TRANSFER_PENDING.")
 
     # Historical at_height == exact creation/spend heights (kills L2692, L2708, L2854, L2872, L3102, L3119, L3338, L3379!)
@@ -1786,7 +1815,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     of_eq["chain"]["txs"][op_eq["guardian_policy"]["slots"][0]["vacant_utxo"]["txid"]]["confirmed_height"] = eval_eq
     of_eq["chain"]["txs"][rm._h32("og1-init-0x12")]["confirmed_height"] = eval_eq
     add("d8-mk-origin-hist-seals-created-at-exact-eval-h-admit", ["SL-ORIG-002", "SL-ORIG-006"], "origin_status",
-        {"at_height": eval_eq, "chain": of_eq["chain"], "origin_bundle": of_eq["origin_bundle"], "trusted_origin_issuers": of_eq["trusted_origin_issuers"]},
+        {"at_height": eval_eq, "chain": of_eq["chain"], "origin_bundle": of_eq["origin_bundle"], "trusted_origin_issuer_pins": of_eq["trusted_origin_issuer_pins"]},
         "ADMIT_WARD", None, "Seals and 0x12 initial slot activation confirmed at exact historical eval_h MUST admit.")
 
     # Status spend (seallink-end/1) at exact eval_h -> SUBJECT_ENDED (kills L2708 stx["confirmed_height"] > eval_h -> >=!)
@@ -1798,7 +1827,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     of_end_eq["chain"]["txs"][end_eq_tx] = {"confirmed_height": eval_eq, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(end_eq)).hex(), "outputs": {}}
     of_end_eq["origin_bundle"]["end_record"] = end_eq
     add("d8-mk-origin-hist-end-at-exact-eval-h-refuse", ["SL-ORIG-012"], "origin_status",
-        {"at_height": eval_eq, "chain": of_end_eq["chain"], "origin_bundle": of_end_eq["origin_bundle"], "trusted_origin_issuers": of_end_eq["trusted_origin_issuers"]},
+        {"at_height": eval_eq, "chain": of_end_eq["chain"], "origin_bundle": of_end_eq["origin_bundle"], "trusted_origin_issuer_pins": of_end_eq["trusted_origin_issuer_pins"]},
         "REFUSE", "SUBJECT_ENDED", "seallink-end/1 confirmed at exact historical eval_h MUST take effect (SUBJECT_ENDED).")
 
     # Malformed recovery spend at exact eval_h -> recovery_burned=True (kills L2872 rtx["confirmed_height"] > eval_h -> >=!)
@@ -1807,7 +1836,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     of_rb_eq["chain"]["txs"][op_eq["name_recovery"]["recovery_seal"]["txid"]]["outputs"][str(op_eq["name_recovery"]["recovery_seal"]["vout"])]["spent_by_txid"] = rb_eq_tx
     of_rb_eq["chain"]["txs"][rb_eq_tx] = {"confirmed_height": eval_eq, "outputs": {"0": {"script_pubkey_hex": _spk_hex({"kind": "key", "pk": _kp("d8-mk-rb-sink")["comp"]})}}}
     add("d8-mk-origin-hist-recovery-burn-at-exact-eval-h", ["SL-ORIG-013"], "origin_status",
-        {"at_height": eval_eq, "chain": of_rb_eq["chain"], "expect_recovery_burned": True, "origin_bundle": of_rb_eq["origin_bundle"], "trusted_origin_issuers": of_rb_eq["trusted_origin_issuers"]},
+        {"at_height": eval_eq, "chain": of_rb_eq["chain"], "expect_recovery_burned": True, "origin_bundle": of_rb_eq["origin_bundle"], "trusted_origin_issuer_pins": of_rb_eq["trusted_origin_issuer_pins"]},
         "ADMIT_WARD", None, "Malformed recovery spend confirmed at exact historical eval_h MUST set recovery_burned=True.")
 
     # Slot 0x12 active at exact eval_h via verify_assent (kills L3119 h_stx > eval_h -> >=) + 0x0f roster spend at exact eval_h (kills L3338 & L3379!)
@@ -1835,7 +1864,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     of_r_bad_eq["chain"]["txs"][rtx_req] = {"confirmed_height": eval_eq, "outputs": {"0": {"script_pubkey_hex": _spk_hex(vac_req)}}}
     of_r_bad_eq["origin_bundle"]["roster_records"] = []
     add("d8-mk-origin-hist-roster-spend-at-exact-eval-h", ["SL-ORIG-006"], "origin_status",
-        {"at_height": eval_eq, "chain": of_r_bad_eq["chain"], "origin_bundle": of_r_bad_eq["origin_bundle"], "trusted_origin_issuers": of_r_bad_eq["trusted_origin_issuers"]},
+        {"at_height": eval_eq, "chain": of_r_bad_eq["chain"], "origin_bundle": of_r_bad_eq["origin_bundle"], "trusted_origin_issuer_pins": of_r_bad_eq["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Malformed roster_seal spend confirmed at exact historical eval_h MUST be observed (ORIGIN_STATUS_INCOMPLETE).")
 
     # Slot 0x12 active at exact eval_eq tested via verify_assent -> kills L3119 (h_stx > eval_h -> >=)!
@@ -1862,7 +1891,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
         [{"guardian_name": "id/parent-a", "revision": 1, "signers": [of_sl_eq["_keys"]["g1_gr"]["sk"]], "slot": 1}],
     )
     add("d8-mk-assent-hist-slot-0x12-at-exact-eval-h-admit", ["SL-ORIG-006", "SL-CONT-004"], "assent",
-        {"anchor_height": eval_eq, "anchor_time": of_sl_eq["chain"]["now"], "assent": wa_sl, "chain": of_sl_eq["chain"], "contract": of_sl_eq["contract"], "origin_bundle": of_sl_eq["origin_bundle"], "trusted_origin_issuers": of_sl_eq["trusted_origin_issuers"]},
+        {"anchor_height": eval_eq, "anchor_time": of_sl_eq["chain"]["now"], "assent": wa_sl, "chain": of_sl_eq["chain"], "contract": of_sl_eq["contract"], "origin_bundle": of_sl_eq["origin_bundle"], "trusted_origin_issuer_pins": of_sl_eq["trusted_origin_issuer_pins"]},
         "ADMIT", None, "0x12 guardian activation confirmed at exact historical anchor_height MUST count as active.")
 
     # Path B emancipation handover self-update at exact at_height (kills L2413 confirmed_height <= eval_h -> <!)
@@ -1882,7 +1911,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     lu_he.append({"confirmed_height": 749150, "op": "NAME_UPDATE", "output_script_hex": sl.encode_name_output("NAME_UPDATE", s_spk_he, name=b"id/child-leo", value=val_he).hex(), "owner_policy": s_pol_he, "prev_input": {"sighash_bytes": [0x01], "txid": p_he["txid"], "vout": p_he["vout"], "witness_policy": p_he["owner_policy"]}, "txid": _h32("d8-mk-he-u1"), "vout": 0})
     lu_he.append({"confirmed_height": 749200, "op": "NAME_UPDATE", "output_script_hex": sl.encode_name_output("NAME_UPDATE", s_spk_he, name=b"id/child-leo", value=val_he).hex(), "owner_policy": s_pol_he, "prev_input": {"sighash_bytes": [0x01], "txid": _h32("d8-mk-he-u1"), "vout": 0, "witness_policy": s_pol_he}, "txid": _h32("d8-mk-he-u2"), "vout": 0})
     add("d8-mk-emancipation-handover-at-exact-eval-h-admit", ["SL-ORIG-011"], "origin_status",
-        {"at_height": 749200, "chain": of_ho_eq["chain"], "origin_bundle": of_ho_eq["origin_bundle"], "trusted_origin_issuers": of_ho_eq["trusted_origin_issuers"]},
+        {"at_height": 749200, "chain": of_ho_eq["chain"], "origin_bundle": of_ho_eq["origin_bundle"], "trusted_origin_issuer_pins": of_ho_eq["trusted_origin_issuer_pins"]},
         "ADMIT_AUTONOMOUS", None, "Subject self-update confirming handover at exact historical eval_h MUST admit State 4 autonomous.")
 
     # Exact 0x10 cancel boundaries (kills L2928, L2934 x2, L2953, L2957!)
@@ -1934,22 +1963,22 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
 
     of_rc_tr = _mk_rec_cancel_fx(749100, 749110, trunc_old=True)
     add("d8-mk-0x10-truncated-old-name-incomplete", ["SL-ORIG-013"], "origin_status",
-        {"chain": of_rc_tr["chain"], "origin_bundle": of_rc_tr["origin_bundle"], "trusted_origin_issuers": of_rc_tr["trusted_origin_issuers"]},
+        {"chain": of_rc_tr["chain"], "origin_bundle": of_rc_tr["origin_bundle"], "trusted_origin_issuer_pins": of_rc_tr["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Truncated history on active_binding during 0x10 scan MUST refuse ORIGIN_STATUS_INCOMPLETE.")
 
     of_rc_eq = _mk_rec_cancel_fx(749100, 749100, cancel_bt=of0["_maj_unix"] - 100)
     add("d8-mk-0x10-exact-h-cancel-eq-h-rec-and-eval-h", ["SL-ORIG-013"], "origin_status",
-        {"at_height": 749100, "chain": of_rc_eq["chain"], "expect_recovery_outcome": "cancelled_restored", "origin_bundle": of_rc_eq["origin_bundle"], "trusted_origin_issuers": of_rc_eq["trusted_origin_issuers"]},
+        {"at_height": 749100, "chain": of_rc_eq["chain"], "expect_recovery_outcome": "cancelled_restored", "origin_bundle": of_rc_eq["origin_bundle"], "trusted_origin_issuer_pins": of_rc_eq["trusted_origin_issuer_pins"]},
         "ADMIT_WARD", None, "0x10 cancel confirmed at exact h_cancel == h_rec == eval_h MUST cancel recovery (cancelled_restored).")
 
     of_rc_cap = _mk_rec_cancel_fx(749100, 749110, cancel_bt=of0["_maj_unix"] - 100, cap_h=749110)
     add("d8-mk-0x10-exact-h-cancel-eq-cap-h-locked-out", ["SL-ORIG-013"], "origin_status",
-        {"chain": of_rc_cap["chain"], "expect_recovery_outcome": "promoted", "origin_bundle": of_rc_cap["origin_bundle"], "trusted_origin_issuers": of_rc_cap["trusted_origin_issuers"]},
+        {"chain": of_rc_cap["chain"], "expect_recovery_outcome": "promoted", "origin_bundle": of_rc_cap["origin_bundle"], "trusted_origin_issuer_pins": of_rc_cap["trusted_origin_issuer_pins"]},
         "ADMIT_AUTONOMOUS", None, "Former-guardian 0x10 confirmed at exact h_cancel == cap_confirmed_height MUST be locked out so B2 promotes.")
 
     of_rc_maj = _mk_rec_cancel_fx(749100, 749110, cancel_bt=of0["_maj_unix"])
     add("d8-mk-0x10-exact-cancel-bt-eq-majority-locked-out", ["SL-ORIG-013"], "origin_status",
-        {"chain": of_rc_maj["chain"], "expect_recovery_outcome": "promoted", "origin_bundle": of_rc_maj["origin_bundle"], "trusted_origin_issuers": of_rc_maj["trusted_origin_issuers"]},
+        {"chain": of_rc_maj["chain"], "expect_recovery_outcome": "promoted", "origin_bundle": of_rc_maj["origin_bundle"], "trusted_origin_issuer_pins": of_rc_maj["trusted_origin_issuer_pins"]},
         "ADMIT_WARD", None, "Former-guardian 0x10 with exact block_time == opened_majority MUST be locked out so B2 promotes.")
 
     # trace_slot _walk_exhausted (initial slot & post-0x0f roster slot via 2-tx vacant<->pending cycle -> ORIGIN_STATUS_INCOMPLETE, kills L3363 & L3498!)
@@ -1985,7 +2014,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     # Initial slot 1 is already active at og1-init-0x12:0; halting it enters halt_tx:0 <-> pend_tx:0!
     _attach_slot_cycle(of_cy1, rm._h32("og1-init-0x12"), 0, 1, 749060, "init")
     add("d8-mk-slot-walk-exhausted-initial", ["SL-ORIG-006"], "origin_status",
-        {"chain": of_cy1["chain"], "origin_bundle": of_cy1["origin_bundle"], "trusted_origin_issuers": of_cy1["trusted_origin_issuers"]},
+        {"chain": of_cy1["chain"], "origin_bundle": of_cy1["origin_bundle"], "trusted_origin_issuer_pins": of_cy1["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Cyclic initial slot UTXO spend MUST exhaust trace_slot and refuse ORIGIN_STATUS_INCOMPLETE.")
 
     of_cy2 = rm._base_origin_fixture()
@@ -2030,14 +2059,14 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     of_cy2["chain"]["txs"][h2_a] = {"confirmed_height": 749301, "outputs": {"0": {"script_pubkey_hex": _spk_hex(vac_cy2), "spent_by_txid": p2_b}}}
     of_cy2["chain"]["txs"][p2_b] = {"confirmed_height": 749302, "opreturn_hex": sl.encode_opreturn(0x0D, sl.content_addr(g_app_2b)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(pend_cy2_pol), "spent_by_txid": h2_a}}}
     add("d8-mk-slot-walk-exhausted-post-0x0f", ["SL-ORIG-006"], "origin_status",
-        {"chain": of_cy2["chain"], "origin_bundle": of_cy2["origin_bundle"], "trusted_origin_issuers": of_cy2["trusted_origin_issuers"]},
+        {"chain": of_cy2["chain"], "origin_bundle": of_cy2["origin_bundle"], "trusted_origin_issuer_pins": of_cy2["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Cyclic post-0x0f new_vacant slot spend MUST exhaust trace_slot and refuse ORIGIN_STATUS_INCOMPLETE.")
 
     # verify_ward_approvals: persisted guardian_slot closure & guardian missing link.grant (kills L3567, L3593!)
     j_gcl = sv.FencedJournal(_h32("d8-mk-gcl"))
     j_gcl.record_closure({"origin_id": oid_sl, "outpoint": {"txid": rm._h32("og1-init-0x12"), "vout": 0}, "slot": 1, "subject_kind": "guardian_slot"}, "SEAL_SPENT", observed_at=of_sl_eq["chain"]["now"], observed_height=of_sl_eq["chain"]["tip_height"])
     add("d8-mk-ward-approvals-persisted-slot-closure", ["SL-ORIG-006"], "assent",
-        {"assent": wa_sl, "chain": of_sl_eq["chain"], "contract": of_sl_eq["contract"], "journal": {"closures": j_gcl.closures, "journal_id": j_gcl.journal_id}, "origin_bundle": of_sl_eq["origin_bundle"], "trusted_origin_issuers": of_sl_eq["trusted_origin_issuers"]},
+        {"assent": wa_sl, "chain": of_sl_eq["chain"], "contract": of_sl_eq["contract"], "journal": {"closures": j_gcl.closures, "journal_id": j_gcl.journal_id}, "origin_bundle": of_sl_eq["origin_bundle"], "trusted_origin_issuer_pins": of_sl_eq["trusted_origin_issuer_pins"]},
         "REFUSE", "GUARDIAN_INACTIVE", "Persisted guardian_slot closure in FencedJournal MUST refuse GUARDIAN_INACTIVE.")
 
     of_nogr = copy.deepcopy(of_sl_eq)
@@ -2049,7 +2078,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
         extra_updates=[{"confirmed_height": 749500, "txid": _h32("d8-mk-nogr-drop"), "value": {"link": {"cred": _kp("d8-mk-nogr-cred")["xonly"]}}}],
     )
     add("d8-mk-ward-approvals-guardian-missing-grant-role", ["SL-ORIG-006"], "assent",
-        {"assent": wa_sl, "chain": of_nogr["chain"], "contract": of_nogr["contract"], "origin_bundle": of_nogr["origin_bundle"], "trusted_origin_issuers": of_nogr["trusted_origin_issuers"]},
+        {"assent": wa_sl, "chain": of_nogr["chain"], "contract": of_nogr["contract"], "origin_bundle": of_nogr["origin_bundle"], "trusted_origin_issuer_pins": of_nogr["trusted_origin_issuer_pins"]},
         "REFUSE", "GUARDIAN_INACTIVE", "Active guardian whose name later removes link.grant MUST refuse GUARDIAN_INACTIVE.")
 
     # Slot active spend (halt) confirmed at EXACT eval_h -> slot halted at eval_h -> GUARDIAN_INACTIVE (kills trace_slot L3334 > -> >=!)
@@ -2059,7 +2088,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     of_shalt["chain"]["txs"][rm._h32("og1-init-0x12")]["outputs"]["0"]["spent_by_txid"] = shalt_tx
     of_shalt["chain"]["txs"][shalt_tx] = {"confirmed_height": shalt_h, "outputs": {"0": {"script_pubkey_hex": _spk_hex(of_shalt["origin_bundle"]["origin"]["payload"]["guardian_policy"]["roster_seal"]["script_policy"])}}}
     add("d8-mk-slot-spend-at-exact-eval-h", ["SL-ORIG-006"], "assent",
-        {"anchor_height": shalt_h, "anchor_time": of_shalt["chain"]["now"], "assent": wa_sl, "chain": of_shalt["chain"], "contract": of_shalt["contract"], "origin_bundle": of_shalt["origin_bundle"], "trusted_origin_issuers": of_shalt["trusted_origin_issuers"]},
+        {"anchor_height": shalt_h, "anchor_time": of_shalt["chain"]["now"], "assent": wa_sl, "chain": of_shalt["chain"], "contract": of_shalt["contract"], "origin_bundle": of_shalt["origin_bundle"], "trusted_origin_issuer_pins": of_shalt["trusted_origin_issuer_pins"]},
         "REFUSE", "GUARDIAN_INACTIVE", "Active guardian slot halt confirmed at exact historical anchor_height MUST render slot inactive.")
 
     # verify_assent: autonomous party_name mismatch (L3732) & retroactive 0x0b on anchored autonomous party (L3759)
@@ -2191,11 +2220,11 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     def _cm_inp(rp_patch: dict[str, Any], *, jtag: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
         rp = {**copy.deepcopy(rcpt_cm_base), **rp_patch}
         r_env = sl.sign_envelope(rp, [fx_cm["_keys"]["host_rcpt"]["sk"]])
-        return {"bundle": fx_cm["bundle"], "chain": fx_cm["chain"], "executor_cfg": fx_cm["executor_cfg"], "invocation": fx_cm["invocation"], "journal_id": _h32(f"d8-mk-cm-{jtag}"), "receipt_env": r_env, **(extra or {})}
+        return {"actual_message_meta": {"folder": "Invoices"}, "bundle": fx_cm["bundle"], "chain": fx_cm["chain"], "executor_cfg": fx_cm["executor_cfg"], "invocation": fx_cm["invocation"], "journal_id": _h32(f"d8-mk-cm-{jtag}"), "receipt_env": r_env, **(extra or {})}
 
     add("d8-mk-commit-wrong-network", ["SL-GRNT-008"], "commit_edge", _cm_inp({"network": "regtest"}, jtag="net"), "REFUSE", "CHAIN_MISMATCH", "commit_result with wrong receipt network MUST refuse CHAIN_MISMATCH.")
     add("d8-mk-commit-wrong-executor", ["SL-GRNT-008"], "commit_edge", _cm_inp({"executor_name": "id/wrong-host"}, jtag="ex"), "REFUSE", "GRANT_EXECUTOR_MISMATCH", "commit_result with wrong receipt executor_name MUST refuse GRANT_EXECUTOR_MISMATCH.")
-    add("d8-mk-commit-wrong-action", ["SL-GRNT-008"], "commit_edge", _cm_inp({}, jtag="act", extra={"expected_action": "mail/send"}), "REFUSE", "WIRE_MEMBER", "commit_result with expected_action mismatch MUST refuse WIRE_MEMBER.")
+    add("d8-mk-commit-wrong-action", ["SL-GRNT-008"], "commit_edge", _cm_inp({"action": "mail/send"}, jtag="act"), "REFUSE", "WIRE_MEMBER", "commit_result whose receipt.payload.action disagrees with durable reservation.action MUST refuse WIRE_MEMBER.")
     add("d8-mk-commit-wrong-grant-id", ["SL-GRNT-008"], "commit_edge", _cm_inp({"grant_id": _h32("wrong-g")}, jtag="gid", extra={"override_grant_id": _h32("wrong-g")}), "REFUSE", "WIRE_MEMBER", "commit_result whose grant_id disagrees with durable reservation MUST refuse WIRE_MEMBER.")
     add("d8-mk-commit-wrong-settlement-len", ["SL-GRNT-008"], "commit_edge", _cm_inp({"settlements": []}, jtag="slen"), "REFUSE", "WIRE_MEMBER", "commit_result with wrong settlements[] length MUST refuse WIRE_MEMBER.")
     add("d8-mk-commit-unknown-settlement-key", ["SL-GRNT-008"], "commit_edge", _cm_inp({"settlements": [{"account": "own", "kind": "seallink/count", "released": "0", "reserved": "1", "resource": "mailbox:id/alice:other", "settled": "1", "unit": "reads", "window": "term"}]}, jtag="skey"), "REFUSE", "WIRE_MEMBER", "commit_result with settlement key absent from reservation MUST refuse WIRE_MEMBER.")
@@ -2289,11 +2318,11 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
             "journal": {"journal_id": _h32("d8-mk-bs2-j")},
             "steps": [
                 {"bearer_token": tok_bs2, "bundle": fx_bs2["bundle"], "chain": fx_bs2["chain"], "kind": "session_open", "label": "open", "session_open": so_bs2_open, "want_refusal": None, "want_verdict": "ADMIT"},
-                {"action": "mail/read", "arguments": {"folder": "Forbidden", "message_id": "m0"}, "chain": fx_bs2["chain"], "grant_env": g_bs2, "kind": "bearer_session", "label": "where-fail", "slot_binding": "tls-mk-bs2", "token": tok_bs2, "want_refusal": "INVOKE_CONSTRAINT_FAILED", "want_verdict": "REFUSE"},
-                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m1"}, "chain": fx_bs2["chain"], "grant_env": g_bs2, "kind": "bearer_session", "label": "use-1-set-wm", "slot_binding": "tls-mk-bs2", "token": tok_bs2, "want_refusal": None, "want_verdict": "ADMIT"},
-                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": ch_bs2_back, "grant_env": g_bs2, "kind": "bearer_session", "label": "clock-back", "slot_binding": "tls-mk-bs2", "token": tok_bs2, "want_refusal": "QUOTA_CLOCK_REGRESSION", "want_verdict": "REFUSE"},
-                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": ch_bs2_wm, "grant_env": g_bs2, "kind": "bearer_session", "label": "clock-eq-wm-max", "slot_binding": "tls-mk-bs2", "token": tok_bs2, "want_refusal": None, "want_verdict": "ADMIT"},
-                {"action": "mail/read", "arguments": {"folder": "Invoices", "message_id": "m3"}, "chain": ch_bs2_exp, "grant_env": g_bs2, "kind": "bearer_session", "label": "exact-exp", "slot_binding": "tls-mk-bs2", "token": tok_bs2, "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Forbidden"}, "arguments": {"folder": "Forbidden", "message_id": "m0"}, "chain": fx_bs2["chain"], "grant_env": g_bs2, "kind": "bearer_session", "label": "where-fail", "slot_binding": "tls-mk-bs2", "target": "mailbox:id/alice:work", "token": tok_bs2, "want_refusal": "INVOKE_CONSTRAINT_FAILED", "want_verdict": "REFUSE"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m1"}, "chain": fx_bs2["chain"], "grant_env": g_bs2, "kind": "bearer_session", "label": "use-1-set-wm", "slot_binding": "tls-mk-bs2", "target": "mailbox:id/alice:work", "token": tok_bs2, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": ch_bs2_back, "grant_env": g_bs2, "kind": "bearer_session", "label": "clock-back", "slot_binding": "tls-mk-bs2", "target": "mailbox:id/alice:work", "token": tok_bs2, "want_refusal": "QUOTA_CLOCK_REGRESSION", "want_verdict": "REFUSE"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": ch_bs2_wm, "grant_env": g_bs2, "kind": "bearer_session", "label": "clock-eq-wm-max", "slot_binding": "tls-mk-bs2", "target": "mailbox:id/alice:work", "token": tok_bs2, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m3"}, "chain": ch_bs2_exp, "grant_env": g_bs2, "kind": "bearer_session", "label": "exact-exp", "slot_binding": "tls-mk-bs2", "target": "mailbox:id/alice:work", "token": tok_bs2, "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
             ],
         },
         "ADMIT", None, "Bearer session use enforces where-constraints, exact now == watermark ADMIT vs watermark-1 QUOTA_CLOCK_REGRESSION, exact used==max ADMIT, and exact now==exp SESSION_INVALID.")
@@ -2306,22 +2335,16 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     so_d2bs_p = {"executor": {"key": fx_d2bs["executor_cfg"]["key"], "name": fx_d2bs["executor_cfg"]["name"]}, "exp": fx_d2bs["chain"]["now"] + 600, "genesis": GENESIS_MAIN, "iat": fx_d2bs["chain"]["now"] - 10, "network": "main", "nonce": _h32("d8-mk-d2bs-n"), "op": "open", "proof_path": fx_d2bs["invocation"]["payload"]["proof_path"], "quotas": [], "slot_binding": "tls-d2bs", "type": "seallink-session-open/1"}
     so_d2bs_open = sl.sign_envelope(so_d2bs_p, [fx_d2bs["_keys"]["agent_req"]["sk"]])
     tok_d2bs = _h32("d8-mk-d2bs-tok")
-    ch_d2_nb = copy.deepcopy(fx_d2bs["chain"])
-    ch_d2_nb["tip_height"] = p_nb_h
-    ch_d2_nb["best_header_height"] = p_nb_h
-    ch_d2_nb["comparison_peers"] = [{"hash_at_tip": ch_d2_nb["tip_hash"], "healthy": True, "height": p_nb_h}]
-    ch_d2_na = copy.deepcopy(fx_d2bs["chain"])
-    ch_d2_na["tip_height"] = p_na_h
-    ch_d2_na["best_header_height"] = p_na_h
-    ch_d2_na["comparison_peers"] = [{"hash_at_tip": ch_d2_na["tip_hash"], "healthy": True, "height": p_na_h}]
+    ch_d2_nb = rm.sync_chain_tip(copy.deepcopy(fx_d2bs["chain"]), height=p_nb_h)
+    ch_d2_na = rm.sync_chain_tip(copy.deepcopy(fx_d2bs["chain"]), height=p_na_h)
     add("d8-mk-2a-bearer-session-depth2-parent-boundaries", ["SL-GRNT-013"], "session_lifecycle",
         {
             "executor_cfg": ecfg_d2bs,
             "journal": {"journal_id": _h32("d8-mk-d2bs-j")},
             "steps": [
                 {"bearer_token": tok_d2bs, "bundle": fx_d2bs["bundle"], "chain": fx_d2bs["chain"], "kind": "session_open", "label": "open", "session_open": so_d2bs_open, "want_refusal": None, "want_verdict": "ADMIT"},
-                {"chain": ch_d2_nb, "grant_env": c_d2bs, "kind": "bearer_session", "label": "parent-nb-eq-admit", "parent_grant_env": p_d2bs, "slot_binding": "tls-d2bs", "token": tok_d2bs, "want_refusal": None, "want_verdict": "ADMIT"},
-                {"chain": ch_d2_na, "grant_env": c_d2bs, "kind": "bearer_session", "label": "parent-na-eq-refuse", "parent_grant_env": p_d2bs, "slot_binding": "tls-d2bs", "token": tok_d2bs, "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
+                {"action": "agent/tool", "arguments": {"input_sha256": _h32("d2bs-in1"), "max_output_bytes": "128", "tool_name": "pytest"}, "chain": ch_d2_nb, "grant_env": c_d2bs, "kind": "bearer_session", "label": "parent-nb-eq-admit", "parent_grant_env": p_d2bs, "slot_binding": "tls-d2bs", "target": "station:id/station-a:tools", "token": tok_d2bs, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "agent/tool", "arguments": {"input_sha256": _h32("d2bs-in2"), "max_output_bytes": "128", "tool_name": "pytest"}, "chain": ch_d2_na, "grant_env": c_d2bs, "kind": "bearer_session", "label": "parent-na-eq-refuse", "parent_grant_env": p_d2bs, "slot_binding": "tls-d2bs", "target": "station:id/station-a:tools", "token": tok_d2bs, "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
             ],
         },
         "ADMIT", None, "Depth-2 bearer session enforces parent grant exact window bounds [not_before_height, not_after_height).")
@@ -2342,7 +2365,29 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     mid2 = _h32("d8-mk-mg2-id")
     inv2 = {"holder_name": "id/alice", "items": [{"media_type": "message/rfc822", "path": "Invoices/m.eml", "sha256": _h32("d8-mk-mg2-m"), "size_bytes": "12"}], "migration_id": mid2, "service_type": "mail"}
     inv2_h = sl.sha256(sl.jcs_encode(inv2)).hex()
-    exp2 = {"inventory": inv2, "open_predecessor_grants": [], "source_journal_commitment": _h32("d8-mk-mg2-jc"), "source_journal_pos": 5, "source_write_token_fenced": True}
+    f_stmt2 = sl.sign_envelope(
+        {
+            "genesis": GENESIS_MAIN,
+            "issuer": s2_pin,
+            "network": "main",
+            "not_after": fx_mg2["chain"]["now"] + 600,
+            "not_before": fx_mg2["chain"]["now"] - 10,
+            "seq": 1,
+            "statement_kind": "migration-fence",
+            "subject": {
+                "dest_executor": d2_pin,
+                "holder": h2_pin,
+                "inventory_sha256": inv2_h,
+                "migration_id": mid2,
+                "predecessor_grant_seals": [],
+                "source_journal_commitment": _h32("d8-mk-mg2-jc"),
+                "source_journal_pos": 5,
+            },
+            "type": "seallink-statement/1",
+        },
+        [fx_mg2["_keys"]["host_rcpt"]["sk"]],
+    )
+    exp2 = {"fencing_statement": f_stmt2, "inventory": inv2, "source_journal_commitment": _h32("d8-mk-mg2-jc"), "source_journal_pos": 5}
     mg2_p = {"dest_executor": d2_pin, "genesis": GENESIS_MAIN, "holder": h2_pin, "inventory_sha256": inv2_h, "issued_at": fx_mg2["chain"]["now"] - 10, "journal_commitment": _h32("d8-mk-mg2-jc"), "journal_pos": 5, "migration_id": mid2, "network": "main", "outstanding_exposure": [], "service_type": "mail", "source_executor": s2_pin, "type": "seallink-migration/1"}
     mg2_env = sl.sign_envelope(mg2_p, [fx_mg2["_keys"]["host_rcpt"]["sk"]])
     mg2_oid = sl.object_id(mg2_p)
@@ -2382,20 +2427,14 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
         {"chain": fx_fd2["chain"], "grant": g_fd2, "journal": {"closures": j_fdcl.closures, "journal_id": j_fdcl.journal_id}, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": {"trusted_peers": ["id/peer-b"]}},
         "REFUSE", "GRANT_CLOSED", "Federation disclosure with persisted grant closure MUST refuse GRANT_CLOSED.")
 
-    ch_fd_nb = copy.deepcopy(fx_fd2["chain"])
-    ch_fd_nb["tip_height"] = gp_fd2["not_before_height"]
-    ch_fd_nb["best_header_height"] = gp_fd2["not_before_height"]
-    ch_fd_nb["comparison_peers"] = [{"hash_at_tip": ch_fd_nb["tip_hash"], "healthy": True, "height": gp_fd2["not_before_height"]}]
-    ch_fd_na = copy.deepcopy(fx_fd2["chain"])
-    ch_fd_na["tip_height"] = gp_fd2["not_after_height"]
-    ch_fd_na["best_header_height"] = gp_fd2["not_after_height"]
-    ch_fd_na["comparison_peers"] = [{"hash_at_tip": ch_fd_na["tip_hash"], "healthy": True, "height": gp_fd2["not_after_height"]}]
+    ch_fd_nb = rm.sync_chain_tip(copy.deepcopy(fx_fd2["chain"]), height=gp_fd2["not_before_height"])
+    ch_fd_na = rm.sync_chain_tip(copy.deepcopy(fx_fd2["chain"]), height=gp_fd2["not_after_height"])
     add("d8-mk-2a-federation-screening-exact-nb-admit", ["SL-SERV-004"], "federation",
-        {"chain": ch_fd_nb, "grant": g_fd2, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": {"trusted_peers": ["id/peer-b"]}},
+        {"chain": ch_fd_nb, "grant": g_fd2, "journal": {"journal_id": _h32("d8-mk-fdnb-j")}, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": {"trusted_peers": ["id/peer-b"]}},
         "ADMIT", None, "Federation screening at exact tip_height == not_before_height MUST admit.")
     add("d8-mk-2a-federation-screening-exact-na-refuse", ["SL-SERV-004"], "federation",
-        {"chain": ch_fd_na, "grant": g_fd2, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": {"trusted_peers": ["id/peer-b"]}},
-        "REFUSE", "FEDERATION_POLICY_DENIED", "Federation screening at exact tip_height == not_after_height MUST refuse FEDERATION_POLICY_DENIED.")
+        {"chain": ch_fd_na, "grant": g_fd2, "journal": {"journal_id": _h32("d8-mk-fdna-j")}, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": {"trusted_peers": ["id/peer-b"]}},
+        "REFUSE", "GRANT_WINDOW_CLOSED", "Federation screening at exact tip_height == not_after_height MUST refuse GRANT_WINDOW_CLOSED.")
 
     # Schema leaf validator=='type' branches (kills _map_schema_error_to_refusal L302 on BOTH refusal-return & wrong-code!)
     g_wt_base = copy.deepcopy(fx_w0["bundle"]["grants"][0])
@@ -2436,17 +2475,17 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     c_pna_id = sl.object_id(c_pna_p)
     tok_pna = _h32("d8-mk-pna-tok")
     th_pna = sl.sha256(tok_pna.encode("utf-8")).hex()
-    ch_pna = copy.deepcopy(fx_pna["chain"])
-    ch_pna["tip_height"] = p_pna_na
-    ch_pna["best_header_height"] = p_pna_na
-    ch_pna["comparison_peers"] = [{"hash_at_tip": ch_pna["tip_hash"], "healthy": True, "height": p_pna_na}]
+    ch_pna = rm.sync_chain_tip(copy.deepcopy(fx_pna["chain"]), height=p_pna_na)
     add("d8-mk-2a-bearer-session-parent-na-exact-boundary", ["SL-GRNT-013"], "bearer_session",
         {
+            "action": "agent/tool",
+            "arguments": {"input_sha256": _h32("pna-in"), "max_output_bytes": "128", "tool_name": "pytest"},
             "chain": ch_pna,
             "grant_env": c_pna,
             "journal": {"journal_id": _h32("d8-mk-pna-j"), "sessions": {th_pna: {"closed": False, "exp": ch_pna["now"] + 600, "grant_id": c_pna_id, "quotas": [], "session_id": _h32("d8-mk-pna-sid"), "slot_binding": "tls-pna", "token_sha256": th_pna}}},
             "parent_grant_env": p_pna,
             "slot_binding": "tls-pna",
+            "target": "station:id/station-a:tools",
             "token": tok_pna,
         },
         "REFUSE", "SESSION_INVALID", "Bearer session defense-in-depth MUST refuse SESSION_INVALID at exact tip_height == parent.not_after_height.")

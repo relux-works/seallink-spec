@@ -7,7 +7,18 @@
       "mail/send"
     ],
     "key": "9474cbd42c994561f6d4ba7ba1bfa7aeeac24e0d765a7e333a1d079fdbaefb82",
-    "name": "id/mail-host-a"
+    "name": "id/mail-host-a",
+    "pin": {
+      "name": "id/mail-host-a",
+      "owner_policy": {
+        "kind": "key",
+        "pk": "0329ec9f2eaebebd406b40b7c1688f434d6e3d896f45828bb3c307aded972b23c2"
+      },
+      "registration": {
+        "txid": "925527c11b33214cacad527983af94f40d1ded991e3a3d8481f01ef303e36a11",
+        "vout": 0
+      }
+    }
   },
   "grant": {
     "canonical_jcs": "{\"payload\":{\"capabilities\":[{\"action\":\"mail/read\",\"target\":\"mailbox:id/alice:work\",\"where\":{\"folder\":{\"in\":[\"Invoices\"]}}}],\"executor_ref\":{\"label\":\"work\",\"provider_of\":\"id/alice\",\"service_type\":\"mail\"},\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"issuer\":{\"name\":\"id/alice\",\"owner_policy\":{\"kind\":\"key\",\"pk\":\"0398f3cacd40151403dcf7451288bf7a65c8b23a17a1bd3b05b3cec5ed5498c761\"},\"registration\":{\"txid\":\"cb5537b9d9768982b51e49423d19634329e0456bb5746f57f56a61f361780451\",\"vout\":0},\"role_policy\":{\"m\":1,\"pks\":[\"92eb5e1e2c0ceb439b5c01db7bfba28a692f7f091c6126dc24d12427a5d571a9\"]}},\"network\":\"main\",\"not_after_height\":760000,\"not_before_height\":750000,\"recent_block\":\"9f032fe8c14263bae135c5f027d263adc9ed989321bdb157a5257d42e2742604\",\"recipient\":{\"mode\":\"name\",\"name\":\"id/alice-acct-agent\",\"owner_policy\":{\"kind\":\"key\",\"pk\":\"022b962349449262c584142223d7b523ba719a3a1a85eb7f960bd6d2ef2686cefc\"},\"registration\":{\"txid\":\"84620db17ec258c3bff4cd50a171ebcb3214dad689166a382e589824520326a8\",\"vout\":0}},\"revocation\":{\"construction\":\"W\",\"kind\":\"revocable\",\"mode\":\"seal\",\"seal\":{\"script_policy\":{\"kind\":\"key\",\"pk\":\"0396278e2953f822103902e4e1f87f470fd2ad8a489ead99cfdbc9dc6b9afd372a\"},\"txid\":\"565ecad7166da08aef0a1c3f3c2ae693f1366e34040d7a8c908868bde0deab53\",\"vout\":0}},\"type\":\"seallink-grant/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"92eb5e1e2c0ceb439b5c01db7bfba28a692f7f091c6126dc24d12427a5d571a9\"]},\"sigs\":[{\"pk\":\"92eb5e1e2c0ceb439b5c01db7bfba28a692f7f091c6126dc24d12427a5d571a9\",\"sig\":\"4aab35e6bd3f635070a38f3aee25316bf8f4054a7f42e2368682f7613909d62f2188779fc84645fd0a915dc577fe94c0b6b4b69346e5d9448ea37cdaed351503\"}]}}",
@@ -101,6 +112,7 @@
     "signing_digest": "1e04a1b2fe0b274bf5d4f7c804d6a8320070a7778adb11cc3a032277717b07c9"
   },
   "initial_chain_state": {
+    "best_header_height": 750010,
     "blocks": {
       "9f032fe8c14263bae135c5f027d263adc9ed989321bdb157a5257d42e2742604": 749990
     },
@@ -113,6 +125,7 @@
       }
     ],
     "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+    "in_ibd": false,
     "manifests": {
       "4fc0d6fe9e48456688d3a1072a1579bd89a7302cd7c0e566f33d6a1b27f6c7eb": {
         "network": "main",
@@ -284,12 +297,25 @@
       }
     },
     "network": "main",
+    "node_reachable": true,
     "now": 1795220010,
+    "observation_bracket": {
+      "consistent": true,
+      "end": {
+        "hash": "6593c8af21ba5a03d7be803ecf2ce2dcc193d9fb988c5bf2bf809488d2391276",
+        "height": 750010
+      },
+      "start": {
+        "hash": "6593c8af21ba5a03d7be803ecf2ce2dcc193d9fb988c5bf2bf809488d2391276",
+        "height": 750010
+      }
+    },
     "tip_first_sight": 1795220005,
     "tip_hash": "6593c8af21ba5a03d7be803ecf2ce2dcc193d9fb988c5bf2bf809488d2391276",
     "tip_header_time": 1795220000,
     "tip_height": 750010,
     "tip_median_time_past": 1795219900,
+    "txindex": true,
     "txs": {
       "565ecad7166da08aef0a1c3f3c2ae693f1366e34040d7a8c908868bde0deab53": {
         "confirmed_height": 749995,
@@ -444,6 +470,11 @@
   },
   "steps": [
     {
+      "actual_message_meta": {
+        "folder": "Invoices",
+        "sender_domain": "vendor.example",
+        "size_bytes": "69"
+      },
       "expected_verdict": "ADMIT",
       "invocation": {
         "canonical_jcs": "{\"payload\":{\"action\":\"mail/read\",\"arguments\":{\"folder\":\"Invoices\",\"message_id\":\"msg-2026-001\"},\"executor\":{\"key\":\"9474cbd42c994561f6d4ba7ba1bfa7aeeac24e0d765a7e333a1d079fdbaefb82\",\"name\":\"id/mail-host-a\"},\"exp\":1795220300,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"network\":\"main\",\"nonce\":\"e797b9e2a5b5b886b0ce80efd3952b212668cf2e6a52280737a2c3c375eec7ed\",\"proof_path\":[{\"grant_id\":\"467a3a217c087defe3372a105719ae0fd8f83eb9e72065876c535b195618921e\",\"issuance_txid\":\"c98fad2416b02739861c138b9e167cad9ef944143d553ff410905323d9b29018\"}],\"target\":\"mailbox:id/alice:work\",\"type\":\"seallink-invocation/1\"},\"signatures\":{\"policy\":{\"m\":1,\"pks\":[\"c116fe12568b04e5a4b0d56308587c832cf594c7c03e1519a2d10424a070a572\"]},\"sigs\":[{\"pk\":\"c116fe12568b04e5a4b0d56308587c832cf594c7c03e1519a2d10424a070a572\",\"sig\":\"b6c145e38968631c9a1c81fd9cda62711b9a0a6ec9d67b0235740f90794ca66bc71f879b14f68c560f86efc92215068d40f4b750f0e192f622d82195026e6292\"}]}}",
@@ -694,6 +725,7 @@
     },
     {
       "chain_patch": {
+        "best_header_height": 750011,
         "comparison_peers": [
           {
             "hash_at_tip": "919d63731e99fbfbb64d4bfc8e09c299173fbd2f0cb35ad7f71dd21ee26d5bbf",
@@ -702,6 +734,17 @@
           }
         ],
         "now": 1795220500,
+        "observation_bracket": {
+          "consistent": true,
+          "end": {
+            "hash": "919d63731e99fbfbb64d4bfc8e09c299173fbd2f0cb35ad7f71dd21ee26d5bbf",
+            "height": 750011
+          },
+          "start": {
+            "hash": "919d63731e99fbfbb64d4bfc8e09c299173fbd2f0cb35ad7f71dd21ee26d5bbf",
+            "height": 750011
+          }
+        },
         "tip_first_sight": 1795220490,
         "tip_hash": "919d63731e99fbfbb64d4bfc8e09c299173fbd2f0cb35ad7f71dd21ee26d5bbf",
         "tip_header_time": 1795220480,
@@ -846,5 +889,5 @@
     }
   ],
   "suite": "trace-01-mail-offline-revoke",
-  "version": "1.0.0-draft.9"
+  "version": "1.0.0-draft.10"
 }

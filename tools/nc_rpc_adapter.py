@@ -537,8 +537,8 @@ class ColdNamecoinObserver:
             self._hdr_cache[blockhash] = self.read_rpc("getblockheader", blockhash)
         return self._hdr_cache[blockhash]
 
-    def _active_confirmed_height(self, blockhash: str, confirmations: int | None = None) -> tuple[int, int] | None:
-        """Verify `blockhash` is on the reading node's active chain (`A-2`). Returns `(height, time)` or `None`."""
+    def _active_confirmed_height(self, blockhash: str, confirmations: int | None = None) -> tuple[int, int | None] | None:
+        """Verify `blockhash` is on the reading node's active chain (`A-2`, `A-13`, `L-7`). Returns `(height, mediantime_or_None)` or `None`."""
         if confirmations is not None and int(confirmations) <= 0:
             return None
         try:
@@ -551,7 +551,13 @@ class ColdNamecoinObserver:
         active_h = self._get_active_blockhash(h)
         if active_h != blockhash:
             return None
-        return h, int(hdr.get("time", 0))
+        raw_mt = hdr.get("mediantime")
+        if isinstance(raw_mt, int) and not isinstance(raw_mt, bool) and raw_mt > 0:
+            return h, raw_mt
+        raw_t = hdr.get("time")
+        if isinstance(raw_t, int) and not isinstance(raw_t, bool) and raw_t > 0:
+            return h, raw_t
+        return h, None
 
     def _get_block_by_height(self, height: int) -> dict[str, Any]:
         if height not in self._block_cache:
@@ -622,11 +628,21 @@ class ColdNamecoinObserver:
         except RuntimeError as exc:
             raise RuntimeError(f"RPC_GETTXOUT_UNAVAILABLE: {exc}") from exc
         if utxo is not None:
+            spk_obj = utxo.get("scriptPubKey") if isinstance(utxo, dict) else None
+            spk_hex = spk_obj.get("hex") if isinstance(spk_obj, dict) else None
+            confs = utxo.get("confirmations") if isinstance(utxo, dict) else None
+            spk_valid = isinstance(spk_hex, str) and len(spk_hex) >= 2 and len(spk_hex) % 2 == 0
+            if spk_valid:
+                try:
+                    bytes.fromhex(spk_hex)
+                except ValueError:
+                    spk_valid = False
             if (
                 isinstance(utxo, dict)
-                and isinstance(utxo.get("scriptPubKey"), dict)
-                and isinstance(utxo.get("confirmations"), int)
-                and not isinstance(utxo.get("confirmations"), bool)
+                and spk_valid
+                and isinstance(confs, int)
+                and not isinstance(confs, bool)
+                and confs >= 0
             ):
                 return None, False
             # Malformed non-None gettxout response -> transient node error (CHAIN_UNHEALTHY, 0 closures!), NEVER absent_from_utxo!
@@ -660,10 +676,12 @@ class ColdNamecoinObserver:
         txid = txd["txid"]
         conf_h: int | None = None
         block_time: int | None = None
+        block_hash: str | None = None
         if "blockhash" in txd:
             act = self._active_confirmed_height(txd["blockhash"], txd.get("confirmations"))
             if act is not None:
                 conf_h, block_time = act
+                block_hash = txd["blockhash"]
         inputs_v: list[dict[str, Any]] = []
         for vin in txd.get("vin", []):
             if "txid" in vin:
@@ -692,6 +710,8 @@ class ColdNamecoinObserver:
             "inputs": inputs_v,
             "outputs": outputs_v,
         }
+        if block_hash is not None:
+            obj["block_hash"] = block_hash
         if block_time is not None:
             obj["block_time"] = block_time
         oprets = _extract_opreturns(txd.get("vout", []))
@@ -844,49 +864,56 @@ class ColdNamecoinObserver:
 
         # Sort raw_hist deterministically by (height if int else tip+1, original idx) while keeping unparseables in place
         indexed_items = list(enumerate(raw_hist))
-        enriched: list[tuple[int, int, int, dict[str, Any] | None, int, dict[str, Any] | None, bool]] = []
+        enriched: list[tuple[int, int, int | None, dict[str, Any] | None, int, dict[str, Any] | None, bool, bool]] = []
         for idx, item in indexed_items:
             if not isinstance(item, dict):
-                enriched.append((10**12, idx, 0, None, 0, None, True))
+                enriched.append((10**12, idx, None, None, 0, None, True, False))
                 continue
             txid = item.get("txid")
             vout_n = item.get("vout")
             raw_h = item.get("height")
             hint_h = int(raw_h) if isinstance(raw_h, int) and not isinstance(raw_h, bool) else 10**12
             if not isinstance(txid, str) or not isinstance(vout_n, int):
-                enriched.append((hint_h, idx, 0, None, 0, None, True))
+                enriched.append((hint_h, idx, None, None, 0, None, True, False))
                 continue
             txd = self._get_raw_tx(txid, allow_mempool=True, mempool_set=mempool_set)
             if txd is None:
-                enriched.append((hint_h, idx, 0, None, 0, None, True))
+                enriched.append((hint_h, idx, None, None, 0, None, True, False))
                 continue
             if "blockhash" not in txd:
                 if txid in mempool_txs:
                     continue
-                enriched.append((hint_h, idx, 0, None, 0, None, True))
+                enriched.append((hint_h, idx, None, None, 0, None, True, False))
                 continue
             act = self._active_confirmed_height(txd["blockhash"], txd.get("confirmations"))
             if act is None:
-                enriched.append((hint_h, idx, 0, None, 0, None, True))
+                enriched.append((hint_h, idx, None, None, 0, None, True, False))
                 continue
             h_conf, b_time = act
             collected_txs[txid] = txd
             out_obj = next((o for o in txd.get("vout", []) if int(o["n"]) == vout_n), None)
             if out_obj is None:
-                enriched.append((h_conf, idx, b_time, None, 0, None, True))
+                enriched.append((h_conf, idx, b_time, None, 0, None, True, False))
                 continue
             spk_hex = out_obj.get("scriptPubKey", {}).get("hex", "")
+            is_firstupdate_prefix = False
             try:
-                parsed = sl.parse_name_output(bytes.fromhex(spk_hex))
+                spk_b = bytes.fromhex(spk_hex)
+                is_firstupdate_prefix = len(spk_b) > 0 and spk_b[0] == 0x52
+                parsed = sl.parse_name_output(spk_b)
             except ValueError:
-                enriched.append((h_conf, idx, b_time, None, 0, None, True))
+                enriched.append((h_conf, idx, b_time, txd, vout_n, None, True, is_firstupdate_prefix))
                 continue
-            enriched.append((h_conf, idx, b_time, txd, vout_n, parsed, False))
+            enriched.append((h_conf, idx, b_time, txd, vout_n, parsed, False, False))
         enriched.sort(key=lambda t: (t[0], t[1]))
 
-        for h_conf, _idx, b_time, txd, vout_n, parsed, is_err in enriched:
+        for h_conf, _idx, b_time, txd, vout_n, parsed, is_err, is_fu_err in enriched:
             if is_err or txd is None or parsed is None:
-                if raw_lineages:
+                if is_fu_err and txd is not None:
+                    # A non-SegWit (e.g. P2PKH) OP_NAME_FIRSTUPDATE starts a NEW truncated lineage, never poisoning an expired prior lineage!
+                    raw_lineages.append([])
+                    lin_truncated.append(True)
+                elif raw_lineages:
                     lin_truncated[-1] = True
                 else:
                     pre_lineage_error = True
@@ -899,6 +926,8 @@ class ColdNamecoinObserver:
                 attached = False
                 for l_idx in range(len(raw_lineages) - 1, -1, -1):
                     lin = raw_lineages[l_idx]
+                    if not lin:
+                        continue
                     last_txid, last_vout = lin[-1][2]["txid"], lin[-1][3]
                     if (last_txid, last_vout) in in_ops:
                         lin.append((h_conf, b_time, txd, vout_n, parsed))
@@ -906,7 +935,8 @@ class ColdNamecoinObserver:
                         break
                 if not attached:
                     lin_truncated[-1] = True
-                    raw_lineages[-1].append((h_conf, b_time, txd, vout_n, parsed))
+                    if raw_lineages[-1]:
+                        raw_lineages[-1].append((h_conf, b_time, txd, vout_n, parsed))
             else:
                 if raw_lineages:
                     lin_truncated[-1] = True
@@ -940,7 +970,6 @@ class ColdNamecoinObserver:
                 if owner_pol is None:
                     owner_pol = {"kind": "unknown_unspent_spk", "spk_hex": t_spk_hex}
                 u_obj: dict[str, Any] = {
-                    "block_time": b_time,
                     "confirmed_height": h_conf,
                     "op": parsed["op"],
                     "output_script_hex": out_spk_hex,
@@ -948,6 +977,8 @@ class ColdNamecoinObserver:
                     "txid": txd["txid"],
                     "vout": vout_n,
                 }
+                if b_time is not None:
+                    u_obj["block_time"] = b_time
                 if pos > 0:
                     prev_u = updates_v[pos - 1]
                     spent_vin = next(
@@ -987,6 +1018,12 @@ class ColdNamecoinObserver:
                 if lin_truncated[l_idx]:
                     lin_rec["history_truncated"] = True
                 lineages_out.append(lin_rec)
+            elif lin_truncated[l_idx]:
+                lineages_out.append({
+                    "history_truncated": True,
+                    "registration": {"txid": "0" * 64, "vout": 0},
+                    "updates": [],
+                })
 
         if not lineages_out and pre_lineage_error:
             first_it = raw_hist[0] if isinstance(raw_hist[0], dict) else {}
@@ -1200,12 +1237,18 @@ class ColdNamecoinObserver:
                 for txid, txd in collected_txs.items()
             }
 
-            # Verify every target_block (recent_block) is on the active chain (A-2)!
+            # Verify every target_block (recent_block) is on the active chain (A-2) and collect confirmed block_times (MTP)!
             blocks_view: dict[str, int] = {tip_hash: tip_h}
+            block_times_view: dict[str, int] = {str(tip_h): start_s["mediantime"]}
             for bh in sorted(target_blocks):
                 act_b = self._active_confirmed_height(bh)
                 if act_b is not None:
                     blocks_view[bh] = act_b[0]
+                    if act_b[1] is not None:
+                        block_times_view[str(act_b[0])] = act_b[1]
+            for tv in txs_view.values():
+                if tv.get("confirmed_height") is not None and tv.get("block_time") is not None:
+                    block_times_view[str(tv["confirmed_height"])] = int(tv["block_time"])
 
             # Closing tip bracket (hash_1, height_1) AFTER all queries (`SPEC-02 §4` item 1)
             end_s = self._sample_tip()
@@ -1215,15 +1258,14 @@ class ColdNamecoinObserver:
 
             last_view = {
                 "best_header_height": int(b_info["headers"]),
+                "block_times": block_times_view,
                 "blocks": blocks_view,
                 "clock_source": end_s["clock_source"],
                 "clock_watermark": decision_wm,
                 "comparison_peers": comp_peers,
                 "credible_utc_interval": [decision_now - 60, decision_now + 60],
-                "future_bound_s": 600,
                 "genesis": self.genesis_hash,
                 "in_ibd": bool(b_info["initialblockdownload"]),
-                "lag_limit": 1,
                 "manifests": copy.deepcopy(manifests) if manifests else {},
                 "name_registrations": name_regs_view,
                 "names": names_view,
@@ -1588,6 +1630,8 @@ def self_test() -> None:
                 raise RuntimeError("namecoin-cli name_history failed: connection reset by peer")
             if nm_q == "id/no-method" and state["name_hist_rpc_err"]:
                 raise RuntimeError("namecoin-cli name_history failed: error code -32601: Method not found")
+            if nm_q == "id/no-history-flag" and state["name_hist_rpc_err"]:
+                raise RuntimeError("namecoin-cli name_history failed: error code -1: -namehistory is not enabled")
             if nm_q == "id/missing":
                 raise RuntimeError("namecoin-cli name_history failed: error code -4: name not found")
             if nm_q == "id/corrupt" and state["bad_name_hist"]:
@@ -1635,7 +1679,8 @@ def self_test() -> None:
     assert cv_dict["txs"][vac_txid]["outputs"]["0"]["spent_by_txid"] == pend_txid
     assert cv_dict["txs"][pend_txid]["outputs"]["2"]["spent_by_txid"] == act_txid
     assert cv_dict["txs"][act_txid]["inputs"][0]["sequence"] == 3
-    assert cv_dict["txs"][act_txid]["block_time"] == hdrs[b204]["time"]
+    assert cv_dict["txs"][act_txid]["block_time"] == hdrs[b204]["mediantime"]
+    assert cv_dict["txs"][act_txid]["block_hash"] == b204
     # A-1: ghost_seal_txid:0 MUST be marked absent_from_utxo=True!
     assert cv_dict["txs"][ghost_seal_txid]["outputs"]["0"].get("absent_from_utxo") is True
     # A-2: orphaned tx & orphaned block MUST NOT enter active chain view!
@@ -1760,15 +1805,19 @@ def self_test() -> None:
     assert v_strict.check_chain_observation(sv.ChainView(cv_pre_rpc_utxo)) == "CHAIN_UNHEALTHY"
     state["gettxout_rpc_err"] = False
 
-    # Test 11 (R2-A-01 / R2-A-02 / D8-M2): Transient name_history RPC error & -32601 Method not found -> history_truncated=True; corrupt 2nd reg does NOT taint clean 1st reg!
+    # Test 11 (R2-A-01 / R2-A-02 / D8-M2 / L-4): Transient name_history RPC error, -1 -namehistory disabled, & -32601 Method not found -> history_truncated=True; corrupt 2nd reg does NOT taint clean 1st reg!
     state["name_hist_rpc_err"] = True
     state["corrupt_second_reg"] = True
-    cv_nh = obs.build_chain_view(extra_names=["id/rpc-err", "id/no-method", "id/missing", "id/school"], extra_policies=[pol1, pol2])
+    cv_nh = obs.build_chain_view(extra_names=["id/rpc-err", "id/no-method", "id/no-history-flag", "id/missing", "id/school"], extra_policies=[pol1, pol2])
     assert cv_nh["names"]["id/rpc-err"].get("history_truncated") is True
     assert cv_nh["names"]["id/no-method"].get("history_truncated") is True
+    assert cv_nh["names"]["id/no-history-flag"].get("history_truncated") is True
     assert "id/missing" not in cv_nh["names"]
     assert v_strict.resolve_name("id/rpc-err", sv.ChainView(cv_nh))[1] == "NAME_HISTORY_UNAVAILABLE"
     assert v_strict.resolve_name("id/no-method", sv.ChainView(cv_nh))[1] == "NAME_HISTORY_UNAVAILABLE"
+    assert v_strict.resolve_name("id/no-history-flag", sv.ChainView(cv_nh))[1] == "NAME_HISTORY_UNAVAILABLE"
+    # Even WITH an expected_registration pin, truncated history MUST return NAME_HISTORY_UNAVAILABLE (not NAME_OWNER_MISMATCH / NAME_NOT_FOUND)!
+    assert v_strict.resolve_name("id/no-history-flag", sv.ChainView(cv_nh), expected_registration={"txid": fu1_txid, "vout": 0})[1] == "NAME_HISTORY_UNAVAILABLE"
     assert v_strict.resolve_name("id/missing", sv.ChainView(cv_nh))[1] == "NAME_NOT_FOUND"
     # Second reg is tainted, while clean historical first reg still resolves at height 157!
     assert cv_nh["names"]["id/school"].get("history_truncated") is True

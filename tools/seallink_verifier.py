@@ -357,6 +357,10 @@ def _normalize_policy(p: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _policy_sha256(p: dict[str, Any]) -> str:
+    return sl.sha256(sl.jcs_encode(_normalize_policy(p))).hex()
+
+
 def _closure_subject_key(subject: dict[str, Any]) -> str:
     sk = subject.get("subject_kind")
     if sk in ("grant", "contract", "credential", "origin"):
@@ -366,7 +370,7 @@ def _closure_subject_key(subject: dict[str, Any]) -> str:
     if sk == "row":
         return f"row:{subject['grant_id']}:{subject['ordinal']}"
     if sk == "role":
-        return f"role:{subject['name']}:{_outpoint_key(subject['registration'])}:{subject['role']}"
+        return f"role:{subject['name']}:{_outpoint_key(subject['registration'])}:{subject['role']}:{subject['policy_sha256']}"
     if sk == "guardian_slot":
         return f"guardian_slot:{subject['origin_id']}:{subject['slot']}:{_outpoint_key(subject['outpoint'])}"
     return str(subject)
@@ -876,8 +880,16 @@ class FencedJournal:
         observed_at: int,
         observed_height: int | None = None,
         spend_txid: str | None = None,
-    ) -> dict[str, Any]:
-        """Append a schema-valid ClosureSubject closure entry (SPEC-06 §6, H-4)."""
+    ) -> dict[str, Any] | None:
+        """Idempotently append a schema-valid ClosureSubject closure entry (SPEC-06 §6, H-4, M-1)."""
+        ckey = _closure_subject_key(subject)
+        existing = self.closures.get(ckey)
+        if existing is not None and existing.get("cause") == cause:
+            ex_subj = existing.get("subject", {}) if isinstance(existing.get("subject"), dict) else {}
+            new_hc = subject.get("cutoff_height")
+            old_hc = ex_subj.get("cutoff_height")
+            if new_hc is None or (old_hc is not None and min(int(old_hc), int(new_hc)) == int(old_hc)):
+                return None
         body: dict[str, Any] = {
             "cause": cause,
             "observed_at": int(observed_at),
@@ -929,6 +941,10 @@ class FencedJournal:
                 )
                 if sch_err is not None:
                     raise ValueError(sch_err)
+            if kind == "settlement" and body.get("outcome") == "uncertain":
+                for ln_u in body.get("settlements", []):
+                    if isinstance(ln_u, dict) and int(ln_u.get("released", "0")) != 0:
+                        raise ValueError("WIRE_MEMBER")
 
         c_after = sl.journal_commit_step(c_before, entry)
         # External CAS witness check (atomic write-token fencing + head-pos CAS, G7-11)
@@ -1012,7 +1028,7 @@ class FencedJournal:
                 self.terminal_invocations[inv_id] = {"outcome": outcome, "receipt_sha256": rsha}
             elif inv_id in self.unsettled_reservations and rsha:
                 self.unsettled_reservations[inv_id]["uncertain_receipt_sha256"] = rsha
-            # R3 Blocker #2: Unified atomic single-use terminal closure inside settlement entry (+1 witness advance!)
+            # R3 Blocker #2 / L-11: Unified atomic single-use terminal closure inside settlement entry (+1 witness advance!)
             if body.get("single_use_consumed") is True and "closes_grant_id" in body:
                 cgid = body["closes_grant_id"]
                 self.closures[f"grant:{cgid}"] = {
@@ -1021,7 +1037,9 @@ class FencedJournal:
                     "spend_txid": body.get("use_txid", "0" * 64),
                     "subject": {"subject_id": cgid, "subject_kind": "grant"},
                 }
-            if rsha and rsha in self.receipt_store:
+                if inv_id in self.unsettled_reservations:
+                    self.unsettled_reservations[inv_id]["single_use_consumed_recorded"] = True
+            if outcome != "uncertain" and rsha and rsha in self.receipt_store:
                 try:
                     if sl.content_addr(self.receipt_store[rsha]) == rsha:
                         self.receipts[inv_id] = copy.deepcopy(self.receipt_store[rsha])
@@ -1184,51 +1202,59 @@ class ChainView:
 class Tier1Verifier:
     """Reference Verifier Core implementing SPEC-01 through SPEC-07."""
 
+    _VALID_MODULES = frozenset({"core", "bearer-sessions", "service-migration", "federated-screening"})
+    _TYPE_REQUIRED_MODULE: dict[str, str] = {
+        "seallink-session-open/1": "bearer-sessions",
+        "seallink-migration/1": "service-migration",
+    }
+
     def __init__(
         self,
         pinned_network: str = "main",
         pinned_genesis: str = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
         operator_min_depth: int = 1,
         allow_window_only: bool = False,
-        trusted_origin_issuers: set[str] | list[Any] | None = None,
         trusted_origin_issuer_pins: list[dict[str, Any]] | None = None,
         enforce_schemas: bool = True,
         require_jsonschema: bool = True,
         max_history_steps: int = 500,
-        require_observation_bracket: bool = False,
-        enabled_modules: set[str] | list[str] | None = None,
+        require_observation_bracket: bool = True,
+        enabled_modules: set[str] | frozenset[str] | list[str] | tuple[str, ...] | None = None,
+        lag_limit: int = 1,
+        future_bound_s: int = 600,
+        recency_k: int = 432,
     ) -> None:
         self.pinned_network = pinned_network
         self.pinned_genesis = pinned_genesis
         self.operator_min_depth = operator_min_depth
         self.allow_window_only = allow_window_only
-        self.trusted_origin_issuers: set[str] = set()
-        self.trusted_origin_issuer_pins: list[dict[str, Any]] | None = (
-            [copy.deepcopy(p) for p in trusted_origin_issuer_pins if isinstance(p, dict)]
-            if trusted_origin_issuer_pins is not None
-            else None
-        )
-        if trusted_origin_issuers is not None:
-            pins_from_arg: list[dict[str, Any]] = []
-            for item in trusted_origin_issuers:
-                if isinstance(item, dict):
-                    pins_from_arg.append(copy.deepcopy(item))
-                elif isinstance(item, str):
-                    self.trusted_origin_issuers.add(item)
-            if pins_from_arg:
-                if self.trusted_origin_issuer_pins is None:
-                    self.trusted_origin_issuer_pins = pins_from_arg
-                else:
-                    self.trusted_origin_issuer_pins.extend(pins_from_arg)
+        # B-1 (SL-ORIG-002): Trust origin issuers strictly by complete NamePin — NEVER bare name strings!
+        self.trusted_origin_issuer_pins: list[dict[str, Any]] = []
+        if trusted_origin_issuer_pins is not None:
+            if not isinstance(trusted_origin_issuer_pins, (list, tuple)):
+                raise ValueError("trusted_origin_issuer_pins must be a list of NamePin dicts")
+            for p in trusted_origin_issuer_pins:
+                if not isinstance(p, dict) or not all(k in p for k in ("name", "registration", "owner_policy")):
+                    raise ValueError("trusted_origin_issuer_pins entries MUST be full NamePin dicts (bare strings forbidden)")
+                self.trusted_origin_issuer_pins.append(copy.deepcopy(p))
         self.enforce_schemas = enforce_schemas
         self.require_jsonschema = require_jsonschema
         self.max_history_steps = max_history_steps
         self.require_observation_bracket = require_observation_bracket
-        self.enabled_modules: set[str] = (
-            set(enabled_modules)
-            if enabled_modules is not None
-            else {"core", "bearer-sessions", "service-migration", "federated-screening"}
-        )
+        self.lag_limit = int(lag_limit)
+        self.future_bound_s = int(future_bound_s)
+        self.recency_k = int(recency_k)
+        # M-12: Strictly validate enabled_modules (reject bare str, unknown module names, or missing 'core')
+        if enabled_modules is None:
+            self.enabled_modules: frozenset[str] = self._VALID_MODULES
+        else:
+            if isinstance(enabled_modules, (str, bytes)) or not isinstance(enabled_modules, (set, frozenset, list, tuple)):
+                raise ValueError("enabled_modules must be a collection of registered module names")
+            mods = frozenset(enabled_modules)
+            unknown = mods - self._VALID_MODULES
+            if unknown or "core" not in mods:
+                raise ValueError(f"invalid enabled_modules: {sorted(mods)}")
+            self.enabled_modules = mods
 
     # ------------------------------------------------------------------
     # SPEC-01 §7 Wire Pipeline (steps 1..10, closed Draft 2020-12 schemas)
@@ -1261,6 +1287,18 @@ class Tier1Verifier:
         else:
             if not isinstance(obj_type, str) or obj_type not in reg:
                 return False, "WIRE_TYPE"
+            # Step 7b (H-13 / M-11): Uniform disabled optional module rejection across ALL wire & domain entrypoints!
+            req_mod = self._TYPE_REQUIRED_MODULE.get(obj_type)
+            if req_mod is None and "payload" in obj and isinstance(obj["payload"], dict):
+                p_mod = obj["payload"]
+                if obj_type == "seallink-owner-command/1" and p_mod.get("command") == "approve-pii-disclosure":
+                    req_mod = "federated-screening"
+                elif obj_type == "seallink-statement/1" and p_mod.get("statement_kind") in ("migration-accept", "migration-fence"):
+                    req_mod = "service-migration"
+                elif obj_type == "seallink-assent/1" and p_mod.get("target_type") == "seallink-migration/1":
+                    req_mod = "service-migration"
+            if req_mod is not None and req_mod not in self.enabled_modules:
+                return False, "ACTION_UNSUPPORTED"
             type_max = reg[obj_type]["max_bytes"]
             if len(raw) > type_max:
                 return False, "WIRE_SIZE"
@@ -1497,39 +1535,67 @@ class Tier1Verifier:
 
     def check_chain_observation(self, chain: ChainView, risk_class: int = 1) -> str | None:
         c = chain.raw
-        # Step 4a: Snapshot bracket consistency FIRST (before peer comparison! SPEC-02 §4, M-1, R1-B)
+        # Step 4a: Snapshot bracket consistency FIRST (before peer comparison! SPEC-02 §4, H-1 / SL-LDGR-015)
         if (self.require_observation_bracket or c.get("observation_bracket") is not None) and not self._is_bracket_consistent(chain):
             return "CHAIN_OBSERVATION_VOID"
         # Step 4b: Chain/genesis pin
         if chain.network != self.pinned_network or chain.genesis != self.pinned_genesis:
             return "CHAIN_MISMATCH"
-        # Step 4c: Reading node health (!IBD, txindex=1, header lag <= LAG)
-        lag_limit = c.get("lag_limit", 1)
-        if c.get("in_ibd", False) or not c.get("txindex", True) or not c.get("node_reachable", True):
+        # Step 4c: Reading node health (!IBD, txindex=true, node_reachable=true, header lag <= self.lag_limit; omitted -> fail closed!)
+        in_ibd = c.get("in_ibd")
+        txindex = c.get("txindex")
+        node_reachable = c.get("node_reachable")
+        best_hdr = c.get("best_header_height")
+        if (
+            not isinstance(in_ibd, bool)
+            or not isinstance(txindex, bool)
+            or not isinstance(node_reachable, bool)
+            or not isinstance(best_hdr, int)
+            or isinstance(best_hdr, bool)
+            or in_ibd
+            or not txindex
+            or not node_reachable
+        ):
             return "CHAIN_UNHEALTHY"
-        best_hdr = c.get("best_header_height", chain.tip_height)
-        if best_hdr - chain.tip_height > lag_limit:
+        if best_hdr - chain.tip_height > self.lag_limit:
             return "CHAIN_UNHEALTHY"
-        # Step 4d: Require >= 1 healthy independent comparison peer; single disagreeing peer vetoes
-        healthy_peers = [p for p in c.get("comparison_peers", []) if isinstance(p, dict) and p.get("healthy", True)]
+        # Step 4d: Require >= 1 healthy independent comparison peer with mandatory (height, hash_at_tip); single disagreeing peer vetoes (H-1)
+        peers_raw = c.get("comparison_peers")
+        healthy_peers = (
+            [p for p in peers_raw if isinstance(p, dict) and p.get("healthy") is True]
+            if isinstance(peers_raw, list)
+            else []
+        )
         if not healthy_peers:
             return "CHAIN_UNHEALTHY"
         for peer in healthy_peers:
-            if peer.get("height", chain.tip_height) > chain.tip_height:
+            p_h = peer.get("height")
+            p_hash = peer.get("hash_at_tip")
+            if not isinstance(p_h, int) or isinstance(p_h, bool) or not isinstance(p_hash, str) or len(p_hash) != 64:
+                return "CHAIN_UNHEALTHY"
+            if p_h > chain.tip_height or p_hash != chain.tip_hash:
                 return "CHAIN_NODE_DISAGREEMENT"
-            if peer.get("hash_at_tip", chain.tip_hash) != chain.tip_hash:
-                return "CHAIN_NODE_DISAGREEMENT"
-        # Step 4e: Monotonic UTC clock watermark & future header bound S (also reject non-operational clock on main, A-9)
-        now = chain.now
-        watermark = c.get("clock_watermark", 0)
+        # Step 4e: Monotonic UTC clock watermark & future header bound S (verifier config, never snapshot override!)
+        now = c.get("now")
+        watermark = c.get("clock_watermark")
+        hdr_time = c.get("tip_header_time")
+        first_sight = c.get("tip_first_sight")
+        if (
+            not isinstance(now, int)
+            or isinstance(now, bool)
+            or not isinstance(watermark, int)
+            or isinstance(watermark, bool)
+            or not isinstance(hdr_time, int)
+            or isinstance(hdr_time, bool)
+            or not isinstance(first_sight, int)
+            or isinstance(first_sight, bool)
+        ):
+            return "CHAIN_CLOCK_ERROR"
         if now < watermark or (chain.network == "main" and c.get("clock_source") == "regtest_deterministic"):
             return "CHAIN_CLOCK_ERROR"
-        hdr_time = c.get("tip_header_time", now - 60)
-        future_s = c.get("future_bound_s", 600)
-        if hdr_time - now > future_s:
+        if hdr_time - now > self.future_bound_s:
             return "CHAIN_CLOCK_ERROR"
         # Step 4f: Dual tip-age freshness (evaluated at unified decision clock & closing bracket)
-        first_sight = c.get("tip_first_sight", hdr_time)
         tip_age = max(now - hdr_time, now - first_sight)
         cutoff = 3600 if risk_class == 1 else 5400
         if tip_age > cutoff:
@@ -1628,7 +1694,9 @@ class Tier1Verifier:
         subject_kind: str = "grant",
         closure_subject: dict[str, Any] | None = None,
     ) -> tuple[str, str | None, dict[str, Any] | None]:
-        """Evaluate standard revocable seal (SPEC-02 §6.1)."""
+        """Evaluate standard revocable seal (SPEC-02 §6.1, H-2 fail-closed on node_reachable=False)."""
+        if chain.raw.get("node_reachable") is False:
+            return "unavailable", "CHAIN_UNHEALTHY", None
         try:
             exp_spk, _ = sl.compile_script_policy(seal["script_policy"])
         except ValueError:
@@ -1665,7 +1733,9 @@ class Tier1Verifier:
         journal: FencedJournal | None = None,
         grant_id: str | None = None,
     ) -> tuple[str, str | None, dict[str, Any] | None]:
-        """Evaluate single_use_1_of_2 seal deriving spend branch strictly from witness (SPEC-02 §6.2)."""
+        """Evaluate single_use_1_of_2 seal deriving spend branch strictly from witness (SPEC-02 §6.2, H-2)."""
+        if chain.raw.get("node_reachable") is False:
+            return "unavailable", "CHAIN_UNHEALTHY", None
         try:
             if seal["script_policy"].get("template") != "single_use_1_of_2":
                 raise ValueError("not single_use_1_of_2")
@@ -1795,11 +1865,17 @@ class Tier1Verifier:
     ) -> tuple[dict[str, Any] | None, str | None]:
         """Resolve a Namecoin name strictly by walking its structured updates[] history (B-9, B-12, A-5, A-7, R2-L-01)."""
         is_hist = at_height is not None or historical
+        raw_cur = chain.get_name(name)
         rec = chain.get_name_for_registration(name, expected_registration, historical=is_hist)
-        if not rec:
-            return None, "NAME_NOT_FOUND"
-        if expected_registration is not None and rec.get("registration") != expected_registration:
-            return None, "NAME_OWNER_MISMATCH"
+        if not rec or (expected_registration is not None and rec.get("registration") != expected_registration):
+            cands = (
+                ([raw_cur] if isinstance(raw_cur, dict) else [])
+                + ([rec] if isinstance(rec, dict) else [])
+                + list(chain.raw.get("name_registrations", {}).get(name, []))
+            )
+            if any(isinstance(r, dict) and r.get("history_truncated") is True and not r.get("updates") for r in cands):
+                return None, "NAME_HISTORY_UNAVAILABLE"
+            return None, "NAME_NOT_FOUND" if not rec else "NAME_OWNER_MISMATCH"
         updates = rec.get("updates")
         if not isinstance(updates, list) or not updates:
             return None, "NAME_HISTORY_UNAVAILABLE"
@@ -1891,7 +1967,8 @@ class Tier1Verifier:
             return None, "ORIGIN_UNVERIFIED"
         historical_origin_id = next(iter(hist_origins)) if hist_origins else None
 
-        # Derive 0x0b compromise breaks & 0x10 recovery cancels from confirmed owner-authored updates in history (H-20, H-22, H-29)
+        # Derive 0x0b compromise breaks & 0x10 recovery cancels from confirmed owner-authored updates in history,
+        # enforcing strict SLNK frame validation & forward-compatibility criticality rules (SPEC-02 §5.2, H-3/F3, L-8).
         compromised_breaks: list[dict[str, Any]] = []
         recovery_cancels: list[dict[str, Any]] = []
         for idx in range(1, len(updates)):
@@ -1899,12 +1976,35 @@ class Tier1Verifier:
             uh_conf = u.get("confirmed_height")
             if uh_conf is None or not self._is_owner_authored_update(u, updates[idx - 1]):
                 continue
-            opret_hex = u.get("opreturn_hex")
-            if not opret_hex:
+            # Normalize opreturns[] / legacy opreturn_hex (must have <= 1 zero-value SLNK frame!)
+            if "opreturns" in u and isinstance(u["opreturns"], list):
+                raw_oprets = [it_o for it_o in u["opreturns"] if isinstance(it_o, dict)]
+            elif u.get("opreturn_hex"):
+                raw_oprets = [{"script_pubkey_hex": u["opreturn_hex"], "value_sat": u.get("opreturn_value_sat", 0)}]
+            else:
+                raw_oprets = []
+            slnk_items: list[dict[str, Any]] = []
+            frame_bad = False
+            for it_o in raw_oprets:
+                sh = it_o.get("script_pubkey_hex", "")
+                try:
+                    sb = bytes.fromhex(sh)
+                except ValueError:
+                    frame_bad = True
+                    break
+                if sl.is_slnk_opreturn(sb):
+                    slnk_items.append(it_o)
+            if frame_bad or len(slnk_items) > 1 or (len(slnk_items) == 1 and slnk_items[0].get("value_sat", 0) != 0):
+                return None, "CHAIN_FRAME_INVALID"
+            if not slnk_items:
                 continue
+            slnk_hex = slnk_items[0]["script_pubkey_hex"]
             try:
-                dec = sl.decode_opreturn(bytes.fromhex(opret_hex))
-            except ValueError:
+                dec = sl.decode_opreturn_with_criticality(bytes.fromhex(slnk_hex))
+            except ValueError as exc:
+                err_code = str(exc)
+                return None, err_code if err_code in ("ORIGIN_STATUS_INCOMPLETE", "CHAIN_FRAME_INVALID") else "CHAIN_FRAME_INVALID"
+            if dec.get("advisory"):
                 continue
             prev_owner_spk = None
             try:
@@ -1912,6 +2012,8 @@ class Tier1Verifier:
             except (ValueError, KeyError, TypeError):
                 pass
             if dec["action"] == "0x0b":
+                if dec["h_c"] > int(uh_conf):
+                    return None, "CHAIN_FRAME_INVALID"
                 pinp = u["prev_input"]
                 compromised_breaks.append({
                     "h_c": dec["h_c"],
@@ -2018,18 +2120,54 @@ class Tier1Verifier:
             return None, "WIRE_SIGNATURE"
         return resolved, None
 
-    def _is_policy_compromised_at(
+    def _resolve_historical_role_policy(
+        self,
+        name_rec: dict[str, Any],
+        role: str,
+        presented_role_policy: dict[str, Any] | None,
+        at_height: int | None,
+    ) -> dict[str, Any] | None:
+        """Resolve link.<role> active at historical block height `at_height` (without recency diff) for H-4 authentication."""
+        if at_height is None:
+            return None
+        updates = name_rec.get("updates", [])
+        target_name = name_rec.get("_name", "")
+        target_u = None
+        for u in updates:
+            uh = u.get("confirmed_height")
+            if uh is not None and uh <= at_height:
+                target_u = u
+        if target_u is None:
+            return None
+        vobj, verr = self._parse_update_value(target_u, target_name)
+        if verr or vobj is None:
+            return None
+        entry = vobj.get("link", {}).get(role)
+        if entry is None:
+            return None
+        if isinstance(entry, str):
+            resolved = {"m": 1, "pks": [entry]}
+        else:
+            if not isinstance(entry, dict) or "p" not in entry or presented_role_policy is None:
+                return None
+            if sl.sha256(sl.jcs_encode(presented_role_policy)).hex() != entry["p"]:
+                return None
+            resolved = _normalize_policy(presented_role_policy)
+        if presented_role_policy is not None and _normalize_policy(presented_role_policy) != resolved:
+            return None
+        return resolved
+
+    def _policy_compromised_cutoff(
         self,
         nrec: dict[str, Any],
         issuer_pin: dict[str, Any],
         role: str,
         resolved_policy: dict[str, Any],
-        anchor_height: int,
         chain: ChainView,
-    ) -> bool:
-        """Reconstruct seallink-credential-break/1 from on-chain 0x0b frames and check exact owner & policy scope (H-22, R1 #1, R2-04)."""
+    ) -> int | None:
+        """Reconstruct seallink-credential-break/1 from on-chain 0x0b frames and return min(h_c) or None."""
         if role not in ("cred", "notary", "grant"):
-            return False
+            return None
         issuer_name_pin = {
             "name": issuer_pin["name"],
             "owner_policy": issuer_pin["owner_policy"],
@@ -2038,7 +2176,7 @@ class Tier1Verifier:
         try:
             exp_owner_spk_hex = sl.compile_script_policy(issuer_pin["owner_policy"])[0].hex()
         except (ValueError, KeyError, TypeError):
-            return False
+            return None
         norm_pol = _normalize_policy(resolved_policy)
         min_hc: int | None = None
         for brk in nrec.get("_compromised_breaks", []):
@@ -2057,6 +2195,18 @@ class Tier1Verifier:
             }
             if sl.signing_digest(cand_break).hex() == brk["commitment"]:
                 min_hc = brk["h_c"] if min_hc is None else min(min_hc, brk["h_c"])
+        return min_hc
+
+    def _is_policy_compromised_at(
+        self,
+        nrec: dict[str, Any],
+        issuer_pin: dict[str, Any],
+        role: str,
+        resolved_policy: dict[str, Any],
+        anchor_height: int,
+        chain: ChainView,
+    ) -> bool:
+        min_hc = self._policy_compromised_cutoff(nrec, issuer_pin, role, resolved_policy, chain)
         return min_hc is not None and anchor_height >= min_hc
 
     def verify_issuer_role_at_height(
@@ -2070,7 +2220,7 @@ class Tier1Verifier:
         resolve_at_tip: bool = False,
         journal: FencedJournal | None = None,
     ) -> str | None:
-        """Authoritatively verify an object's signatures against issuer's link.<role> + policy-scoped 0x0b h_c cutoff."""
+        """Authoritatively verify an object's signatures against issuer's link.<role> + policy-scoped 0x0b h_c cutoff (M-1)."""
         nrec, nerr = self.resolve_name(
             issuer_pin["name"],
             chain,
@@ -2087,10 +2237,26 @@ class Tier1Verifier:
         if rerr:
             return rerr
         assert rpol is not None
-        if self._is_policy_compromised_at(nrec, issuer_pin, role, rpol, anchor_height, chain):
+        pol_sha = _policy_sha256(rpol)
+        role_subj: dict[str, Any] = {
+            "name": issuer_pin["name"],
+            "policy_sha256": pol_sha,
+            "registration": issuer_pin["registration"],
+            "role": role,
+            "subject_kind": "role",
+        }
+        # M-1: Check policy- & cutoff-scoped durable role closure BEFORE signature checks (never blocks < h_c or successor policy B!)
+        if journal is not None:
+            ex_cl = journal.lookup_closure(role_subj)
+            if ex_cl is not None and ex_cl.get("cause") == "CRED_ISSUER_CLOSED":
+                ex_hc = ex_cl.get("subject", {}).get("cutoff_height")
+                if ex_hc is None or anchor_height >= int(ex_hc):
+                    return "CRED_ISSUER_CLOSED"
+        min_hc = self._policy_compromised_cutoff(nrec, issuer_pin, role, rpol, chain)
+        if min_hc is not None and anchor_height >= min_hc:
             if journal is not None:
                 journal.record_closure(
-                    {"name": issuer_pin["name"], "registration": issuer_pin["registration"], "role": role, "subject_kind": "role"},
+                    {**role_subj, "cutoff_height": min_hc},
                     "CRED_ISSUER_CLOSED",
                     observed_at=chain.now,
                     observed_height=chain.tip_height,
@@ -2328,6 +2494,9 @@ class Tier1Verifier:
         p = res["payload"]
         if p["network"] != self.pinned_network or p["genesis"] != self.pinned_genesis:
             return VerifierResult("REFUSE", "CHAIN_MISMATCH")
+        obs_err = self.check_chain_observation(chain, risk_class=1)
+        if obs_err:
+            return VerifierResult("REFUSE", obs_err)
         if not (p["iat"] <= chain.now < p["exp"]):
             return VerifierResult("REFUSE", "INVOKE_TIME_INVALID")
         if dl_res.get("owner") != p["owner"]:
@@ -2411,6 +2580,29 @@ class Tier1Verifier:
         )
         return ok_s
 
+    @staticmethod
+    def _extract_policy_pubkeys(pol: Any) -> set[str]:
+        """Extract all public key hex strings referenced anywhere in a ScriptPolicy / BranchKeySpec (M-9)."""
+        out: set[str] = set()
+        if not isinstance(pol, dict):
+            return out
+        pk = pol.get("pk")
+        if isinstance(pk, str):
+            out.add(pk)
+        pks = pol.get("pks")
+        if isinstance(pks, list):
+            for k in pks:
+                if isinstance(k, str):
+                    out.add(k)
+        keys = pol.get("keys")
+        if isinstance(keys, dict):
+            for v in keys.values():
+                if isinstance(v, str):
+                    out.add(v)
+                elif isinstance(v, dict):
+                    out.update(Tier1Verifier._extract_policy_pubkeys(v))
+        return out
+
     def _check_emancipation_handover(
         self,
         ward_name: str,
@@ -2423,20 +2615,24 @@ class Tier1Verifier:
         at_height: int | None = None,
         cap_confirmed_height: int | None = None,
         last_recovery_promo_height: int | None = None,
+        last_recovery_promo_time: int | None = None,
         majority_cutoff_reached: bool = False,
+        opened_majority: int | None = None,
+        pre_trigger_pks: set[str] | None = None,
     ) -> tuple[bool, dict[str, Any] | None]:
-        """Derive unified Decision 1B emancipation handover strictly from ward name.updates[] (R2G-02, R2G-04, B-13, D8-M5).
+        """Derive unified Decision 1B emancipation handover strictly from ward name.updates[] (R2G-02, R2G-04, B-13, H-5, M-9).
 
         Transition to State 4 (autonomous) ALWAYS requires cryptographically authenticated
-        subject_new_owner_policy via either:
-          - Confirmed seallink-capacity/1 (subject_new_owner_policy != None) + handover transfer + SIGHASH_ALL self-update, OR
-          - Confirmed dual_party_delayed 0x0c recovery (active_binding.seq >= 2, distinct owner_policy, taking effect at/after
-            cap_confirmed_height when emancipation is triggered solely by capacity/1, allowing K1->K2 recovery) + SIGHASH_ALL self-update.
-        Calendar majority T alone NEVER transitions to State 4 without capacity/1 or 0x0c recovery.
+        subject_new_owner_policy disjoint from ALL pre-emancipation guardian pubkeys via either:
+          - Confirmed seallink-capacity/1 (subject_new_owner_policy != None) + handover transfer (>= cap_confirmed_height) + SIGHASH_ALL self-update, OR
+          - Confirmed dual_party_delayed 0x0c recovery (active_binding.seq >= 2, fresh disjoint owner_policy, taking effect AT/AFTER
+            the emancipation trigger: h_promo >= cap_confirmed_height OR t_promo >= opened_majority) + SIGHASH_ALL self-update.
+        Calendar majority T alone NEVER transitions to State 4 without capacity/1 or post-trigger 0x0c recovery.
         Returns `(True, current_subject_owner_policy)` on verified State 4 transition, else `(False, None)`.
         """
         init_spk, _ = sl.compile_script_policy(initial_owner_policy)
         target_spk = sl.compile_script_policy(subject_new_owner_policy)[0] if subject_new_owner_policy else None
+        forbidden_pks = self._extract_policy_pubkeys(initial_owner_policy) | (pre_trigger_pks or set())
         eval_h = chain.tip_height if at_height is None else at_height
         rec = chain.get_name_for_registration(ward_name, registration, historical=(at_height is not None))
         if not rec or rec.get("registration") != registration or not isinstance(rec.get("updates"), list):
@@ -2449,21 +2645,30 @@ class Tier1Verifier:
             latest_spk, _ = sl.compile_script_policy(latest_owner)
         except (ValueError, KeyError, TypeError):
             return False, None
-        if latest_spk == init_spk:
+        latest_pks = self._extract_policy_pubkeys(latest_owner)
+        if latest_spk == init_spk or not latest_pks or not latest_pks.isdisjoint(forbidden_pks):
             return False, None
 
-        # Case 1 (Decision 1B / D8-M5): Confirmed dual_party_delayed 0x0c recovery (seq >= 2) with fresh owner_policy + self-update
-        rec_order_ok = (
-            majority_cutoff_reached
-            or cap_confirmed_height is None
-            or (last_recovery_promo_height is not None and last_recovery_promo_height >= cap_confirmed_height)
+        # Case 1 (Decision 1B / H-5 / M-9): Confirmed post-trigger dual_party_delayed 0x0c recovery (seq >= 2) with fresh disjoint owner_policy + self-update
+        cap_ok = (
+            cap_confirmed_height is not None
+            and last_recovery_promo_height is not None
+            and last_recovery_promo_height >= cap_confirmed_height
         )
+        maj_ok = (
+            majority_cutoff_reached
+            and opened_majority is not None
+            and last_recovery_promo_time is not None
+            and last_recovery_promo_time >= opened_majority
+        )
+        rec_order_ok = cap_ok or maj_ok
         if active_binding is not None and active_binding.get("seq", 1) >= 2 and rec_order_ok:
             try:
                 b_spk, _ = sl.compile_script_policy(active_binding["owner_policy"])
             except (ValueError, KeyError, TypeError):
                 b_spk = b""
-            if b_spk and b_spk != init_spk:
+            b_pks = self._extract_policy_pubkeys(active_binding["owner_policy"])
+            if b_spk and b_spk != init_spk and b_pks and b_pks.isdisjoint(forbidden_pks):
                 for j in range(1, len(updates)):
                     if self._is_owner_authored_update(updates[j], updates[j - 1]):
                         try:
@@ -2475,10 +2680,13 @@ class Tier1Verifier:
                         ):
                             return True, copy.deepcopy(latest_owner)
 
-        # Case 2 (Decision 1B): Confirmed seallink-capacity/1 committing subject_new_owner_policy + handover transfer + self-update
-        if target_spk is not None and target_spk != init_spk and len(updates) >= 3:
+        # Case 2 (Decision 1B / H-5 / M-9): Confirmed seallink-capacity/1 committing fresh disjoint subject_new_owner_policy + handover transfer (>= h_cap) + self-update
+        target_pks = self._extract_policy_pubkeys(subject_new_owner_policy) if subject_new_owner_policy else set()
+        if target_spk is not None and target_spk != init_spk and target_pks and target_pks.isdisjoint(forbidden_pks) and len(updates) >= 3:
             for idx in range(1, len(updates)):
                 u_xfer = updates[idx]
+                if cap_confirmed_height is not None and u_xfer["confirmed_height"] < cap_confirmed_height:
+                    continue
                 try:
                     u_spk, _ = sl.compile_script_policy(u_xfer["owner_policy"])
                 except (ValueError, KeyError, TypeError):
@@ -2486,6 +2694,8 @@ class Tier1Verifier:
                 if u_spk != target_spk:
                     continue
                 if not self._is_owner_authored_update(u_xfer, updates[idx - 1]):
+                    continue
+                if not target_pks.isdisjoint(self._extract_policy_pubkeys(updates[idx - 1].get("owner_policy"))):
                     continue
                 for j in range(idx + 1, len(updates)):
                     u_subj = updates[j]
@@ -2557,12 +2767,7 @@ class Tier1Verifier:
         return False
 
     def _is_trusted_origin_issuer(self, issuer_pin: dict[str, Any]) -> bool:
-        if self.trusted_origin_issuer_pins is not None:
-            if any(_name_pin_equal(issuer_pin, pin) for pin in self.trusted_origin_issuer_pins):
-                return True
-            if not self.trusted_origin_issuers:
-                return False
-        return issuer_pin.get("name") in self.trusted_origin_issuers
+        return any(_name_pin_equal(issuer_pin, pin) for pin in self.trusted_origin_issuer_pins)
 
     def verify_origin_and_status(
         self,
@@ -2638,9 +2843,45 @@ class Tier1Verifier:
                 return None, iss_err
             return None, "ORIGIN_UNVERIFIED"
 
-        # D-6 / R2-03 / D8-M5: Eternal credential with subject.mode="origin" verifies historical origin existence & trusted issuance
-        # (h_origin <= eval_h, valid issuer link.cred, h_origin < h_c) WITHOUT requiring initial 0x0c NameBinding at eval_h!
+        # D-6 / R2-03 / M-8: Eternal credential with subject.mode="origin" verifies historical origin existence,
+        # trusted issuance (h_origin <= eval_h, valid issuer link.cred, h_origin < h_c), confirmed binding_seal &
+        # status_seal UTXOs at <= eval_h, and (if supplied) valid binding identity — WITHOUT requiring initial 0x0c NameBinding!
         if historical_existence_only:
+            bs_chk = op["binding_seal"]
+            bs_chk_spk, _ = sl.compile_script_policy(bs_chk["script_policy"])
+            bs_chk_tx = chain.get_tx(bs_chk["txid"])
+            bs_chk_out = chain.get_output(bs_chk["txid"], bs_chk["vout"])
+            if (
+                not bs_chk_tx
+                or bs_chk_tx.get("confirmed_height") is None
+                or bs_chk_tx["confirmed_height"] > eval_h
+                or not bs_chk_out
+                or bs_chk_out.get("script_pubkey_hex") != bs_chk_spk.hex()
+            ):
+                return None, "ORIGIN_BINDING_INVALID"
+            ss_chk = op["status_seal"]
+            ss_chk_spk, _ = sl.compile_script_policy(ss_chk["script_policy"])
+            ss_chk_tx = chain.get_tx(ss_chk["txid"])
+            ss_chk_out = chain.get_output(ss_chk["txid"], ss_chk["vout"])
+            if (
+                not ss_chk_tx
+                or ss_chk_tx.get("confirmed_height") is None
+                or ss_chk_tx["confirmed_height"] > eval_h
+                or not ss_chk_out
+                or ss_chk_out.get("script_pubkey_hex") != ss_chk_spk.hex()
+            ):
+                return None, "ORIGIN_STATUS_INCOMPLETE"
+            if "name_binding" in origin_bundle and origin_bundle["name_binding"] is not None:
+                hb = origin_bundle["name_binding"]
+                if (
+                    not isinstance(hb, dict)
+                    or not self._verify_object_wire(hb, expected_type="seallink-name-binding/1")[0]
+                    or hb.get("origin_id") != origin_id
+                    or hb.get("seq") != 1
+                    or hb.get("name") != op["claims"]["intended_name"]
+                    or sl.compile_script_policy(hb["owner_policy"])[0] != sl.compile_script_policy(op["claims"]["intended_owner_policy"])[0]
+                ):
+                    return None, "ORIGIN_BINDING_INVALID"
             return {
                 "origin_id": origin_id,
                 "capacity": "historical",
@@ -2843,10 +3084,21 @@ class Tier1Verifier:
                     majority_cutoff_reached = True
                     emancipated_by_majority = True
 
-        # Walk full name_recovery continuation spine (SPEC-04 §6, 3-way D-1 R2G-01, non-retroactive D-2 R2G-05, H-28, H-29)
+        # Walk full name_recovery continuation spine (SPEC-04 §6, 3-way D-1 R2G-01, non-retroactive D-2 R2G-05, H-5, H-6, M-9)
         active_binding = binding
         active_recovery_seal: dict[str, Any] | None = None
         last_recovery_promo_height: int | None = None
+        last_recovery_promo_time: int | None = None
+        pre_trigger_pks: set[str] = set(self._extract_policy_pubkeys(op["claims"]["intended_owner_policy"]))
+        for bu in b_nrec.get("updates", []):
+            bh_u = bu.get("confirmed_height")
+            if bh_u is None:
+                continue
+            before_cap = cap_confirmed_height is None or bh_u < cap_confirmed_height
+            bu_bt = bu.get("block_time")
+            before_maj = opened_majority is None or (bu_bt is not None and int(bu_bt) < opened_majority)
+            if before_cap and before_maj:
+                pre_trigger_pks.update(self._extract_policy_pubkeys(bu.get("owner_policy")))
         recovery_events: list[dict[str, Any]] = []
         recovery_burned = False
         nr = op["name_recovery"]
@@ -2973,20 +3225,23 @@ class Tier1Verifier:
                     if not self._is_owner_authored_update(u_c, old_updates[u_idx - 1]):
                         continue
                     opret_c = u_c.get("opreturn_hex")
-                    if not opret_c:
+                    if not opret_c or u_c.get("opreturn_value_sat", 0) != 0:
                         continue
                     try:
-                        dec_c = sl.decode_opreturn(bytes.fromhex(opret_c))
+                        raw_op_c = bytes.fromhex(opret_c)
                     except ValueError:
                         continue
-                    if dec_c["action"] != "0x10" or dec_c["commitment"] != cand_id:
+                    if not sl.is_slnk_opreturn(raw_op_c):
                         continue
                     try:
-                        author_spk, _ = sl.compile_script_policy(old_updates[u_idx - 1]["owner_policy"])
-                    except (ValueError, KeyError, TypeError):
+                        dec_c = sl.decode_opreturn_with_criticality(raw_op_c)
+                    except ValueError:
                         continue
-                    # Non-retroactive D-2 / D8-M5 former-guardian lockout checked at (h_cancel, cancel_block_time); missing block_time fails closed!
-                    if "guardian_policy" in op and author_spk == int_spk:
+                    if dec_c.get("advisory") or dec_c["action"] != "0x10" or dec_c["commitment"] != cand_id:
+                        continue
+                    # H-6 / Non-retroactive D-2: Former-guardian lockout depends on origin State 3 at (h_cancel, cancel_block_time),
+                    # NOT on author_spk == int_spk (rotating W1->W2 before T/h_cap MUST NOT bypass State 3 lockout!).
+                    if "guardian_policy" in op:
                         locked_by_cap = (cap_confirmed_height is not None and h_cancel >= cap_confirmed_height)
                         cancel_bt = u_c.get("block_time")
                         if opened_majority is not None:
@@ -2994,7 +3249,23 @@ class Tier1Verifier:
                         else:
                             locked_by_maj = False
                         if locked_by_cap or locked_by_maj:
-                            continue
+                            already_state4, _ = self._check_emancipation_handover(
+                                active_binding["name"],
+                                active_binding["registration"],
+                                op["claims"]["intended_owner_policy"],
+                                subject_new_owner_policy,
+                                chain,
+                                active_binding=active_binding,
+                                at_height=h_cancel - 1,
+                                cap_confirmed_height=cap_confirmed_height,
+                                last_recovery_promo_height=last_recovery_promo_height,
+                                last_recovery_promo_time=last_recovery_promo_time,
+                                majority_cutoff_reached=locked_by_maj,
+                                opened_majority=opened_majority,
+                                pre_trigger_pks=pre_trigger_pks,
+                            )
+                            if not already_state4:
+                                continue
                     cancelled = True
                     break
                 if cancelled:
@@ -3008,7 +3279,22 @@ class Tier1Verifier:
                     return None, "RECOVERY_FORBIDDEN"
                 # Delay elapsed without valid 0x10 cancel -> B_{k+1} promoted!
                 prev_id = sl.object_id(active_binding)
+                blk_times = chain.raw.get("block_times", {})
+                promo_bt = blk_times.get(str(deadline))
+                if promo_bt is None:
+                    promo_bt = blk_times.get(deadline)
+                if promo_bt is None and rtx.get("deadline_block_time") is not None:
+                    promo_bt = rtx["deadline_block_time"]
+                if promo_bt is None and rtx.get("block_time") is not None and nr["delay_blocks"] == 0:
+                    promo_bt = rtx["block_time"]
+                promo_bt_int = int(promo_bt) if (promo_bt is not None and not isinstance(promo_bt, bool)) else None
+                # H-5 / M-9: Record pre-trigger childhood 0x0c owner pubkeys so they can NEVER later self-emancipate!
+                promoted_before_cap = (cap_confirmed_height is None or deadline < cap_confirmed_height)
+                promoted_before_maj = (opened_majority is None or promo_bt_int is None or promo_bt_int < opened_majority)
+                if promoted_before_cap and promoted_before_maj:
+                    pre_trigger_pks.update(self._extract_policy_pubkeys(cand.get("owner_policy")))
                 last_recovery_promo_height = deadline
+                last_recovery_promo_time = promo_bt_int
                 recovery_events.append({"candidate_id": cand_id, "outcome": "promoted", "superseded_id": prev_id, "next_recovery_seal": next_rec_seal})
                 if assert_binding_id is not None and assert_binding_id == prev_id:
                     return None, "ORIGIN_BINDING_INVALID"
@@ -3022,7 +3308,7 @@ class Tier1Verifier:
         if card_obj is not None and card_obj.get("name") != active_binding["name"]:
             return None, "ORIGIN_UNVERIFIED"
 
-        # Decision 1B / D8-M5: Unified emancipation state machine for BOTH person & agent (R2G-02, R2G-04)
+        # Decision 1B / H-5 / M-9: Unified emancipation state machine for BOTH person & agent (R2G-02, R2G-04)
         emancipation_triggered = capacity_confirmed or majority_cutoff_reached
         if emancipation_triggered:
             handover_ok, emancipated_owner_policy = self._check_emancipation_handover(
@@ -3035,7 +3321,10 @@ class Tier1Verifier:
                 at_height=at_height,
                 cap_confirmed_height=cap_confirmed_height,
                 last_recovery_promo_height=last_recovery_promo_height,
+                last_recovery_promo_time=last_recovery_promo_time,
                 majority_cutoff_reached=majority_cutoff_reached,
+                opened_majority=opened_majority,
+                pre_trigger_pks=pre_trigger_pks,
             )
             if not handover_ok or emancipated_owner_policy is None:
                 return None, "GUARDIAN_TRANSFER_PENDING"
@@ -3585,8 +3874,8 @@ class Tier1Verifier:
         seen_guardian_regs: set[str] = set()
         opened_maj = ward_state.get("opened_majority_unix")
 
-        # Pass 1 (H-34 / M-2): Validate ALL slot states, terms, distinct registrations, & guardian identities BEFORE per-entry sig checks!
-        resolved_entries: list[tuple[dict[str, Any], dict[str, Any] | None, str | None, int, str]] = []
+        # Pass 1 (H-34 / M-6): Validate ALL slot states, terms, distinct registrations, & guardian identities BEFORE 0x0b & sig checks!
+        resolved_entries: list[tuple[dict[str, Any], dict[str, Any] | None, str | None, int, dict[str, Any], dict[str, Any]]] = []
         for item in approvals:
             sn = item["slot"]
             st = ward_state["slots"].get(sn)
@@ -3605,7 +3894,7 @@ class Tier1Verifier:
             if greg in seen_guardian_regs:
                 return False, "GUARDIAN_INACTIVE", {}
             seen_guardian_regs.add(greg)
-            # R1 #1 / R2-04: Resolve guardian's link.grant at eval_h (historical anchor or live tip) + retroactive 0x0b break!
+            # R1 #1 / R2-04: Resolve guardian's link.grant at eval_h (historical anchor or live tip)
             gnrec, gerr = self.resolve_name(
                 gpin["name"],
                 chain,
@@ -3620,21 +3909,36 @@ class Tier1Verifier:
             )
             if rerr and rerr != "WIRE_SIGNATURE":
                 return False, "GUARDIAN_INACTIVE", {}
-            if gpol is not None and at_height is not None and self._is_policy_compromised_at(gnrec, gpin, "grant", gpol, at_height, chain):
-                return False, "CRED_ISSUER_CLOSED", {}
-            resolved_entries.append((item, gpol, rerr, sn, gpin["name"]))
+            resolved_entries.append((item, gpol, rerr, sn, gpin, gnrec))
 
-        # Pass 2: Verify cryptographic SignatureSet on every resolved active guardian entry
-        for item, gpol, rerr, sn, gname in resolved_entries:
+        # Pass 2 (M-6 / A-17): Check policy-scoped 0x0b compromise (BOTH historical & live tip!) & cryptographic SignatureSet
+        for item, gpol, rerr, sn, gpin, gnrec in resolved_entries:
             if rerr is not None or gpol is None:
                 return False, "WIRE_SIGNATURE", {}
+            min_hc = self._policy_compromised_cutoff(gnrec, gpin, "grant", gpol, chain)
+            if min_hc is not None and eval_h >= min_hc:
+                if journal is not None and at_height is None:
+                    journal.record_closure(
+                        {
+                            "cutoff_height": min_hc,
+                            "name": gpin["name"],
+                            "policy_sha256": _policy_sha256(gpol),
+                            "registration": gpin["registration"],
+                            "role": "grant",
+                            "subject_kind": "role",
+                        },
+                        "CRED_ISSUER_CLOSED",
+                        observed_at=chain.now,
+                        observed_height=chain.tip_height,
+                    )
+                return False, "CRED_ISSUER_CLOSED", {}
             ok_s, code_s = sl.verify_signature_set(
                 digest, item["signatures"], expected_policy=gpol, obj_type="__guardian_approval__"
             )
             if not ok_s:
                 return False, code_s, {}
             verified_slots.append(sn)
-            verified_guardians.append(gname)
+            verified_guardians.append(gpin["name"])
 
         derived_class = sl.derive_guardian_event_class(payload)
         if gc["event_class"] != derived_class:
@@ -4137,13 +4441,16 @@ class Tier1Verifier:
         expected_policy: dict[str, Any] | None = None,
         device_list: dict[str, Any] | None = None,
     ) -> VerifierResult:
-        """Verify seallink-statement/1 against issuer's link.grant, pinned policy, or registered device key (SPEC-03 §3.1, H-24)."""
+        """Verify seallink-statement/1 against issuer's link.grant, pinned policy, or registered device key (SPEC-03 §3.1, H-2, M-11)."""
         ok_s, s_res = self._verify_object_wire(stmt_env, expected_type="seallink-statement/1")
         if not ok_s:
             return VerifierResult("REFUSE", s_res)
         sp = s_res["payload"]
         if sp["network"] != self.pinned_network or sp["genesis"] != self.pinned_genesis:
             return VerifierResult("REFUSE", "CHAIN_MISMATCH")
+        obs_err = self.check_chain_observation(chain, risk_class=1)
+        if obs_err:
+            return VerifierResult("REFUSE", obs_err)
         if not (sp["not_before"] <= chain.now < sp["not_after"]):
             return VerifierResult("REFUSE", "INVOKE_TIME_INVALID")
         sig_pol = stmt_env["signatures"]["policy"]
@@ -4168,7 +4475,7 @@ class Tier1Verifier:
             if serr:
                 return VerifierResult("REFUSE", serr)
             return VerifierResult("ADMIT", None, outcome="executed", details={"statement_id": sl.object_id(sp), "kind": sp["statement_kind"]})
-        # Default: verify against issuer's live link.grant policy
+        # Default: verify against issuer's live link.grant policy (+ 0x0b compromise cutoff)
         iss = sp["issuer"]
         nrec, nerr = self.resolve_name(
             iss["name"], chain, expected_owner_policy=iss["owner_policy"], expected_registration=iss["registration"]
@@ -4179,6 +4486,9 @@ class Tier1Verifier:
         rpol, rerr = self.resolve_role_policy(nrec, "grant", sig_pol)
         if rerr:
             return VerifierResult("REFUSE", rerr)
+        assert rpol is not None
+        if self._is_policy_compromised_at(nrec, iss, "grant", rpol, chain.tip_height, chain):
+            return VerifierResult("REFUSE", "CRED_ISSUER_CLOSED")
         ok_sig, scode = sl.verify_signature_set(
             sl.signing_digest(sp), stmt_env["signatures"], expected_policy=rpol, obj_type="seallink-statement/1"
         )
@@ -4270,32 +4580,33 @@ class Tier1Verifier:
             m_owner, m_label = rest.rsplit(":", 1)
             if iss_pin["name"] != m_owner:
                 return "GRANT_TARGET_UNAUTHORIZED"
-            # G7-08: Concrete-executor mailbox grants MUST verify holder manifest provider binding (fail closed unless self-hosted)!
-            if (
-                "executor_ref" not in leaf_gp
-                and executor_cfg.get("name") != m_owner
-                and executor_cfg.get("self_hosted_owner") != m_owner
-            ):
-                o_man, o_merr = self.resolve_manifest(m_owner, nrec, bundle.get("manifests", {}), chain, journal)
-                if o_merr is not None or o_man is None:
-                    return "SERVICE_PROVIDER_UNBOUND" if o_merr == "MANIFEST_UNAVAILABLE" else (o_merr or "SERVICE_PROVIDER_UNBOUND")
-                exec_pin = executor_cfg.get("pin")
-                bound = any(
-                    p.get("service_type") == "mail"
-                    and p.get("label") == m_label
-                    and (
-                        _name_pin_equal(p.get("provider"), exec_pin)
-                        if isinstance(exec_pin, dict)
-                        else p.get("provider", {}).get("name") == executor_cfg["name"]
+            # G7-08 / M-7: Concrete-executor mailbox grants MUST verify holder manifest provider binding using full NamePin
+            # (fail closed unless explicitly self_hosted AND executor_cfg.pin NamePin equals root issuer NamePin)!
+            exec_pin = executor_cfg.get("pin")
+            is_self_hosted = (
+                bool(executor_cfg.get("self_hosted"))
+                and isinstance(exec_pin, dict)
+                and _name_pin_equal(iss_pin, exec_pin)
+            )
+            if "executor_ref" not in leaf_gp and not is_self_hosted:
+                bound = False
+                if isinstance(exec_pin, dict):
+                    o_man, o_merr = self.resolve_manifest(m_owner, nrec, bundle.get("manifests", {}), chain, journal)
+                    if o_merr is not None or o_man is None:
+                        return "SERVICE_PROVIDER_UNBOUND" if o_merr == "MANIFEST_UNAVAILABLE" else (o_merr or "SERVICE_PROVIDER_UNBOUND")
+                    bound = any(
+                        p.get("service_type") == "mail"
+                        and p.get("label") == m_label
+                        and isinstance(p.get("provider"), dict)
+                        and _name_pin_equal(p["provider"], exec_pin)
+                        for p in o_man.get("providers", [])
                     )
-                    for p in o_man.get("providers", [])
-                )
                 if not bound:
                     return "SERVICE_PROVIDER_UNBOUND"
         elif t_auth in ("station_host", "station_host_and_contract"):
             rest = target_str[len("station:") :]
             s_host, s_slot = rest.rsplit(":", 1)
-            # G7-01: Fail-closed station slot authority! Defaults to verified <s_host> owner (full NamePin when configured).
+            # G7-01 / M-7: Fail-closed station slot authority! Strict full NamePin ONLY (zero bare string fallbacks)!
             station_bindings = executor_cfg.get("station_slot_bindings")
             if isinstance(station_bindings, dict):
                 raw_pins = station_bindings.get(target_str) or station_bindings.get(s_slot) or []
@@ -4303,7 +4614,7 @@ class Tier1Verifier:
                 slot_ok = any(_name_pin_equal(iss_pin, p) for p in pins if isinstance(p, dict))
             else:
                 host_pin = executor_cfg.get("pin")
-                slot_ok = _name_pin_equal(iss_pin, host_pin) if isinstance(host_pin, dict) else (iss_pin["name"] == s_host)
+                slot_ok = isinstance(host_pin, dict) and _name_pin_equal(iss_pin, host_pin)
             if s_host != executor_cfg["name"] or not slot_ok:
                 return "GRANT_TARGET_UNAUTHORIZED"
         elif t_auth in ("pinned_ward", "ward_origin"):
@@ -4393,18 +4704,7 @@ class Tier1Verifier:
                 return VerifierResult("REFUSE", rcode)
 
         def check_local_replay_or_crash() -> VerifierResult | None:
-            if inv_id in journal.receipts:
-                cached = journal.receipts[inv_id]
-                return VerifierResult(
-                    "ADMIT",
-                    None,
-                    outcome=cached["payload"]["outcome"],
-                    cached_receipt_content_addr=sl.content_addr(cached),
-                    details={"cached_receipt": True},
-                )
-            # R1-A / B-7: Terminal settlement committed but receipt blob missing -> NEVER re-execute!
-            if inv_id in journal.terminal_invocations:
-                return VerifierResult("REFUSE", "INVOKE_REPLAY")
+            # M-4: Check unsettled reservations BEFORE cached receipts so unreconciled `uncertain` ALWAYS returns UNCERTAIN!
             if inv_id in journal.unsettled_reservations:
                 unsettled_rec = journal.unsettled_reservations[inv_id]
                 return VerifierResult(
@@ -4417,6 +4717,18 @@ class Tier1Verifier:
                         "unsettled_count": len(unsettled_rec.get("reservations", [])),
                     },
                 )
+            if inv_id in journal.receipts:
+                cached = journal.receipts[inv_id]
+                return VerifierResult(
+                    "ADMIT",
+                    None,
+                    outcome=cached["payload"]["outcome"],
+                    cached_receipt_content_addr=sl.content_addr(cached),
+                    details={"cached_receipt": True},
+                )
+            # R1-A / B-7: Terminal settlement committed but receipt blob missing -> NEVER re-execute!
+            if inv_id in journal.terminal_invocations:
+                return VerifierResult("REFUSE", "INVOKE_REPLAY")
             if inv_p["nonce"] in journal.nonces and journal.nonces[inv_p["nonce"]] != inv_id:
                 return VerifierResult("REFUSE", "INVOKE_REPLAY")
             return None
@@ -4465,6 +4777,7 @@ class Tier1Verifier:
         ward_details = bg["ward_details"]
         matched_parent_template = bg["matched_parent_template"]
         journal_writes = bg["journal_writes"]
+        resolved_use_txid = bg.get("resolved_use_txid") or use_txid
 
         # Step 11: Named recipient, action, text ban, target authority (B-1, G7-01, G7-08), and constraints
         # 11a. Named recipient (B-9: pin exact registration!)
@@ -4523,34 +4836,12 @@ class Tier1Verifier:
         if t_err is not None:
             return VerifierResult("REFUSE", t_err)
 
-        # 11e. Target match, 7-predicate where evaluation, and profile server-side checks
+        # 11e. Target match, 7-predicate where evaluation, and profile server-side checks (H-15: mail/read folder/sender_domain/max_bytes ALL require actual_message_meta!)
         matched_cap = None
         for cap in action_caps:
             if cap["target"] != target_str:
                 continue
-            ok_where = True
-            for arg_k, pred in cap.get("where", {}).items():
-                if action == "mail/read" and arg_k in ("sender_domain", "max_bytes"):
-                    # Server-side message metadata predicates not carried in MailReadArgs
-                    meta_key = "size_bytes" if (arg_k == "max_bytes" and actual_message_meta is not None and "size_bytes" in actual_message_meta) else arg_k
-                    if actual_message_meta is None or meta_key not in actual_message_meta:
-                        ok_where = False
-                        break
-                    if not sl.match_predicate(pred, actual_message_meta[meta_key]):
-                        ok_where = False
-                        break
-                    continue
-                if arg_k not in inv_p["arguments"]:
-                    ok_where = False
-                    break
-                if not sl.match_predicate(pred, inv_p["arguments"][arg_k]):
-                    ok_where = False
-                    break
-                if actual_message_meta is not None and arg_k in actual_message_meta:
-                    if not sl.match_predicate(pred, actual_message_meta[arg_k]):
-                        ok_where = False
-                        break
-            if ok_where:
+            if self._match_capability_where(action, cap, inv_p["arguments"], actual_message_meta):
                 matched_cap = cap
                 break
         if matched_cap is None:
@@ -4697,7 +4988,7 @@ class Tier1Verifier:
         }
         if leaf_gp["revocation"].get("kind") == "single_use":
             res_body["single_use"] = True
-            res_body["use_txid"] = use_txid
+            res_body["use_txid"] = resolved_use_txid
         jw_res, j_aerr = _append_journal_checked(journal, "reservation", res_body)
         if j_aerr is not None:
             return VerifierResult("REFUSE", j_aerr)
@@ -4714,9 +5005,41 @@ class Tier1Verifier:
             "reserved_ops": pending_ops,
             "single_use": (leaf_gp["revocation"].get("kind") == "single_use"),
             "tip_height": chain.tip_height,
-            "use_txid": use_txid,
+            "use_txid": resolved_use_txid,
         })
         return VerifierResult("ADMIT", None, outcome="reserved", journal_writes=journal_writes, details=frame_details)
+
+    @staticmethod
+    def _match_capability_where(
+        action: str,
+        cap: dict[str, Any],
+        arguments: dict[str, Any],
+        actual_message_meta: dict[str, Any] | None = None,
+    ) -> bool:
+        """Evaluate all 7-predicate `where` constraints + mandatory server-side mail/read metadata checks (H-9, H-15)."""
+        for arg_k, pred in cap.get("where", {}).items():
+            if action == "mail/read" and arg_k in ("sender_domain", "max_bytes", "folder"):
+                if arg_k == "folder":
+                    if arg_k not in arguments or not sl.match_predicate(pred, arguments[arg_k]):
+                        return False
+                meta_key = (
+                    "size_bytes"
+                    if (arg_k == "max_bytes" and actual_message_meta is not None and "size_bytes" in actual_message_meta)
+                    else arg_k
+                )
+                if actual_message_meta is None or meta_key not in actual_message_meta:
+                    return False
+                if not sl.match_predicate(pred, actual_message_meta[meta_key]):
+                    return False
+                continue
+            if arg_k not in arguments:
+                return False
+            if not sl.match_predicate(pred, arguments[arg_k]):
+                return False
+            if actual_message_meta is not None and arg_k in actual_message_meta:
+                if not sl.match_predicate(pred, actual_message_meta[arg_k]):
+                    return False
+        return True
 
     def _verify_backing_grant_chain(
         self,
@@ -4762,12 +5085,28 @@ class Tier1Verifier:
                 return False, VerifierResult("REFUSE", "GRANT_ROW_STOPPED"), {}
         iss_pin = root_gp["issuer"]
         iss_name = iss_pin["name"]
-        role_cl = journal.lookup_closure(
-            {"name": iss_name, "registration": iss_pin["registration"], "role": "grant", "subject_kind": "role"},
-            legacy_key=f"role:{iss_name}:grant",
+        presented_rpol = iss_pin.get("role_policy") or (
+            root_grant.get("signatures", {}).get("policy")
+            if isinstance(root_grant.get("signatures"), dict)
+            else None
         )
-        if role_cl is not None:
-            return False, VerifierResult("REFUSE", "NAME_ROLE_CHANGED"), {}
+        if isinstance(presented_rpol, dict):
+            role_cl = journal.lookup_closure(
+                {
+                    "name": iss_name,
+                    "policy_sha256": _policy_sha256(presented_rpol),
+                    "registration": iss_pin["registration"],
+                    "role": "grant",
+                    "subject_kind": "role",
+                }
+            )
+            if role_cl is not None:
+                if role_cl.get("cause") == "CRED_ISSUER_CLOSED":
+                    ex_hc = role_cl.get("subject", {}).get("cutoff_height")
+                    if ex_hc is None or chain.tip_height >= int(ex_hc):
+                        return False, VerifierResult("REFUSE", "CRED_ISSUER_CLOSED"), {}
+                else:
+                    return False, VerifierResult("REFUSE", "NAME_ROLE_CHANGED"), {}
         if "contract_id" in leaf_gp:
             c_cl = journal.lookup_closure(
                 {"subject_id": leaf_gp["contract_id"], "subject_kind": "contract"},
@@ -4839,13 +5178,49 @@ class Tier1Verifier:
             rpol, rerr = self.resolve_role_policy(nrec, "grant", iss_pin.get("role_policy"), recent_block_height=root_recent_h)
             if rerr:
                 if rerr == "NAME_ROLE_CHANGED":
-                    journal.record_closure(
-                        {"name": iss_name, "registration": iss_pin["registration"], "role": "grant", "subject_kind": "role"},
-                        "NAME_ROLE_CHANGED",
-                        observed_at=chain.now,
-                        observed_height=chain.tip_height,
-                    )
+                    # H-4 / D9-B1: Authenticate root_grant against the historical link.grant policy active at root_recent_h
+                    # BEFORE writing a policy-scoped role closure! Forged/unauthenticated grants write ZERO closures!
+                    hist_pol = self._resolve_historical_role_policy(nrec, "grant", iss_pin.get("role_policy"), at_height=root_recent_h)
+                    if hist_pol is not None and sl.verify_signature_set(
+                        sl.signing_digest(root_gp),
+                        root_grant.get("signatures", {}),
+                        expected_policy=hist_pol,
+                        obj_type="seallink-grant/1",
+                    )[0]:
+                        journal.record_closure(
+                            {
+                                "name": iss_name,
+                                "policy_sha256": _policy_sha256(hist_pol),
+                                "registration": iss_pin["registration"],
+                                "role": "grant",
+                                "subject_kind": "role",
+                            },
+                            "NAME_ROLE_CHANGED",
+                            observed_at=chain.now,
+                            observed_height=chain.tip_height,
+                        )
+                        return False, VerifierResult("REFUSE", "NAME_ROLE_CHANGED"), {}
+                    if hist_pol is None and nrec.get("_value_obj", {}).get("link", {}).get("grant") is None:
+                        return False, VerifierResult("REFUSE", "NAME_ROLE_CHANGED"), {}
+                    return False, VerifierResult("REFUSE", "WIRE_SIGNATURE"), {}
                 return False, VerifierResult("REFUSE", rerr), {}
+            assert rpol is not None
+            min_hc = self._policy_compromised_cutoff(nrec, iss_pin, "grant", rpol, chain)
+            if min_hc is not None and chain.tip_height >= min_hc:
+                journal.record_closure(
+                    {
+                        "cutoff_height": min_hc,
+                        "name": iss_name,
+                        "policy_sha256": _policy_sha256(rpol),
+                        "registration": iss_pin["registration"],
+                        "role": "grant",
+                        "subject_kind": "role",
+                    },
+                    "CRED_ISSUER_CLOSED",
+                    observed_at=chain.now,
+                    observed_height=chain.tip_height,
+                )
+                return False, VerifierResult("REFUSE", "CRED_ISSUER_CLOSED"), {}
             ok_rs, rscode = sl.verify_signature_set(
                 sl.signing_digest(root_gp), root_grant.get("signatures", {}), expected_policy=rpol, obj_type="seallink-grant/1"
             )
@@ -5166,6 +5541,7 @@ class Tier1Verifier:
 
         # Step 10: Grant window, SL-GRNT-004 issuer expiry bound, revocation/single-use seal, linkage on BOTH root & child (R3 Blocker #1, H-6)
         journal_writes: list[dict[str, Any]] = []
+        resolved_use_txid: str | None = use_txid
         for idx_pe, pe in enumerate(ppath):
             g = grants_by_id[pe["grant_id"]]
             gp = g["payload"]
@@ -5211,7 +5587,7 @@ class Tier1Verifier:
                 if r_height is None:
                     return False, VerifierResult("REFUSE", "CHAIN_RECENCY_INVALID"), {}
                 if a_height is not None:
-                    k_lim = chain.raw.get("recency_k", 432)
+                    k_lim = self.recency_k
                     if not (r_height < a_height <= r_height + k_lim):
                         return False, VerifierResult("REFUSE", "CHAIN_RECENCY_INVALID"), {}
                     # H-6: Non-linkage funding inputs present in chain MUST be confirmed strictly before a_height (linkage T & A may confirm in the same block, SPEC-02 §5.1)
@@ -5268,6 +5644,10 @@ class Tier1Verifier:
                         journal_writes.append(jw)
                     if serr:
                         return False, VerifierResult("REFUSE", serr, journal_writes=journal_writes), {}
+                    if resolved_use_txid is None:
+                        s_out_su = chain.get_output(seal_obj["txid"], seal_obj["vout"])
+                        if s_out_su and isinstance(s_out_su.get("spent_by_txid"), str):
+                            resolved_use_txid = s_out_su["spent_by_txid"]
 
         # 10d. Executor binding: evaluate executor_ref strictly against leaf_gp["capabilities"] (G7-17: provider_of == iss_pin!)
         if "executor_ref" in leaf_gp:
@@ -5325,6 +5705,7 @@ class Tier1Verifier:
             "ward_details": ward_details,
             "matched_parent_template": matched_parent_template,
             "journal_writes": journal_writes,
+            "resolved_use_txid": resolved_use_txid,
         }
 
     def commit_result(
@@ -5335,15 +5716,9 @@ class Tier1Verifier:
         *,
         invocation_id: str,
         grant_id: str,
-        reserved_ops: list[dict[str, Any]] | None = None,
         actual_quota_usage: dict[str, int] | None = None,
-        single_use: bool = False,
-        use_txid: str | None = None,
-        recorded_at: int | None = None,
-        tip_height: int = 0,
-        expected_action: str | None = None,
     ) -> VerifierResult:
-        """Phase 2 of SPEC-06 §2.2 (R1 #2, R3 Blockers #2 & #3, G7-07): verify signed receipt, reconcile 1-to-1 against durable reservation, idempotent on identical retry, ONE atomic settlement entry (+1 witness)."""
+        """Phase 2 of SPEC-06 §2.2 (H-7, H-8, M-2, M-4, M-5, L-10..L-12): verify signed receipt, reconcile 1-to-1 strictly against durable reservation, idempotent on identical retry, ONE atomic settlement entry (+1 witness)."""
         ok_r, r_res = self._verify_object_wire(receipt_env, expected_type="seallink-receipt/1")
         if not ok_r:
             return VerifierResult("REFUSE", r_res)
@@ -5353,8 +5728,6 @@ class Tier1Verifier:
         if rp["executor_name"] != executor_cfg.get("name"):
             return VerifierResult("REFUSE", "GRANT_EXECUTOR_MISMATCH")
         if rp["invocation_id"] != invocation_id or rp["grant_id"] != grant_id:
-            return VerifierResult("REFUSE", "WIRE_MEMBER")
-        if expected_action is not None and rp["action"] != expected_action:
             return VerifierResult("REFUSE", "WIRE_MEMBER")
         ok_sig, scode = sl.verify_signature_set(
             sl.signing_digest(rp),
@@ -5370,7 +5743,7 @@ class Tier1Verifier:
 
         rcpt_caddr = sl.content_addr(r_res)
 
-        # R1 #2 / G7-07 / D8-B2: Strict idempotency on retry with identical receipt_sha256 (0 writes! — BOTH terminal AND uncertain!);
+        # R1 #2 / G7-07 / M-4: Strict idempotency on retry with identical receipt_sha256 (0 writes! — BOTH terminal AND uncertain!);
         # refuse conflicting receipt or missing Phase-1 reservation (INVOKE_REPLAY); allow uncertain -> executed|refused reconciliation!
         res_rec: dict[str, Any] | None = None
         if invocation_id in journal.terminal_invocations:
@@ -5391,7 +5764,6 @@ class Tier1Verifier:
             if rp["outcome"] == "uncertain" and prev_u_sha is not None:
                 if prev_u_sha == rcpt_caddr:
                     journal.receipt_store[rcpt_caddr] = copy.deepcopy(r_res)
-                    journal.receipts[invocation_id] = copy.deepcopy(r_res)
                     return VerifierResult(
                         "ADMIT",
                         None,
@@ -5403,56 +5775,74 @@ class Tier1Verifier:
                 return VerifierResult("REFUSE", "INVOKE_REPLAY")
         if res_rec is None:
             return VerifierResult("REFUSE", "INVOKE_REPLAY")
-        if res_rec.get("grant_id") is not None and res_rec["grant_id"] != grant_id:
+        # H-7 / L-10: Action, single_use, and use_txid are derived STRICTLY from durable Phase-1 reservation!
+        is_single_use = bool(res_rec.get("single_use", False))
+        eff_use_txid = res_rec.get("use_txid")
+        if (
+            res_rec.get("grant_id") != grant_id
+            or "action" not in res_rec
+            or rp["action"] != res_rec["action"]
+            or (is_single_use and (not isinstance(eff_use_txid, str) or not re.fullmatch(r"[0-9a-f]{64}", eff_use_txid)))
+        ):
             return VerifierResult("REFUSE", "WIRE_MEMBER")
-        if "action" in res_rec and rp["action"] != res_rec["action"]:
-            return VerifierResult("REFUSE", "WIRE_MEMBER")
-        # D8-M3: Self-contained single_use restart recovery strictly from durable reservation + witness!
-        is_single_use = single_use or bool(res_rec.get("single_use"))
-        eff_use_txid = use_txid if use_txid is not None else res_rec.get("use_txid")
-        if is_single_use:
-            if (
-                not isinstance(eff_use_txid, str)
-                or len(eff_use_txid) != 64
-                or (res_rec.get("use_txid") is not None and eff_use_txid != res_rec["use_txid"])
-            ):
-                return VerifierResult("REFUSE", "WIRE_MEMBER")
         durable_res_lines = res_rec.get("reservations", [])
 
-        # R1 #2 / R3 Blocker #3 / G7-07 / D8-B2: Derive settlements strictly 1-to-1 in verified signed receipt.payload.settlements[] order!
+        # R1 #2 / M-2 / L-12: Reconcile strictly 1-to-1 against durable reservation in verified receipt.payload.settlements[] order
+        # with GLOBAL two-pass refusal precedence: Pass 1 checks ALL QUOTA_EXCEEDED overruns across all lines, Pass 2 checks ALL WIRE_MEMBER!
         rcpt_settlements = rp.get("settlements", [])
         if len(rcpt_settlements) != len(durable_res_lines):
             return VerifierResult("REFUSE", "WIRE_MEMBER")
 
         res_by_key: dict[tuple[str, int | None, str, str, str, str], dict[str, Any]] = {}
+        reserved_qkeys: set[str] = set()
         for ln in durable_res_lines:
             k = (ln["account"], ln.get("row_ordinal"), ln["quota_kind"], ln["resource"], ln["unit"], ln["window"])
             res_by_key[k] = ln
+            reserved_qkeys.add(f"{ln['quota_kind']}|{ln['resource']}|{ln['unit']}|{ln['window']}")
 
         seen_keys: set[tuple[str, int | None, str, str, str, str]] = set()
-        settle_lines: list[dict[str, Any]] = []
+        paired_lines: list[tuple[dict[str, Any], dict[str, Any], str]] = []
         for rs in rcpt_settlements:
             k = (rs["account"], rs.get("row_ordinal"), rs["kind"], rs["resource"], rs["unit"], rs["window"])
             if k not in res_by_key or k in seen_keys:
                 return VerifierResult("REFUSE", "WIRE_MEMBER")
             seen_keys.add(k)
-            rln = res_by_key[k]
+            qkey = f"{rs['kind']}|{rs['resource']}|{rs['unit']}|{rs['window']}"
+            paired_lines.append((rs, res_by_key[k], qkey))
+
+        # Pass 1 (M-2): Global QUOTA_EXCEEDED precedence across EVERY settlement line and actual_quota_usage entry!
+        for rs, rln, qkey in paired_lines:
+            res_amt = int(rln["amount"])
+            set_amt = int(rs["settled"])
+            if set_amt > res_amt:
+                return VerifierResult("REFUSE", "QUOTA_EXCEEDED")
+            if actual_quota_usage is not None and qkey in actual_quota_usage:
+                act_val = int(actual_quota_usage[qkey])
+                if act_val < 0 or act_val > res_amt:
+                    return VerifierResult("REFUSE", "QUOTA_EXCEEDED")
+
+        # Pass 2 (M-2 / L-12): Extra actual_quota_usage keys, conservation arithmetic, meter match, and own-vs-row equality!
+        if actual_quota_usage is not None:
+            if any(qk not in reserved_qkeys for qk in actual_quota_usage):
+                return VerifierResult("REFUSE", "WIRE_MEMBER")
+
+        settled_by_qkey: dict[str, int] = {}
+        settle_lines: list[dict[str, Any]] = []
+        for rs, rln, qkey in paired_lines:
             res_amt = int(rln["amount"])
             rcpt_res = int(rs["reserved"])
             set_amt = int(rs["settled"])
             rel_amt = int(rs["released"])
-            if set_amt > res_amt:
-                return VerifierResult("REFUSE", "QUOTA_EXCEEDED")
-            if rcpt_res != res_amt or set_amt + rel_amt != res_amt or set_amt < 0 or (rp["outcome"] == "uncertain" and rel_amt != 0):
+            if (
+                rcpt_res != res_amt
+                or set_amt + rel_amt != res_amt
+                or set_amt < 0
+                or (rp["outcome"] == "uncertain" and rel_amt != 0)
+                or (actual_quota_usage is not None and qkey in actual_quota_usage and int(actual_quota_usage[qkey]) != set_amt)
+                or (qkey in settled_by_qkey and settled_by_qkey[qkey] != set_amt)
+            ):
                 return VerifierResult("REFUSE", "WIRE_MEMBER")
-            if actual_quota_usage is not None:
-                qkey = f"{rs['kind']}|{rs['resource']}|{rs['unit']}|{rs['window']}"
-                if qkey in actual_quota_usage:
-                    act_val = int(actual_quota_usage[qkey])
-                    if act_val < 0 or act_val > res_amt:
-                        return VerifierResult("REFUSE", "QUOTA_EXCEEDED")
-                    if act_val != set_amt:
-                        return VerifierResult("REFUSE", "WIRE_MEMBER")
+            settled_by_qkey[qkey] = set_amt
             sln: dict[str, Any] = {
                 "account": rln["account"],
                 "bucket_id": rln["bucket_id"],
@@ -5468,8 +5858,9 @@ class Tier1Verifier:
                 sln["row_ordinal"] = rln["row_ordinal"]
             settle_lines.append(sln)
 
-        rec_ts = recorded_at if recorded_at is not None else rp["recorded_at"]
-        # Persist verified signed receipt blob FIRST before committing ONE atomic terminal settlement entry (+1 witness)!
+        # M-5 / H-8: settlement.recorded_at is ALWAYS rp["recorded_at"] from the verified signed receipt!
+        rec_ts = rp["recorded_at"]
+        # Persist verified signed receipt blob FIRST before committing ONE atomic settlement entry (+1 witness)!
         journal.receipt_store[rcpt_caddr] = copy.deepcopy(r_res)
         set_body: dict[str, Any] = {
             "grant_id": grant_id,
@@ -5479,7 +5870,8 @@ class Tier1Verifier:
             "recorded_at": rec_ts,
             "settlements": settle_lines,
         }
-        if is_single_use:
+        # L-11: Record single_use_consumed ONCE across uncertain -> terminal reconciliation!
+        if is_single_use and not res_rec.get("single_use_consumed_recorded", False):
             set_body["single_use_consumed"] = True
             set_body["use_txid"] = eff_use_txid
             set_body["closes_grant_id"] = grant_id
@@ -5547,13 +5939,7 @@ class Tier1Verifier:
                 executor_cfg,
                 invocation_id=p1.details["invocation_id"],
                 grant_id=p1.details["grant_id"],
-                reserved_ops=p1.details["reserved_ops"],
                 actual_quota_usage=actual_quota_usage,
-                single_use=p1.details["single_use"],
-                use_txid=p1.details["use_txid"],
-                recorded_at=p1.details["recorded_at"],
-                tip_height=p1.details["tip_height"],
-                expected_action=p1.details.get("action"),
             )
             if p2.verdict != "ADMIT":
                 return p2
@@ -5583,8 +5969,6 @@ class Tier1Verifier:
         bearer_token: str | None = None,
     ) -> VerifierResult:
         """Verify seallink-session-open/1 (`open` | `extend` | `close`) via full SPEC-06 §4 backing-grant admission (2A, G7-03, R1 §3, D8-B3, D8-M7)."""
-        if "bearer-sessions" not in self.enabled_modules:
-            return VerifierResult("REFUSE", "ACTION_UNSUPPORTED")
         ok_o, o_res = self._verify_object_wire(open_env, expected_type="seallink-session-open/1")
         if not ok_o:
             return VerifierResult("REFUSE", o_res)
@@ -5760,7 +6144,12 @@ class Tier1Verifier:
             body["quotas"] = sp["quotas"]
         t_hash: str | None = None
         if op == "open":
-            tok = bearer_token if bearer_token is not None else secrets.token_hex(32)
+            if bearer_token is not None:
+                if not isinstance(bearer_token, str) or not re.fullmatch(r"[0-9a-f]{64}", bearer_token):
+                    return VerifierResult("REFUSE", "SESSION_INVALID")
+                tok = bearer_token
+            else:
+                tok = secrets.token_hex(32)
             t_hash = sl.sha256(tok.encode("utf-8")).hex()
             body["token_sha256"] = t_hash
         jw, j_aerr = _append_journal_checked(journal, "session-state", body)
@@ -5777,6 +6166,38 @@ class Tier1Verifier:
             )
         return VerifierResult("ADMIT", None, outcome="executed", journal_writes=[jw], details={"session_id": sid, "op": op})
 
+    def _validate_session_contract_env(
+        self,
+        contract_env: dict[str, Any] | None,
+        expected_cid: str,
+        chain: ChainView,
+        journal: FencedJournal,
+    ) -> dict[str, Any] | None:
+        """Validate a mandatory contract or framework contract envelope, live seal, and window for bearer sessions (H-10)."""
+        if (
+            contract_env is None
+            or journal.lookup_closure({"subject_id": expected_cid, "subject_kind": "contract"}, legacy_key=expected_cid) is not None
+        ):
+            return None
+        ok_c, rc = self._verify_object_wire(contract_env, expected_type="seallink-contract/1")
+        if (
+            not ok_c
+            or rc["network"] != self.pinned_network
+            or rc["genesis"] != self.pinned_genesis
+            or sl.object_id(rc) != expected_cid
+            or "seal" not in rc
+            or self.evaluate_seal(rc["seal"], chain, required_depth=1, journal=journal, subject_id=expected_cid, subject_kind="contract")[1] is not None
+        ):
+            return None
+        cw = rc["window"]
+        if (
+            chain.tip_height < cw["not_before_height"]
+            or ("not_after_height" in cw and chain.tip_height >= cw["not_after_height"])
+            or ("not_after_unix" in cw and chain.now >= cw["not_after_unix"])
+        ):
+            return None
+        return rc
+
     def _validate_session_backing_grant(
         self,
         gid: str,
@@ -5785,10 +6206,13 @@ class Tier1Verifier:
         chain: ChainView,
         journal: FencedJournal,
         contract_env: dict[str, Any] | None = None,
-    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str | None]:
-        """Online live re-check of a bearer session's backing grant, mandatory depth-2 parent, and optional contract seal (2A, G7-09, D8-M7)."""
+        framework_contract_env: dict[str, Any] | None = None,
+        origin_bundle: dict[str, Any] | None = None,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str | None, dict[tuple[str, str, str, str], int]]:
+        """Online live SPEC-06 §4 re-check of a bearer session's backing grant, root issuer link.grant & 0x0b, depth-2 parent + stop_coin, and mandatory contract/framework seals (B-2, H-10)."""
+        empty_caps: dict[tuple[str, str, str, str], int] = {}
         if grant_env is None:
-            return None, None, None
+            return None, None, None, empty_caps
         ok_g, rg = self._verify_object_wire(grant_env, expected_type="seallink-grant/1")
         gp = rg["payload"] if (ok_g and sl.object_id(rg["payload"]) == gid) else None
         if (
@@ -5798,26 +6222,29 @@ class Tier1Verifier:
             or gp["revocation"]["mode"] != "seal"
             or gp["revocation"]["kind"] != "revocable"
             or not (gp["not_before_height"] <= chain.tip_height < gp["not_after_height"])
-            or ("contract_id" in gp and journal.lookup_closure({"subject_id": gp["contract_id"], "subject_kind": "contract"}, legacy_key=gp["contract_id"]) is not None)
         ):
-            return None, None, None
-        if "contract_id" in gp and contract_env is not None:
-            ok_c, rc = self._verify_object_wire(contract_env, expected_type="seallink-contract/1")
-            if (
-                not ok_c
-                or sl.object_id(rc) != gp["contract_id"]
-                or "seal" not in rc
-                or self.evaluate_seal(rc["seal"], chain, required_depth=1, journal=journal, subject_id=gp["contract_id"], subject_kind="contract")[1] is not None
-            ):
-                return None, None, None
+            return None, None, None, empty_caps
+
+        # H-10: When backing grant binds contract_id, contract_env (and framework_contract_env if present) is MANDATORY!
+        if "contract_id" in gp:
+            rc = self._validate_session_contract_env(contract_env, gp["contract_id"], chain, journal)
+            if rc is None:
+                return None, None, None, empty_caps
+            if "framework_id" in rc and self._validate_session_contract_env(framework_contract_env, rc["framework_id"], chain, journal) is None:
+                return None, None, None, empty_caps
+
         s_op = {"txid": gp["revocation"]["seal"]["txid"], "vout": gp["revocation"]["seal"]["vout"]}
         if (
             journal.lookup_closure({"outpoint": s_op, "subject_kind": "seal"}, legacy_key=_outpoint_key(s_op)) is not None
             or self.evaluate_seal(gp["revocation"]["seal"], chain, required_depth=1, journal=journal, subject_id=gid, subject_kind="grant")[1] is not None
         ):
-            return None, None, None
+            return None, None, None, empty_caps
+
         parent_gp: dict[str, Any] | None = None
         parent_gid: str | None = None
+        parent_row_caps: dict[tuple[str, str, str, str], int] = {}
+        root_env = rg
+        root_gp = gp
         if "parent" in gp:
             parent_gid = gp["parent"]["grant_id"]
             row_ord = gp["parent"]["ordinal"]
@@ -5826,16 +6253,177 @@ class Tier1Verifier:
                 or journal.lookup_closure({"subject_id": parent_gid, "subject_kind": "grant"}, legacy_key=parent_gid) is not None
                 or journal.lookup_closure({"grant_id": parent_gid, "ordinal": row_ord, "subject_kind": "row"}, legacy_key=f"{parent_gid}:{row_ord}") is not None
             ):
-                return None, None, None
+                return None, None, None, empty_caps
             ok_pg, rpg = self._verify_object_wire(parent_grant_env, expected_type="seallink-grant/1")
             if not ok_pg or sl.object_id(rpg["payload"]) != parent_gid:
-                return None, None, None
+                return None, None, None, empty_caps
             parent_gp = rpg["payload"]
-            if not (parent_gp["not_before_height"] <= chain.tip_height < parent_gp["not_after_height"]):
-                return None, None, None
-            if parent_gp["revocation"]["mode"] == "seal" and self.evaluate_seal(parent_gp["revocation"]["seal"], chain, required_depth=1, journal=journal, subject_id=parent_gid, subject_kind="grant")[1] is not None:
-                return None, None, None
-        return gp, parent_gp, parent_gid
+            if (
+                parent_gp["network"] != self.pinned_network
+                or parent_gp["genesis"] != self.pinned_genesis
+                or "delegate" not in parent_gp
+                or not (parent_gp["not_before_height"] <= chain.tip_height < parent_gp["not_after_height"])
+            ):
+                return None, None, None, empty_caps
+            if parent_gp["revocation"]["mode"] == "seal":
+                p_op = {"txid": parent_gp["revocation"]["seal"]["txid"], "vout": parent_gp["revocation"]["seal"]["vout"]}
+                if (
+                    journal.lookup_closure({"outpoint": p_op, "subject_kind": "seal"}, legacy_key=_outpoint_key(p_op)) is not None
+                    or self.evaluate_seal(parent_gp["revocation"]["seal"], chain, required_depth=1, journal=journal, subject_id=parent_gid, subject_kind="grant")[1] is not None
+                ):
+                    return None, None, None, empty_caps
+            # B-2: Locate row_ord in parent_gp.delegate.groups and verify live stop_outpoint + extract row caps!
+            cur_ord = 0
+            matched_group = None
+            stop_outpoint = None
+            for gspec in parent_gp["delegate"]["groups"]:
+                for rng in gspec["ranges"]:
+                    if cur_ord + 1 <= row_ord <= cur_ord + rng["count"]:
+                        offset = row_ord - cur_ord - 1
+                        matched_group = gspec
+                        if "stop_txid" in rng:
+                            stop_outpoint = {
+                                "txid": rng["stop_txid"],
+                                "vout": rng["stop_first"] + offset,
+                                "script_policy": rng["stop_script_policy"],
+                            }
+                        break
+                    cur_ord += rng["count"]
+                if matched_group is not None:
+                    break
+            if matched_group is None:
+                return None, None, None, empty_caps
+            if stop_outpoint is not None:
+                try:
+                    exp_stop_spk, _ = sl.compile_script_policy(stop_outpoint["script_policy"])
+                except ValueError:
+                    return None, None, None, empty_caps
+                stx = chain.get_tx(stop_outpoint["txid"])
+                sout = chain.get_output(stop_outpoint["txid"], stop_outpoint["vout"])
+                if not stx or stx.get("confirmed_height") is None or not sout or sout.get("script_pubkey_hex") != exp_stop_spk.hex():
+                    return None, None, None, empty_caps
+                if sout.get("spent_by_txid") or sout.get("absent_from_utxo"):
+                    journal.record_closure(
+                        {"grant_id": parent_gid, "ordinal": row_ord, "subject_kind": "row"},
+                        "GRANT_ROW_STOPPED",
+                        observed_at=chain.now,
+                        observed_height=chain.tip_height,
+                        spend_txid=sout.get("spent_by_txid", "0" * 64),
+                    )
+                    return None, None, None, empty_caps
+            for pcap in matched_group["template"].get("capabilities", []):
+                for pq in pcap.get("quotas", []):
+                    pk_t = (pq["kind"], pq["resource"], pq["unit"], pq["window"])
+                    parent_row_caps[pk_t] = max(parent_row_caps.get(pk_t, 0), int(pq["max"]))
+            root_env = rpg
+            root_gp = parent_gp
+
+        # B-2: Mandatory live root issuer identity, link.grant rotation, policy-scoped role closure, 0x0b break, & origin/ward check!
+        iss_pin = root_gp.get("issuer")
+        if not isinstance(iss_pin, dict):
+            return None, None, None, empty_caps
+        iss_name = iss_pin["name"]
+        presented_rpol = iss_pin.get("role_policy") or (
+            root_env.get("signatures", {}).get("policy")
+            if isinstance(root_env.get("signatures"), dict)
+            else None
+        )
+        if isinstance(presented_rpol, dict):
+            role_cl = journal.lookup_closure(
+                {
+                    "name": iss_name,
+                    "policy_sha256": _policy_sha256(presented_rpol),
+                    "registration": iss_pin["registration"],
+                    "role": "grant",
+                    "subject_kind": "role",
+                }
+            )
+            if role_cl is not None:
+                if role_cl.get("cause") != "CRED_ISSUER_CLOSED":
+                    return None, None, None, empty_caps
+                ex_hc = role_cl.get("subject", {}).get("cutoff_height")
+                if ex_hc is None or chain.tip_height >= int(ex_hc):
+                    return None, None, None, empty_caps
+
+        nrec, nerr = self.resolve_name(
+            iss_name,
+            chain,
+            expected_owner_policy=iss_pin["owner_policy"],
+            expected_registration=iss_pin["registration"],
+        )
+        if nerr or nrec is None:
+            return None, None, None, empty_caps
+        root_recent_h = chain.raw.get("blocks", {}).get(root_gp["recent_block"])
+        hist_oid = nrec.get("_historical_origin_id")
+        if not hist_oid:
+            reg_bound = chain.raw.get("registered_bindings", {}).get(_outpoint_key(iss_pin["registration"]))
+            if isinstance(reg_bound, str):
+                hist_oid = reg_bound
+        wstate: dict[str, Any] | None = None
+        if hist_oid:
+            ob_iss = self._pick_origin_bundle_for_oid(hist_oid, origin_bundle, None)
+            wstate, oerr = self.verify_origin_and_status(ob_iss, chain, journal=journal)
+            if oerr or wstate is None:
+                return None, None, None, empty_caps
+            if not _name_pin_equal(wstate.get("effective_binding", wstate["binding"]), iss_pin):
+                return None, None, None, empty_caps
+            if wstate["capacity"] == "ward":
+                ok_wa, _, _ = self.verify_ward_approvals(root_env, wstate, chain, journal=journal)
+                if not ok_wa:
+                    return None, None, None, empty_caps
+        if wstate is None or wstate["capacity"] != "ward":
+            rpol, rerr = self.resolve_role_policy(nrec, "grant", iss_pin.get("role_policy"), recent_block_height=root_recent_h)
+            if rerr:
+                if rerr == "NAME_ROLE_CHANGED":
+                    hist_pol = self._resolve_historical_role_policy(nrec, "grant", iss_pin.get("role_policy"), at_height=root_recent_h)
+                    if hist_pol is not None:
+                        ok_hist, _ = sl.verify_signature_set(
+                            sl.signing_digest(root_gp),
+                            root_env.get("signatures", {}),
+                            expected_policy=hist_pol,
+                            obj_type="seallink-grant/1",
+                        )
+                        if ok_hist:
+                            journal.record_closure(
+                                {
+                                    "name": iss_name,
+                                    "policy_sha256": _policy_sha256(hist_pol),
+                                    "registration": iss_pin["registration"],
+                                    "role": "grant",
+                                    "subject_kind": "role",
+                                },
+                                "NAME_ROLE_CHANGED",
+                                observed_at=chain.now,
+                                observed_height=chain.tip_height,
+                            )
+                return None, None, None, empty_caps
+            assert rpol is not None
+            min_hc = self._policy_compromised_cutoff(nrec, iss_pin, "grant", rpol, chain)
+            if min_hc is not None and chain.tip_height >= min_hc:
+                journal.record_closure(
+                    {
+                        "cutoff_height": min_hc,
+                        "name": iss_name,
+                        "policy_sha256": _policy_sha256(rpol),
+                        "registration": iss_pin["registration"],
+                        "role": "grant",
+                        "subject_kind": "role",
+                    },
+                    "CRED_ISSUER_CLOSED",
+                    observed_at=chain.now,
+                    observed_height=chain.tip_height,
+                )
+                return None, None, None, empty_caps
+            ok_rs, _ = sl.verify_signature_set(
+                sl.signing_digest(root_gp),
+                root_env.get("signatures", {}),
+                expected_policy=rpol,
+                obj_type="seallink-grant/1",
+            )
+            if not ok_rs:
+                return None, None, None, empty_caps
+
+        return gp, parent_gp, parent_gid, parent_row_caps
 
     def verify_bearer_session(
         self,
@@ -5847,11 +6435,14 @@ class Tier1Verifier:
         grant_env: dict[str, Any] | None = None,
         parent_grant_env: dict[str, Any] | None = None,
         contract_env: dict[str, Any] | None = None,
+        framework_contract_env: dict[str, Any] | None = None,
+        origin_bundle: dict[str, Any] | None = None,
         action: str | None = None,
         target: str | None = None,
         arguments: dict[str, Any] | None = None,
+        actual_message_meta: dict[str, Any] | None = None,
     ) -> VerifierResult:
-        """Per-use bearer session verification: mandatory live grant recheck + durable atomic `session-use` debits across session/own/row (2A, R1 §3, G7-09, D8-B3, D8-M7)."""
+        """Per-use bearer session verification: strict 64-hex token, mandatory live §4 backing-grant recheck, full capability/mail-meta enforcement, and deterministic per-capability `session-use` debits (B-2, H-9, H-10, M-10, M-16, L-6)."""
         if "bearer-sessions" not in self.enabled_modules:
             return VerifierResult("REFUSE", "ACTION_UNSUPPORTED")
         obs_err = self.check_chain_observation(chain, risk_class=2)
@@ -5860,6 +6451,9 @@ class Tier1Verifier:
         j_err = journal.check_continuity()
         if j_err:
             return VerifierResult("REFUSE", j_err)
+        # M-16: Strictly enforce 64 lowercase hexadecimal ASCII bearer token format!
+        if not isinstance(token, str) or not re.fullmatch(r"[0-9a-f]{64}", token):
+            return VerifierResult("REFUSE", "SESSION_INVALID")
         t_hash = sl.sha256(token.encode("utf-8")).hex()
         sess = None
         for k_hash, s_obj in journal.sessions.items():
@@ -5875,87 +6469,103 @@ class Tier1Verifier:
             and bool(gid)
             and journal.lookup_closure({"subject_id": gid, "subject_kind": "grant"}, legacy_key=gid) is None
         )
-        gp, parent_gp, parent_gid = (
-            self._validate_session_backing_grant(gid, grant_env, parent_grant_env, chain, journal, contract_env=contract_env)
+        gp, parent_gp, parent_gid, parent_row_caps = (
+            self._validate_session_backing_grant(
+                gid,
+                grant_env,
+                parent_grant_env,
+                chain,
+                journal,
+                contract_env=contract_env,
+                framework_contract_env=framework_contract_env,
+                origin_bundle=origin_bundle,
+            )
             if (sess_ok and gid is not None)
-            else (None, None, None)
+            else (None, None, None, {})
         )
-        act_meta = ACTION_PROFILES.get(action) if action is not None else None
-        if gp is None or (act_meta is not None and not act_meta.get("allows_bearer_session", False)):
+        act_meta = ACTION_PROFILES.get(action) if isinstance(action, str) else None
+        if gp is None or action is None or act_meta is None or not act_meta.get("allows_bearer_session", False):
             return VerifierResult("REFUSE", "SESSION_INVALID")
         assert sess is not None and gid is not None
 
-        # Match action, capability, where predicates, and compute durable atomic session/own/row debits (R1 §3, G7-09)
-        sid = sess["session_id"]
-        debit_lines: list[dict[str, Any]] = []
-        planned_delta: dict[tuple[str, str, str], int] = {}
-        act_args = arguments or {}
+        # H-9: Enforce profile args_schema, exact target match, and ALL 7-predicate where + mail/read actual_message_meta checks!
+        if not isinstance(target, str) or not isinstance(arguments, dict):
+            return VerifierResult("REFUSE", "INVOKE_CONSTRAINT_FAILED")
+        if self.enforce_schemas and "args_schema" in act_meta:
+            aerr = validate_against_schema(act_meta["args_schema"], arguments, require_jsonschema=self.require_jsonschema)
+            if aerr is not None:
+                return VerifierResult("REFUSE", aerr)
 
-        if action is not None:
-            matched_cap: dict[str, Any] | None = None
-            for cap in gp.get("capabilities", []):
-                if cap["action"] != action or (target is not None and cap["target"] != target):
-                    continue
-                if arguments is not None:
-                    ok_w = all(
-                        (k in act_args and sl.match_predicate(pred, act_args[k]))
-                        for k, pred in cap.get("where", {}).items()
-                        if not (action == "mail/read" and k in ("sender_domain", "max_bytes"))
-                    )
-                    if not ok_w:
-                        continue
+        sid = sess["session_id"]
+        matched_cap: dict[str, Any] | None = None
+        for cap in gp.get("capabilities", []):
+            if cap["action"] != action or cap["target"] != target:
+                continue
+            if self._match_capability_where(action, cap, arguments, actual_message_meta):
                 matched_cap = cap
                 break
-            if matched_cap is None:
-                return VerifierResult("REFUSE", "INVOKE_CONSTRAINT_FAILED")
+        if matched_cap is None:
+            return VerifierResult("REFUSE", "INVOKE_CONSTRAINT_FAILED")
 
-            def _bucket_for(window: str, anchor_nb: int) -> str:
-                if window.startswith("seconds:"):
-                    sec_s = int(window.split(":", 1)[1])
-                    return f"sec:{(chain.now // sec_s) * sec_s}"
-                if window.startswith("blocks:"):
-                    blk_n = int(window.split(":", 1)[1])
-                    k_b = (chain.tip_height - anchor_nb) // blk_n
-                    return f"blk:{anchor_nb + k_b * blk_n}"
-                return "term"
+        def _bucket_for(window: str, anchor_nb: int) -> str:
+            if window.startswith("seconds:"):
+                sec_s = int(window.split(":", 1)[1])
+                return f"sec:{(chain.now // sec_s) * sec_s}"
+            if window.startswith("blocks:"):
+                blk_n = int(window.split(":", 1)[1])
+                k_b = (chain.tip_height - anchor_nb) // blk_n
+                return f"blk:{anchor_nb + k_b * blk_n}"
+            return "term"
 
-            # Unified atomic debit check across session, own, and (depth-2) row accounts!
-            acct_batches: list[tuple[str, str, str, int | None, list[dict[str, Any]], int]] = [
-                ("session", f"session:{sid}", gid, None, sess.get("quotas", []), gp["not_before_height"]),
-                ("own", f"own:{gid}", gid, None, matched_cap.get("quotas", []), gp["not_before_height"]),
-            ]
+        # M-10 / L-6: Debit ONLY matched_cap's quotas (and matching session quotas) in deterministic per-quota order: session -> own -> row!
+        sess_q_by_key = {
+            (sq["kind"], sq["resource"], sq["unit"], sq["window"]): sq
+            for sq in sess.get("quotas", [])
+        }
+        debit_lines: list[dict[str, Any]] = []
+        planned_delta: dict[tuple[str, str, str], int] = {}
+        watermark_updates: dict[str, int] = {}
+
+        for q in matched_cap.get("quotas", []):
+            qk_t = (q["kind"], q["resource"], q["unit"], q["window"])
+            qkey = f"{q['kind']}|{q['resource']}|{q['unit']}|{q['window']}"
+            if q["window"].startswith("seconds:"):
+                if chain.now < journal.quota_watermarks.get(qkey, 0):
+                    return VerifierResult("REFUSE", "QUOTA_CLOCK_REGRESSION")
+                watermark_updates[qkey] = chain.now
+            amt, _ = compute_quota_debit(action, arguments, q)
+            targets_for_q: list[tuple[str, str, str, int | None, int, int]] = []
+            if qk_t in sess_q_by_key:
+                targets_for_q.append(("session", f"session:{sid}", gid, None, int(sess_q_by_key[qk_t]["max"]), gp["not_before_height"]))
+            targets_for_q.append(("own", f"own:{gid}", gid, None, int(q["max"]), gp["not_before_height"]))
             if "parent" in gp and parent_gid is not None and parent_gp is not None:
                 r_ord = int(gp["parent"]["ordinal"])
-                acct_batches.append(("row", f"row:{parent_gid}:{r_ord}", parent_gid, r_ord, matched_cap.get("quotas", []), parent_gp["not_before_height"]))
+                row_cap = parent_row_caps.get(qk_t, int(q["max"]))
+                targets_for_q.append(("row", f"row:{parent_gid}:{r_ord}", parent_gid, r_ord, row_cap, parent_gp["not_before_height"]))
 
-            for acct_kind, scope_id, g_ref, r_ord_opt, q_list, nb_h in acct_batches:
-                for q in q_list:
-                    qkey = f"{q['kind']}|{q['resource']}|{q['unit']}|{q['window']}"
-                    if q["window"].startswith("seconds:") and chain.now < journal.quota_watermarks.get(qkey, 0):
-                        return VerifierResult("REFUSE", "QUOTA_CLOCK_REGRESSION")
-                    b_id = _bucket_for(q["window"], nb_h)
-                    amt, _ = compute_quota_debit(action, act_args, q)
-                    bkey = (scope_id, qkey, b_id)
-                    used = journal.quotas_used.get(bkey, 0) + planned_delta.get(bkey, 0)
-                    if int(q["max"]) == 0 or used + amt > int(q["max"]):
-                        return VerifierResult("REFUSE", "QUOTA_EXCEEDED")
-                    planned_delta[bkey] = planned_delta.get(bkey, 0) + amt
-                    dln: dict[str, Any] = {
-                        "account": acct_kind,
-                        "amount": str(amt),
-                        "bucket_id": b_id,
-                        "grant_id": g_ref,
-                        "quota_kind": q["kind"],
-                        "resource": q["resource"],
-                        "unit": q["unit"],
-                        "window": q["window"],
-                    }
-                    if r_ord_opt is not None:
-                        dln["row_ordinal"] = r_ord_opt
-                    debit_lines.append(dln)
+            for acct_kind, scope_id, g_ref, r_ord_opt, ceiling, nb_h in targets_for_q:
+                b_id = _bucket_for(q["window"], nb_h)
+                bkey = (scope_id, qkey, b_id)
+                used = journal.quotas_used.get(bkey, 0) + planned_delta.get(bkey, 0)
+                if ceiling == 0 or used + amt > ceiling:
+                    return VerifierResult("REFUSE", "QUOTA_EXCEEDED")
+                planned_delta[bkey] = planned_delta.get(bkey, 0) + amt
+                dln: dict[str, Any] = {
+                    "account": acct_kind,
+                    "amount": str(amt),
+                    "bucket_id": b_id,
+                    "grant_id": g_ref,
+                    "quota_kind": q["kind"],
+                    "resource": q["resource"],
+                    "unit": q["unit"],
+                    "window": q["window"],
+                }
+                if r_ord_opt is not None:
+                    dln["row_ordinal"] = r_ord_opt
+                debit_lines.append(dln)
 
         journal_writes: list[dict[str, Any]] = []
-        if action is not None and debit_lines:
+        if debit_lines:
             jw_u, j_aerr = _append_journal_checked(
                 journal,
                 "session-use",
@@ -5970,6 +6580,8 @@ class Tier1Verifier:
             if j_aerr is not None:
                 return VerifierResult("REFUSE", j_aerr)
             assert jw_u is not None
+            for wk, wv in watermark_updates.items():
+                journal.quota_watermarks[wk] = max(journal.quota_watermarks.get(wk, 0), wv)
             journal_writes.append(jw_u)
         return VerifierResult(
             "ADMIT",
@@ -5993,14 +6605,12 @@ class Tier1Verifier:
         mode: str = "activate",
         local_executor_pin: dict[str, Any] | None = None,
     ) -> VerifierResult:
-        """Verify exclusive service migration (`stage` vs mandatory-proof `activate`) per SPEC-07 §2 (2A, G7-04, R1 §3, D8-B3, D8-M8)."""
-        if "service-migration" not in self.enabled_modules:
-            return VerifierResult("REFUSE", "ACTION_UNSUPPORTED")
-        if mode not in ("stage", "activate"):
-            return VerifierResult("REFUSE", "SERVICE_MIGRATION_INVALID")
+        """Verify exclusive service migration (`stage` vs mandatory-proof `activate`) per SPEC-07 §2 (H-14, M-14, L-13)."""
         ok_w, res = self._verify_object_wire(migration_env, expected_type="seallink-migration/1")
         if not ok_w:
             return VerifierResult("REFUSE", res)
+        if mode not in ("stage", "activate"):
+            return VerifierResult("REFUSE", "SERVICE_MIGRATION_INVALID")
         mp = res["payload"]
         if mp["network"] != self.pinned_network or mp["genesis"] != self.pinned_genesis:
             return VerifierResult("REFUSE", "CHAIN_MISMATCH")
@@ -6013,8 +6623,25 @@ class Tier1Verifier:
         if j_err:
             return VerifierResult("REFUSE", j_err)
         manifests = presented_manifests or {}
+        dest = mp["dest_executor"]
 
-        # 1. Verify source_executor signature against its confirmed manifest service.receipt_key
+        # Proof (a1) [M-14 / L-13]: Local executor pin check runs FIRST so executor mismatches always refuse GRANT_EXECUTOR_MISMATCH!
+        if (mode == "activate" and local_executor_pin is None) or (
+            local_executor_pin is not None and not _name_pin_equal(local_executor_pin, dest)
+        ):
+            return VerifierResult("REFUSE", "GRANT_EXECUTOR_MISMATCH")
+
+        # H-14: Validate export_bundle against closed MigrationExportBundle schema!
+        if self.enforce_schemas:
+            eb_err = validate_against_schema(
+                "schemas/invocation.schema.json#/$defs/MigrationExportBundle",
+                export_bundle,
+                require_jsonschema=self.require_jsonschema,
+            )
+            if eb_err is not None:
+                return VerifierResult("REFUSE", "SERVICE_MIGRATION_INVALID")
+
+        # Proof (a2): Verify source_executor signature against its confirmed manifest service.receipt_key
         src = mp["source_executor"]
         s_nrec, s_nerr = self.resolve_name(
             src["name"], chain, expected_owner_policy=src["owner_policy"], expected_registration=src["registration"]
@@ -6038,51 +6665,71 @@ class Tier1Verifier:
         if not ok_sig:
             return VerifierResult("REFUSE", scode)
 
-        # 2. Verify canonical MigrationInventory ONLY (legacy export_bundle["files"] removed per 2A / G7-04!)
+        # Proof (a3): Verify canonical MigrationInventory allowlist + inventory_sha256 (zero execution secrets)
         inv_obj = export_bundle.get("inventory")
-        if not isinstance(inv_obj, dict):
-            return VerifierResult("REFUSE", "SERVICE_MIGRATION_INVALID")
+        inv_dict = inv_obj if isinstance(inv_obj, dict) else {}
         inv_err = (
-            validate_against_schema("schemas/invocation.schema.json#/$defs/MigrationInventory", inv_obj, require_jsonschema=self.require_jsonschema)
-            if self.enforce_schemas
+            validate_against_schema("schemas/invocation.schema.json#/$defs/MigrationInventory", inv_dict, require_jsonschema=self.require_jsonschema)
+            if (self.enforce_schemas and isinstance(inv_obj, dict))
             else None
         )
         has_forbidden_item = any(
             any(fk in (it.get("path", "").lower() + " " + it.get("media_type", "").lower()) for fk in FORBIDDEN_EXPORT_KINDS)
-            for it in inv_obj.get("items", [])
+            for it in inv_dict.get("items", [])
             if isinstance(it, dict)
         )
         inv_ok = (
-            inv_err is None
+            isinstance(inv_obj, dict)
+            and inv_err is None
             and not has_forbidden_item
-            and inv_obj.get("migration_id") == mp["migration_id"]
-            and inv_obj.get("holder_name") == mp["holder"]["name"]
-            and inv_obj.get("service_type") == mp["service_type"]
-            and sl.sha256(sl.jcs_encode(inv_obj)).hex() == mp["inventory_sha256"]
+            and inv_dict.get("migration_id") == mp["migration_id"]
+            and inv_dict.get("holder_name") == mp["holder"]["name"]
+            and inv_dict.get("service_type") == mp["service_type"]
+            and sl.sha256(sl.jcs_encode(inv_dict)).hex() == mp["inventory_sha256"]
         )
-
-        # 3. Verify inventory, journal pos/commitment, and unique migration_id; stage returns BEFORE fencing! (D8-M8)
         mid = mp["migration_id"]
+        if not inv_ok:
+            return VerifierResult("REFUSE", "SERVICE_MIGRATION_INVALID")
+
+        # L-13: Stage mode runs BEFORE source fencing (does not require journal_pos equality or fencing_statement) and performs ZERO journal writes!
+        if mode == "stage":
+            return VerifierResult("ADMIT", None, outcome="reserved", journal_writes=[], details={"mode": "stage", "migration_id": mid})
+
+        # Proof (a4) [H-14]: ACTIVATE mode requires matching journal coordinates, unique migration_id, source-signed migration-fence Statement,
+        # AND cryptographic on-chain verification that EVERY declared predecessor_grant_seals[] is spent!
         if (
-            not inv_ok
-            or export_bundle.get("source_journal_pos") != mp["journal_pos"]
+            export_bundle.get("source_journal_pos") != mp["journal_pos"]
             or export_bundle.get("source_journal_commitment") != mp["journal_commitment"]
             or mid in journal.migrations_applied
         ):
             return VerifierResult("REFUSE", "SERVICE_MIGRATION_INVALID")
-
-        # Stage mode validates source bundle BEFORE source fencing and performs ZERO activation / journal writes!
-        if mode == "stage":
-            return VerifierResult("ADMIT", None, outcome="reserved", journal_writes=[], details={"mode": "stage", "migration_id": mid})
-
-        # 4. ACTIVATE mode (default): require fenced source, zero open predecessor grants, mandatory local_executor_pin, & ALL 4 proofs!
-        if not export_bundle.get("source_write_token_fenced", False) or bool(export_bundle.get("open_predecessor_grants", [])):
+        f_stmt = export_bundle.get("fencing_statement")
+        f_res = (
+            self.verify_statement(f_stmt, chain, expected_policy={"m": 1, "pks": [rcpt_key]})
+            if isinstance(f_stmt, dict)
+            else None
+        )
+        fsp = f_stmt.get("payload", {}) if isinstance(f_stmt, dict) else {}
+        fsubj = fsp.get("subject", {}) if isinstance(fsp, dict) else {}
+        if (
+            f_res is None
+            or f_res.verdict != "ADMIT"
+            or fsp.get("statement_kind") != "migration-fence"
+            or not _name_pin_equal(fsp.get("issuer"), src)
+            or fsubj.get("migration_id") != mid
+            or not _name_pin_equal(fsubj.get("holder"), mp["holder"])
+            or not _name_pin_equal(fsubj.get("dest_executor"), dest)
+            or fsubj.get("source_journal_pos") != mp["journal_pos"]
+            or fsubj.get("source_journal_commitment") != mp["journal_commitment"]
+            or fsubj.get("inventory_sha256") != mp["inventory_sha256"]
+        ):
             return VerifierResult("REFUSE", "SERVICE_MIGRATION_INVALID")
-        dest = mp["dest_executor"]
-        if local_executor_pin is None or not _name_pin_equal(local_executor_pin, dest):
-            return VerifierResult("REFUSE", "GRANT_EXECUTOR_MISMATCH")
+        for p_seal in fsubj.get("predecessor_grant_seals", []):
+            st_p, err_p, _ = self.evaluate_seal(p_seal, chain, required_depth=1)
+            if st_p != "revoked" or err_p != "SEAL_SPENT":
+                return VerifierResult("REFUSE", "SERVICE_MIGRATION_INVALID")
 
-        # 4a. Mandatory holder_assent (with ward custody_change quorum when holder is a ward!)
+        # Proof (b): Mandatory holder_assent (with ward custody_change quorum when holder is a ward!)
         h_assent = holder_assent if holder_assent is not None else export_bundle.get("holder_assent")
         ok_ha, ha_res = self._verify_object_wire(h_assent, expected_type="seallink-assent/1") if h_assent is not None else (False, None)
         hap = ha_res["payload"] if ok_ha else {}
@@ -6117,12 +6764,14 @@ class Tier1Verifier:
             hpol, hrerr = self.resolve_role_policy(h_nrec, "grant", ha_res.get("signatures", {}).get("policy"))
             ok_hs = (
                 hrerr is None
+                and hpol is not None
+                and not self._is_policy_compromised_at(h_nrec, mp["holder"], "grant", hpol, chain.tip_height, chain)
                 and sl.verify_signature_set(sl.signing_digest(hap), ha_res.get("signatures", {}), expected_policy=hpol, obj_type="seallink-assent/1")[0]
             )
             if not ok_hs:
                 return VerifierResult("REFUSE", "SERVICE_MIGRATION_INVALID")
 
-        # 4b. Mandatory confirmed holder manifest pinning dest_executor for mp["service_type"]!
+        # Proof (c): Mandatory confirmed holder manifest pinning dest_executor for mp["service_type"]!
         h_man, h_merr = self.resolve_manifest(mp["holder"]["name"], h_nrec, manifests, chain, journal)
         if h_merr and h_merr != "MANIFEST_UNAVAILABLE":
             return VerifierResult("REFUSE", h_merr)
@@ -6132,7 +6781,7 @@ class Tier1Verifier:
         ):
             return VerifierResult("REFUSE", "SERVICE_PROVIDER_UNBOUND")
 
-        # 4c. Mandatory destination acceptance statement (`migration-accept`) signed by dest_executor's receipt_key!
+        # Proof (d): Mandatory destination acceptance statement (`migration-accept`) signed by dest_executor's receipt_key!
         d_stmt = dest_accept_stmt if dest_accept_stmt is not None else export_bundle.get("dest_accept_stmt")
         d_nrec, d_nerr = (
             self.resolve_name(dest["name"], chain, expected_owner_policy=dest["owner_policy"], expected_registration=dest["registration"])
@@ -6189,7 +6838,7 @@ class Tier1Verifier:
         presented_manifests: dict[str, dict[str, Any]] | None = None,
         journal: FencedJournal | None = None,
     ) -> VerifierResult:
-        """Verify two-phase federated screening and L2-gated Contour A direct PII disclosure (SPEC-07 §3, 2A, G7-10, D8-B3, D8-M9)."""
+        """Verify two-phase federated screening and L2-gated Contour A direct PII disclosure (SPEC-07 §3, H-11, H-12, M-13, M-15)."""
         if "federated-screening" not in self.enabled_modules:
             return VerifierResult("REFUSE", "ACTION_UNSUPPORTED")
         ok_g, g_res = self._verify_object_wire(grant_env, expected_type="seallink-grant/1")
@@ -6198,71 +6847,89 @@ class Tier1Verifier:
         gp = g_res["payload"]
         if gp["network"] != self.pinned_network or gp["genesis"] != self.pinned_genesis:
             return VerifierResult("REFUSE", "CHAIN_MISMATCH")
+        # M-15: Fail closed if chain or journal is omitted!
+        if chain is None or journal is None:
+            return VerifierResult("REFUSE", "FEDERATION_POLICY_DENIED")
+        j_err = journal.check_continuity()
+        if j_err:
+            return VerifierResult("REFUSE", j_err)
         gid = sl.object_id(gp)
-        if journal is not None and journal.lookup_closure({"subject_id": gid, "subject_kind": "grant"}, legacy_key=gid) is not None:
+        if journal.lookup_closure({"subject_id": gid, "subject_kind": "grant"}, legacy_key=gid) is not None:
             return VerifierResult("REFUSE", "GRANT_CLOSED")
-        if peer_ctx.get("phase") == "screening":
-            scr_ok = any(bool(c.get("quotas")) for c in gp.get("capabilities", [])) and peer_ctx.get("peer_id") in set(policy.get("trusted_peers", []))
-            if scr_ok and chain is not None:
-                obs_err = self.check_chain_observation(chain, risk_class=2)
-                if obs_err:
-                    return VerifierResult("REFUSE", obs_err)
-                scr_ok = (
-                    gp["not_before_height"] <= chain.tip_height < gp["not_after_height"]
-                    and (
-                        gp["revocation"]["mode"] != "seal"
-                        or self.evaluate_seal(gp["revocation"]["seal"], chain, required_depth=1, journal=journal, subject_id=gid, subject_kind="grant")[1] is None
-                    )
-                )
+
+        phase = peer_ctx.get("phase")
+        if phase not in ("screening", "pii_disclosure"):
+            return VerifierResult("REFUSE", "FEDERATION_POLICY_DENIED")
+        obs_err = self.check_chain_observation(chain, risk_class=2 if phase == "screening" else 1)
+        if obs_err:
+            return VerifierResult("REFUSE", obs_err)
+        # H-12: Mandatory grant height window AND live UTXO seal check across BOTH phases!
+        if not (gp["not_before_height"] <= chain.tip_height < gp["not_after_height"]):
+            return VerifierResult("REFUSE", "GRANT_WINDOW_CLOSED")
+        if phase == "pii_disclosure" and gp["revocation"]["mode"] != "seal":
+            return VerifierResult("REFUSE", "FEDERATION_POLICY_DENIED")
+        if gp["revocation"]["mode"] == "seal":
+            _, serr, _ = self.evaluate_seal(
+                gp["revocation"]["seal"], chain, required_depth=1, journal=journal, subject_id=gid, subject_kind="grant"
+            )
+            if serr:
+                return VerifierResult("REFUSE", serr)
+
+        if phase == "screening":
+            scr_ok = (
+                any(bool(c.get("quotas")) for c in gp.get("capabilities", []))
+                and peer_ctx.get("peer_id") in set(policy.get("trusted_peers", []))
+            )
             if scr_ok:
                 return VerifierResult("ADMIT", None, outcome="executed")
-        elif peer_ctx.get("phase") == "pii_disclosure":
-            # G7-10: Strict single direct hop (forbid screening_agent / hub / relay) + MANDATORY verified holder manifest pinning sets.devices!
+        else:
+            # H-11: Strict single direct hop TO exact recipient_name (forbid screening_agent / hub / relay / wrong actor)!
             hops = peer_ctx.get("route_hops", [])
             approval_cmd = peer_ctx.get("approval_command")
             dev_list = peer_ctx.get("device_list")
             forbidden_roles = {"screening_agent", "hub", "relay"}
             iss_pin = gp.get("issuer")
             if (
-                isinstance(hops, list)
-                and len(hops) == 1
-                and isinstance(hops[0], dict)
-                and hops[0].get("role") not in forbidden_roles
-                and approval_cmd is not None
-                and dev_list is not None
-                and chain is not None
-                and isinstance(iss_pin, dict)
+                gp["recipient"].get("mode") != "name"
+                or not isinstance(hops, list)
+                or len(hops) != 1
+                or not isinstance(hops[0], dict)
+                or hops[0].get("role") in forbidden_roles
+                or hops[0].get("actor") != gp["recipient"]["name"]
+                or approval_cmd is None
+                or not isinstance(peer_ctx.get("fields_sha256"), str)
+                or not isinstance(iss_pin, dict)
             ):
-                obs_err = self.check_chain_observation(chain, risk_class=1)
-                if obs_err:
-                    return VerifierResult("REFUSE", obs_err)
-                manifests = presented_manifests or peer_ctx.get("manifests") or {}
-                h_nrec, h_nerr = self.resolve_name(
-                    iss_pin["name"], chain, expected_owner_policy=iss_pin["owner_policy"], expected_registration=iss_pin["registration"]
-                )
-                if h_nerr is None and h_nrec is not None:
-                    o_man, o_merr = self.resolve_manifest(iss_pin["name"], h_nrec, manifests, chain, journal)
-                    if o_merr is not None:
-                        return VerifierResult("REFUSE", o_merr)
-                    assert o_man is not None
-                    if not isinstance(o_man.get("sets", {}).get("devices"), dict):
-                        return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
-                    cmd_res = self.verify_owner_command(
-                        approval_cmd, dev_list, is_foreign_service=False, chain=chain, owner_manifest=o_man
-                    )
-                    cp = approval_cmd["payload"] if cmd_res.verdict == "ADMIT" else {}
-                    cargs = cp.get("arguments", {}) if isinstance(cp, dict) else {}
-                    cmd_ok = (
-                        cmd_res.verdict == "ADMIT"
-                        and cp.get("level") == 2
-                        and cp.get("command") == "approve-pii-disclosure"
-                        and cargs.get("grant_id") == gid
-                        and cargs.get("route_mode") == "direct"
-                        and gp["recipient"].get("mode") == "name"
-                        and cargs.get("recipient_name") == gp["recipient"]["name"]
-                        and isinstance(peer_ctx.get("fields_sha256"), str)
-                        and cargs.get("fields_sha256") == peer_ctx["fields_sha256"]
-                    )
-                    if cmd_ok:
-                        return VerifierResult("ADMIT", None, outcome="executed", details={"grant_id": gid, "route_mode": "direct"})
+                return VerifierResult("REFUSE", "FEDERATION_POLICY_DENIED")
+            manifests = presented_manifests or peer_ctx.get("manifests") or {}
+            h_nrec, h_nerr = self.resolve_name(
+                iss_pin["name"], chain, expected_owner_policy=iss_pin["owner_policy"], expected_registration=iss_pin["registration"]
+            )
+            if h_nerr:
+                return VerifierResult("REFUSE", h_nerr)
+            assert h_nrec is not None
+            o_man, o_merr = self.resolve_manifest(iss_pin["name"], h_nrec, manifests, chain, journal)
+            if o_merr:
+                return VerifierResult("REFUSE", o_merr)
+            assert o_man is not None
+            # M-13: Missing sets.devices or missing device_list MUST return DEVICE_UNAUTHORIZED (not FEDERATION_POLICY_DENIED)!
+            if not isinstance(o_man.get("sets", {}).get("devices"), dict) or dev_list is None:
+                return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
+            cmd_res = self.verify_owner_command(
+                approval_cmd, dev_list, is_foreign_service=False, chain=chain, owner_manifest=o_man
+            )
+            if cmd_res.verdict != "ADMIT":
+                return cmd_res
+            cp = approval_cmd["payload"]
+            cargs = cp.get("arguments", {})
+            cmd_ok = (
+                cp.get("level") == 2
+                and cp.get("command") == "approve-pii-disclosure"
+                and cargs.get("grant_id") == gid
+                and cargs.get("route_mode") == "direct"
+                and cargs.get("recipient_name") == gp["recipient"]["name"]
+                and cargs.get("fields_sha256") == peer_ctx["fields_sha256"]
+            )
+            if cmd_ok:
+                return VerifierResult("ADMIT", None, outcome="executed", details={"grant_id": gid, "route_mode": "direct"})
         return VerifierResult("REFUSE", "FEDERATION_POLICY_DENIED")

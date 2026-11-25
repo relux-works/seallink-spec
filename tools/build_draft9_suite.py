@@ -253,7 +253,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
     _j_tmp = sv.FencedJournal(_h32("d9-co-j"))
     _p1_tmp = _v_tmp.admit_and_reserve(fx_co["invocation"], fx_co["bundle"], sv.ChainView(fx_co["chain"]), _j_tmp, fx_co["executor_cfg"])
     assert _p1_tmp.verdict == "ADMIT", _p1_tmp
-    _p2_tmp = _v_tmp.commit_result(rcpt_co, _j_tmp, fx_co["executor_cfg"], invocation_id=inv_co_id, grant_id=cid_co, recorded_at=fx_co["chain"]["now"])
+    _p2_tmp = _v_tmp.commit_result(rcpt_co, _j_tmp, fx_co["executor_cfg"], invocation_id=inv_co_id, grant_id=cid_co)
     assert _p2_tmp.verdict == "ADMIT", _p2_tmp
     golden_co_commit = _j_tmp.commitment
     add(
@@ -449,7 +449,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
             "chain": fx_b3["chain"],
             "enabled_modules": ["core"],
             "expect_zero_writes": True,
-            "export_bundle": {"inventory": mig_b3_inv, "open_predecessor_grants": [], "source_journal_commitment": _h32("d9-b3-jc"), "source_journal_pos": 1, "source_write_token_fenced": True},
+            "export_bundle": {"inventory": mig_b3_inv, "source_journal_commitment": _h32("d9-b3-jc"), "source_journal_pos": 1},
             "journal": {"journal_id": _h32("d9-b3-j3")},
             "manifests": fx_b3["bundle"]["manifests"],
             "migration": mig_b3_env,
@@ -627,6 +627,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-GRNT-006", "SL-GRNT-007", "SL-GRNT-014"],
         "commit_edge",
         {
+            "actual_message_meta": {"folder": "Invoices"},
             "bundle": fx_su["bundle"],
             "chain": fx_su["chain"],
             "executor_cfg": fx_su["executor_cfg"],
@@ -640,7 +641,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
         },
         "REFUSE",
         "INVOKE_REPLAY",
-        "D8-M3: After Phase-1 restart strictly from JournalEntry[] + witness, commit_result(single_use=False, use_txid=None) auto-recovers single_use & use_txid, writes SINGLE_USE_CONSUMED closure, and refuses a second new-nonce invocation with INVOKE_REPLAY.",
+        "D8-M3: After Phase-1 restart strictly from JournalEntry[] + witness, commit_result auto-recovers single_use & use_txid from reservation, writes SINGLE_USE_CONSUMED closure, and refuses a second new-nonce invocation with INVOKE_REPLAY.",
     )
     rcpt_wrong_act = sl.sign_envelope({**rcpt_su["payload"], "action": "mail/list"}, [fx_su["_keys"]["host_rcpt"]["sk"]])
     add(
@@ -648,6 +649,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-GRNT-007"],
         "commit_edge",
         {
+            "actual_message_meta": {"folder": "Invoices"},
             "bundle": fx_su["bundle"],
             "chain": fx_su["chain"],
             "executor_cfg": fx_su["executor_cfg"],
@@ -659,25 +661,27 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
         },
         "REFUSE",
         "WIRE_MEMBER",
-        "D8-M3: commit_result enforces rp['action'] == reservation['action'] persisted in Phase-1 JournalEntry even without caller expected_action.",
+        "D8-M3: commit_result enforces rp['action'] == reservation['action'] persisted in Phase-1 JournalEntry without caller expected_action.",
     )
     add(
-        "d9-m3-commit-single-use-mismatched-txid-refuse",
-        ["SL-GRNT-007"],
+        "d9-m3-single-use-auto-derived-use-txid-admit",
+        ["SL-GRNT-006", "SL-GRNT-007", "SL-GRNT-014"],
         "commit_edge",
         {
+            "actual_message_meta": {"folder": "Invoices"},
             "bundle": fx_su["bundle"],
             "chain": fx_su["chain"],
             "executor_cfg": fx_su["executor_cfg"],
+            "expect_total_entries": 2,
             "invocation": fx_su["invocation"],
             "journal_id": _h32("d9-m3-j3"),
-            "override_use_txid": _h32("d9-m3-wrong-use-tx"),
+            "post_restart_new_invocation": inv_su_new,
             "receipt_env": rcpt_su,
-            "use_txid": su_use_tx,
+            "self_contained_restart": True,
         },
         "REFUSE",
-        "WIRE_MEMBER",
-        "D8-M3: commit_result refuses WIRE_MEMBER when caller use_txid disagrees with durable Phase-1 reservation.use_txid.",
+        "INVOKE_REPLAY",
+        "D10-M3/H-7: Single-use admit_and_reserve with use_txid omitted auto-derives spent_by_txid from verified branch-0 seal spend, persists it in reservation, commits SINGLE_USE_CONSUMED after restart, and refuses replay with INVOKE_REPLAY.",
     )
     fx_ord_su = rm._base_invocation_fixture()
     gid_ord = sl.object_id(fx_ord_su["bundle"]["grants"][0]["payload"])
@@ -691,22 +695,22 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
         [fx_ord_su["_keys"]["host_rcpt"]["sk"]],
     )
     add(
-        "d9-m3-commit-single-use-missing-txid-refuse",
+        "d9-m3-commit-mismatched-grant-id-refuse",
         ["SL-GRNT-007"],
         "commit_edge",
         {
+            "actual_message_meta": {"folder": "Invoices"},
             "bundle": fx_ord_su["bundle"],
             "chain": fx_ord_su["chain"],
             "executor_cfg": fx_ord_su["executor_cfg"],
             "invocation": fx_ord_su["invocation"],
             "journal_id": _h32("d9-m3-j4"),
-            "override_single_use": True,
-            "override_use_txid": None,
+            "override_grant_id": _h32("d9-m3-wrong-gid"),
             "receipt_env": rcpt_ord,
         },
         "REFUSE",
         "WIRE_MEMBER",
-        "D8-M3: commit_result with single_use=True and missing use_txid refuses WIRE_MEMBER instead of fabricating all-zero txid.",
+        "D8-M3: commit_result with caller grant_id disagreeing with receipt & durable reservation refuses WIRE_MEMBER.",
     )
 
     # =========================================================================
@@ -1035,8 +1039,8 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
             "journal": {"journal_id": _h32("d9-m7-j3")},
             "steps": [
                 {"bundle": fx_mc["bundle"], "chain": fx_mc["chain"], "expect_bearer_token": True, "kind": "session_open", "label": "open-mc", "session_open": so_mc, "want_refusal": None, "want_verdict": "ADMIT"},
-                {"action": "agent/session", "arguments": {"config_sha256": c_env_m7["config_sha256"], "mode": "interactive"}, "chain": fx_mc["chain"], "contract_env": c_env_m7, "grant_env": g_mc_env, "kind": "bearer_session", "label": "live-contract-seal-admit", "slot_binding": "slot-mc", "target": "station:id/station-a:slot1", "token": "__FROM_OPEN__", "want_refusal": None, "want_verdict": "ADMIT"},
-                {"action": "agent/session", "arguments": {"config_sha256": c_env_m7["config_sha256"], "mode": "interactive"}, "chain": ch_mc_spent, "contract_env": c_env_m7, "grant_env": g_mc_env, "kind": "bearer_session", "label": "spent-contract-seal-refuse", "slot_binding": "slot-mc", "target": "station:id/station-a:slot1", "token": "__FROM_OPEN__", "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
+                {"action": "agent/session", "arguments": {"config_sha256": c_env_m7["config_sha256"], "op": "start", "session_slot": "slot1"}, "chain": fx_mc["chain"], "contract_env": c_env_m7, "grant_env": g_mc_env, "kind": "bearer_session", "label": "live-contract-seal-admit", "slot_binding": "slot-mc", "target": "station:id/station-a:slot1", "token": "__FROM_OPEN__", "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "agent/session", "arguments": {"config_sha256": c_env_m7["config_sha256"], "op": "start", "session_slot": "slot1"}, "chain": ch_mc_spent, "contract_env": c_env_m7, "grant_env": g_mc_env, "kind": "bearer_session", "label": "spent-contract-seal-refuse", "slot_binding": "slot-mc", "target": "station:id/station-a:slot1", "token": "__FROM_OPEN__", "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
             ],
         },
         "ADMIT",
@@ -1057,10 +1061,8 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
             "expect_zero_writes": True,
             "export_bundle": {
                 "inventory": mig_b3_inv,
-                "open_predecessor_grants": [_h32("open-pred-grant")],
                 "source_journal_commitment": _h32("d9-b3-jc"),
                 "source_journal_pos": 1,
-                "source_write_token_fenced": False,
             },
             "journal": {"journal_id": _h32("d9-m8-j1")},
             "manifests": fx_b3["bundle"]["manifests"],
@@ -1080,10 +1082,8 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
             "chain": fx_b3["chain"],
             "export_bundle": {
                 "inventory": mig_b3_inv,
-                "open_predecessor_grants": [],
                 "source_journal_commitment": _h32("d9-b3-jc"),
                 "source_journal_pos": 1,
-                "source_write_token_fenced": True,
             },
             "journal": {"journal_id": _h32("d9-m8-j2")},
             "manifests": fx_b3["bundle"]["manifests"],
@@ -1129,10 +1129,8 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
             "dest_accept_stmt": m8u_acc,
             "export_bundle": {
                 "inventory": m8u_inv,
-                "open_predecessor_grants": [],
                 "source_journal_commitment": _h32("d9-m8u-jc"),
                 "source_journal_pos": 1,
-                "source_write_token_fenced": False,
             },
             "holder_assent": m8u_ha,
             "journal": {"journal_id": _h32("d9-m8-j3")},
@@ -1180,6 +1178,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
         {
             "chain": fx_f9["chain"],
             "grant": g_bare,
+            "journal": {"journal_id": _h32("d9-m9-j1")},
             "peer_ctx": {
                 "approval_command": cmd_bare,
                 "device_list": dl_f9,
@@ -1217,6 +1216,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
         {
             "chain": fx_f9["chain"],
             "grant": g_named,
+            "journal": {"journal_id": _h32("d9-m9-j2")},
             "peer_ctx": {
                 "approval_command": cmd_named,
                 "device_list": dl_f9,
@@ -1247,6 +1247,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
         {
             "chain": fx_f9["chain"],
             "grant": g_named,
+            "journal": {"journal_id": _h32("d9-m9-j3")},
             "peer_ctx": {
                 "approval_command": cmd_wrong_rcpt,
                 "device_list": dl_f9,

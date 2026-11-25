@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  deployments: write
 
 jobs:
   lint:
@@ -115,10 +116,18 @@ jobs:
           - Conformance Requirements, Open Questions, and SLIP Template
           - Machine-Readable Registries (\`registry/*.json\`)
           - Formal Draft 2020-12 Wire JSON Schemas (\`schemas/*.schema.json\`) — live at \`https://seallink.org/releases/${TAG}/schemas/\`
-          - Informative Guides (\`GUIDE-01\`), Complete 114-Rule Inventory (mechanically checked against \`registry/refusal-codes.json\`), and Conformance Vector Manifest (9 deterministic suites, 7 registries including \`registry/actions.json\`, 203 crypto/logic checks, 737 live verifier checks across 624 module-tagged \`security-conformance.json\` cases and 86/86 module-tagged \`refusal-coverage-matrix.json\` cases, 3684 Draft 2020-12 schema checks, 30/30 object types, hardened cold-observer RPC adapter \`tools/nc_rpc_adapter.py\` with 9-method read-only \`rpcwhitelist\` support, fail-closed \`gettxout\` / \`name_history\` \`-32601\` handling, observation brackets, closed-bracket \`pre_effect_recheck\`, file-locked transactional state merge, schema-driven \`*_vout\` traversal, and operational/regtest clock modes, and parallel multi-operator verifier mutation audits via \`tools/mutation_audit.py\`: \`347/347\` = 100.0% \`refusal-return\`, \`347/347\` = 100.0% \`wrong-code\` [0 exceptions], and \`146/146\` = 100.0% exact numeric \`boundary\` [0 exceptions])
+          - Informative Guides (\`GUIDE-01\`), Complete 114-Rule Inventory (mechanically checked against \`registry/refusal-codes.json\`), and Conformance Vector Manifest (9 deterministic suites, 7 registries including \`registry/actions.json\` and \`SLNK\` forward-compatibility criticality ranges \`0x13\`–\`0x1f\` / \`0x20\`–\`0x2f\`, 203 crypto/logic checks, 824 live verifier checks across 711 module-tagged \`security-conformance.json\` cases and 86/86 module-tagged \`refusal-coverage-matrix.json\` cases with \`core\` cases enforced under \`enabled_modules=["core"]\`, 4226 Draft 2020-12 schema checks, 30/30 object types, hardened cold-observer RPC adapter \`tools/nc_rpc_adapter.py\` with 9-method read-only \`rpcwhitelist\` support, fail-closed \`gettxout\` / \`name_history\` \`-32601\` handling, BIP-113 \`mediantime\`, \`block_times\`, observation brackets, closed-bracket \`pre_effect_recheck\`, file-locked transactional state merge, schema-driven \`*_vout\` traversal, and operational/regtest clock modes, and parallel multi-operator verifier mutation audits via \`tools/mutation_audit.py\`: \`369/369\` = 100.0% \`refusal-return\`, \`369/369\` = 100.0% \`wrong-code\` [0 exceptions], and \`169/169\` = 100.0% exact numeric \`boundary\` [0 exceptions] — \`907/907\` total)
           - Two-node Namecoin Core \`nc28.0\` regtest proofs: standalone \`P2A\` package relay (\`conformance/p2a-regtest/\`) and live 5-trace cold-observer end-to-end suite (\`conformance/traces-regtest/\`, 34 live \`Tier1Verifier\` verdicts with \`require_observation_bracket=True\` and dedicated 9-method read-only \`rpcwhitelist\` Node B verified to reject \`sendrawtransaction\` with HTTP 403, covering flagship \`mail/read\` + \`executor_ref\` + named recipient + foreign-issuer \`GRANT_TARGET_UNAUTHORIZED\` + two-phase late-receipt commit + closed-bracket \`pre_effect_recheck\` + mempool revoke, native \`P2WSH\` 2-of-3 \`BranchKeySpec\` \`disposer_pk\` + \`P2WSH\` 2-of-3 \`namepsbt\` + non-default \`pending_vout = 2\` CSV + historical ward contract survival across \`0x0f\` & live guardian \`link.grant\` rotation + \`0x10\` + Decision \`1B\` confirmed \`capacity/1\` & \`P2WSH\` 2-of-3 handover -> State 4 autonomous adult assent, depth-2 sibling \`row_ordinal\` + \`(seal_txid, seal_vout + 1)\` linkage + witness-verified restart recovery + self-contained Phase-1 -> restart -> Phase-2 \`single_use_1_of_2\` unified \`settlement\` + TRUC v3 \`P2A\` CPFP, \`agent/guardian-message\` + two-phase late-receipt separate-process restart recovery, and historical eternal diploma across live 30-block expiry, lawful re-registration, live mid-read tip-change bracket \`CHAIN_OBSERVATION_VOID\` -> retry \`ADMIT\`, live transfer-written \`NAME_WRITER_UNVERIFIED\` -> new owner self-update \`ADMIT\`, and live \`invalidateblock\` reorg exclusion)
 
           **SHA-256 (\`seallink-spec-${TAG}.md\`):** \`${SHA_MD}\`  
           **SHA-256 (\`seallink-spec-${TAG}.html\`):** \`${SHA_HTML}\`
           EOF
           )"
+
+  deploy_site:
+    name: Deploy seallink.org (Post-Gate)
+    needs: [publish]
+    uses: ./.github/workflows/deploy-site.yml
+    with:
+      version: ${{ github.ref_name }}
+    secrets: inherit

@@ -1,12 +1,14 @@
 {
   "$comment": "SealLink v1.0 OP_RETURN Commitment Framing Registry (SPEC-02). All standard frames fit strictly within Bitcoin/Namecoin MAX_OP_RETURN_RELAY = 83 bytes.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.9",
+  "version": "1.0.0-draft.10",
   "magic_ascii": "SLNK",
   "magic_hex": "534c4e4b",
   "max_relay_script_bytes": 83,
   "header_format": "OP_RETURN(0x6a) PUSH5(0x05) magic(4B='SLNK') action(1B) PUSH_N(1B) payload(N bytes)",
   "standard_payload_format": "version(1B=0x01) || commitment(32B) || loc_type(1B) || pointer(0B | 32B)",
+  "critical_reserved_range": "0x13..0x1f",
+  "advisory_ignorable_range": "0x20..0x2f",
   "locator_types": [
     {
       "code": "0x00",
@@ -148,7 +150,7 @@
       "commitment": "typed_digest(seallink-credential-break/1)",
       "allowed_locators": ["0x00"],
       "owning_spec": "SPEC-05",
-      "description": "OwnerPolicy-authenticated compromise height h_c for a credential or notary role key; anchors < h_c survive, >= h_c refuse."
+      "description": "OwnerPolicy-authenticated compromise height h_c for a cred, notary, or grant role policy; anchors < h_c survive, >= h_c refuse."
     },
     {
       "code": "0x0c",
@@ -219,6 +221,26 @@
       "allowed_locators": ["0x00", "0x01", "0x05"],
       "owning_spec": "SPEC-04",
       "description": "Direct initial activation (activation_mode=initial): committed when spending an origin's initial_vacant slot UTXO for the disclosed initial_guardian_commitment (with guardian assent) directly to active_policy at active_vout."
+    },
+    {
+      "code": "0x13",
+      "name": "RESERVED_CRITICAL_VOLUNTARY_REBIND",
+      "status": "reserved_critical",
+      "version": "0x01",
+      "commitment": "reserved",
+      "allowed_locators": [],
+      "owning_spec": "SPEC-04",
+      "description": "Reserved critical action code (0x13..0x1f range) for future voluntary name rebinding. Verifiers observing an unknown confirmed owner-authored frame in 0x13..0x1f MUST fail closed with ORIGIN_STATUS_INCOMPLETE (never silently skip)."
+    },
+    {
+      "code": "0x14",
+      "name": "RESERVED_CRITICAL_LOG_CHECKPOINT",
+      "status": "reserved_critical",
+      "version": "0x01",
+      "commitment": "reserved",
+      "allowed_locators": [],
+      "owning_spec": "SPEC-05",
+      "description": "Reserved critical action code (0x13..0x1f range) for future notarization/release log checkpoints. Verifiers observing an unknown confirmed owner-authored frame in 0x13..0x1f MUST fail closed with ORIGIN_STATUS_INCOMPLETE (never silently skip)."
     }
   ]
 }

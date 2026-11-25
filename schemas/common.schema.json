@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.9/schemas/common.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.10/schemas/common.schema.json",
   "title": "SealLink v1.0 Shared Wire Primitives",
   "description": "Shared primitives with normative x-seallink-refusal class annotations (SPEC-01 §7 deterministic leaf-wins precedence: WIRE_TYPE -> WIRE_MEMBER -> WIRE_INTEGER -> WIRE_KEY -> WIRE_SIGNATURE -> WIRE_CONSTRAINT -> CHAIN_SCRIPT_UNSUPPORTED). Regular expressions follow portable RE2 / ECMA-262 / Rust regex semantics without lookaround.",
   "$defs": {
@@ -649,6 +649,122 @@
       "properties": {
         "seq": { "$ref": "#/$defs/PositiveUint53" },
         "sha256": { "$ref": "#/$defs/Hex64" }
+      }
+    },
+    "ChainViewTipRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hash", "height"],
+      "properties": {
+        "hash": { "$ref": "#/$defs/Hex64" },
+        "height": { "$ref": "#/$defs/Uint53" },
+        "now": { "$ref": "#/$defs/Uint53" }
+      }
+    },
+    "ChainViewComparisonPeer": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "healthy", "height", "hash_at_tip"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1, "maxLength": 128, "not": { "pattern": "\n" } },
+            "healthy": { "const": true },
+            "height": { "$ref": "#/$defs/Uint53" },
+            "hash_at_tip": { "$ref": "#/$defs/Hex64" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "healthy"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1, "maxLength": 128, "not": { "pattern": "\n" } },
+            "healthy": { "const": false },
+            "height": { "$ref": "#/$defs/Uint53" },
+            "hash_at_tip": { "$ref": "#/$defs/Hex64" }
+          }
+        }
+      ]
+    },
+    "ChainViewSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Normative ChainView observation snapshot ABI (SL-LDGR-015, SPEC-02 §2.2). Every required field MUST be populated by cold adapters; omitted or malformed required fields fail closed.",
+      "required": [
+        "network", "genesis", "tip_height", "tip_hash", "tip_header_time", "tip_first_sight",
+        "now", "clock_watermark", "best_header_height", "in_ibd", "txindex", "node_reachable",
+        "observation_bracket", "comparison_peers", "blocks", "txs", "names"
+      ],
+      "properties": {
+        "network": { "$ref": "#/$defs/Network" },
+        "genesis": { "$ref": "#/$defs/Hex64" },
+        "tip_height": { "$ref": "#/$defs/Uint53" },
+        "tip_hash": { "$ref": "#/$defs/Hex64" },
+        "tip_header_time": { "$ref": "#/$defs/Uint53" },
+        "tip_first_sight": { "$ref": "#/$defs/Uint53" },
+        "tip_median_time_past": { "$ref": "#/$defs/Uint53" },
+        "now": { "$ref": "#/$defs/Uint53" },
+        "clock_watermark": { "$ref": "#/$defs/Uint53" },
+        "clock_source": { "type": "string", "enum": ["operational_utc", "operational_persisted", "operational_memory", "regtest_deterministic"] },
+        "credible_utc_interval": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "$ref": "#/$defs/Uint53" }
+        },
+        "best_header_height": { "$ref": "#/$defs/Uint53" },
+        "in_ibd": { "type": "boolean" },
+        "txindex": { "type": "boolean" },
+        "node_reachable": { "type": "boolean" },
+        "observation_bracket": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["consistent", "start", "end"],
+          "properties": {
+            "consistent": { "type": "boolean" },
+            "start": { "$ref": "#/$defs/ChainViewTipRef" },
+            "end": { "$ref": "#/$defs/ChainViewTipRef" },
+            "attempts": { "$ref": "#/$defs/PositiveUint53" },
+            "pre_effect_rechecked": { "type": "boolean" },
+            "pre_effect_start": { "$ref": "#/$defs/ChainViewTipRef" },
+            "pre_effect_end": { "$ref": "#/$defs/ChainViewTipRef" },
+            "pre_effect_tip": { "$ref": "#/$defs/ChainViewTipRef" },
+            "initial_snapshot": { "type": "object" }
+          }
+        },
+        "rebracket_tip": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["hash", "height"],
+          "properties": {
+            "hash": { "$ref": "#/$defs/Hex64" },
+            "height": { "$ref": "#/$defs/Uint53" },
+            "now": { "$ref": "#/$defs/Uint53" },
+            "header_time": { "$ref": "#/$defs/Uint53" },
+            "first_sight": { "$ref": "#/$defs/Uint53" }
+          }
+        },
+        "comparison_peers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ChainViewComparisonPeer" }
+        },
+        "blocks": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/Uint53" }
+        },
+        "block_times": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/Uint53" }
+        },
+        "txs": { "type": "object" },
+        "names": { "type": "object" },
+        "name_registrations": { "type": "object" },
+        "registered_bindings": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/Hex64" }
+        },
+        "manifests": { "type": "object" }
       }
     }
   }

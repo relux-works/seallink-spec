@@ -14,7 +14,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -192,6 +193,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -266,7 +278,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -444,6 +457,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -589,7 +613,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -767,6 +792,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -912,7 +948,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -1090,6 +1127,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -1225,6 +1273,9 @@
       "code": "CHAIN_CLOCK_ERROR",
       "expected_refusal": "CHAIN_CLOCK_ERROR",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -1356,7 +1407,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -1534,6 +1586,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -1657,6 +1720,9 @@
       "code": "CHAIN_DEPTH_INSUFFICIENT",
       "expected_refusal": "CHAIN_DEPTH_INSUFFICIENT",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -1788,7 +1854,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -1966,6 +2033,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -2100,6 +2178,9 @@
       "code": "CHAIN_MISMATCH",
       "expected_refusal": "CHAIN_MISMATCH",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -2231,7 +2312,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "a36f4bd093f1ee43ea285a7461f98727b6933a9d1a29fd190f276decfa9fd02d",
@@ -2409,6 +2491,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -2532,6 +2625,9 @@
       "code": "CHAIN_NODE_DISAGREEMENT",
       "expected_refusal": "CHAIN_NODE_DISAGREEMENT",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -2841,6 +2937,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -2964,6 +3071,9 @@
       "code": "CHAIN_OBSERVATION_VOID",
       "expected_refusal": "CHAIN_OBSERVATION_VOID",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -3095,7 +3205,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -3273,6 +3384,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "rebracket_tip": {
             "hash": "f95baaa393f344e31a11c7b6f13cd8d5d09f699509513a410e15e634dac0ac88",
             "height": 750011
@@ -3400,6 +3522,9 @@
       "code": "CHAIN_RECENCY_INVALID",
       "expected_refusal": "CHAIN_RECENCY_INVALID",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -3531,7 +3656,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -3709,6 +3835,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -3842,6 +3979,9 @@
       "code": "CHAIN_TIP_STALE",
       "expected_refusal": "CHAIN_TIP_STALE",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -3973,7 +4113,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -4151,6 +4292,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795214010,
@@ -4274,6 +4426,9 @@
       "code": "CHAIN_TX_CONSTRUCTION",
       "expected_refusal": "CHAIN_TX_CONSTRUCTION",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -4405,7 +4560,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -4583,6 +4739,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -4706,6 +4873,9 @@
       "code": "CHAIN_UNHEALTHY",
       "expected_refusal": "CHAIN_UNHEALTHY",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -4837,7 +5007,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -5015,6 +5186,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -5138,6 +5320,9 @@
       "code": "CONTRACT_ASSENT_INVALID",
       "expected_refusal": "CONTRACT_ASSENT_INVALID",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "contract": {
             "clause_commitments": [
@@ -5379,7 +5564,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -5557,6 +5743,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -5690,6 +5887,9 @@
       "code": "CONTRACT_CONFIG_MISMATCH",
       "expected_refusal": "CONTRACT_CONFIG_MISMATCH",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "contract": {
             "clause_commitments": [
@@ -5959,7 +6159,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -6137,6 +6338,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -6270,6 +6482,9 @@
       "code": "CONTRACT_ID_MISMATCH",
       "expected_refusal": "CONTRACT_ID_MISMATCH",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "contract": {
             "clause_commitments": [
@@ -6539,7 +6754,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -6717,6 +6933,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -6850,6 +7077,9 @@
       "code": "CONTRACT_NOT_PRESENTED",
       "expected_refusal": "CONTRACT_NOT_PRESENTED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "contract_assents": [
             {
@@ -7067,7 +7297,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -7245,6 +7476,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -7378,6 +7620,9 @@
       "code": "CONTRACT_SEAL_MISSING",
       "expected_refusal": "CONTRACT_SEAL_MISSING",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "contract": {
             "clause_commitments": [
@@ -7635,7 +7880,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -7813,6 +8059,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -7946,6 +8203,9 @@
       "code": "CONTRACT_TERMS_MISMATCH",
       "expected_refusal": "CONTRACT_TERMS_MISMATCH",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "contract": {
             "clause_commitments": [
@@ -8191,7 +8451,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -8369,6 +8630,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -8504,14 +8776,18 @@
       "inputs": {
         "anchor_txid": null,
         "chain": {
+          "best_header_height": 750010,
+          "clock_watermark": 1795219010,
           "comparison_peers": [
             {
               "hash_at_tip": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/issuer-a": {
               "registration": {
@@ -8557,11 +8833,24 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
+              "height": 750010
+            },
+            "start": {
+              "hash": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
           "tip_header_time": 1795220000,
           "tip_height": 750010,
+          "txindex": true,
           "txs": {
             "05c7caa86928f58a4ff3671eea40e96fabcc718b0e7e97bfa45638a3bcbc3f0a": {
               "confirmed_height": 749400,
@@ -8650,14 +8939,18 @@
       "inputs": {
         "anchor_txid": "956ca66cefe8fe2926ea2c558cc2c0f948c9cc92a260b7e35ebf27e3fa35e35d",
         "chain": {
+          "best_header_height": 750010,
+          "clock_watermark": 1795219010,
           "comparison_peers": [
             {
               "hash_at_tip": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/issuer-a": {
               "registration": {
@@ -8726,11 +9019,24 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
+              "height": 750010
+            },
+            "start": {
+              "hash": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
           "tip_header_time": 1795220000,
           "tip_height": 750010,
+          "txindex": true,
           "txs": {
             "05c7caa86928f58a4ff3671eea40e96fabcc718b0e7e97bfa45638a3bcbc3f0a": {
               "confirmed_height": 749400,
@@ -8811,14 +9117,18 @@
       "inputs": {
         "anchor_txid": "956ca66cefe8fe2926ea2c558cc2c0f948c9cc92a260b7e35ebf27e3fa35e35d",
         "chain": {
+          "best_header_height": 750010,
+          "clock_watermark": 1795219010,
           "comparison_peers": [
             {
               "hash_at_tip": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/issuer-a": {
               "registration": {
@@ -8864,11 +9174,24 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
+              "height": 750010
+            },
+            "start": {
+              "hash": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
           "tip_header_time": 1795220000,
           "tip_height": 750010,
+          "txindex": true,
           "txs": {
             "05c7caa86928f58a4ff3671eea40e96fabcc718b0e7e97bfa45638a3bcbc3f0a": {
               "confirmed_height": 749400,
@@ -8963,14 +9286,18 @@
       "inputs": {
         "anchor_txid": "956ca66cefe8fe2926ea2c558cc2c0f948c9cc92a260b7e35ebf27e3fa35e35d",
         "chain": {
+          "best_header_height": 760000,
+          "clock_watermark": 1795219010,
           "comparison_peers": [
             {
               "hash_at_tip": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
               "healthy": true,
-              "height": 760000
+              "height": 760000,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/issuer-a": {
               "registration": {
@@ -9016,11 +9343,24 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
+              "height": 760000
+            },
+            "start": {
+              "hash": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
+              "height": 760000
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "7251ededb42f5fa14df52fcd29af1763cf03935c9842e9e08dfbbe3a9eaeda70",
           "tip_header_time": 1795220000,
           "tip_height": 760000,
+          "txindex": true,
           "txs": {
             "05c7caa86928f58a4ff3671eea40e96fabcc718b0e7e97bfa45638a3bcbc3f0a": {
               "confirmed_height": 749400,
@@ -9117,7 +9457,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -9295,6 +9636,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -9416,7 +9768,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -9594,6 +9947,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -9724,6 +10088,9 @@
             ]
           }
         },
+        "journal": {
+          "journal_id": "aa24f4b8113c552ce6ca7d94fed523660b4097cbf106e34bd427cb2b43ccbdac"
+        },
         "peer_ctx": {
           "approval_command": {
             "payload": {
@@ -9782,6 +10149,7 @@
             "seq": 1,
             "type": "seallink-device-list/1"
           },
+          "fields_sha256": "567c04c6ad78f16dc442f4bea6f1b9e37480843b3471629ae63dcd502845cd69",
           "phase": "pii_disclosure",
           "route_hops": [
             {
@@ -9809,6 +10177,9 @@
       "code": "GRANT_CHILD_WIDER",
       "expected_refusal": "GRANT_CHILD_WIDER",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -10072,7 +10443,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -10250,6 +10622,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -10441,6 +10824,9 @@
       "code": "GRANT_CLOSED",
       "expected_refusal": "GRANT_CLOSED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -10572,7 +10958,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -10750,6 +11137,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -10880,6 +11278,9 @@
       "code": "GRANT_CONTRACT_REQUIRED",
       "expected_refusal": "GRANT_CONTRACT_REQUIRED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -11013,7 +11414,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -11191,6 +11593,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -11315,6 +11728,9 @@
       "code": "GRANT_EXECUTOR_MISMATCH",
       "expected_refusal": "GRANT_EXECUTOR_MISMATCH",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -11446,7 +11862,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -11624,6 +12041,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -11747,6 +12175,9 @@
       "code": "GRANT_EXECUTOR_REF_FORBIDDEN",
       "expected_refusal": "GRANT_EXECUTOR_REF_FORBIDDEN",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -11872,7 +12303,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -12050,6 +12482,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -12175,6 +12618,9 @@
       "code": "GRANT_NOT_DELEGABLE",
       "expected_refusal": "GRANT_NOT_DELEGABLE",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -12377,7 +12823,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -12555,6 +13002,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -12746,6 +13204,9 @@
       "code": "GRANT_ROW_INVALID",
       "expected_refusal": "GRANT_ROW_INVALID",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -13009,7 +13470,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -13187,6 +13649,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -13369,6 +13842,9 @@
       "code": "GRANT_ROW_STOPPED",
       "expected_refusal": "GRANT_ROW_STOPPED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -13638,7 +14114,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -13816,6 +14293,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -14016,6 +14504,9 @@
       "code": "GRANT_SEAL_REQUIRED",
       "expected_refusal": "GRANT_SEAL_REQUIRED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -14137,7 +14628,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -14315,6 +14807,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -14438,6 +14941,9 @@
       "code": "GRANT_TARGET_UNAUTHORIZED",
       "expected_refusal": "GRANT_TARGET_UNAUTHORIZED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -14569,7 +15075,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -14789,6 +15296,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -14912,6 +15430,9 @@
       "code": "GRANT_TEXT_FORBIDDEN",
       "expected_refusal": "GRANT_TEXT_FORBIDDEN",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -15044,7 +15565,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -15222,6 +15744,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -15345,6 +15878,9 @@
       "code": "GRANT_WINDOW_CLOSED",
       "expected_refusal": "GRANT_WINDOW_CLOSED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -15467,7 +16003,7 @@
           }
         },
         "chain": {
-          "best_header_height": 750010,
+          "best_header_height": 760000,
           "blocks": {
             "543a756ce9eaf98201ccb6afbe71c0ba8e119818fea89209ed0e6a2d80c7b564": 749990
           },
@@ -15476,7 +16012,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 760000
+              "height": 760000,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -15654,6 +16191,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 760000
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 760000
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -15820,11 +16368,14 @@
           }
         },
         "chain": {
+          "best_header_height": 750100,
+          "clock_watermark": 1795219000,
           "comparison_peers": [
             {
               "hash_at_tip": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
               "healthy": true,
-              "height": 750100
+              "height": 750100,
+              "id": "peer-1"
             }
           ],
           "credible_utc_interval": [
@@ -15832,6 +16383,7 @@
             1795220020
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/child-leo": {
               "registration": {
@@ -15976,12 +16528,25 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            },
+            "start": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
           "tip_header_time": 1795220000,
           "tip_height": 750100,
           "tip_median_time_past": 1795219900,
+          "txindex": true,
           "txs": {
             "158a31c0fba643431c67563eba292c5a095ac4a02f7cfc8bf5676a8d05bfb086": {
               "confirmed_height": 749000,
@@ -16449,8 +17014,18 @@
           "origin_anchor_txid": "9b8acc384e0a6913f62bdcff7902d3632c543d0b81d7c6a9a800a5439e67d578",
           "roster_records": []
         },
-        "trusted_origin_issuers": [
-          "id/civil-registry"
+        "trusted_origin_issuer_pins": [
+          {
+            "name": "id/civil-registry",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
+            },
+            "registration": {
+              "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
+              "vout": 0
+            }
+          }
         ]
       },
       "module": "core",
@@ -16504,11 +17079,14 @@
           }
         },
         "chain": {
+          "best_header_height": 750100,
+          "clock_watermark": 1795219000,
           "comparison_peers": [
             {
               "hash_at_tip": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
               "healthy": true,
-              "height": 750100
+              "height": 750100,
+              "id": "peer-1"
             }
           ],
           "credible_utc_interval": [
@@ -16516,6 +17094,7 @@
             1795220020
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/child-leo": {
               "registration": {
@@ -16660,12 +17239,25 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            },
+            "start": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
           "tip_header_time": 1795220000,
           "tip_height": 750100,
           "tip_median_time_past": 1795219900,
+          "txindex": true,
           "txs": {
             "158a31c0fba643431c67563eba292c5a095ac4a02f7cfc8bf5676a8d05bfb086": {
               "confirmed_height": 749000,
@@ -17133,8 +17725,18 @@
           "origin_anchor_txid": "9b8acc384e0a6913f62bdcff7902d3632c543d0b81d7c6a9a800a5439e67d578",
           "roster_records": []
         },
-        "trusted_origin_issuers": [
-          "id/civil-registry"
+        "trusted_origin_issuer_pins": [
+          {
+            "name": "id/civil-registry",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
+            },
+            "registration": {
+              "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
+              "vout": 0
+            }
+          }
         ]
       },
       "module": "core",
@@ -17146,11 +17748,14 @@
       "expected_refusal": "GUARDIAN_TIME_BOUNDARY",
       "inputs": {
         "chain": {
+          "best_header_height": 750100,
+          "clock_watermark": 1795219000,
           "comparison_peers": [
             {
               "hash_at_tip": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
               "healthy": true,
-              "height": 750100
+              "height": 750100,
+              "id": "peer-1"
             }
           ],
           "credible_utc_interval": [
@@ -17158,6 +17763,7 @@
             2000000010
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/child-leo": {
               "registration": {
@@ -17302,12 +17908,25 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            },
+            "start": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
           "tip_header_time": 1795220000,
           "tip_height": 750100,
           "tip_median_time_past": 1795219900,
+          "txindex": true,
           "txs": {
             "158a31c0fba643431c67563eba292c5a095ac4a02f7cfc8bf5676a8d05bfb086": {
               "confirmed_height": 749000,
@@ -17702,8 +18321,18 @@
           "origin_anchor_txid": "9b8acc384e0a6913f62bdcff7902d3632c543d0b81d7c6a9a800a5439e67d578",
           "roster_records": []
         },
-        "trusted_origin_issuers": [
-          "id/civil-registry"
+        "trusted_origin_issuer_pins": [
+          {
+            "name": "id/civil-registry",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
+            },
+            "registration": {
+              "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
+              "vout": 0
+            }
+          }
         ]
       },
       "module": "core",
@@ -17715,11 +18344,14 @@
       "expected_refusal": "GUARDIAN_TRANSFER_PENDING",
       "inputs": {
         "chain": {
+          "best_header_height": 750100,
+          "clock_watermark": 1795219000,
           "comparison_peers": [
             {
               "hash_at_tip": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
               "healthy": true,
-              "height": 750100
+              "height": 750100,
+              "id": "peer-1"
             }
           ],
           "credible_utc_interval": [
@@ -17727,6 +18359,7 @@
             2000000200
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/child-leo": {
               "registration": {
@@ -17871,12 +18504,25 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            },
+            "start": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
           "tip_header_time": 1795220000,
           "tip_height": 750100,
           "tip_median_time_past": 1795219900,
+          "txindex": true,
           "txs": {
             "158a31c0fba643431c67563eba292c5a095ac4a02f7cfc8bf5676a8d05bfb086": {
               "confirmed_height": 749000,
@@ -18271,8 +18917,18 @@
           "origin_anchor_txid": "9b8acc384e0a6913f62bdcff7902d3632c543d0b81d7c6a9a800a5439e67d578",
           "roster_records": []
         },
-        "trusted_origin_issuers": [
-          "id/civil-registry"
+        "trusted_origin_issuer_pins": [
+          {
+            "name": "id/civil-registry",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
+            },
+            "registration": {
+              "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
+              "vout": 0
+            }
+          }
         ]
       },
       "module": "core",
@@ -18283,6 +18939,9 @@
       "code": "INVOKE_ACTION_DENIED",
       "expected_refusal": "INVOKE_ACTION_DENIED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -18414,7 +19073,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -18592,6 +19252,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -18715,6 +19386,9 @@
       "code": "INVOKE_CONSTRAINT_FAILED",
       "expected_refusal": "INVOKE_CONSTRAINT_FAILED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -18846,7 +19520,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -19024,6 +19699,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -19147,6 +19833,9 @@
       "code": "INVOKE_REPLAY",
       "expected_refusal": "INVOKE_REPLAY",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -19278,7 +19967,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -19456,6 +20146,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -19582,6 +20283,9 @@
       "code": "INVOKE_TIME_INVALID",
       "expected_refusal": "INVOKE_TIME_INVALID",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -19713,7 +20417,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -19891,6 +20596,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220300,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -20014,6 +20730,9 @@
       "code": "JOURNAL_FENCED",
       "expected_refusal": "JOURNAL_FENCED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -20145,7 +20864,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -20323,6 +21043,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -20447,6 +21178,9 @@
       "code": "JOURNAL_LOST",
       "expected_refusal": "JOURNAL_LOST",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -20578,7 +21312,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -20756,6 +21491,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -20880,6 +21626,9 @@
       "code": "MANIFEST_MISMATCH",
       "expected_refusal": "MANIFEST_MISMATCH",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -20995,7 +21744,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -21132,6 +21882,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -21255,6 +22016,9 @@
       "code": "MANIFEST_ROLLBACK",
       "expected_refusal": "MANIFEST_ROLLBACK",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -21387,7 +22151,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -21565,6 +22330,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -21697,6 +22473,9 @@
       "code": "MANIFEST_UNAVAILABLE",
       "expected_refusal": "MANIFEST_UNAVAILABLE",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -21788,7 +22567,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -21925,6 +22705,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -22048,6 +22839,9 @@
       "code": "NAME_EXPIRED",
       "expected_refusal": "NAME_EXPIRED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -22179,7 +22973,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -22357,6 +23152,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -22480,6 +23286,9 @@
       "code": "NAME_HISTORY_UNAVAILABLE",
       "expected_refusal": "NAME_HISTORY_UNAVAILABLE",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -22611,7 +23420,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -22790,6 +23600,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -22913,6 +23734,9 @@
       "code": "NAME_NOT_FOUND",
       "expected_refusal": "NAME_NOT_FOUND",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -23044,7 +23868,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -23180,6 +24005,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -23303,6 +24139,9 @@
       "code": "NAME_OWNER_MISMATCH",
       "expected_refusal": "NAME_OWNER_MISMATCH",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -23434,7 +24273,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -23612,6 +24452,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -23735,6 +24586,9 @@
       "code": "NAME_ROLE_CHANGED",
       "expected_refusal": "NAME_ROLE_CHANGED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -23866,7 +24720,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -24066,6 +24921,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -24189,6 +25055,9 @@
       "code": "NAME_VALUE_INVALID",
       "expected_refusal": "NAME_VALUE_INVALID",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -24320,7 +25189,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -24498,6 +25368,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -24621,6 +25502,9 @@
       "code": "NAME_WRITER_UNVERIFIED",
       "expected_refusal": "NAME_WRITER_UNVERIFIED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -24752,7 +25636,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -24908,6 +25793,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -25031,6 +25927,9 @@
       "code": "NOTARY_REQUIRED",
       "expected_refusal": "NOTARY_REQUIRED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -25308,7 +26207,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -25486,6 +26386,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -25678,11 +26589,14 @@
       "expected_refusal": "ORIGIN_BINDING_INVALID",
       "inputs": {
         "chain": {
+          "best_header_height": 750100,
+          "clock_watermark": 1795219000,
           "comparison_peers": [
             {
               "hash_at_tip": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
               "healthy": true,
-              "height": 750100
+              "height": 750100,
+              "id": "peer-1"
             }
           ],
           "credible_utc_interval": [
@@ -25690,6 +26604,7 @@
             1795220020
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/child-leo": {
               "registration": {
@@ -25834,7 +26749,19 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            },
+            "start": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            }
+          },
           "registered_bindings": {
             "83a6273b4a16c92a73da7ba148af612386cab800941527f6b53850dc0c85dd7c:0": "452e67ec460c28ea5eec4b11e850b3c3884dc99202baba9380652f11bc45976d"
           },
@@ -25843,6 +26770,7 @@
           "tip_header_time": 1795220000,
           "tip_height": 750100,
           "tip_median_time_past": 1795219900,
+          "txindex": true,
           "txs": {
             "158a31c0fba643431c67563eba292c5a095ac4a02f7cfc8bf5676a8d05bfb086": {
               "confirmed_height": 749000,
@@ -26237,8 +27165,18 @@
           "origin_anchor_txid": "9b8acc384e0a6913f62bdcff7902d3632c543d0b81d7c6a9a800a5439e67d578",
           "roster_records": []
         },
-        "trusted_origin_issuers": [
-          "id/civil-registry"
+        "trusted_origin_issuer_pins": [
+          {
+            "name": "id/civil-registry",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
+            },
+            "registration": {
+              "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
+              "vout": 0
+            }
+          }
         ]
       },
       "module": "core",
@@ -26250,11 +27188,14 @@
       "expected_refusal": "ORIGIN_STATUS_INCOMPLETE",
       "inputs": {
         "chain": {
+          "best_header_height": 750100,
+          "clock_watermark": 1795219000,
           "comparison_peers": [
             {
               "hash_at_tip": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
               "healthy": true,
-              "height": 750100
+              "height": 750100,
+              "id": "peer-1"
             }
           ],
           "credible_utc_interval": [
@@ -26262,6 +27203,7 @@
             1795220020
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/child-leo": {
               "registration": {
@@ -26406,12 +27348,25 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            },
+            "start": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
           "tip_header_time": 1795220000,
           "tip_height": 750100,
           "tip_median_time_past": 1795219900,
+          "txindex": true,
           "txs": {
             "158a31c0fba643431c67563eba292c5a095ac4a02f7cfc8bf5676a8d05bfb086": {
               "confirmed_height": 749000,
@@ -26812,8 +27767,18 @@
           "origin_anchor_txid": "9b8acc384e0a6913f62bdcff7902d3632c543d0b81d7c6a9a800a5439e67d578",
           "roster_records": []
         },
-        "trusted_origin_issuers": [
-          "id/civil-registry"
+        "trusted_origin_issuer_pins": [
+          {
+            "name": "id/civil-registry",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
+            },
+            "registration": {
+              "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
+              "vout": 0
+            }
+          }
         ]
       },
       "module": "core",
@@ -26825,11 +27790,14 @@
       "expected_refusal": "ORIGIN_UNVERIFIED",
       "inputs": {
         "chain": {
+          "best_header_height": 750100,
+          "clock_watermark": 1795219000,
           "comparison_peers": [
             {
               "hash_at_tip": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
               "healthy": true,
-              "height": 750100
+              "height": 750100,
+              "id": "peer-1"
             }
           ],
           "credible_utc_interval": [
@@ -26837,6 +27805,7 @@
             1795220020
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/child-leo": {
               "registration": {
@@ -26981,12 +27950,25 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            },
+            "start": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
           "tip_header_time": 1795220000,
           "tip_height": 750100,
           "tip_median_time_past": 1795219900,
+          "txindex": true,
           "txs": {
             "158a31c0fba643431c67563eba292c5a095ac4a02f7cfc8bf5676a8d05bfb086": {
               "confirmed_height": 749000,
@@ -27381,8 +28363,18 @@
           "origin_anchor_txid": "9b8acc384e0a6913f62bdcff7902d3632c543d0b81d7c6a9a800a5439e67d578",
           "roster_records": []
         },
-        "trusted_origin_issuers": [
-          "id/other-trusted-registry"
+        "trusted_origin_issuer_pins": [
+          {
+            "name": "id/other-trusted-registry",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "02e2c83db43b8798df251b72f396989c4d84a71c3ff9f389b534294fa8c85de460"
+            },
+            "registration": {
+              "txid": "7e5e5ac61b2f4ba8dad6267f1901931709ce71d5500e751b3545b91e5f8ded80",
+              "vout": 0
+            }
+          }
         ]
       },
       "module": "core",
@@ -27393,6 +28385,9 @@
       "code": "QUOTA_CLOCK_REGRESSION",
       "expected_refusal": "QUOTA_CLOCK_REGRESSION",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -27533,7 +28528,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -27711,6 +28707,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -27837,6 +28844,9 @@
       "code": "QUOTA_EXCEEDED",
       "expected_refusal": "QUOTA_EXCEEDED",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -27977,7 +28987,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -28155,6 +29166,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -28288,11 +29310,14 @@
       "inputs": {
         "assert_binding_id": "af207a57f31534f059ca6788382110ae9fc78347e55091215bc7bd3014d40ffb",
         "chain": {
+          "best_header_height": 750100,
+          "clock_watermark": 1795219000,
           "comparison_peers": [
             {
               "hash_at_tip": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
               "healthy": true,
-              "height": 750100
+              "height": 750100,
+              "id": "peer-1"
             }
           ],
           "credible_utc_interval": [
@@ -28300,6 +29325,7 @@
             1795220020
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/child-leo": {
               "registration": {
@@ -28357,6 +29383,7 @@
                   "vout": 0
                 },
                 {
+                  "block_time": 1795220000,
                   "confirmed_height": 750060,
                   "op": "NAME_UPDATE",
                   "opreturn_hex": "6a05534c4e4b102201af207a57f31534f059ca6788382110ae9fc78347e55091215bc7bd3014d40ffb00",
@@ -28477,12 +29504,25 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            },
+            "start": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
           "tip_header_time": 1795220000,
           "tip_height": 750100,
           "tip_median_time_past": 1795219900,
+          "txindex": true,
           "txs": {
             "158a31c0fba643431c67563eba292c5a095ac4a02f7cfc8bf5676a8d05bfb086": {
               "confirmed_height": 749000,
@@ -28920,8 +29960,18 @@
           ],
           "roster_records": []
         },
-        "trusted_origin_issuers": [
-          "id/civil-registry"
+        "trusted_origin_issuer_pins": [
+          {
+            "name": "id/civil-registry",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
+            },
+            "registration": {
+              "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
+              "vout": 0
+            }
+          }
         ]
       },
       "module": "core",
@@ -28932,6 +29982,9 @@
       "code": "SEAL_SPENT",
       "expected_refusal": "SEAL_SPENT",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -29063,7 +30116,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -29241,6 +30295,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -29365,6 +30430,9 @@
       "code": "SEAL_UNAVAILABLE",
       "expected_refusal": "SEAL_UNAVAILABLE",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -29496,7 +30564,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -29674,6 +30743,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -29807,7 +30887,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -29985,6 +31066,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -30033,27 +31125,41 @@
           }
         },
         "export_bundle": {
-          "files": [
-            {
-              "content_sha256": "026418494088e0fe87e4495f5ae76aa1080fe446dc852d46806e417abe2b89db",
-              "kind": "mail_blob",
-              "media_type": "message/rfc822",
-              "path": "mail/msg-1.eml"
-            },
-            {
-              "content_sha256": "6fbcbc44269fe2fc37973080162ddb2b6766232ee1b10a8abde30da80b2008eb",
-              "kind": "dkim_key",
-              "media_type": "application/x-pem-file",
-              "path": "secrets/dkim.pem"
-            }
-          ],
-          "open_predecessor_grants": [],
+          "inventory": {
+            "holder_name": "id/alice",
+            "items": [
+              {
+                "media_type": "message/rfc822",
+                "path": "mail/msg-1.eml",
+                "sha256": "026418494088e0fe87e4495f5ae76aa1080fe446dc852d46806e417abe2b89db",
+                "size_bytes": "512"
+              },
+              {
+                "media_type": "application/x-pem-file",
+                "path": "secrets/dkim.pem",
+                "sha256": "6fbcbc44269fe2fc37973080162ddb2b6766232ee1b10a8abde30da80b2008eb",
+                "size_bytes": "1024"
+              }
+            ],
+            "migration_id": "af3c2d6c082825cf5c1d8bad4f2b673264ed691a1a41a8d4fbacb955f59145b5",
+            "service_type": "mail"
+          },
           "source_journal_commitment": "cb3dcf4740be239810d4851848df1141b153c5262ea4ea8ec4590471fc32b193",
-          "source_journal_pos": 10,
-          "source_write_token_fenced": true
+          "source_journal_pos": 10
         },
         "journal": {
           "journal_id": "11903943b0282ad688242af7014d838fe6e8019d99eebcd423a86e0f507c9d53"
+        },
+        "local_executor_pin": {
+          "name": "id/mail-host-b",
+          "owner_policy": {
+            "kind": "key",
+            "pk": "03c72e42d7c562a76a880e60db793d2619c877a79075464d2aeee7cb9b948cc228"
+          },
+          "registration": {
+            "txid": "5556821cfccc9a05bf7dfa84e6d0ce1a575cd0e044e2496d4fcc51938aa5ee65",
+            "vout": 0
+          }
         },
         "manifests": {
           "d4b1220f59889c2a09e6302c4acbaa4dc08127b2fdcd6f8db0c2a7c4cfde098f": {
@@ -30122,7 +31228,7 @@
                 "vout": 0
               }
             },
-            "inventory_sha256": "523645d61f6bbb75ab8638fe5253fc9db4fafb3742d55da8805d187149b0b650",
+            "inventory_sha256": "b16968573adc31342a4eecd619bf379f1f1f76a7f0ee16d615748ec66d6ad20c",
             "issued_at": 1795220000,
             "journal_commitment": "cb3dcf4740be239810d4851848df1141b153c5262ea4ea8ec4590471fc32b193",
             "journal_pos": 10,
@@ -30153,7 +31259,7 @@
             "sigs": [
               {
                 "pk": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-                "sig": "e94eadec0034f6bd590ac4e210ccc48f6b0683a2566ff562ac11646bd8e1b50d0ef00f563a51e7376849a502f65c274b07732480e6db786c65331d98c858163a"
+                "sig": "7c9d85e03192cd315382a7eb731fb31d0cfcfe5c7892bf88c165b09729e36ea0866c71882c9ad527e9171399b9c7643eae2f5ad7fa44cf703579dee68e572fda"
               }
             ]
           }
@@ -30167,6 +31273,9 @@
       "code": "SERVICE_PROVIDER_UNBOUND",
       "expected_refusal": "SERVICE_PROVIDER_UNBOUND",
       "inputs": {
+        "actual_message_meta": {
+          "folder": "Invoices"
+        },
         "bundle": {
           "grants": [
             {
@@ -30306,7 +31415,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -30491,6 +31601,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -30624,7 +31745,8 @@
             {
               "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
               "healthy": true,
-              "height": 750010
+              "height": 750010,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -30802,6 +31924,17 @@
           "network": "main",
           "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            },
+            "start": {
+              "hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "height": 750010
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
           "tip_header_time": 1795220000,
@@ -30852,7 +31985,7 @@
         "journal": {
           "journal_id": "02887fd4dba59cb262465b8fb9e2a721fd76a61f9c06ce6b43dbaca913a96933",
           "sessions": {
-            "c2404ebe81286dbe15658d683d684c6d7d9ccbb00e2f4cf9fdaefa25edbe389c": {
+            "27c6be7faf4e4088eb6d9e58eb2cbcce0784017e1fa395eaeded47667a5e0756": {
               "closed": false,
               "exp": 1795219000,
               "grant_id": "cb99f71887329f854eae0cf73fef746fbc5975eb9b0a147e186f8670c80a4307",
@@ -30861,7 +31994,7 @@
           }
         },
         "slot_binding": "slot-1",
-        "token": "secret-bearer-token-xyz"
+        "token": "ae9688c668bed992de992d974169bfe12f9b5f0401dd6454864b971bd7551b0f"
       },
       "module": "bearer-sessions",
       "rule": "SL-GRNT-013",
@@ -30872,11 +32005,14 @@
       "expected_refusal": "SUBJECT_ENDED",
       "inputs": {
         "chain": {
+          "best_header_height": 750100,
+          "clock_watermark": 1795219000,
           "comparison_peers": [
             {
               "hash_at_tip": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
               "healthy": true,
-              "height": 750100
+              "height": 750100,
+              "id": "peer-1"
             }
           ],
           "credible_utc_interval": [
@@ -30884,6 +32020,7 @@
             1795220020
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/child-leo": {
               "registration": {
@@ -31028,12 +32165,25 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            },
+            "start": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
           "tip_header_time": 1795220000,
           "tip_height": 750100,
           "tip_median_time_past": 1795219900,
+          "txindex": true,
           "txs": {
             "158a31c0fba643431c67563eba292c5a095ac4a02f7cfc8bf5676a8d05bfb086": {
               "confirmed_height": 749000,
@@ -31480,8 +32630,18 @@
           "origin_anchor_txid": "9b8acc384e0a6913f62bdcff7902d3632c543d0b81d7c6a9a800a5439e67d578",
           "roster_records": []
         },
-        "trusted_origin_issuers": [
-          "id/civil-registry"
+        "trusted_origin_issuer_pins": [
+          {
+            "name": "id/civil-registry",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
+            },
+            "registration": {
+              "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
+              "vout": 0
+            }
+          }
         ]
       },
       "module": "core",
@@ -31522,11 +32682,14 @@
           }
         },
         "chain": {
+          "best_header_height": 750100,
+          "clock_watermark": 1795219000,
           "comparison_peers": [
             {
               "hash_at_tip": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
               "healthy": true,
-              "height": 750100
+              "height": 750100,
+              "id": "peer-1"
             }
           ],
           "credible_utc_interval": [
@@ -31534,6 +32697,7 @@
             1795220020
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
           "names": {
             "id/child-leo": {
               "registration": {
@@ -31678,12 +32842,25 @@
             }
           },
           "network": "main",
+          "node_reachable": true,
           "now": 1795220010,
+          "observation_bracket": {
+            "consistent": true,
+            "end": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            },
+            "start": {
+              "hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
+              "height": 750100
+            }
+          },
           "tip_first_sight": 1795220005,
           "tip_hash": "e492fb4332f3c8f5990f8c14694d8a32b027e549ecb88e5e20a28bfa3f5d2766",
           "tip_header_time": 1795220000,
           "tip_height": 750100,
           "tip_median_time_past": 1795219900,
+          "txindex": true,
           "txs": {
             "158a31c0fba643431c67563eba292c5a095ac4a02f7cfc8bf5676a8d05bfb086": {
               "confirmed_height": 749000,
@@ -32151,8 +33328,18 @@
           "origin_anchor_txid": "9b8acc384e0a6913f62bdcff7902d3632c543d0b81d7c6a9a800a5439e67d578",
           "roster_records": []
         },
-        "trusted_origin_issuers": [
-          "id/civil-registry"
+        "trusted_origin_issuer_pins": [
+          {
+            "name": "id/civil-registry",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
+            },
+            "registration": {
+              "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
+              "vout": 0
+            }
+          }
         ]
       },
       "module": "core",
@@ -32295,5 +33482,5 @@
   "suite": "refusal-coverage-matrix",
   "total_covered_codes": 86,
   "total_registered_codes": 86,
-  "version": "1.0.0-draft.9"
+  "version": "1.0.0-draft.10"
 }

@@ -301,8 +301,9 @@ def execute_traces_and_matrix(
     # --- Execute trace-02-guardian-succession-assent.json ---
     if "trace-02-guardian-succession-assent.json" in vectors:
         t2 = vectors["trace-02-guardian-succession-assent.json"]
+        if "trusted_origin_issuers" in t2:
+            errors.append("trace-02: legacy bare trusted_origin_issuers MUST NOT be published (use trusted_origin_issuer_pins NamePins)")
         v = sv.Tier1Verifier(
-            trusted_origin_issuers=None if t2.get("trusted_origin_issuer_pins") else set(t2["trusted_origin_issuers"]),
             trusted_origin_issuer_pins=t2.get("trusted_origin_issuer_pins"),
             require_jsonschema=require_jsonschema,
         )
@@ -496,8 +497,9 @@ def execute_traces_and_matrix(
     # --- Execute trace-04-agent-guardian-intake.json ---
     if "trace-04-agent-guardian-intake.json" in vectors:
         t4 = vectors["trace-04-agent-guardian-intake.json"]
+        if "trusted_origin_issuers" in t4:
+            errors.append("trace-04: legacy bare trusted_origin_issuers MUST NOT be published (use trusted_origin_issuer_pins NamePins)")
         v = sv.Tier1Verifier(
-            trusted_origin_issuers=None if t4.get("trusted_origin_issuer_pins") else set(t4["trusted_origin_issuers"]),
             trusted_origin_issuer_pins=t4.get("trusted_origin_issuer_pins"),
             require_jsonschema=require_jsonschema,
         )
@@ -547,7 +549,10 @@ def execute_traces_and_matrix(
         for case in mat.get("cases", []):
             if case.get("module") not in valid_modules:
                 errors.append(f"refusal-coverage-matrix '{case.get('code')}': missing or invalid module tag {case.get('module')!r}")
-            got = rm.execute_matrix_case(case, require_jsonschema=require_jsonschema)
+            run_case = case
+            if case.get("module") == "core" and "enabled_modules" not in case.get("inputs", {}):
+                run_case = {**case, "inputs": {**case["inputs"], "enabled_modules": ["core"]}}
+            got = rm.execute_matrix_case(run_case, require_jsonschema=require_jsonschema)
             if got != case["expected_refusal"]:
                 errors.append(f"refusal-coverage-matrix '{case['code']}': expected {case['expected_refusal']}, verifier computed {got!r}")
                 if fail_fast:
@@ -570,7 +575,12 @@ def execute_traces_and_matrix(
             if cid in seen_sec_ids:
                 errors.append(f"Duplicate security-conformance case id: '{cid}'")
             seen_sec_ids.add(cid)
-            got_v, got_c = sec.execute_security_case(case, require_jsonschema=require_jsonschema)
+            if "trusted_origin_issuers" in case.get("inputs", {}):
+                errors.append(f"security-conformance '{cid}': legacy bare trusted_origin_issuers MUST NOT be published")
+            run_case = case
+            if case.get("module") == "core" and "enabled_modules" not in case.get("inputs", {}):
+                run_case = {**case, "inputs": {**case["inputs"], "enabled_modules": ["core"]}}
+            got_v, got_c = sec.execute_security_case(run_case, require_jsonschema=require_jsonschema)
             if (got_v, got_c) != (case["expected_verdict"], case.get("expected_refusal")):
                 errors.append(f"security-conformance '{cid}': expected {(case['expected_verdict'], case.get('expected_refusal'))}, got {(got_v, got_c)}")
                 if fail_fast:

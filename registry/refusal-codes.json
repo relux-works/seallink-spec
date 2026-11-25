@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Authoritative Refusal Code Registry. No normative document may emit a refusal code absent from this file. Verifiers report the FIRST failing code in each pipeline's deterministic check order.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.9",
+  "version": "1.0.0-draft.10",
   "codes": [
     {"code": "WIRE_SIZE", "category": "wire", "owning_spec": "SPEC-01", "creates_closure": false, "retryable": false, "description": "Document exceeds type max_bytes or nesting depth > 16."},
     {"code": "WIRE_JSON", "category": "wire", "owning_spec": "SPEC-01", "creates_closure": false, "retryable": false, "description": "Invalid UTF-8, BOM present, trailing bytes, or malformed RFC 8259 JSON object."},

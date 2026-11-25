@@ -977,9 +977,11 @@
   },
   "description": "Executable RFC 8448-style trace: parent delegation with 2 groups sharing 2-unit pools (R8.5 & R8.6 positive/negative), atomic dual-account (own + row) multi-quota reservation/settlement & rollback, acyclic single-use branch-0 execution (0x11), crash-in-effect-window uncertain recovery across journal reconstruction, Step 3b auth-before-cache check, authenticated replay idempotency, new-nonce replay refusal, and issuer branch-1 revocation.",
   "initial_chain_state": {
+    "best_header_height": 750110,
     "blocks": {
       "28e2ae7a79f2e92dfe8715991b5afa33f49f586eb33888597150833248133e35": 750000
     },
+    "clock_watermark": 1795219000,
     "comparison_peers": [
       {
         "hash_at_tip": "a47486b303d37ef3b3e4ca1e8bc11be19885e04181379bd8f614866c6c526c4e",
@@ -988,6 +990,7 @@
       }
     ],
     "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+    "in_ibd": false,
     "names": {
       "id/org-treasury": {
         "registration": {
@@ -1033,11 +1036,24 @@
       }
     },
     "network": "main",
+    "node_reachable": true,
     "now": 1795220050,
+    "observation_bracket": {
+      "consistent": true,
+      "end": {
+        "hash": "a47486b303d37ef3b3e4ca1e8bc11be19885e04181379bd8f614866c6c526c4e",
+        "height": 750110
+      },
+      "start": {
+        "hash": "a47486b303d37ef3b3e4ca1e8bc11be19885e04181379bd8f614866c6c526c4e",
+        "height": 750110
+      }
+    },
     "tip_first_sight": 1795220045,
     "tip_hash": "a47486b303d37ef3b3e4ca1e8bc11be19885e04181379bd8f614866c6c526c4e",
     "tip_header_time": 1795220040,
     "tip_height": 750110,
+    "txindex": true,
     "txs": {
       "05f147a75e3010a398dda4ee58621bd7b1e5227765b2c1ac0dd30e8946a91ad6": {
         "confirmed_height": 750101,
@@ -2052,5 +2068,5 @@
   },
   "station_b_journal_id": "fa4c01896fbd3c1d2ccfab1bcc59ec91fb417320f260718ada19b6c2706185bc",
   "suite": "trace-03-delegation-pool-single-use",
-  "version": "1.0.0-draft.9"
+  "version": "1.0.0-draft.10"
 }

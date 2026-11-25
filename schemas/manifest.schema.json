@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.9/schemas/manifest.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.10/schemas/manifest.schema.json",
   "title": "SealLink v1.0 Manifest, Sets & Statements",
   "type": "object",
   "additionalProperties": false,
@@ -310,6 +310,39 @@
                     "holder": { "$ref": "common.schema.json#/$defs/NamePin" },
                     "source_executor": { "$ref": "common.schema.json#/$defs/NamePin" },
                     "inventory_sha256": { "$ref": "common.schema.json#/$defs/Hex64" }
+                  }
+                },
+                "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                "not_before": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "not_after": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "issuer", "statement_kind", "subject", "seq", "not_before", "not_after"],
+              "properties": {
+                "type": { "const": "seallink-statement/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issuer": { "$ref": "common.schema.json#/$defs/NamePin" },
+                "statement_kind": { "const": "migration-fence" },
+                "subject": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["migration_id", "holder", "dest_executor", "source_journal_pos", "source_journal_commitment", "inventory_sha256", "predecessor_grant_seals"],
+                  "properties": {
+                    "migration_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                    "holder": { "$ref": "common.schema.json#/$defs/NamePin" },
+                    "dest_executor": { "$ref": "common.schema.json#/$defs/NamePin" },
+                    "source_journal_pos": { "$ref": "common.schema.json#/$defs/Uint53" },
+                    "source_journal_commitment": { "$ref": "common.schema.json#/$defs/Hex64" },
+                    "inventory_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+                    "predecessor_grant_seals": {
+                      "type": "array",
+                      "maxItems": 256,
+                      "items": { "$ref": "common.schema.json#/$defs/Seal" }
+                    }
                   }
                 },
                 "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },

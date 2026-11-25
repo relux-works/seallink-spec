@@ -176,7 +176,7 @@ def _build_delegation_base(
         0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(c2_env), "grant_id": c2_id, "type": "seallink-issuance/1"}).hex()
     ).hex()
 
-    chain = {
+    chain = rm.sync_chain_tip({
         "network": "main",
         "genesis": GENESIS_MAIN,
         "tip_height": 750110,
@@ -184,7 +184,6 @@ def _build_delegation_base(
         "tip_header_time": 1795220040,
         "tip_first_sight": 1795220045,
         "now": 1795220050,
-        "comparison_peers": [{"healthy": True, "height": 750110, "hash_at_tip": _h32("del-tip")}],
         "blocks": {recent_blk: 750000},
         "names": {
             "id/org-treasury": sv.make_name_history(
@@ -199,7 +198,7 @@ def _build_delegation_base(
             c2_stx: {"confirmed_height": 750101, "inputs": [sv.make_segwit_input(_h32("c2f"), 0)], "outputs": {"0": {"script_pubkey_hex": _spk_hex(c2_spol)}, "1": {"script_pubkey_hex": _spk_hex(org_owner_pol)}}},
             c2_itx: {"confirmed_height": 750102, "inputs": [sv.make_segwit_input(rows_tx, 1), sv.make_segwit_input(c2_stx, 1)], "opreturn_hex": c2_iss_opret, "outputs": {}},
         },
-    }
+    })
     return {
         "parent_env": p_env,
         "parent_id": p_id,
@@ -290,7 +289,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         }
         cenv = sl.sign_envelope(cp, [signer_kp["sk"]])
         atx = _h32(f"0x0b-atx-{lbl}")
-        chain = {
+        chain = rm.sync_chain_tip({
             "network": "main",
             "genesis": GENESIS_MAIN,
             "tip_height": 750010,
@@ -298,10 +297,9 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             "tip_header_time": 1795220000,
             "tip_first_sight": 1795220005,
             "now": 1795220010,
-            "comparison_peers": [{"healthy": True, "height": 750010, "hash_at_tip": _h32("0x0b-tip")}],
             "names": {"id/issuer-rot": copy.deepcopy(hist_with_break_and_rot)},
             "txs": {atx: {"confirmed_height": anchor_h, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(cenv)).hex(), "outputs": {}}},
-        }
+        })
         return {"credential": cenv, "anchor_txid": atx, "chain": chain}
 
     add(
@@ -785,12 +783,12 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     # --- Group 7: Origin, Recovery, Status, Roster & Ward Approvals ---
     of = rm._base_origin_fixture()
     add("branch-origin-missing-envelope", ["SL-ORIG-002"], "origin_status",
-        {"origin_bundle": {}, "chain": of["chain"], "trusted_origin_issuers": of["trusted_origin_issuers"]},
+        {"origin_bundle": {}, "chain": of["chain"], "trusted_origin_issuer_pins": of["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_UNVERIFIED", "Missing origin envelope MUST refuse ORIGIN_UNVERIFIED.")
     of_gen = rm._base_origin_fixture()
     of_gen["origin_bundle"]["origin"] = sl.sign_envelope({**of_gen["origin_bundle"]["origin"]["payload"], "genesis": _h32("bad-og")}, [of_gen["_keys"]["reg_cred"]["sk"]])
     add("branch-origin-chain-mismatch", ["SL-ORIG-002"], "origin_status",
-        {"origin_bundle": of_gen["origin_bundle"], "chain": of_gen["chain"], "trusted_origin_issuers": of_gen["trusted_origin_issuers"]},
+        {"origin_bundle": of_gen["origin_bundle"], "chain": of_gen["chain"], "trusted_origin_issuer_pins": of_gen["trusted_origin_issuer_pins"]},
         "REFUSE", "CHAIN_MISMATCH", "Origin with wrong genesis MUST refuse CHAIN_MISMATCH.")
     of_cd = rm._base_origin_fixture()
     of_cd["origin_bundle"]["card"] = {
@@ -799,22 +797,22 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         "type": "seallink-card/1",
     }
     add("branch-origin-card-kind-mismatch", ["SL-ORIG-002"], "origin_status",
-        {"origin_bundle": of_cd["origin_bundle"], "chain": of_cd["chain"], "trusted_origin_issuers": of_cd["trusted_origin_issuers"]},
+        {"origin_bundle": of_cd["origin_bundle"], "chain": of_cd["chain"], "trusted_origin_issuer_pins": of_cd["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_UNVERIFIED", "Entity card kind mismatching origin_class MUST refuse ORIGIN_UNVERIFIED.")
     of_anc = rm._base_origin_fixture()
     of_anc["chain"]["txs"][of_anc["origin_bundle"]["origin_anchor_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x09, _h32("wrong-orig-ca")).hex()
     add("branch-origin-bad-0x09-anchor", ["SL-ORIG-002"], "origin_status",
-        {"origin_bundle": of_anc["origin_bundle"], "chain": of_anc["chain"], "trusted_origin_issuers": of_anc["trusted_origin_issuers"]},
+        {"origin_bundle": of_anc["origin_bundle"], "chain": of_anc["chain"], "trusted_origin_issuer_pins": of_anc["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_UNVERIFIED", "Origin 0x09 commitment mismatch MUST refuse ORIGIN_UNVERIFIED.")
     of_noi = rm._base_origin_fixture()
     del of_noi["chain"]["names"]["id/civil-registry"]
     add("branch-origin-missing-issuer-name", ["SL-ORIG-002"], "origin_status",
-        {"origin_bundle": of_noi["origin_bundle"], "chain": of_noi["chain"], "trusted_origin_issuers": of_noi["trusted_origin_issuers"]},
+        {"origin_bundle": of_noi["origin_bundle"], "chain": of_noi["chain"], "trusted_origin_issuer_pins": of_noi["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_UNVERIFIED", "Origin whose issuer name is missing on chain MUST refuse ORIGIN_UNVERIFIED.")
     of_nb = rm._base_origin_fixture()
     del of_nb["origin_bundle"]["name_binding"]
     add("branch-origin-missing-binding", ["SL-ORIG-003"], "origin_status",
-        {"origin_bundle": of_nb["origin_bundle"], "chain": of_nb["chain"], "trusted_origin_issuers": of_nb["trusted_origin_issuers"]},
+        {"origin_bundle": of_nb["origin_bundle"], "chain": of_nb["chain"], "trusted_origin_issuer_pins": of_nb["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_BINDING_INVALID", "Missing name_binding MUST refuse ORIGIN_BINDING_INVALID.")
     of_seq2 = rm._base_origin_fixture()
     nr_s2 = of_seq2["origin_bundle"]["origin"]["payload"]["name_recovery"]
@@ -825,12 +823,12 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         "supersedes_binding_id": _h32("fake-prev-binding"),
     })
     add("branch-origin-initial-binding-seq-not-1", ["SL-ORIG-003"], "origin_status",
-        {"origin_bundle": of_seq2["origin_bundle"], "chain": of_seq2["chain"], "trusted_origin_issuers": of_seq2["trusted_origin_issuers"]},
+        {"origin_bundle": of_seq2["origin_bundle"], "chain": of_seq2["chain"], "trusted_origin_issuer_pins": of_seq2["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_BINDING_INVALID", "Initial name_binding with seq != 1 MUST refuse ORIGIN_BINDING_INVALID.")
     of_beh = rm._base_origin_fixture()
     of_beh["chain"]["txs"][of_beh["origin_bundle"]["name_binding_txid"]]["confirmed_height"] = 749000  # <= h_origin 749000!
     add("branch-origin-binding-before-origin", ["SL-ORIG-003"], "origin_status",
-        {"origin_bundle": of_beh["origin_bundle"], "chain": of_beh["chain"], "trusted_origin_issuers": of_beh["trusted_origin_issuers"]},
+        {"origin_bundle": of_beh["origin_bundle"], "chain": of_beh["chain"], "trusted_origin_issuer_pins": of_beh["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_BINDING_INVALID", "Initial name_binding confirmed <= h_origin MUST refuse ORIGIN_BINDING_INVALID.")
 
     # Recovery branches
@@ -851,7 +849,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     of_rnone["chain"]["txs"][of_rnone["origin_bundle"]["name_binding_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x0C, sl.object_id(of_rnone["origin_bundle"]["name_binding"])).hex()
     of_rnone["origin_bundle"]["recovery_bindings"] = [copy.deepcopy(of_rnone["origin_bundle"]["name_binding"])]
     add("branch-recovery-forbidden-under-mode-none", ["SL-ORIG-013"], "origin_status",
-        {"origin_bundle": of_rnone["origin_bundle"], "chain": of_rnone["chain"], "trusted_origin_issuers": of_rnone["trusted_origin_issuers"]},
+        {"origin_bundle": of_rnone["origin_bundle"], "chain": of_rnone["chain"], "trusted_origin_issuer_pins": of_rnone["trusted_origin_issuer_pins"]},
         "REFUSE", "RECOVERY_FORBIDDEN", "Presenting recovery_bindings under autonomous name_recovery.mode='none' MUST refuse RECOVERY_FORBIDDEN.")
 
     of_rs = rm._base_origin_fixture()
@@ -863,13 +861,13 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     of_rs["chain"]["txs"][of_rs["origin_bundle"]["origin_anchor_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x09, sl.content_addr(o_rs)).hex()
     of_rs["chain"]["txs"][of_rs["origin_bundle"]["name_binding_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x0C, sl.object_id(of_rs["origin_bundle"]["name_binding"])).hex()
     add("branch-recovery-seal-script-mismatch", ["SL-ORIG-014"], "origin_status",
-        {"origin_bundle": of_rs["origin_bundle"], "chain": of_rs["chain"], "trusted_origin_issuers": of_rs["trusted_origin_issuers"]},
+        {"origin_bundle": of_rs["origin_bundle"], "chain": of_rs["chain"], "trusted_origin_issuer_pins": of_rs["trusted_origin_issuer_pins"]},
         "REFUSE", "CHAIN_SCRIPT_UNSUPPORTED", "Recovery seal script not matching both_of_2(disposer, arbiter) MUST refuse CHAIN_SCRIPT_UNSUPPORTED.")
 
     of_rmiss = rm._base_origin_fixture()
     del of_rmiss["chain"]["txs"][of_rmiss["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]["txid"]]
     add("branch-recovery-missing-outpoint", ["SL-ORIG-014"], "origin_status",
-        {"origin_bundle": of_rmiss["origin_bundle"], "chain": of_rmiss["chain"], "trusted_origin_issuers": of_rmiss["trusted_origin_issuers"]},
+        {"origin_bundle": of_rmiss["origin_bundle"], "chain": of_rmiss["chain"], "trusted_origin_issuer_pins": of_rmiss["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Missing recovery_seal outpoint MUST refuse ORIGIN_STATUS_INCOMPLETE.")
 
     def _rec_spend_fixture(*, bad_opret: bool = False, bad_seq: bool = False, miss_next_out: bool = False, tip_h: int = 750010) -> dict[str, Any]:
@@ -907,19 +905,19 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         orf = _rec_spend_fixture(**kw_r)
         b1_id = sl.object_id(orf["origin_bundle"]["name_binding"])
         add(cid_r, ["SL-ORIG-014"], "origin_status",
-            {"origin_bundle": orf["origin_bundle"], "chain": orf["chain"], "trusted_origin_issuers": orf["trusted_origin_issuers"],
+            {"origin_bundle": orf["origin_bundle"], "chain": orf["chain"], "trusted_origin_issuer_pins": orf["trusted_origin_issuer_pins"],
              "assert_binding_id": b1_id, "expect_recovery_burned": True},
             "ADMIT_WARD", None, note_r)
     orf_del = _rec_spend_fixture(tip_h=750010)
     add("branch-recovery-delay-not-elapsed", ["SL-ORIG-014"], "origin_status",
-        {"origin_bundle": orf_del["origin_bundle"], "chain": orf_del["chain"], "trusted_origin_issuers": orf_del["trusted_origin_issuers"]},
+        {"origin_bundle": orf_del["origin_bundle"], "chain": orf_del["chain"], "trusted_origin_issuer_pins": orf_del["trusted_origin_issuer_pins"]},
         "REFUSE", "RECOVERY_FORBIDDEN", "Un-cancelled recovery before h_rec + delay_blocks MUST refuse RECOVERY_FORBIDDEN.")
 
     # Status spine branches
     of_sm = rm._base_origin_fixture()
     del of_sm["chain"]["txs"][of_sm["origin_bundle"]["origin"]["payload"]["status_seal"]["txid"]]
     add("branch-status-missing-seal-out", ["SL-ORIG-002"], "origin_status",
-        {"origin_bundle": of_sm["origin_bundle"], "chain": of_sm["chain"], "trusted_origin_issuers": of_sm["trusted_origin_issuers"]},
+        {"origin_bundle": of_sm["origin_bundle"], "chain": of_sm["chain"], "trusted_origin_issuer_pins": of_sm["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Missing status_seal outpoint MUST refuse ORIGIN_STATUS_INCOMPLETE.")
     of_sbad = rm._base_origin_fixture()
     end_for_bad = sl.sign_envelope(
@@ -941,7 +939,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     of_sbad["chain"]["txs"][stx_b] = {"confirmed_height": 749600, "opreturn_hex": sl.encode_opreturn(0x0C, sl.content_addr(end_for_bad)).hex(), "outputs": {}}
     of_sbad["origin_bundle"]["end_record"] = end_for_bad
     add("branch-status-bad-0x09-spend", ["SL-ORIG-002"], "origin_status",
-        {"origin_bundle": of_sbad["origin_bundle"], "chain": of_sbad["chain"], "trusted_origin_issuers": of_sbad["trusted_origin_issuers"]},
+        {"origin_bundle": of_sbad["origin_bundle"], "chain": of_sbad["chain"], "trusted_origin_issuer_pins": of_sbad["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "Status seal spend without 0x09 OP_RETURN MUST refuse ORIGIN_STATUS_INCOMPLETE.")
 
     of_end_oid = rm._base_origin_fixture()
@@ -964,7 +962,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     of_end_oid["chain"]["txs"][stx_e] = {"confirmed_height": 749600, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(end_bad)).hex(), "outputs": {}}
     of_end_oid["origin_bundle"]["end_record"] = end_bad
     add("branch-status-end-wrong-origin-id", ["SL-ORIG-012"], "origin_status",
-        {"origin_bundle": of_end_oid["origin_bundle"], "chain": of_end_oid["chain"], "trusted_origin_issuers": of_end_oid["trusted_origin_issuers"]},
+        {"origin_bundle": of_end_oid["origin_bundle"], "chain": of_end_oid["chain"], "trusted_origin_issuer_pins": of_end_oid["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "seallink-end/1 with mismatched origin_id MUST refuse ORIGIN_STATUS_INCOMPLETE.")
 
     def _cap_fixture(*, wrong_oid: bool = False, wrong_auth: bool = False, miss_nxt: bool = False) -> dict[str, Any]:
@@ -1012,19 +1010,19 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     ]:
         ocf = _cap_fixture(**kw_c)
         add(cid_c, ["SL-ORIG-002", "SL-ORIG-009"], "origin_status",
-            {"origin_bundle": ocf["origin_bundle"], "chain": ocf["chain"], "trusted_origin_issuers": ocf["trusted_origin_issuers"]},
+            {"origin_bundle": ocf["origin_bundle"], "chain": ocf["chain"], "trusted_origin_issuer_pins": ocf["trusted_origin_issuer_pins"]},
             "REFUSE", "ORIGIN_STATUS_INCOMPLETE", note_c)
 
     of_maj = rm._base_origin_fixture()
     of_maj["origin_bundle"]["opened_majority_unix"] = 1900000000
     of_maj["origin_bundle"]["majority_salt_hex"] = _h32("wrong-maj-salt")
     add("branch-origin-bad-majority-salt", ["SL-ORIG-009"], "origin_status",
-        {"origin_bundle": of_maj["origin_bundle"], "chain": of_maj["chain"], "trusted_origin_issuers": of_maj["trusted_origin_issuers"]},
+        {"origin_bundle": of_maj["origin_bundle"], "chain": of_maj["chain"], "trusted_origin_issuer_pins": of_maj["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_UNVERIFIED", "Opened majority_unix failing salted commitment MUST refuse ORIGIN_UNVERIFIED.")
     of_m2 = rm._base_origin_fixture()
     of_m2["chain"].pop("credible_utc_interval", None)
     add("branch-origin-missing-utc-oracle", ["SL-ORIG-010"], "origin_status",
-        {"origin_bundle": of_m2["origin_bundle"], "chain": of_m2["chain"], "trusted_origin_issuers": of_m2["trusted_origin_issuers"]},
+        {"origin_bundle": of_m2["origin_bundle"], "chain": of_m2["chain"], "trusted_origin_issuer_pins": of_m2["trusted_origin_issuer_pins"]},
         "REFUSE", "GUARDIAN_TIME_BOUNDARY", "Missing credible_utc_interval when evaluating majority boundary MUST refuse GUARDIAN_TIME_BOUNDARY.")
 
     # Roster spine branches (0x0f)
@@ -1083,7 +1081,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     ]:
         orf = _roster_fixture(**kw_ro)
         add(cid_ro, ["SL-ORIG-015"], "origin_status",
-            {"origin_bundle": orf["origin_bundle"], "chain": orf["chain"], "trusted_origin_issuers": orf["trusted_origin_issuers"]},
+            {"origin_bundle": orf["origin_bundle"], "chain": orf["chain"], "trusted_origin_issuer_pins": orf["trusted_origin_issuer_pins"]},
             "REFUSE", "ORIGIN_STATUS_INCOMPLETE", note_ro)
 
     # Ward approvals branches (including fail-safe halt on roster revision change!)
@@ -1172,7 +1170,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         if make_slot2 and approvals_override is None:
             apps.append({"slot": 2, "revision": gc["revision"], "guardian_name": "id/parent-b", "signers": [ow["_g2"]["gr"]["sk"]]})
         ass = sl.sign_guardian_envelope(ap, apps)
-        return {"assent": ass, "contract": ow["contract"], "origin_bundle": ow["origin_bundle"], "chain": ow["chain"], "trusted_origin_issuers": ow["trusted_origin_issuers"]}
+        return {"assent": ass, "contract": ow["contract"], "origin_bundle": ow["origin_bundle"], "chain": ow["chain"], "trusted_origin_issuer_pins": ow["trusted_origin_issuer_pins"]}
 
     add("branch-ward-gc-wrong-ward-name", ["SL-ORIG-006"], "assent",
         _ward_assent_fx(gc_override={"ward_name": "id/other-ward"}),
@@ -1343,10 +1341,10 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     of_wa = rm._base_origin_fixture()
     wa_ok = _ward_assent_fx()
     add("branch-assent-ward-missing-origin-bundle", ["SL-ORIG-006"], "assent",
-        {"assent": wa_ok["assent"], "contract": wa_ok["contract"], "origin_bundle": None, "chain": wa_ok["chain"], "trusted_origin_issuers": of_wa["trusted_origin_issuers"]},
+        {"assent": wa_ok["assent"], "contract": wa_ok["contract"], "origin_bundle": None, "chain": wa_ok["chain"], "trusted_origin_issuer_pins": of_wa["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_UNVERIFIED", "Ward contract assent without origin_bundle MUST refuse ORIGIN_UNVERIFIED.")
     add("branch-assent-ward-bad-origin-bundle", ["SL-ORIG-006"], "assent",
-        {"assent": wa_ok["assent"], "contract": wa_ok["contract"], "origin_bundle": {}, "chain": wa_ok["chain"], "trusted_origin_issuers": of_wa["trusted_origin_issuers"]},
+        {"assent": wa_ok["assent"], "contract": wa_ok["contract"], "origin_bundle": {}, "chain": wa_ok["chain"], "trusted_origin_issuer_pins": of_wa["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_UNVERIFIED", "Ward contract assent with invalid origin_bundle MUST refuse ORIGIN_UNVERIFIED.")
     c_ward_other = copy.deepcopy(wa_ok["contract"])
     c_ward_other["parties"][0]["ward_origin_id"] = _h32("different-ward-oid")
@@ -1355,7 +1353,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         [{"slot": 1, "revision": 1, "guardian_name": "id/parent-a", "signers": [of_wa["_keys"]["g1_gr"]["sk"]]}],
     )
     add("branch-assent-ward-origin-id-mismatch", ["SL-CONT-002"], "assent",
-        {"assent": wa_other_c, "contract": c_ward_other, "origin_bundle": wa_ok["origin_bundle"], "chain": wa_ok["chain"], "trusted_origin_issuers": of_wa["trusted_origin_issuers"]},
+        {"assent": wa_other_c, "contract": c_ward_other, "origin_bundle": wa_ok["origin_bundle"], "chain": wa_ok["chain"], "trusted_origin_issuer_pins": of_wa["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_UNVERIFIED", "Verified origin_id mismatching Contract.parties[].ward_origin_id MUST refuse ORIGIN_UNVERIFIED.")
     add("branch-contract-assents-invalid-member", ["SL-CONT-004"], "contract_assents",
         {"contract": c_two, "assents": [a_p1, _mk_assent("p2", "seller", p1_k["sk"])], "chain": fx0["chain"]},
@@ -1424,9 +1422,16 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
          "journal": {"journal_id": _h32("jcl1"), "closures": {f"{db_cl['parent_id']}:1": {"cause": "GRANT_ROW_STOPPED"}}}, "executor_cfg": db_cl["executor_cfg"]},
         "REFUSE", "GRANT_ROW_STOPPED", "Durable journal row-stop closure MUST immediately refuse GRANT_ROW_STOPPED.")
     fx_rc = rm._base_invocation_fixture()
-    fx_rc["journal"]["closures"] = {"role:id/alice:grant": {"cause": "NAME_ROLE_CHANGED"}}
+    rc_subj = {
+        "name": "id/alice",
+        "policy_sha256": sv._policy_sha256({"m": 1, "pks": [fx_rc["_keys"]["alice_gr"]["xonly"]]}),
+        "registration": fx_rc["_alice_reg"],
+        "role": "grant",
+        "subject_kind": "role",
+    }
+    fx_rc["journal"]["closures"] = {sv._closure_subject_key(rc_subj): {"cause": "NAME_ROLE_CHANGED", "subject": rc_subj}}
     add("branch-inv-journal-role-changed-closure", ["SL-IDEN-004", "SL-GRNT-014"], "invocation", fx_rc, "REFUSE", "NAME_ROLE_CHANGED",
-        "Durable journal issuer-role closure MUST immediately refuse NAME_ROLE_CHANGED.")
+        "Durable journal policy-scoped issuer-role closure MUST immediately refuse NAME_ROLE_CHANGED.")
     fx_sc = rm._base_invocation_fixture()
     s0 = fx_sc["bundle"]["grants"][0]["payload"]["revocation"]["seal"]
     fx_sc["journal"]["closures"] = {f"{s0['txid']}:{s0['vout']}": {"cause": "SEAL_SPENT"}}
@@ -1751,7 +1756,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             "chain": ow["chain"],
             "journal": {"journal_id": _h32("agm-jid")},
             "executor_cfg": {"key": exec_k["xonly"], "name": "id/agent-host", "pinned_ward_origin_id": oid_q},
-            "trusted_origin_issuers": ow["trusted_origin_issuers"],
+            "trusted_origin_issuer_pins": ow["trusted_origin_issuer_pins"],
         }
         if wrong_raw_msg:
             out["raw_message_hex"] = b"tampered bytes".hex()
@@ -1772,17 +1777,25 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
                      "sessions": {sl.sha256(tok.encode()).hex(): {"closed": False, "exp": 1795229999, "grant_id": _h32("closed-g"), "slot_binding": "slot:1"}}}},
         "REFUSE", "SESSION_INVALID", "Bearer session whose backing grant is closed in journal MUST refuse SESSION_INVALID.")
 
-    # Migration branches (all remaining!)
+    # Migration branches (all remaining! H-14 closed MigrationExportBundle + M-14 local_executor_pin!)
     def _mig_fx(*, wrong_gen: bool = False, no_chain: bool = False, miss_src_name: bool = False, miss_src_man: bool = False, no_rcpt_key: bool = False, bad_files_type: bool = False, wrong_inv_sha: bool = False, unfenced: bool = False, dup_mid: bool = False) -> dict[str, Any]:
         fx = rm._base_invocation_fixture()
         src_rcpt = fx["_keys"]["host_rcpt"]
-        files: Any = [{"kind": "mail_message", "object": {"id": "m1"}}]
-        inv_sha = _h32("wrong-inv-sha") if wrong_inv_sha else sl.sha256(sl.jcs_encode({"files": files})).hex()
         mid = _h32(f"mig-id-{dup_mid}")
+        inv_obj: Any = {
+            "holder_name": "id/alice",
+            "items": [{"media_type": "message/rfc822", "path": "mail/m1.eml", "sha256": _h32("m1"), "size_bytes": "128"}],
+            "migration_id": mid,
+            "service_type": "mail",
+        }
+        inv_sha = _h32("wrong-inv-sha") if wrong_inv_sha else sl.sha256(sl.jcs_encode(inv_obj)).hex()
+        dest_pin = {"name": "id/mail-svc-2", "owner_policy": fx["_host_owner_pol"], "registration": {"txid": _h32("dst-reg"), "vout": 0}}
+        src_pin = {"name": "id/mail-host-a", "owner_policy": fx["_host_owner_pol"], "registration": fx["_host_reg"]}
+        holder_pin = {"name": "id/alice", "owner_policy": fx["_alice_owner_pol"], "registration": fx["_alice_reg"]}
         mp = {
-            "dest_executor": {"name": "id/mail-svc-2", "owner_policy": fx["_host_owner_pol"], "registration": {"txid": _h32("dst-reg"), "vout": 0}},
+            "dest_executor": dest_pin,
             "genesis": _h32("bad-mgen") if wrong_gen else GENESIS_MAIN,
-            "holder": {"name": "id/alice", "owner_policy": fx["_alice_owner_pol"], "registration": fx["_alice_reg"]},
+            "holder": holder_pin,
             "inventory_sha256": inv_sha,
             "issued_at": 1795220000,
             "journal_commitment": _h32("mig-jc"),
@@ -1791,7 +1804,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             "network": "main",
             "outstanding_exposure": [],
             "service_type": "mail",
-            "source_executor": {"name": "id/mail-host-a", "owner_policy": fx["_host_owner_pol"], "registration": fx["_host_reg"]},
+            "source_executor": src_pin,
             "type": "seallink-migration/1",
         }
         menv = sl.sign_envelope(mp, [src_rcpt["sk"]])
@@ -1809,15 +1822,37 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             sm_no.pop("service", None)
             ch_m["names"]["id/mail-host-a"] = sv.make_name_history("id/mail-host-a", fx["_host_reg"], fx["_host_owner_pol"], {"m": {"h": sl.content_addr(sm_no), "s": 1}}, first_height=748000, update_height=749000)
             mans = {sl.content_addr(sm_no): sm_no}
-        eb = {
-            "files": "not-a-list" if bad_files_type else files,
+        eb: dict[str, Any] = {
+            "inventory": "not-an-object" if bad_files_type else inv_obj,
             "source_journal_pos": 10,
             "source_journal_commitment": _h32("mig-jc"),
-            "source_write_token_fenced": not unfenced,
-            "open_predecessor_grants": [],
         }
+        if not unfenced and not bad_files_type:
+            f_stmt = sl.sign_envelope(
+                {
+                    "genesis": GENESIS_MAIN,
+                    "issuer": src_pin,
+                    "network": "main",
+                    "not_after": 1795221000,
+                    "not_before": 1795219000,
+                    "seq": 1,
+                    "statement_kind": "migration-fence",
+                    "subject": {
+                        "dest_executor": dest_pin,
+                        "holder": holder_pin,
+                        "inventory_sha256": inv_sha,
+                        "migration_id": mid,
+                        "predecessor_grant_seals": [],
+                        "source_journal_commitment": _h32("mig-jc"),
+                        "source_journal_pos": 10,
+                    },
+                    "type": "seallink-statement/1",
+                },
+                [src_rcpt["sk"]],
+            )
+            eb["fencing_statement"] = f_stmt
         j = {"journal_id": _h32("mig-j"), "migrations_applied": [mid] if dup_mid else []}
-        return {"migration": menv, "export_bundle": eb, "journal": j, "chain": ch_m, "manifests": mans}
+        return {"migration": menv, "export_bundle": eb, "journal": j, "chain": ch_m, "manifests": mans, "local_executor_pin": dest_pin}
 
     for cid_m, kw_m, want_m, note_m in [
         ("branch-mig-chain-mismatch", {"wrong_gen": True}, "CHAIN_MISMATCH", "Migration manifest with wrong genesis MUST refuse CHAIN_MISMATCH."),
@@ -1882,7 +1917,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     of_nob = rm._base_origin_fixture()
     del of_nob["origin_bundle"]["name_binding"]
     add("branch-origin-missing-name-binding", ["SL-ORIG-003"], "origin_status",
-        {"origin_bundle": of_nob["origin_bundle"], "chain": of_nob["chain"], "trusted_origin_issuers": of_nob["trusted_origin_issuers"]},
+        {"origin_bundle": of_nob["origin_bundle"], "chain": of_nob["chain"], "trusted_origin_issuer_pins": of_nob["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_BINDING_INVALID",
         "Origin bundle omitting name_binding MUST refuse ORIGIN_BINDING_INVALID.")
 
@@ -1893,7 +1928,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         0x0C, sl.object_id(of_boid["origin_bundle"]["name_binding"])
     ).hex()
     add("branch-origin-binding-wrong-origin-id", ["SL-ORIG-003"], "origin_status",
-        {"origin_bundle": of_boid["origin_bundle"], "chain": of_boid["chain"], "trusted_origin_issuers": of_boid["trusted_origin_issuers"]},
+        {"origin_bundle": of_boid["origin_bundle"], "chain": of_boid["chain"], "trusted_origin_issuer_pins": of_boid["trusted_origin_issuer_pins"]},
         "REFUSE", "ORIGIN_BINDING_INVALID",
         "0x0c name-binding whose origin_id disagrees with verified origin MUST refuse ORIGIN_BINDING_INVALID.")
 
@@ -1927,7 +1962,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     )
     add("branch-ward-approval-item-revision-mismatch-1of2", ["SL-ORIG-005"], "assent",
         {"assent": assent_item_rev, "contract": c_1of2, "origin_bundle": wa_item_rev["origin_bundle"],
-         "chain": wa_item_rev["chain"], "trusted_origin_issuers": wa_item_rev["trusted_origin_issuers"]},
+         "chain": wa_item_rev["chain"], "trusted_origin_issuer_pins": wa_item_rev["trusted_origin_issuer_pins"]},
         "REFUSE", "GUARDIAN_QUORUM_UNMET",
         "guardian_approvals[].revision mismatching guardian_context.revision MUST refuse GUARDIAN_QUORUM_UNMET.")
 
@@ -1949,7 +1984,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     })
     add("branch-ward-approval-guardian-owner-changed-at-tip", ["SL-ORIG-005", "SL-ORIG-006"], "assent",
         {"assent": wa_gmiss["assent"], "contract": wa_gmiss["contract"], "origin_bundle": wa_gmiss["origin_bundle"],
-         "chain": wa_gmiss["chain"], "trusted_origin_issuers": of_wa["trusted_origin_issuers"]},
+         "chain": wa_gmiss["chain"], "trusted_origin_issuer_pins": of_wa["trusted_origin_issuer_pins"]},
         "REFUSE", "GUARDIAN_INACTIVE",
         "Active guardian whose Namecoin owner_policy changed after activation MUST refuse GUARDIAN_INACTIVE at tip (SL-ORIG-006 / H-35).")
 
@@ -2024,7 +2059,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     )
     add("branch-assent-adult-missing-signing-policy", ["SL-CONT-002"], "assent",
         {"assent": adult_assent, "contract": wa_adult["contract"], "origin_bundle": wa_adult["origin_bundle"],
-         "chain": wa_adult["chain"], "trusted_origin_issuers": of_wa["trusted_origin_issuers"]},
+         "chain": wa_adult["chain"], "trusted_origin_issuer_pins": of_wa["trusted_origin_issuer_pins"]},
         "REFUSE", "CONTRACT_ASSENT_INVALID",
         "Adult capacity assent against a ward-mode contract party without signing_policy MUST refuse CONTRACT_ASSENT_INVALID.")
 

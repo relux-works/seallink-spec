@@ -1,6 +1,6 @@
 # SealLink Open Questions and Provisional Parameters
 
-- **Version:** `1.0.0-draft.9`
+- **Version:** `1.0.0-draft.10`
 - **Purpose:** Authoritative registry of every unresolved design item, provisional numeric constant, deferred extension, and unprofiled standard service type. Per `SPEC-00 §5.1`, readers MUST fail closed on any unprofiled `open` construct.
 
 ---
@@ -23,8 +23,8 @@
 
 | ID | Owning Spec | Constant | Provisional Value | Calibration Basis |
 | --- | --- | --- | --- | --- |
-| `OQ-010` | `SPEC-02 §4` (`SL-LDGR-008`) | `LAG` (reading-node header lag bound) | `1` block | Namecoin block propagation telemetry. |
-| `OQ-011` | `SPEC-02 §4` (`SL-LDGR-008`) | `S` (block header future-timestamp bound) | `600` seconds | Namecoin consensus vs clock skew tolerances. |
+| `OQ-010` | `SPEC-02 §4` (`SL-LDGR-008`) | `LAG` (reading-node header lag bound) | `1` block | Verifier-owned config (never overridable by `ChainViewSnapshot`, `SL-LDGR-015`); Namecoin block propagation telemetry. |
+| `OQ-011` | `SPEC-02 §4` (`SL-LDGR-008`) | `S` (block header future-timestamp bound) | `600` seconds | Verifier-owned config (never overridable by `ChainViewSnapshot`, `SL-LDGR-015`); Namecoin consensus vs clock skew tolerances. |
 | `OQ-012` | `SPEC-02 §4` (`SL-LDGR-008`) | `K` (grant `recent_block` recency ceiling) | **`432` blocks (~72 h) — `decided`** | Frozen in `v1.0.0-draft.7`: balances offline signing ceremonies against bounded replay/history walks. |
 | `OQ-013` | `SPEC-02 §4` (`SL-LDGR-008`) | Risk Class 1 / Class 2 `tip_age` cutoffs | `3600s` / `5400s` | Namecoin block-interval tail distribution (9.88 min mean). |
 | `OQ-014` | `SPEC-03 §6` (`SL-IDEN-012`) | Host trust-root admin override delay `D` | `1008` blocks (~7 d) | Incident response window for human owners. |

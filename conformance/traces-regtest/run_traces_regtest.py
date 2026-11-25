@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.9.
+Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.10.
 
 Executes five end-to-end SealLink protocol traces on two fresh loopback-only
 Namecoin Core 28 regtest nodes under strict standard policy (`-acceptnonstdtxn=0`,
@@ -901,7 +901,8 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
     cl.mine(1)
 
     manifests = {alice_man_ca: alice_man, host_man_ca: host_man}
-    exec_cfg = {"key": host_rcpt["xonly"], "name": "id/t1-mail-host"}
+    exec_ref = {"key": host_rcpt["xonly"], "name": "id/t1-mail-host"}
+    exec_cfg = {**exec_ref, "pin": {"name": "id/t1-mail-host", "owner_policy": host_pol, "registration": names_a["id/t1-mail-host"]["registration"]}}
     v = sv.Tier1Verifier(pinned_network="regtest", pinned_genesis=cl.genesis_hash, require_jsonschema=True, require_observation_bracket=True)
     journal = sv.FencedJournal(sl.sha256(b"t1-regtest-j").hex())
 
@@ -910,7 +911,7 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
             {
                 "action": "mail/read",
                 "arguments": {"folder": "Invoices", "message_id": f"msg-{tag}", "sender_domain": "billing.example"},
-                "executor": exec_cfg,
+                "executor": exec_ref,
                 "exp": now_s + 600,
                 "genesis": cl.genesis_hash,
                 "iat": now_s - 10,
@@ -966,9 +967,6 @@ def run_trace_01(cl: RegtestCluster) -> dict[str, Any]:
         exec_cfg,
         invocation_id=p1_admit.details["invocation_id"],
         grant_id=p1_admit.details["grant_id"],
-        reserved_ops=p1_admit.details["reserved_ops"],
-        recorded_at=p1_admit.details["recorded_at"],
-        tip_height=p1_admit.details["tip_height"],
     )
     assert res_admit.verdict == "ADMIT" and res_admit.cached_receipt_content_addr == sl.content_addr(rcpt_step1), f"Trace 01 commit_result failed: {res_admit}"
 
@@ -1542,10 +1540,11 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     ch_dict = cl.new_cold_observer(rpc_counter=t2_ctr).build_chain_view(wire_objects=[origin_bundle], extra_txids=[hist_0x07_txid])
     assert t2_ctr.get("getblockchaininfo", 0) >= 2 and ch_dict["observation_bracket"]["consistent"] is True
     ch = sv.ChainView(ch_dict)
+    reg_pin_t2 = {k: origin_env["payload"]["issuer"][k] for k in ("name", "owner_policy", "registration")}
     v = sv.Tier1Verifier(
         pinned_network="regtest",
         pinned_genesis=cl.genesis_hash,
-        trusted_origin_issuers={"id/t2-civil-registry"},
+        trusted_origin_issuer_pins=[reg_pin_t2],
         require_jsonschema=True,
         require_observation_bracket=True,
     )
@@ -1839,7 +1838,8 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
     tip_h = cl.rpc(1, "getblockcount")
     tip_time = int(cl.rpc(1, "getblockheader", recent_blk)["time"])
 
-    exec_cfg = {"key": host_rcpt["xonly"], "name": "id/t3-mail-host"}
+    exec_ref = {"key": host_rcpt["xonly"], "name": "id/t3-mail-host"}
+    exec_cfg = {**exec_ref, "pin": host_pin_t3}
 
     # --- Part A: Real Depth-2 Delegation + Sibling row_ordinal (1 & 2) + Crash/Restart Recovery ---
     parent_gp = {
@@ -1850,7 +1850,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
                 "ranges": [{"count": 2, "first": 0, "script_policy": row_pol, "txid": rows_txid}],
                 "template": {
                     "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": "2", "resource": "mailbox:id/t3-alice:del", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
-                    "executor": exec_cfg,
+                    "executor": exec_ref,
                     "notary_mode": "none",
                     "recipient_rule": {"key": child_req["xonly"], "mode": "exact_key"},
                 },
@@ -1858,7 +1858,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
             "key": del_k["xonly"],
             "pools": [{"kind": "seallink/count", "max": "4", "resource": "mailbox:id/t3-alice:del", "unit": "calls", "window": "seconds:3600"}],
         },
-        "executor": exec_cfg,
+        "executor": exec_ref,
         "genesis": cl.genesis_hash,
         "issuer": {"name": "id/t3-alice", "owner_policy": alice_pol, "registration": names["id/t3-alice"]["registration"], "role_policy": {"m": 1, "pks": [alice_gr["xonly"]]}},
         "network": "regtest",
@@ -1875,7 +1875,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
     def _mk_child(ordinal: int, seal_vout: int, row_max: str) -> tuple[dict[str, Any], str]:
         cp = {
             "capabilities": [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": row_max, "resource": "mailbox:id/t3-alice:del", "unit": "calls", "window": "seconds:3600"}], "target": "mailbox:id/t3-alice:del", "where": {}}],
-            "executor": exec_cfg,
+            "executor": exec_ref,
             "genesis": cl.genesis_hash,
             "network": "regtest",
             "not_after_height": tip_h + 24,
@@ -1900,7 +1900,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
                 "target": tgt,
                 "where": {},
             }],
-            "executor": exec_cfg,
+            "executor": exec_ref,
             "genesis": cl.genesis_hash,
             "issuer": {"name": "id/t3-alice", "owner_policy": alice_pol, "registration": names["id/t3-alice"]["registration"], "role_policy": {"m": 1, "pks": [alice_gr["xonly"]]}},
             "network": "regtest",
@@ -1922,7 +1922,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
             "target": "mailbox:id/t3-alice:p2a",
             "where": {},
         }],
-        "executor": exec_cfg,
+        "executor": exec_ref,
         "genesis": cl.genesis_hash,
         "issuer": {"name": "id/t3-alice", "owner_policy": alice_pol, "registration": names["id/t3-alice"]["registration"], "role_policy": {"m": 1, "pks": [alice_gr["xonly"]]}},
         "network": "regtest",
@@ -1970,7 +1970,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         {
             "action": "mail/send",
             "arguments": {"body_sha256": sl.sha256(b"su1-body").hex(), "size_bytes": "128", "subject": "SU1", "to": "su1@example.com"},
-            "executor": exec_cfg,
+            "executor": exec_ref,
             "exp": tip_time + 1200,
             "genesis": cl.genesis_hash,
             "iat": tip_time - 10,
@@ -2040,7 +2040,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
             {
                 "action": "mail/read",
                 "arguments": {"folder": "INBOX", "message_id": f"del-{tag}"},
-                "executor": exec_cfg,
+                "executor": exec_ref,
                 "exp": ch.now + 600,
                 "genesis": cl.genesis_hash,
                 "iat": ch.now - 10,
@@ -2173,8 +2173,6 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         exec_cfg,
         invocation_id=sl.object_id(inv1_env["payload"]),
         grant_id=g1_id,
-        single_use=False,
-        use_txid=None,
     )
     assert p2_su1.verdict == "ADMIT" and len(p2_su1.journal_writes) == 1, f"Trace 03 su1 self-contained Phase 2 failed: {p2_su1}"
     assert p2_su1.journal_writes[0]["entry"]["kind"] == "settlement" and p2_su1.journal_writes[0]["entry"]["body"].get("single_use_consumed") is True and p2_su1.journal_writes[0]["entry"]["body"].get("use_txid") == use1_txid
@@ -2188,7 +2186,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         {
             "action": "mail/send",
             "arguments": {"body_sha256": sl.sha256(b"su2-body").hex(), "size_bytes": "128", "subject": "SU2", "to": "su2@example.com"},
-            "executor": exec_cfg,
+            "executor": exec_ref,
             "exp": ch.now + 600,
             "genesis": cl.genesis_hash,
             "iat": ch.now - 10,
@@ -2211,7 +2209,7 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         {
             "action": "mail/send",
             "arguments": {"body_sha256": sl.sha256(b"p2a-body").hex(), "size_bytes": "128", "subject": "P2A", "to": "p2a@example.com"},
-            "executor": exec_cfg,
+            "executor": exec_ref,
             "exp": ch.now + 600,
             "genesis": cl.genesis_hash,
             "iat": ch.now - 10,
@@ -2532,10 +2530,11 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
     )
     assert t4_ctr.get("getblockchaininfo", 0) >= 2 and ch_dict["observation_bracket"]["consistent"] is True
     ch = sv.ChainView(ch_dict)
+    reg_pin_t4 = {k: origin_env["payload"]["issuer"][k] for k in ("name", "owner_policy", "registration")}
     v = sv.Tier1Verifier(
         pinned_network="regtest",
         pinned_genesis=cl.genesis_hash,
-        trusted_origin_issuers={"id/t4-civil-registry"},
+        trusted_origin_issuer_pins=[reg_pin_t4],
         require_jsonschema=True,
         require_observation_bracket=True,
     )
@@ -2606,9 +2605,6 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
         exec_cfg,
         invocation_id=p1_t4.details["invocation_id"],
         grant_id=p1_t4.details["grant_id"],
-        reserved_ops=p1_t4.details["reserved_ops"],
-        recorded_at=p1_t4.details["recorded_at"],
-        tip_height=p1_t4.details["tip_height"],
     )
     assert r_ok.verdict == "ADMIT" and len(r_ok.journal_writes) == 1 and r_ok.journal_writes[0]["entry"]["kind"] == "settlement", f"Trace 04 Phase 2 commit_result failed: {r_ok}"
 
@@ -2630,6 +2626,7 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
                 "exec_cfg": exec_cfg,
                 "raw_msg_hex": raw_msg.hex(),
                 "genesis": cl.genesis_hash,
+                "trusted_origin_issuer_pins": [reg_pin_t4],
                 "expected_rcpt_ca": rcpt_ok_ca,
                 "expected_rcpt_jcs_hex": sl.jcs_encode(rcpt_ok).hex(),
             }
@@ -2647,7 +2644,7 @@ def run_trace_04(cl: RegtestCluster) -> dict[str, Any]:
         "assert len(rj.receipts) == 1, f'Expected 1 indexed receipt after restart, got {len(rj.receipts)}'; "
         "inv_id = sl.object_id(d['inv_ok']['payload']); "
         "assert sl.jcs_encode(rj.receipts[inv_id]).hex() == d['expected_rcpt_jcs_hex']; "
-        "v = sv.Tier1Verifier(pinned_network='regtest', pinned_genesis=d['genesis'], trusted_origin_issuers={'id/t4-civil-registry'}, require_jsonschema=True, require_observation_bracket=True); "
+        "v = sv.Tier1Verifier(pinned_network='regtest', pinned_genesis=d['genesis'], trusted_origin_issuer_pins=d['trusted_origin_issuer_pins'], require_jsonschema=True, require_observation_bracket=True); "
         "before_n = len(rj.entries); "
         "res = v.verify_invocation(d['inv_ok'], {'grants': [d['grant']], 'origin_bundle': d['origin_bundle']}, sv.ChainView(d['chain']), rj, d['exec_cfg'], raw_message_bytes=bytes.fromhex(d['raw_msg_hex'])); "
         "assert res.verdict == 'ADMIT' and res.details.get('cached_receipt') is True and res.cached_receipt_content_addr == d['expected_rcpt_ca'] and len(rj.entries) == before_n, res; "
@@ -2904,7 +2901,7 @@ def main() -> int:
         elapsed = round(time.monotonic() - t0, 2)
         report = {
             "suite": "seallink-nc28-live-traces-regtest",
-            "spec_version": "1.0.0-draft.9",
+            "spec_version": "1.0.0-draft.10",
             "chain": "regtest",
             "policy": "standard (-acceptnonstdtxn=0 -txindex=1 -namehistory=1), two loopback-only nodes (node A writer outbound -> node B read-only cold observer with -disablewallet=1 and -rpcwhitelistdefault=0)",
             "node_b_rpcwhitelist": cl.obs_whitelist.split(","),

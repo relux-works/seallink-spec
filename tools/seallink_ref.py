@@ -1627,6 +1627,48 @@ def decode_opreturn(script: bytes) -> dict[str, Any]:
     raise ValueError("CHAIN_FRAME_INVALID")
 
 
+def is_slnk_opreturn(script: bytes) -> bool:
+    """Return True if script starts with OP_RETURN + PUSH5 + 'SLNK' magic."""
+    return len(script) >= 6 and script[0] == 0x6A and script[1] == 0x05 and script[2:6] == SLNK_MAGIC
+
+
+def decode_opreturn_with_criticality(script: bytes) -> dict[str, Any]:
+    """Decode an SLNK OP_RETURN frame in name history with forward-compatibility criticality rules (SPEC-02 §5.2).
+
+    - Known v1.0 actions (0x01..0x05, 0x07..0x12): strict `decode_opreturn` (malformed -> CHAIN_FRAME_INVALID).
+    - Critical reserved range (0x13..0x1f): raises ValueError('ORIGIN_STATUS_INCOMPLETE').
+    - Advisory ignorable range (0x20..0x2f): validates standard 42B/74B framing (malformed -> CHAIN_FRAME_INVALID)
+      and returns {'advisory': True, ...} so v1.0 readers safely ignore non-critical future extensions.
+    - Reserved 0x06 or any other unknown action byte: raises ValueError('CHAIN_FRAME_INVALID').
+    """
+    if len(script) < 8 or len(script) > 83 or script[0] != 0x6A or script[1] != 0x05 or script[2:6] != SLNK_MAGIC:
+        raise ValueError("CHAIN_FRAME_INVALID")
+    action = script[6]
+    if action in ACTION_ALLOWED_LOCATORS:
+        return decode_opreturn(script)
+    if 0x13 <= action <= 0x1F:
+        raise ValueError("ORIGIN_STATUS_INCOMPLETE")
+    if 0x20 <= action <= 0x2F:
+        payload, end = _read_push(script, 7)
+        if end != len(script) or len(payload) < 34 or payload[0] != 0x01:
+            raise ValueError("CHAIN_FRAME_INVALID")
+        comm = payload[1:33].hex()
+        loc = payload[33]
+        if loc == 0x00 and len(payload) == 34:
+            return {"action": f"0x{action:02x}", "advisory": True, "version": 1, "commitment": comm, "loc_type": "0x00"}
+        if loc in (0x01, 0x02, 0x05) and len(payload) == 66:
+            return {
+                "action": f"0x{action:02x}",
+                "advisory": True,
+                "version": 1,
+                "commitment": comm,
+                "loc_type": f"0x{loc:02x}",
+                "pointer": payload[34:66].hex(),
+            }
+        raise ValueError("CHAIN_FRAME_INVALID")
+    raise ValueError("CHAIN_FRAME_INVALID")
+
+
 def merkle_leaf(item_digest_hex: str) -> bytes:
     b = bytes.fromhex(item_digest_hex)
     if len(b) != 32:

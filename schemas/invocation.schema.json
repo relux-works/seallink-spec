@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.9/schemas/invocation.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.10/schemas/invocation.schema.json",
   "title": "SealLink v1.0 Invocation, Receipt, Sessions, Auth, Owner Control, Journal & Migration",
   "$defs": {
     "Invocation": {
@@ -388,12 +388,15 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["subject_kind", "name", "registration", "role"],
+          "required": ["subject_kind", "name", "registration", "role", "policy_sha256"],
+          "description": "Policy-scoped durable role closure (prevents routine A->B key rotation or forged unauthenticated grants from closing successor policy B; optional cutoff_height pins 0x0b h_c).",
           "properties": {
             "subject_kind": { "const": "role" },
             "name": { "$ref": "common.schema.json#/$defs/NameStr" },
             "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
-            "role": { "type": "string", "enum": ["grant", "cred", "notary"] }
+            "role": { "type": "string", "enum": ["grant", "cred", "notary"] },
+            "policy_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "cutoff_height": { "$ref": "common.schema.json#/$defs/Uint53" }
           }
         },
         {
@@ -494,8 +497,8 @@
             "body": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["invocation_id", "grant_id", "nonce", "expires_at", "recorded_at", "reservations"],
-              "description": "Atomic pre-effect commit: binds invocation_id, nonce, and complete quota reservation plan (empty [] for quota-free invocations) in a single CAS witness step.",
+              "required": ["invocation_id", "grant_id", "action", "nonce", "expires_at", "recorded_at", "reservations"],
+              "description": "Atomic pre-effect commit: binds invocation_id, action, nonce, and complete quota reservation plan in signed capability.quotas[] order (own before row; empty [] for quota-free invocations) in a single CAS witness step.",
               "properties": {
                 "invocation_id": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "grant_id": { "$ref": "common.schema.json#/$defs/Hex64" },
@@ -788,6 +791,20 @@
             }
           }
         }
+      }
+    },
+    "MigrationExportBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inventory", "source_journal_pos", "source_journal_commitment"],
+      "description": "Closed carrier schema for service migration export bundles (SPEC-07 §2). In stage mode only inventory and source journal coordinates are required; in activate mode a source-signed migration-fence Statement is MANDATORY and every listed predecessor_grant_seals[] MUST be verified spent on chain.",
+      "properties": {
+        "inventory": { "$ref": "#/$defs/MigrationInventory" },
+        "source_journal_pos": { "$ref": "common.schema.json#/$defs/Uint53" },
+        "source_journal_commitment": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "fencing_statement": { "$ref": "manifest.schema.json#/$defs/Statement" },
+        "holder_assent": { "$ref": "contract.schema.json#/$defs/Assent" },
+        "dest_accept_stmt": { "$ref": "manifest.schema.json#/$defs/Statement" }
       }
     },
     "MigrationManifest": {
