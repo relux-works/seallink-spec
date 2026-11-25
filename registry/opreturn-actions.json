@@ -7,6 +7,8 @@
   "max_relay_script_bytes": 83,
   "header_format": "OP_RETURN(0x6a) PUSH5(0x05) magic(4B='SLNK') action(1B) PUSH_N(1B) payload(N bytes)",
   "standard_payload_format": "version(1B=0x01) || commitment(32B) || loc_type(1B) || pointer(0B | 32B)",
+  "critical_forward_only_range": "0x13..0x1a",
+  "critical_retroactive_range": "0x1b..0x1f",
   "critical_reserved_range": "0x13..0x1f",
   "advisory_ignorable_range": "0x20..0x2f",
   "locator_types": [
@@ -226,21 +228,23 @@
       "code": "0x13",
       "name": "RESERVED_CRITICAL_VOLUNTARY_REBIND",
       "status": "reserved_critical",
+      "critical_scope": "forward_only",
       "version": "0x01",
       "commitment": "reserved",
       "allowed_locators": [],
       "owning_spec": "SPEC-04",
-      "description": "Reserved critical action code (0x13..0x1f range) for future voluntary name rebinding. Verifiers observing an unknown confirmed owner-authored frame in 0x13..0x1f MUST fail closed with ORIGIN_STATUS_INCOMPLETE (never silently skip)."
+      "description": "Reserved critical forward-only action code (0x13..0x1a range) for future voluntary name rebinding. Verifiers observing an unknown confirmed frame in 0x13..0x1a at live tip or at_height >= confirmed_height MUST fail closed with ORIGIN_STATUS_INCOMPLETE (historical queries strictly prior to confirmed_height are unaffected)."
     },
     {
       "code": "0x14",
       "name": "RESERVED_CRITICAL_LOG_CHECKPOINT",
       "status": "reserved_critical",
+      "critical_scope": "forward_only",
       "version": "0x01",
       "commitment": "reserved",
       "allowed_locators": [],
       "owning_spec": "SPEC-05",
-      "description": "Reserved critical action code (0x13..0x1f range) for future notarization/release log checkpoints. Verifiers observing an unknown confirmed owner-authored frame in 0x13..0x1f MUST fail closed with ORIGIN_STATUS_INCOMPLETE (never silently skip)."
+      "description": "Reserved critical forward-only action code (0x13..0x1a range) for future notarization/release log checkpoints. Verifiers observing an unknown confirmed frame in 0x13..0x1a at live tip or at_height >= confirmed_height MUST fail closed with ORIGIN_STATUS_INCOMPLETE (historical queries strictly prior to confirmed_height are unaffected)."
     }
   ]
 }

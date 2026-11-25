@@ -851,7 +851,7 @@ def build_trace_01_mail() -> dict[str, Any]:
             "start": {"height": 750010, "hash": h32("t1-tip-750010")},
             "end": {"height": 750010, "hash": h32("t1-tip-750010")},
         },
-        "comparison_peers": [{"healthy": True, "height": 750010, "hash_at_tip": h32("t1-tip-750010")}],
+        "comparison_peers": [{"id": "observer-1", "healthy": True, "height": 750010, "hash_at_tip": h32("t1-tip-750010")}],
         "blocks": {recent_blk: 749990},
         "names": {
             "id/alice": sv.make_name_history(
@@ -929,7 +929,7 @@ def build_trace_01_mail() -> dict[str, Any]:
         "tip_header_time": 1795220480,
         "tip_first_sight": 1795220490,
         "now": 1795220500,
-        "comparison_peers": [{"healthy": True, "height": 750011, "hash_at_tip": h32("t1-tip-750011")}],
+        "comparison_peers": [{"id": "observer-1", "healthy": True, "height": 750011, "hash_at_tip": h32("t1-tip-750011")}],
         "txs": {seal_txid: {"outputs": {"0": {"script_pubkey_hex": spk_hex(seal_pol), "spent_by_txid": revoke_txid, "spend_in_mempool": True}}}},
     }
     ch.apply_patch(step3_patch)
@@ -1377,7 +1377,8 @@ def build_trace_02_guardian() -> dict[str, Any]:
             "end": {"height": 750600, "hash": h32("t2-tip-750600")},
         },
         "credible_utc_interval": [1795220000, 1795220020],
-        "comparison_peers": [{"healthy": True, "height": 750600, "hash_at_tip": h32("t2-tip-750600")}],
+        "comparison_peers": [{"id": "observer-1", "healthy": True, "height": 750600, "hash_at_tip": h32("t2-tip-750600")}],
+        "blocks": {},
         "names": {
             "id/civil-registry": sv.make_name_history(
                 "id/civil-registry", {"txid": h32("t2-reg-outpoint"), "vout": 0}, {"kind": "key", "pk": reg_owner["compressed_pk"]},
@@ -1541,7 +1542,7 @@ def build_trace_02_guardian() -> dict[str, Any]:
         "start": {"height": 752100, "hash": h32("t2-tip-752100")},
         "end": {"height": 752100, "hash": h32("t2-tip-752100")},
     }
-    ch_rec_b_raw["comparison_peers"] = [{"healthy": True, "height": 752100, "hash_at_tip": h32("t2-tip-752100")}]
+    ch_rec_b_raw["comparison_peers"] = [{"id": "observer-1", "healthy": True, "height": 752100, "hash_at_tip": h32("t2-tip-752100")}]
     ch_rec_b_raw["names"]["id/child-leo-recovered-final"] = sv.make_name_history(
         "id/child-leo-recovered-final", b3["registration"], b3_owner_pol,
         {"link": {"origin": origin_id}}, first_height=750900, update_height=750950,
@@ -1984,7 +1985,7 @@ def build_trace_03_delegation() -> dict[str, Any]:
             "start": {"height": 750110, "hash": h32("t3-tip-750110")},
             "end": {"height": 750110, "hash": h32("t3-tip-750110")},
         },
-        "comparison_peers": [{"healthy": True, "height": 750110, "hash_at_tip": h32("t3-tip-750110")}],
+        "comparison_peers": [{"id": "observer-1", "healthy": True, "height": 750110, "hash_at_tip": h32("t3-tip-750110")}],
         "blocks": {recent_blk: 750000},
         "names": {
             "id/org-treasury": sv.make_name_history(
@@ -2542,7 +2543,7 @@ def build_trace_04_agent_guardian_intake() -> dict[str, Any]:
             "start": {"height": 750010, "hash": h32("t4-tip-750010")},
             "end": {"height": 750010, "hash": h32("t4-tip-750010")},
         },
-        "comparison_peers": [{"healthy": True, "height": 750010, "hash_at_tip": h32("t4-tip-750010")}],
+        "comparison_peers": [{"id": "observer-1", "healthy": True, "height": 750010, "hash_at_tip": h32("t4-tip-750010")}],
         "blocks": {recent_blk: 749990},
         "names": {
             "id/agent-registry": sv.make_name_history(

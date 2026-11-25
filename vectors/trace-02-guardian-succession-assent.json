@@ -159,12 +159,14 @@
   ],
   "chain_state": {
     "best_header_height": 750600,
+    "blocks": {},
     "clock_watermark": 1795219000,
     "comparison_peers": [
       {
         "hash_at_tip": "ea2aac743d9503ea1552c8522636a35b8b9cc4fa24946dd639a2105298381f9b",
         "healthy": true,
-        "height": 750600
+        "height": 750600,
+        "id": "observer-1"
       }
     ],
     "credible_utc_interval": [
@@ -856,12 +858,14 @@
     "branch_a_timely_0x10_cancel_restores_b1": {
       "chain_state": {
         "best_header_height": 750600,
+        "blocks": {},
         "clock_watermark": 1795219000,
         "comparison_peers": [
           {
             "hash_at_tip": "ea2aac743d9503ea1552c8522636a35b8b9cc4fa24946dd639a2105298381f9b",
             "healthy": true,
-            "height": 750600
+            "height": 750600,
+            "id": "observer-1"
           }
         ],
         "credible_utc_interval": [
@@ -1265,12 +1269,14 @@
     "branch_b_post_delay_recovery_promotes_b3": {
       "chain_state": {
         "best_header_height": 752100,
+        "blocks": {},
         "clock_watermark": 1795219000,
         "comparison_peers": [
           {
             "hash_at_tip": "4bf2c143350fa88031f8032de8b7be3743b47df13a19335081eef1d50b4b470c",
             "healthy": true,
-            "height": 752100
+            "height": 752100,
+            "id": "observer-1"
           }
         ],
         "credible_utc_interval": [

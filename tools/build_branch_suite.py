@@ -297,6 +297,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             "tip_header_time": 1795220000,
             "tip_first_sight": 1795220005,
             "now": 1795220010,
+            "blocks": {},
             "names": {"id/issuer-rot": copy.deepcopy(hist_with_break_and_rot)},
             "txs": {atx: {"confirmed_height": anchor_h, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(cenv)).hex(), "outputs": {}}},
         })
@@ -564,11 +565,11 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     add("branch-obs-header-lag", ["SL-LDGR-008"], "chain_obs", {"chain": ch_obs}, "REFUSE", "CHAIN_UNHEALTHY",
         "Node lagging behind best_header_height by > lag_limit MUST refuse CHAIN_UNHEALTHY.")
     ch_obs = copy.deepcopy(fx0["chain"])
-    ch_obs["comparison_peers"] = [{"healthy": True, "height": ch_obs["tip_height"] + 1, "hash_at_tip": ch_obs["tip_hash"]}]
+    ch_obs["comparison_peers"] = [{"id": "peer-1", "healthy": True, "height": ch_obs["tip_height"] + 1, "hash_at_tip": ch_obs["tip_hash"]}]
     add("branch-obs-peer-higher-same-hash", ["SL-LDGR-008"], "chain_obs", {"chain": ch_obs}, "REFUSE", "CHAIN_NODE_DISAGREEMENT",
         "Comparison peer strictly ahead of local tip (even with same tip hash) MUST refuse CHAIN_NODE_DISAGREEMENT.")
     ch_obs = copy.deepcopy(fx0["chain"])
-    ch_obs["comparison_peers"] = [{"healthy": True, "height": ch_obs["tip_height"], "hash_at_tip": _h32("fork-hash")}]
+    ch_obs["comparison_peers"] = [{"id": "peer-1", "healthy": True, "height": ch_obs["tip_height"], "hash_at_tip": _h32("fork-hash")}]
     add("branch-obs-peer-same-height-diff-hash", ["SL-LDGR-008"], "chain_obs", {"chain": ch_obs}, "REFUSE", "CHAIN_NODE_DISAGREEMENT",
         "Comparison peer at identical height with divergent tip hash MUST refuse CHAIN_NODE_DISAGREEMENT.")
     ch_obs = copy.deepcopy(fx0["chain"])
@@ -891,7 +892,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             "outputs": {} if miss_next_out else {"0": {"script_pubkey_hex": _spk_hex(rec_pol)}},
         }
         o2["chain"]["tip_height"] = tip_h
-        o2["chain"]["comparison_peers"] = [{"healthy": True, "height": tip_h, "hash_at_tip": o2["chain"]["tip_hash"]}]
+        o2["chain"]["comparison_peers"] = [{"id": "peer-1", "healthy": True, "height": tip_h, "hash_at_tip": o2["chain"]["tip_hash"]}]
         o2["origin_bundle"]["recovery_bindings"] = [cand]
         return o2
 

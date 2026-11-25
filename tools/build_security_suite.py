@@ -40,6 +40,19 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
     """Execute one security-conformance case through Tier1Verifier. NEVER reads expected_* fields."""
     runner = case["runner"]
     inp = case["inputs"]
+    if runner == "init_verifier":
+        try:
+            sv.Tier1Verifier(
+                pinned_network=inp.get("pinned_network", "main"),
+                pinned_genesis=inp.get("pinned_genesis", GENESIS_MAIN),
+                trusted_origin_issuer_pins=inp.get("trusted_origin_issuer_pins"),
+                enforce_schemas=True,
+                require_jsonschema=require_jsonschema,
+                enabled_modules=inp.get("enabled_modules"),
+            )
+            return "ADMIT", None
+        except ValueError:
+            return "REFUSE", "ORIGIN_UNVERIFIED"
     v = sv.Tier1Verifier(
         pinned_network=inp.get("pinned_network", "main"),
         pinned_genesis=inp.get("pinned_genesis", GENESIS_MAIN),
@@ -795,6 +808,21 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 if rep_err is not None:
                     return "REFUSE", f"MSJ_REPLAY_ERR:{rep_err}"
                 continue
+            if op == "record_closure":
+                before_cl = len(j.closures)
+                before_ent = len(j.entries)
+                j.record_closure(
+                    step["subject"],
+                    step["cause"],
+                    observed_at=step["observed_at"],
+                    observed_height=step.get("observed_height"),
+                    spend_txid=step.get("spend_txid"),
+                )
+                if "expect_closures_delta" in step and (len(j.closures) - before_cl) != step["expect_closures_delta"]:
+                    return "REFUSE", f"MSJ_CL_DELTA:{step['label']}:{len(j.closures) - before_cl}"
+                if "expect_entries_delta" in step and (len(j.entries) - before_ent) != step["expect_entries_delta"]:
+                    return "REFUSE", f"MSJ_ENT_DELTA:{step['label']}:{len(j.entries) - before_ent}"
+                continue
             ch = sv.ChainView(step["chain"])
             before_cl = len(j.closures)
             before_ent = len(j.entries)
@@ -815,6 +843,14 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                     ch,
                     journal=j,
                     origin_bundle=step.get("origin_bundle"),
+                )
+            elif op == "federation":
+                res = v.verify_federation_disclosure(
+                    step["policy"],
+                    step["peer_ctx"],
+                    step["grant"],
+                    chain=ch,
+                    journal=j,
                 )
             else:
                 raise ValueError(f"Unknown multi_step_journal op: {op}")

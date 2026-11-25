@@ -888,6 +888,15 @@ def verify_jsonschema(
                     else:
                         _record_type(inst)
                     validated += 1
+        # Validate trace-01..04 initial chain snapshots against closed ChainViewSnapshot schema (SL-LDGR-015)!
+        val_cvs = get_validator("schemas/common.schema.json#/$defs/ChainViewSnapshot")
+        if vname.startswith("trace-0"):
+            for ck in ("initial_chain_state", "chain_state"):
+                if ck in vdoc and isinstance(vdoc[ck], dict):
+                    errs_cv = list(val_cvs.iter_errors(vdoc[ck]))
+                    if errs_cv:
+                        errors.append(f"{vname} {ck} FAILED ChainViewSnapshot schema: {errs_cv[0].message}")
+                    validated += 1
         # Validate trace-02 disclosed machine clause against canonical ClauseObject schema (R2-01)!
         if vname == "trace-02-guardian-succession-assent.json" and "machine_clause_0_disclosure" in vdoc:
             mc_obj = vdoc["machine_clause_0_disclosure"].get("clause")
@@ -896,13 +905,28 @@ def verify_jsonschema(
             if errs_mc:
                 errors.append(f"trace-02 machine_clause_0_disclosure FAILED ClauseObject schema: {errs_mc[0].message}")
             validated += 1
-        # Validate EVERY recognizable typed object inside non-wire-syntax security-conformance cases AND module tags!
+        # Validate EVERY recognizable typed object inside non-wire-syntax security-conformance cases,
+        # module tags, AND closed ChainViewSnapshot on all positive (ADMIT*) cases & positive sub-steps!
         if vname == "security-conformance.json":
             valid_modules = {"core", "bearer-sessions", "service-migration", "federated-screening"}
             for case in vdoc.get("cases", []):
                 if case.get("module") not in valid_modules:
                     errors.append(f"Security conformance case '{case.get('id')}' has missing/invalid module tag: {case.get('module')!r}")
+                exp_v = str(case.get("expected_verdict") or "")
                 exp_r = case.get("expected_refusal") or ""
+                if exp_v.startswith("ADMIT"):
+                    inp_c = case.get("inputs", {})
+                    if isinstance(inp_c.get("chain"), dict):
+                        errs_cv = list(val_cvs.iter_errors(inp_c["chain"]))
+                        if errs_cv:
+                            errors.append(f"Security conformance positive case '{case['id']}' chain FAILED ChainViewSnapshot schema: {errs_cv[0].message}")
+                        validated += 1
+                    for st_i, st in enumerate(inp_c.get("steps", [])):
+                        if isinstance(st, dict) and isinstance(st.get("chain"), dict) and str(st.get("want_verdict") or "").startswith("ADMIT"):
+                            errs_cv = list(val_cvs.iter_errors(st["chain"]))
+                            if errs_cv:
+                                errors.append(f"Security conformance positive step '{case['id']}[{st.get('label', st_i)}]' chain FAILED ChainViewSnapshot schema: {errs_cv[0].message}")
+                            validated += 1
                 if exp_r.startswith("WIRE_") and exp_r not in ("WIRE_SIGNATURE", "WIRE_KEY"):
                     continue
                 typed_objs = []

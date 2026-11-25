@@ -121,7 +121,8 @@
       {
         "hash_at_tip": "6593c8af21ba5a03d7be803ecf2ce2dcc193d9fb988c5bf2bf809488d2391276",
         "healthy": true,
-        "height": 750010
+        "height": 750010,
+        "id": "observer-1"
       }
     ],
     "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -730,7 +731,8 @@
           {
             "hash_at_tip": "919d63731e99fbfbb64d4bfc8e09c299173fbd2f0cb35ad7f71dd21ee26d5bbf",
             "healthy": true,
-            "height": 750011
+            "height": 750011,
+            "id": "observer-1"
           }
         ],
         "now": 1795220500,

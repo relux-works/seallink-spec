@@ -28,6 +28,7 @@ Executable golden & adversarial vectors closing 100% of independent verification
 from __future__ import annotations
 
 import copy
+import json
 from typing import Any, Callable
 
 import build_refusal_matrix as rm
@@ -522,7 +523,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
             "journal": {"journal_id": _h32("d10-bsec-j")},
             "steps": [
                 {"bearer_token": tok_bsec, "bundle": fx_bsec["bundle"], "chain": fx_bsec["chain"], "kind": "session_open", "label": "open-sec", "session_open": so_bsec, "want_refusal": None, "want_verdict": "ADMIT"},
-                {"action": "mail/list", "arguments": "not-a-dict", "chain": fx_bsec["chain"], "expect_zero_writes": True, "grant_env": g_bsec, "kind": "bearer_session", "label": "non-dict-args", "slot_binding": "slot-bsec", "target": "mailbox:id/alice:work", "token": tok_bsec, "want_refusal": "INVOKE_CONSTRAINT_FAILED", "want_verdict": "REFUSE"},
+                {"action": "mail/list", "arguments": "not-a-dict", "chain": fx_bsec["chain"], "expect_zero_writes": True, "grant_env": g_bsec, "kind": "bearer_session", "label": "non-dict-args", "slot_binding": "slot-bsec", "target": "mailbox:id/alice:work", "token": tok_bsec, "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
                 {"action": "mail/list", "arguments": {"folder": "Invoices", "page": -1, "unexpected": True}, "chain": fx_bsec["chain"], "expect_zero_writes": True, "grant_env": g_bsec, "kind": "bearer_session", "label": "bad-args-schema", "slot_binding": "slot-bsec", "target": "mailbox:id/alice:work", "token": tok_bsec, "want_refusal": "WIRE_MEMBER", "want_verdict": "REFUSE"},
                 {"action": "mail/list", "arguments": {"folder": "Invoices", "page": 0}, "chain": fx_bsec["chain"], "grant_env": g_bsec, "kind": "bearer_session", "label": "first-sec-use-admit", "slot_binding": "slot-bsec", "target": "mailbox:id/alice:work", "token": tok_bsec, "want_refusal": None, "want_verdict": "ADMIT"},
                 {"action": "mail/list", "arguments": {"folder": "Invoices", "page": 0}, "chain": ch_bsec_reg, "expect_zero_writes": True, "grant_env": g_bsec, "kind": "bearer_session", "label": "sec-clock-regression", "slot_binding": "slot-bsec", "target": "mailbox:id/alice:work", "token": tok_bsec, "want_refusal": "QUOTA_CLOCK_REGRESSION", "want_verdict": "REFUSE"},
@@ -1298,8 +1299,8 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
 
     # M-9: Post-majority 0x0c targeting owner_policy sharing pubkey with initial_owner_policy stays GUARDIAN_TRANSFER_PENDING!
     of_m9_base = rm._base_origin_fixture()
-    guard_pk = sorted(sv.Tier1Verifier._extract_policy_pubkeys(of_m9_base["origin_bundle"]["origin"]["payload"]["claims"]["intended_owner_policy"]))[0]
-    overlap_pol = {"kind": "multisig", "m": 1, "pks": [guard_pk, _kp("d10-m9-extra")["comp"]]}
+    guard_pk = of_m9_base["origin_bundle"]["origin"]["payload"]["claims"]["intended_owner_policy"]["pks"][0]
+    overlap_pol = {"kind": "multisig", "m": 1, "pks": sorted([guard_pk, _kp("d10-m9-extra")["comp"]])}
     of_m9, _, _ = _setup_rec(of_m9_base, 749600, overlap_pol, "m9-ov", name_new="id/child-leo-ov")
     maj_m9 = of_m9["origin_bundle"]["opened_majority_unix"]
     of_m9["chain"]["block_times"] = {str(749600 + 144): maj_m9 + 10}
@@ -1853,3 +1854,1002 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         if meta_val is not None:
             inp_m["actual_message_meta"] = meta_val
         add(f"d10-h15-mail-read-{label_m}", ["SL-PROF-001", "SL-GRNT-004"], "invocation", inp_m, want_v, want_c, desc_m)
+
+    # =========================================================================
+    # 13. Layer 1 Verification Hardening (Post-draft.10 Audit Closures)
+    # =========================================================================
+
+    # L1-1: Tier1Verifier.__init__ validates trusted_origin_issuer_pins against NamePin schema (fail closed!)
+    fx_orig_l1 = rm._base_origin_fixture()
+    bad_pin = copy.deepcopy(fx_orig_l1["trusted_origin_issuer_pins"][0])
+    bad_pin["unexpected_typo"] = "boom"
+    add(
+        "d10-l1-init-bad-origin-issuer-pin-refuse",
+        ["SL-ORIG-002"],
+        "init_verifier",
+        {"trusted_origin_issuer_pins": [bad_pin]},
+        "REFUSE",
+        "ORIGIN_UNVERIFIED",
+        "L1: Tier1Verifier.__init__ MUST validate every trusted_origin_issuer_pins entry against closed NamePin schema.",
+    )
+
+    # L1-2: SPEC-01 §7 Step 7 WIRE_SIZE runs BEFORE Step 7b optional-module ACTION_UNSUPPORTED!
+    big_mig_payload = {
+        "dest_executor": fx_mig["executor_cfg"]["pin"],
+        "genesis": GENESIS_MAIN,
+        "holder": fx_mig["bundle"]["grants"][0]["payload"]["issuer"],
+        "inventory_sha256": _h32("l1-big-inv"),
+        "issued_at": 1795220000,
+        "journal_commitment": _h32("l1-big-jc"),
+        "journal_pos": 1,
+        "migration_id": _h32("l1-big-mid"),
+        "network": "main",
+        "outstanding_exposure": [
+            {"kind": "seallink/count", "max": "1", "resource": ("r" * 240) + f"-{i:02d}", "unit": "calls", "window": "term"}
+            for i in range(64)
+        ],
+        "source_executor": fx_mig["executor_cfg"]["pin"],
+        "type": "seallink-migration/1",
+    }
+    big_mig_env = sl.sign_envelope(big_mig_payload, [fx_mig["_keys"]["host_rcpt"]["sk"]])
+    big_mig_raw = sl.jcs_encode(big_mig_env).decode("utf-8")
+    # Pad inside a valid UTF-8 JSON object exceeding 65536B (or using max_bytes_override? No, make raw > 65536B via extra field before Step 8!)
+    big_mig_over = json.dumps({**big_mig_env, "pad": "x" * 66000}, separators=(",", ":"), sort_keys=True)
+    add(
+        "d10-l1-wire-size-before-action-unsupported-refuse",
+        ["SL-WIRE-001", "SL-SERV-003"],
+        "raw_wire",
+        {"enabled_modules": ["core"], "raw_bytes_utf8": big_mig_over},
+        "REFUSE",
+        "WIRE_SIZE",
+        "L1 (SPEC-01 §7): Oversized disabled-module object (> type max_bytes) MUST refuse WIRE_SIZE before optional-module ACTION_UNSUPPORTED.",
+    )
+
+    # L1-3: _is_bracket_consistent MUST NOT let rebracket_tip alone bypass missing/invalid observation_bracket!
+    ch_no_ob_with_rb = copy.deepcopy(fx_h15["chain"])
+    ch_no_ob_with_rb.pop("observation_bracket", None)
+    ch_no_ob_with_rb["rebracket_tip"] = {
+        "first_sight": ch_no_ob_with_rb["tip_first_sight"],
+        "hash": ch_no_ob_with_rb["tip_hash"],
+        "header_time": ch_no_ob_with_rb["tip_header_time"],
+        "height": ch_no_ob_with_rb["tip_height"],
+        "now": ch_no_ob_with_rb["now"],
+    }
+    add(
+        "d10-l1-missing-ob-with-rebracket-tip-void",
+        ["SL-LDGR-008"],
+        "chain_obs",
+        {"chain": ch_no_ob_with_rb, "require_observation_bracket": True, "risk_class": 1},
+        "REFUSE",
+        "CHAIN_OBSERVATION_VOID",
+        "L1: rebracket_tip alone MUST NOT bypass missing observation_bracket when require_observation_bracket=True.",
+    )
+    ch_nondict_ob = copy.deepcopy(ch_no_ob_with_rb)
+    ch_nondict_ob["observation_bracket"] = "invalid"
+    add(
+        "d10-l1-nondict-ob-with-rebracket-tip-void",
+        ["SL-LDGR-008"],
+        "chain_obs",
+        {"chain": ch_nondict_ob, "require_observation_bracket": True, "risk_class": 1},
+        "REFUSE",
+        "CHAIN_OBSERVATION_VOID",
+        "L1: Non-dict observation_bracket MUST refuse CHAIN_OBSERVATION_VOID even if rebracket_tip matches.",
+    )
+
+    # L1-4: SPEC-02 §5.2 200-year SLNK outer-before-semantic + critical_forward_only (0x13..0x1a) vs critical_retroactive (0x1b..0x1f)
+    sl_own, sl_cred, sl_subj = _kp("l1-sl-own"), _kp("l1-sl-cred"), _kp("l1-sl-subj")
+    sl_pol = {"kind": "key", "pk": sl_own["comp"]}
+    sl_reg = {"txid": _h32("l1-sl-reg"), "vout": 0}
+    sl_val = {"link": {"cred": sl_cred["xonly"]}}
+    sl_cred_p = {
+        "claims": {"degree": "MSc"},
+        "credential_kind": "education/diploma",
+        "genesis": GENESIS_MAIN,
+        "issued_at": 1795220000,
+        "issuer": {"name": "id/slnk-uni", "owner_policy": sl_pol, "registration": sl_reg, "role_policy": {"m": 1, "pks": [sl_cred["xonly"]]}},
+        "lifecycle": "eternal",
+        "network": "main",
+        "not_before_height": 749500,
+        "subject": {"key": sl_subj["xonly"], "mode": "key"},
+        "type": "seallink-credential/1",
+    }
+    sl_cred_env = sl.sign_envelope(sl_cred_p, [sl_cred["sk"]])
+    sl_atx_before = _h32("l1-sl-atx-749999")
+    sl_atx_at = _h32("l1-sl-atx-750000")
+    frame_0x13_ok = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x13, 0x22, 0x01]) + (b"\xaa" * 32) + bytes([0x00])).hex()
+    frame_0x13_bad_outer = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x13, 0x05, 0x01, 0x02])).hex()
+    frame_0x1b_ok = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x1B, 0x22, 0x01]) + (b"\xbb" * 32) + bytes([0x00])).hex()
+    frame_0x0b_bad_hc = sl.encode_opreturn(0x0B, _h32("l1-0b-bad"), 0x00, h_c=750050).hex()
+
+    def _slnk_chain(opret_hex: str, *, sighash: int = 0x01) -> dict[str, Any]:
+        ch_s = copy.deepcopy(fx_h15["chain"])
+        ch_s["names"]["id/slnk-uni"] = sv.make_name_history(
+            "id/slnk-uni",
+            sl_reg,
+            sl_pol,
+            sl_val,
+            first_height=748000,
+            update_height=749000,
+            extra_updates=[{"confirmed_height": 750000, "opreturn_hex": opret_hex, "sighash_bytes": [sighash], "txid": _h32(f"l1-sl-u-{opret_hex[:8]}-{sighash}"), "value": sl_val}],
+        )
+        ch_s["txs"][sl_atx_before] = {"confirmed_height": 749999, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(sl_cred_env)).hex(), "outputs": {}}
+        ch_s["txs"][sl_atx_at] = {"confirmed_height": 750000, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(sl_cred_env)).hex(), "outputs": {}}
+        return ch_s
+
+    add("d10-l1-slnk-0x13-forward-only-before-hframe-admit", ["SL-LDGR-010", "SL-CONT-008"], "credential",
+        {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x13_ok), "credential": sl_cred_env},
+        "ADMIT", None, "L1 (SPEC-02 §5.2): Future critical_forward_only 0x13 frame at h_frame=750000 MUST NOT break historical eternal credential at at_height=749999 < h_frame.")
+    add("d10-l1-slnk-0x13-forward-only-at-hframe-refuse", ["SL-LDGR-010", "SL-CONT-008"], "credential",
+        {"anchor_txid": sl_atx_at, "chain": _slnk_chain(frame_0x13_ok), "credential": sl_cred_env},
+        "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "L1 (SPEC-02 §5.2): Future critical_forward_only 0x13 frame at h_frame=750000 MUST refuse ORIGIN_STATUS_INCOMPLETE at at_height == h_frame.")
+    add("d10-l1-slnk-0x1b-retroactive-before-hframe-refuse", ["SL-LDGR-010", "SL-CONT-008"], "credential",
+        {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x1b_ok), "credential": sl_cred_env},
+        "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "L1 (SPEC-02 §5.2): Future critical_retroactive 0x1b frame at h_frame=750000 MUST fail closed ORIGIN_STATUS_INCOMPLETE even at historical at_height=749999 < h_frame.")
+    add("d10-l1-slnk-0x13-malformed-outer-frame-invalid", ["SL-LDGR-010"], "credential",
+        {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x13_bad_outer), "credential": sl_cred_env},
+        "REFUSE", "CHAIN_FRAME_INVALID", "L1 (SPEC-02 §5.2): Truncated outer push on 0x13 MUST refuse CHAIN_FRAME_INVALID before range criticality.")
+    add("d10-l1-slnk-non-sighash-all-0x1b-still-critical-refuse", ["SL-LDGR-010"], "credential",
+        {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x1b_ok, sighash=0x81), "credential": sl_cred_env},
+        "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "L1 (SPEC-02 §5.2): Non-SIGHASH_ALL confirmed update after at_height carrying critical_retroactive 0x1b MUST still be checked and refuse ORIGIN_STATUS_INCOMPLETE.")
+    add("d10-l1-slnk-non-sighash-all-0x0b-bad-hc-frame-invalid", ["SL-LDGR-010"], "credential",
+        {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x0b_bad_hc, sighash=0x81), "credential": sl_cred_env},
+        "REFUSE", "CHAIN_FRAME_INVALID", "L1 (SPEC-02 §5.2): Non-SIGHASH_ALL confirmed update carrying 0x0b with h_c > inclusion_height MUST refuse CHAIN_FRAME_INVALID.")
+
+    # L1-5: A -> B -> A role rotation consistency (retired_before_height) + cause-keyed role closures (NAME_ROLE_CHANGED vs 0x0b CRED_ISSUER_CLOSED)
+    fx_aba = rm._base_invocation_fixture()
+    k_a = fx_aba["_keys"]["alice_gr"]
+    k_b = _kp("l1-aba-key-b")
+    alice_val_a = {"link": {"grant": k_a["xonly"]}, "m": {"h": sl.content_addr(fx_aba["_alice_man"]), "s": 1}}
+    alice_val_b = {"link": {"grant": k_b["xonly"]}, "m": {"h": sl.content_addr(fx_aba["_alice_man"]), "s": 1}}
+    # Old grant G_old issued at recent_block=749990 (BEFORE A->B rotation at 749995)
+    g_aba_old = fx_aba["bundle"]["grants"][0]
+    inv_aba_old = fx_aba["invocation"]
+    # New grant G_new issued by restored key A at recent_block=750002 (AFTER B->A restoration at 750000!)
+    blk_750002 = _h32("l1-aba-blk-750002")
+    seal_tx_new = _h32("l1-aba-seal-new")
+    iss_tx_new = _h32("l1-aba-iss-new")
+    seal_pol_aba = g_aba_old["payload"]["revocation"]["seal"]["script_policy"]
+    gp_aba_new = copy.deepcopy(g_aba_old["payload"])
+    gp_aba_new["recent_block"] = blk_750002
+    gp_aba_new["revocation"] = {"construction": "W", "kind": "revocable", "mode": "seal", "seal": {"script_policy": seal_pol_aba, "txid": seal_tx_new, "vout": 0}}
+    g_aba_new = sl.sign_envelope(gp_aba_new, [k_a["sk"]])
+    gid_aba_new = sl.object_id(gp_aba_new)
+    iss_prep_new = {"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(g_aba_new), "grant_id": gid_aba_new, "type": "seallink-issuance/1"}
+    inv_aba_new = sl.sign_envelope(
+        {**inv_aba_old["payload"], "nonce": _h32("l1-aba-n-new"), "proof_path": [{"grant_id": gid_aba_new, "issuance_txid": iss_tx_new}]},
+        [fx_aba["_keys"]["agent_req"]["sk"]],
+    )
+    bundle_aba_new = {**fx_aba["bundle"], "grants": [g_aba_new]}
+    ch_aba = copy.deepcopy(fx_aba["chain"])
+    ch_aba["blocks"][blk_750002] = 750002
+    ch_aba["txs"][seal_tx_new] = {
+        "confirmed_height": 750003,
+        "inputs": [sv.make_segwit_input(_h32("l1-aba-fund"), 0)],
+        "outputs": {"0": {"script_pubkey_hex": _spk_hex(seal_pol_aba)}, "1": {"script_pubkey_hex": _spk_hex(fx_aba["_alice_owner_pol"])}},
+    }
+    ch_aba["txs"][iss_tx_new] = {
+        "confirmed_height": 750004,
+        "inputs": [sv.make_segwit_input(seal_tx_new, 1)],
+        "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest(iss_prep_new).hex(), 0x00).hex(),
+        "outputs": {},
+    }
+    u_rot_b_tx = _h32("l1-aba-rot-b")
+    u_rot_a2_tx = _h32("l1-aba-rot-a2")
+    ch_aba["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx_aba["_alice_reg"],
+        fx_aba["_alice_owner_pol"],
+        alice_val_a,
+        first_height=748000,
+        update_height=749000,
+        extra_updates=[
+            {"confirmed_height": 749995, "txid": u_rot_b_tx, "value": alice_val_b},
+            {"confirmed_height": 750000, "txid": u_rot_a2_tx, "value": alice_val_a},
+        ],
+    )
+    # Also build post-0x0b chain where key A is later compromised at h_c = 750001 (on update at 750006)!
+    brk_aba = {
+        "compromised_policy": {"m": 1, "pks": [k_a["xonly"]]},
+        "genesis": GENESIS_MAIN,
+        "h_c": 750001,
+        "issuer": {"name": "id/alice", "owner_policy": fx_aba["_alice_owner_pol"], "registration": fx_aba["_alice_reg"]},
+        "name_input": {"txid": u_rot_a2_tx, "vout": 0},
+        "role": "grant",
+        "type": "seallink-credential-break/1",
+    }
+    ch_aba_0b = copy.deepcopy(ch_aba)
+    ch_aba_0b["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx_aba["_alice_reg"],
+        fx_aba["_alice_owner_pol"],
+        alice_val_a,
+        first_height=748000,
+        update_height=749000,
+        extra_updates=[
+            {"confirmed_height": 749995, "txid": u_rot_b_tx, "value": alice_val_b},
+            {"confirmed_height": 750000, "txid": u_rot_a2_tx, "value": alice_val_a},
+            {"confirmed_height": 750006, "opreturn_hex": sl.encode_opreturn(0x0B, sl.signing_digest(brk_aba).hex(), 0x00, h_c=750001).hex(), "txid": _h32("l1-aba-0b"), "value": alice_val_a},
+        ],
+    )
+    add(
+        "d10-l1-aba-rotation-epoch-and-cause-keyed-role-closures",
+        ["SL-IDEN-004", "SL-CONT-009", "SL-GRNT-014"],
+        "multi_step_journal",
+        {
+            "journal": {"journal_id": _h32("l1-aba-j")},
+            "steps": [
+                # 1. Old grant from before A->B rotation at 749995 refuses NAME_ROLE_CHANGED & writes retired_before_height=749995
+                {"actual_message_meta": {"folder": "Invoices"}, "bundle": fx_aba["bundle"], "chain": ch_aba, "executor_cfg": fx_aba["executor_cfg"], "expect_closures_delta": 1, "invocation": inv_aba_old, "kind": "invocation", "label": "old-pre-rot-refuse", "want_refusal": "NAME_ROLE_CHANGED", "want_verdict": "REFUSE"},
+                # 2. Re-presenting old grant hits persisted NAME_ROLE_CHANGED idempotently (0 new writes!)
+                {"actual_message_meta": {"folder": "Invoices"}, "bundle": fx_aba["bundle"], "chain": ch_aba, "executor_cfg": fx_aba["executor_cfg"], "expect_entries_delta": 0, "invocation": inv_aba_old, "kind": "invocation", "label": "old-pre-rot-cached", "want_refusal": "NAME_ROLE_CHANGED", "want_verdict": "REFUSE"},
+                # 3. New grant from restored epoch (recent_block=750002 >= 749995) ADMITS identically on stateful & fresh server!
+                {"actual_message_meta": {"folder": "Invoices"}, "bundle": bundle_aba_new, "chain": ch_aba, "executor_cfg": fx_aba["executor_cfg"], "invocation": inv_aba_new, "kind": "invocation", "label": "new-post-restore-admit", "want_refusal": None, "want_verdict": "ADMIT"},
+                # 4. Restart journal cleanly preserving retired_before_height!
+                {"kind": "replay_restart", "label": "restart"},
+                # 5. Later 0x0b compromise of key A records separate CRED_ISSUER_CLOSED closure without overwriting NAME_ROLE_CHANGED!
+                {"actual_message_meta": {"folder": "Invoices"}, "bundle": bundle_aba_new, "chain": ch_aba_0b, "executor_cfg": fx_aba["executor_cfg"], "expect_closures_delta": 1, "invocation": sl.sign_envelope({**inv_aba_new["payload"], "nonce": _h32("l1-aba-n-new2")}, [fx_aba["_keys"]["agent_req"]["sk"]]), "kind": "invocation", "label": "post-0x0b-cred-issuer-closed", "want_refusal": "CRED_ISSUER_CLOSED", "want_verdict": "REFUSE"},
+                # 6. Both closures coexist: persisted CRED_ISSUER_CLOSED refuses on replay with 0 extra entries!
+                {"actual_message_meta": {"folder": "Invoices"}, "bundle": bundle_aba_new, "chain": ch_aba_0b, "executor_cfg": fx_aba["executor_cfg"], "expect_entries_delta": 0, "invocation": sl.sign_envelope({**inv_aba_new["payload"], "nonce": _h32("l1-aba-n-new3")}, [fx_aba["_keys"]["agent_req"]["sk"]]), "kind": "invocation", "label": "post-0x0b-cached", "want_refusal": "CRED_ISSUER_CLOSED", "want_verdict": "REFUSE"},
+            ],
+        },
+        "ADMIT",
+        None,
+        "L1: A->B->A role rotation uses retired_before_height for stateful/fresh consistency, and cause-keyed role closures separate NAME_ROLE_CHANGED from 0x0b CRED_ISSUER_CLOSED.",
+    )
+    # Also test mempool role change -> retired_before_height = tip_height + 1 (kills _first_role_change_height mempool return!)
+    ch_mem_rot = copy.deepcopy(fx_aba["chain"])
+    mem_rot_spk, _ = sl.compile_script_policy(fx_aba["_alice_owner_pol"])
+    mem_rot_out = sl.encode_name_output("NAME_UPDATE", mem_rot_spk, name=b"id/alice", value=sl.jcs_encode(alice_val_b))
+    last_u_a = ch_mem_rot["names"]["id/alice"]["updates"][-1]
+    ch_mem_rot["names"]["id/alice"]["mempool_updates"] = [{
+        "op": "NAME_UPDATE",
+        "output_script_hex": mem_rot_out.hex(),
+        "owner_policy": fx_aba["_alice_owner_pol"],
+        "prev_input": {"sighash_bytes": [0x01], "txid": last_u_a["txid"], "vout": last_u_a["vout"], "witness_policy": fx_aba["_alice_owner_pol"]},
+        "txid": _h32("l1-mem-rot-tx"),
+        "vout": 0,
+    }]
+    add(
+        "d10-l1-mempool-role-rotation-refuse",
+        ["SL-IDEN-004"],
+        "invocation",
+        {"actual_message_meta": {"folder": "Invoices"}, "bundle": fx_aba["bundle"], "chain": ch_mem_rot, "executor_cfg": fx_aba["executor_cfg"], "invocation": inv_aba_old, "journal": {"journal_id": _h32("l1-memrot-j")}},
+        "REFUSE",
+        "NAME_ROLE_CHANGED",
+        "L1: Mempool OP_NAME_UPDATE rotating link.grant refuses NAME_ROLE_CHANGED and records retired_before_height = tip_height + 1.",
+    )
+
+    # L1-6: Emancipation x-coordinate negated pubkey (02X vs 03X) & missing block_time (bu_bt is None) fail closed!
+    of_neg = rm._base_origin_fixture()
+    init_comp = of_neg["origin_bundle"]["origin"]["payload"]["claims"]["intended_owner_policy"]["pks"][0]
+    neg_comp = ("03" if init_comp.startswith("02") else "02") + init_comp[2:]
+    neg_pol = {"kind": "key", "pk": neg_comp}
+    of_neg_cap_tx = _h32("l1-neg-cap-tx")
+    op_neg = of_neg["origin_bundle"]["origin"]["payload"]
+    cap_neg_p = {
+        "basis_sha256": _h32("l1-neg-basis"),
+        "genesis": GENESIS_MAIN,
+        "issued_at": 1795220000,
+        "issuer": op_neg["issuer"],
+        "network": "main",
+        "next_status_policy": op_neg["status_seal"]["script_policy"],
+        "next_status_vout": 0,
+        "origin_id": sl.object_id(op_neg),
+        "status_prev_outpoint": {"txid": op_neg["status_seal"]["txid"], "vout": op_neg["status_seal"]["vout"]},
+        "subject_new_owner_policy": neg_pol,
+        "type": "seallink-capacity/1",
+    }
+    cap_neg = sl.sign_envelope(cap_neg_p, [of_neg["_keys"]["reg_cred"]["sk"]])
+    of_neg["origin_bundle"]["capacity_record"] = cap_neg
+    of_neg["chain"]["txs"][op_neg["status_seal"]["txid"]]["outputs"]["0"]["spent_by_txid"] = of_neg_cap_tx
+    of_neg["chain"]["txs"][of_neg_cap_tx] = {
+        "confirmed_height": 750050,
+        "inputs": [sv.make_segwit_input(op_neg["status_seal"]["txid"], 0)],
+        "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(cap_neg)).hex(),
+        "outputs": {"0": {"script_pubkey_hex": _spk_hex(op_neg["status_seal"]["script_policy"])}},
+    }
+    of_neg["chain"]["names"]["id/child-leo"] = sv.make_name_history(
+        "id/child-leo",
+        of_neg["origin_bundle"]["name_binding"]["registration"],
+        op_neg["claims"]["intended_owner_policy"],
+        {"link": {"origin": sl.object_id(op_neg)}},
+        first_height=749005,
+        update_height=749015,
+        extra_updates=[
+            {"confirmed_height": 750060, "owner_policy": neg_pol, "txid": _h32("l1-neg-xfer"), "value": {"link": {"origin": sl.object_id(op_neg)}}},
+            {"confirmed_height": 750070, "owner_policy": neg_pol, "txid": _h32("l1-neg-self"), "value": {"link": {"origin": sl.object_id(op_neg)}}},
+        ],
+    )
+    add(
+        "d10-l1-emancipation-negated-xcoord-pubkey-refuse",
+        ["SL-ORIG-014", "SL-LDGR-004"],
+        "origin_status",
+        {"chain": of_neg["chain"], "origin_bundle": of_neg["origin_bundle"], "trusted_origin_issuer_pins": of_neg["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "GUARDIAN_TRANSFER_PENDING",
+        "L1: Emancipation handover to negated secp256k1 point (03X vs 02X, identical x-coordinate) MUST fail closed GUARDIAN_TRANSFER_PENDING.",
+    )
+
+    # Missing block_time on ward name update -> conservatively treated as pre-majority (fail closed!)
+    of_nobt = rm._base_origin_fixture()
+    op_nb = of_nobt["origin_bundle"]["origin"]["payload"]
+    k_mid_guard = _kp("l1-nobt-mid-guard")
+    pol_mid_guard = {"kind": "key", "pk": k_mid_guard["comp"]}
+    cap_nb_p = {
+        "basis_sha256": _h32("l1-nobt-basis"),
+        "genesis": GENESIS_MAIN,
+        "issued_at": 1795220000,
+        "issuer": op_nb["issuer"],
+        "network": "main",
+        "next_status_policy": op_nb["status_seal"]["script_policy"],
+        "next_status_vout": 0,
+        "origin_id": sl.object_id(op_nb),
+        "status_prev_outpoint": {"txid": op_nb["status_seal"]["txid"], "vout": op_nb["status_seal"]["vout"]},
+        "subject_new_owner_policy": pol_mid_guard,
+        "type": "seallink-capacity/1",
+    }
+    cap_nb = sl.sign_envelope(cap_nb_p, [of_nobt["_keys"]["reg_cred"]["sk"]])
+    nb_cap_tx = _h32("l1-nobt-cap-tx")
+    of_nobt["origin_bundle"]["capacity_record"] = cap_nb
+    of_nobt["chain"]["txs"][op_nb["status_seal"]["txid"]]["outputs"]["0"]["spent_by_txid"] = nb_cap_tx
+    of_nobt["chain"]["txs"][nb_cap_tx] = {
+        "confirmed_height": 750050,
+        "inputs": [sv.make_segwit_input(op_nb["status_seal"]["txid"], 0)],
+        "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(cap_nb)).hex(),
+        "outputs": {"0": {"script_pubkey_hex": _spk_hex(op_nb["status_seal"]["script_policy"])}},
+    }
+    # Update at 750040 (< h_cap) has NO block_time -> MUST be added to pre_trigger_pks (blocking reuse of pol_mid_guard at 750060!)
+    of_nobt["chain"]["names"]["id/child-leo"] = sv.make_name_history(
+        "id/child-leo",
+        of_nobt["origin_bundle"]["name_binding"]["registration"],
+        op_nb["claims"]["intended_owner_policy"],
+        {"link": {"origin": sl.object_id(op_nb)}},
+        first_height=749005,
+        update_height=749015,
+        extra_updates=[
+            {"confirmed_height": 750040, "owner_policy": pol_mid_guard, "txid": _h32("l1-nobt-pre"), "value": {"link": {"origin": sl.object_id(op_nb)}}},
+            {"confirmed_height": 750060, "owner_policy": pol_mid_guard, "txid": _h32("l1-nobt-post"), "value": {"link": {"origin": sl.object_id(op_nb)}}},
+            {"confirmed_height": 750070, "owner_policy": pol_mid_guard, "txid": _h32("l1-nobt-self"), "value": {"link": {"origin": sl.object_id(op_nb)}}},
+        ],
+    )
+    add(
+        "d10-l1-emancipation-missing-block-time-fail-closed",
+        ["SL-ORIG-014"],
+        "origin_status",
+        {"chain": of_nobt["chain"], "origin_bundle": of_nobt["origin_bundle"], "trusted_origin_issuer_pins": of_nobt["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "GUARDIAN_TRANSFER_PENDING",
+        "L1: Confirmed ward update with omitted block_time MUST conservatively join pre_trigger_pks (fail closed GUARDIAN_TRANSFER_PENDING).",
+    )
+
+    # L1-7: SPEC-05 §4.2 & §5 anchor check runs BEFORE persisted journal closure!
+    j_cr_l1 = sv.FencedJournal(_h32("l1-cr-j"))
+    j_cr_l1.record_closure({"subject_id": sl.object_id(sl_cred_p), "subject_kind": "credential"}, "CRED_REVOKED_FOR_CAUSE", observed_at=fx_h15["chain"]["now"], observed_height=fx_h15["chain"]["tip_height"])
+    add(
+        "d10-l1-credential-missing-anchor-before-persisted-closure",
+        ["SL-CONT-010"],
+        "credential",
+        {"anchor_txid": _h32("l1-missing-anchor"), "chain": fx_h15["chain"], "credential": sl_cred_env, "journal": {"closures": j_cr_l1.closures, "journal_id": j_cr_l1.journal_id}},
+        "REFUSE",
+        "CRED_ANCHOR_MISSING",
+        "L1 (SPEC-05 §4.2): Missing 0x09 anchor MUST refuse CRED_ANCHOR_MISSING (Step 4) before persisted credential closure (Step 8).",
+    )
+
+    # L1-8: Bearer sessions hardening (Class-1 risk_class freshness, reorged proof_path anchor, 0x02 batch anchor, missing target)
+    fx_bs_l1 = rm._base_invocation_fixture()
+    gp_bs_l1 = copy.deepcopy(fx_bs_l1["bundle"]["grants"][0]["payload"])
+    gp_bs_l1["capabilities"] = [{"action": "mail/read", "quotas": [{"kind": "seallink/count", "max": "5", "resource": "mailbox:id/alice:work", "unit": "reads", "window": "term"}], "target": "mailbox:id/alice:work"}]
+    g_bs_l1, gid_bs_l1 = _reanchor(fx_bs_l1, gp_bs_l1)
+    itx_bs_l1 = fx_bs_l1["invocation"]["payload"]["proof_path"][0]["issuance_txid"]
+    so_bs_l1 = sl.sign_envelope(
+        {"executor": fx_bs_l1["invocation"]["payload"]["executor"], "exp": fx_bs_l1["chain"]["now"] + 600, "genesis": GENESIS_MAIN, "iat": fx_bs_l1["chain"]["now"], "network": "main", "nonce": _h32("l1-bs-n1"), "op": "open", "proof_path": [{"grant_id": gid_bs_l1, "issuance_txid": itx_bs_l1}], "quotas": [], "slot_binding": "slot-bs-l1", "type": "seallink-session-open/1"},
+        [fx_bs_l1["_keys"]["agent_req"]["sk"]],
+    )
+    ch_bs_reorg = copy.deepcopy(fx_bs_l1["chain"])
+    ch_bs_reorg["txs"].pop(itx_bs_l1, None)
+    ch_bs_4000s = copy.deepcopy(fx_bs_l1["chain"])
+    ch_bs_4000s["tip_header_time"] = ch_bs_4000s["now"] - 4000
+    ch_bs_4000s["tip_first_sight"] = ch_bs_4000s["now"] - 4000
+    add(
+        "d10-l1-bearer-reorged-anchor-and-missing-target-refuse",
+        ["SL-GRNT-013"],
+        "session_lifecycle",
+        {
+            "executor_cfg": fx_bs_l1["executor_cfg"],
+            "journal": {"journal_id": _h32("l1-bs-j1")},
+            "steps": [
+                {"bundle": fx_bs_l1["bundle"], "chain": fx_bs_l1["chain"], "kind": "session_open", "label": "open", "session_open": so_bs_l1, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"kind": "replay_restart", "label": "restart-preserves-proof-path"},
+                # mail/read is risk_class=2 (5400s cutoff) -> 4000s tip age ADMITS!
+                {"action": "mail/read", "arguments": {"folder": "Inbox", "message_id": "m1"}, "chain": ch_bs_4000s, "grant_env": g_bs_l1, "kind": "bearer_session", "label": "class2-4000s-admit", "slot_binding": "slot-bs-l1", "target": "mailbox:id/alice:work", "token": "__FROM_OPEN__", "want_refusal": None, "want_verdict": "ADMIT"},
+                # Reorged-out issuance_txid in persisted proof_path -> SESSION_INVALID!
+                {"action": "mail/read", "arguments": {"folder": "Inbox", "message_id": "m2"}, "chain": ch_bs_reorg, "expect_zero_writes": True, "grant_env": g_bs_l1, "kind": "bearer_session", "label": "reorged-anchor-refuse", "slot_binding": "slot-bs-l1", "target": "mailbox:id/alice:work", "token": "__FROM_OPEN__", "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
+                # Missing target -> SESSION_INVALID!
+                {"action": "mail/read", "arguments": {"folder": "Inbox", "message_id": "m3"}, "chain": fx_bs_l1["chain"], "expect_zero_writes": True, "grant_env": g_bs_l1, "kind": "bearer_session", "label": "missing-target-refuse", "slot_binding": "slot-bs-l1", "token": "__FROM_OPEN__", "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
+            ],
+        },
+        "ADMIT",
+        None,
+        "L1 (SPEC-06 §5): Bearer session persists proof_path across restart, re-verifies active-chain anchor against reorgs, allows Class-2 4000s freshness, and refuses missing target with SESSION_INVALID.",
+        module="bearer-sessions",
+    )
+    # Class-1 bearer session (agent/session) at 4000s tip age -> MUST refuse CHAIN_TIP_STALE (> 3600s)!
+    add(
+        "d10-l1-bearer-class1-action-4000s-tip-stale",
+        ["SL-GRNT-013", "SL-LDGR-008"],
+        "bearer_session",
+        {"action": "agent/session", "arguments": {"config_sha256": _h32("cfg"), "op": "start", "session_slot": "s1"}, "chain": ch_bs_4000s, "journal": {"journal_id": _h32("l1-bs-j2")}, "slot_binding": "slot-bs-l1", "target": "station:id/s:s1", "token": _h32("l1-tok-c1")},
+        "REFUSE",
+        "CHAIN_TIP_STALE",
+        "L1 (SPEC-06 §5): Bearer session for Class-1 action (agent/session) MUST enforce 3600s Class-1 chain freshness (refusing CHAIN_TIP_STALE at 4000s).",
+        module="bearer-sessions",
+    )
+    # 0x02 batch-anchored root grant bearer session (kills _verify_issuance_anchor_live 0x02 branch!)
+    fx_bs02 = rm._base_invocation_fixture()
+    g_bs02 = fx_bs02["bundle"]["grants"][0]
+    gp_bs02 = g_bs02["payload"]
+    gid_bs02 = sl.object_id(gp_bs02)
+    iss_dig_02 = sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(g_bs02), "grant_id": gid_bs02, "type": "seallink-issuance/1"}).hex()
+    mroot_02, mproofs_02 = sl.build_merkle_tree([iss_dig_02, _h32("l1-bs02-other")])
+    itx_02 = fx_bs02["invocation"]["payload"]["proof_path"][0]["issuance_txid"]
+    fx_bs02["chain"]["txs"][itx_02]["opreturn_hex"] = sl.encode_opreturn(0x02, mroot_02, 0x00).hex()
+    so_bs02 = sl.sign_envelope(
+        {"executor": fx_bs02["invocation"]["payload"]["executor"], "exp": fx_bs02["chain"]["now"] + 600, "genesis": GENESIS_MAIN, "iat": fx_bs02["chain"]["now"], "network": "main", "nonce": _h32("l1-bs02-n"), "op": "open", "proof_path": [{"batch_proof": mproofs_02[iss_dig_02], "grant_id": gid_bs02, "issuance_txid": itx_02}], "quotas": [], "slot_binding": "slot-bs02", "type": "seallink-session-open/1"},
+        [fx_bs02["_keys"]["agent_req"]["sk"]],
+    )
+    ch_bs02_bad = copy.deepcopy(fx_bs02["chain"])
+    ch_bs02_bad["txs"][itx_02]["opreturn_hex"] = sl.encode_opreturn(0x02, _h32("l1-bs02-wrong-root"), 0x00).hex()
+    ch_bs02_wrong_act = copy.deepcopy(fx_bs02["chain"])
+    ch_bs02_wrong_act["txs"][itx_02]["opreturn_hex"] = sl.encode_opreturn(0x09, mroot_02, 0x00).hex()
+    add(
+        "d10-l1-bearer-0x02-batch-anchor-recheck",
+        ["SL-GRNT-013", "SL-LDGR-014"],
+        "session_lifecycle",
+        {
+            "executor_cfg": fx_bs02["executor_cfg"],
+            "journal": {"journal_id": _h32("l1-bs02-j")},
+            "steps": [
+                {"bundle": fx_bs02["bundle"], "chain": fx_bs02["chain"], "kind": "session_open", "label": "open-0x02", "session_open": so_bs02, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m1"}, "chain": fx_bs02["chain"], "grant_env": g_bs02, "kind": "bearer_session", "label": "use-0x02-admit", "slot_binding": "slot-bs02", "target": "mailbox:id/alice:work", "token": "__FROM_OPEN__", "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": ch_bs02_bad, "expect_zero_writes": True, "grant_env": g_bs02, "kind": "bearer_session", "label": "use-0x02-wrong-root", "slot_binding": "slot-bs02", "target": "mailbox:id/alice:work", "token": "__FROM_OPEN__", "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m3"}, "chain": ch_bs02_wrong_act, "expect_zero_writes": True, "grant_env": g_bs02, "kind": "bearer_session", "label": "use-wrong-opret-action", "slot_binding": "slot-bs02", "target": "mailbox:id/alice:work", "token": "__FROM_OPEN__", "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
+            ],
+        },
+        "ADMIT",
+        None,
+        "L1 (SPEC-06 §5): Bearer session re-verifies 0x02 batch-anchored root grant proof_path on live use and refuses corrupted root or wrong action byte.",
+        module="bearer-sessions",
+    )
+
+    # L1-9: Service migration hardening (D10-2 + benign prose filename + confirmed predecessor spend + dest_accept_stmt issuer)
+    m_inv_prose = {"holder_name": "id/alice", "items": [{"media_type": "text/markdown", "path": "notes/history-of-private-keys.md", "sha256": _h32("l1-prose"), "size_bytes": "512"}], "migration_id": mid_10, "service_type": "mail"}
+    m_p_prose = {**m_p, "inventory_sha256": sl.sha256(sl.jcs_encode(m_inv_prose)).hex()}
+    m_env_prose = sl.sign_envelope(m_p_prose, [fx_mig["_keys"]["host_rcpt"]["sk"]])
+    add(
+        "d10-l1-migration-benign-prose-filename-stage-admit",
+        ["SL-SERV-003"],
+        "migration",
+        {"chain": ch_mig_ok, "export_bundle": {"inventory": m_inv_prose, "source_journal_commitment": m_jc, "source_journal_pos": 1}, "journal": {"journal_id": _h32("l1-mig-j0")}, "local_executor_pin": d_pin, "manifests": fx_mig["bundle"]["manifests"], "migration": m_env_prose, "mode": "stage"},
+        "ADMIT",
+        None,
+        "L1 (SPEC-07 §2.1): Structured secret blocklist MUST permit benign user prose like notes/history-of-private-keys.md (text/markdown).",
+        module="service-migration",
+    )
+    m_inv_pem_mt = {"holder_name": "id/alice", "items": [{"media_type": "application/x-pem-file", "path": "docs/readme.txt", "sha256": _h32("l1-pem-mt"), "size_bytes": "64"}], "migration_id": mid_10, "service_type": "mail"}
+    m_p_pem_mt = {**m_p, "inventory_sha256": sl.sha256(sl.jcs_encode(m_inv_pem_mt)).hex()}
+    m_env_pem_mt = sl.sign_envelope(m_p_pem_mt, [fx_mig["_keys"]["host_rcpt"]["sk"]])
+    add(
+        "d10-l1-migration-forbidden-pem-media-type-refuse",
+        ["SL-SERV-003"],
+        "migration",
+        {"chain": ch_mig_ok, "export_bundle": {"inventory": m_inv_pem_mt, "source_journal_commitment": m_jc, "source_journal_pos": 1}, "journal": {"journal_id": _h32("l1-mig-j1")}, "local_executor_pin": d_pin, "manifests": fx_mig["bundle"]["manifests"], "migration": m_env_pem_mt, "mode": "stage"},
+        "REFUSE",
+        "SERVICE_MIGRATION_INVALID",
+        "L1 (SPEC-07 §2.1): Forbidden execution-credential media_type (application/x-pem-file) MUST refuse SERVICE_MIGRATION_INVALID even on a benign path.",
+        module="service-migration",
+    )
+    # Mempool-only predecessor seal spend (unconfirmed!) MUST refuse SERVICE_MIGRATION_INVALID on activate!
+    ch_mig_mem = copy.deepcopy(ch_mig_ok)
+    ch_mig_mem["txs"][_h32("d10-mig-pred-sp")]["confirmed_height"] = None
+    add(
+        "d10-l1-migration-mempool-only-predecessor-spend-refuse",
+        ["SL-SERV-003"],
+        "migration",
+        {"chain": ch_mig_mem, "dest_accept_stmt": m_acc, "export_bundle": eb_10, "holder_assent": m_ha, "journal": {"journal_id": _h32("l1-mig-j2")}, "local_executor_pin": d_pin, "manifests": fx_mig["bundle"]["manifests"], "migration": m_env, "mode": "activate"},
+        "REFUSE",
+        "SERVICE_MIGRATION_INVALID",
+        "L1 (SPEC-07 §2.2): Mempool-only (unconfirmed) predecessor_grant_seals spend MUST NOT satisfy activate postcondition (refuses SERVICE_MIGRATION_INVALID).",
+        module="service-migration",
+    )
+    # Insufficient depth on predecessor seal spend (operator_min_depth=20 > depth=9) MUST refuse SERVICE_MIGRATION_INVALID!
+    add(
+        "d10-l1-migration-shallow-predecessor-spend-refuse",
+        ["SL-SERV-003"],
+        "migration",
+        {"chain": ch_mig_ok, "dest_accept_stmt": m_acc, "export_bundle": eb_10, "holder_assent": m_ha, "journal": {"journal_id": _h32("l1-mig-j2b")}, "local_executor_pin": d_pin, "manifests": fx_mig["bundle"]["manifests"], "migration": m_env, "mode": "activate", "operator_min_depth": 20},
+        "REFUSE",
+        "SERVICE_MIGRATION_INVALID",
+        "L1 (SPEC-07 §2.2): Predecessor grant seal spend below operator_min_depth MUST refuse SERVICE_MIGRATION_INVALID.",
+        module="service-migration",
+    )
+    # Unrelated origin_bundle presented for migration holder -> ORIGIN_BINDING_INVALID (D10-2!)
+    add(
+        "d10-l1-migration-unrelated-origin-bundle-refuse",
+        ["SL-SERV-003", "SL-ORIG-002"],
+        "migration",
+        {"chain": {**ch_mig_ok, "names": {**ch_mig_ok["names"], **fx_orig_l1["chain"]["names"]}, "txs": {**ch_mig_ok["txs"], **fx_orig_l1["chain"]["txs"]}, "credible_utc_interval": fx_orig_l1["chain"]["credible_utc_interval"], "tip_median_time_past": fx_orig_l1["chain"]["tip_median_time_past"]}, "dest_accept_stmt": m_acc, "export_bundle": eb_10, "holder_assent": m_ha, "journal": {"journal_id": _h32("l1-mig-j3")}, "local_executor_pin": d_pin, "manifests": fx_mig["bundle"]["manifests"], "migration": m_env, "mode": "activate", "origin_bundle": fx_orig_l1["origin_bundle"], "trusted_origin_issuer_pins": fx_orig_l1["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "ORIGIN_BINDING_INVALID",
+        "L1 (D10-2): Migration with origin_bundle whose effective_binding != holder NamePin MUST refuse ORIGIN_BINDING_INVALID.",
+        module="service-migration",
+    )
+    # dest_accept_stmt with mismatched issuer NamePin (still signed by d_rkey) -> SERVICE_MIGRATION_INVALID!
+    m_acc_bad_iss = sl.sign_envelope({**m_acc["payload"], "issuer": fx_mig["executor_cfg"]["pin"]}, [d_rcpt["sk"]])
+    add(
+        "d10-l1-migration-dest-accept-wrong-issuer-refuse",
+        ["SL-SERV-003"],
+        "migration",
+        {"chain": ch_mig_ok, "dest_accept_stmt": m_acc_bad_iss, "export_bundle": eb_10, "holder_assent": m_ha, "journal": {"journal_id": _h32("l1-mig-j4")}, "local_executor_pin": d_pin, "manifests": fx_mig["bundle"]["manifests"], "migration": m_env, "mode": "activate"},
+        "REFUSE",
+        "SERVICE_MIGRATION_INVALID",
+        "L1: migration-accept statement whose issuer NamePin != dest_executor MUST refuse SERVICE_MIGRATION_INVALID.",
+        module="service-migration",
+    )
+
+    # L1-10: Federated screening & PII disclosure hardening (D10-1: sealed in both phases, issuer auth, 0x0b, recipient match, optional issuance_txid, ward deferral, L2 nonce anti-replay!)
+    add(
+        "d10-l1-federation-screening-window-only-refuse",
+        ["SL-SERV-004"],
+        "federation",
+        {"chain": fx_f10["chain"], "grant": gf_wo_env, "journal": {"journal_id": _h32("l1-fed-j1")}, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": base_fed_pol},
+        "REFUSE",
+        "FEDERATION_POLICY_DENIED",
+        "L1 (D10-1 / SPEC-07 §3): Federated screening MUST require a revocable UTXO seal (window_only refuses FEDERATION_POLICY_DENIED).",
+        module="federated-screening",
+    )
+    attacker_fed = _kp("l1-fed-attacker")
+    gf_forged = sl.sign_envelope(gf_p, [attacker_fed["sk"]])
+    add(
+        "d10-l1-federation-screening-forged-grant-sig-refuse",
+        ["SL-SERV-004", "SL-IDEN-003"],
+        "federation",
+        {"chain": fx_f10["chain"], "grant": gf_forged, "journal": {"journal_id": _h32("l1-fed-j2")}, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": base_fed_pol},
+        "REFUSE",
+        "WIRE_SIGNATURE",
+        "L1 (D10-1): Federated screening with attacker-signed grant not matching issuer's confirmed link.grant MUST refuse WIRE_SIGNATURE.",
+        module="federated-screening",
+    )
+    add(
+        "d10-l1-federation-screening-wrong-named-peer-refuse",
+        ["SL-SERV-004"],
+        "federation",
+        {"chain": fx_f10["chain"], "grant": gf_env, "journal": {"journal_id": _h32("l1-fed-j3")}, "peer_ctx": {"peer_id": "id/peer-other", "phase": "screening"}, "policy": {"trusted_peers": ["id/peer-b", "id/peer-other"]}},
+        "REFUSE",
+        "FEDERATION_POLICY_DENIED",
+        "L1 (D10-1): Federated screening with named recipient MUST match peer_id == recipient.name (even if peer-other is in trusted_peers).",
+        module="federated-screening",
+    )
+    # Screening with rotated link.grant -> NAME_ROLE_CHANGED; with 0x0b break -> CRED_ISSUER_CLOSED!
+    ch_f10_rot = copy.deepcopy(fx_f10["chain"])
+    k_frot = _kp("l1-fed-rot-k")
+    ch_f10_rot["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx_f10["_alice_reg"],
+        fx_f10["_alice_owner_pol"],
+        {"link": {"grant": fx_f10["_keys"]["alice_gr"]["xonly"]}, "m": {"h": sl.content_addr(fx_f10["_alice_man"]), "s": 1}},
+        first_height=748000,
+        update_height=749000,
+        extra_updates=[{"confirmed_height": 750002, "txid": _h32("l1-fed-rot-u"), "value": {"link": {"grant": k_frot["xonly"]}, "m": {"h": sl.content_addr(fx_f10["_alice_man"]), "s": 1}}}],
+    )
+    add(
+        "d10-l1-federation-screening-rotated-role-refuse",
+        ["SL-SERV-004", "SL-IDEN-004"],
+        "federation",
+        {"chain": ch_f10_rot, "grant": gf_env, "journal": {"journal_id": _h32("l1-fed-j4")}, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": base_fed_pol},
+        "REFUSE",
+        "NAME_ROLE_CHANGED",
+        "L1 (D10-1): Federated screening MUST refuse NAME_ROLE_CHANGED when issuer rotated link.grant after grant.recent_block.",
+        module="federated-screening",
+    )
+    ch_f10_0b = copy.deepcopy(fx_f10["chain"])
+    u_prev_f10 = ch_f10_0b["names"]["id/alice"]["updates"][-1]
+    brk_f10 = {
+        "compromised_policy": {"m": 1, "pks": [fx_f10["_keys"]["alice_gr"]["xonly"]]},
+        "genesis": GENESIS_MAIN,
+        "h_c": 750001,
+        "issuer": {"name": "id/alice", "owner_policy": fx_f10["_alice_owner_pol"], "registration": fx_f10["_alice_reg"]},
+        "name_input": {"txid": u_prev_f10["txid"], "vout": u_prev_f10["vout"]},
+        "role": "grant",
+        "type": "seallink-credential-break/1",
+    }
+    ch_f10_0b["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx_f10["_alice_reg"],
+        fx_f10["_alice_owner_pol"],
+        {"link": {"grant": fx_f10["_keys"]["alice_gr"]["xonly"]}, "m": {"h": sl.content_addr(fx_f10["_alice_man"]), "s": 1}},
+        first_height=748000,
+        update_height=749000,
+        extra_updates=[{"confirmed_height": 750005, "opreturn_hex": sl.encode_opreturn(0x0B, sl.signing_digest(brk_f10).hex(), 0x00, h_c=750001).hex(), "txid": _h32("l1-fed-0b-u"), "value": {"link": {"grant": fx_f10["_keys"]["alice_gr"]["xonly"]}, "m": {"h": sl.content_addr(fx_f10["_alice_man"]), "s": 1}}}],
+    )
+    add(
+        "d10-l1-federation-screening-0x0b-compromised-refuse",
+        ["SL-SERV-004", "SL-CONT-009"],
+        "federation",
+        {"chain": ch_f10_0b, "grant": gf_env, "journal": {"journal_id": _h32("l1-fed-j5")}, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": base_fed_pol},
+        "REFUSE",
+        "CRED_ISSUER_CLOSED",
+        "L1 (D10-1): Federated screening MUST refuse CRED_ISSUER_CLOSED when issuer link.grant has a confirmed 0x0b compromise break <= tip_height.",
+        module="federated-screening",
+    )
+    # Screening with issuance_txid anchor present (invalid anchor -> CHAIN_FRAME_INVALID!)
+    add(
+        "d10-l1-federation-screening-bad-issuance-anchor-refuse",
+        ["SL-SERV-004"],
+        "federation",
+        {"chain": fx_f10["chain"], "grant": gf_env, "journal": {"journal_id": _h32("l1-fed-j6")}, "peer_ctx": {"issuance_txid": _h32("l1-fed-missing-itx"), "peer_id": "id/peer-b", "phase": "screening"}, "policy": base_fed_pol},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "L1 (D10-1): Federated screening supplying an unanchored/missing issuance_txid MUST refuse CHAIN_FRAME_INVALID.",
+        module="federated-screening",
+    )
+    # L2 PII disclosure single-use nonce anti-replay in multi_step_journal: 1st call ADMIT (writes nonce), 2nd call -> INVOKE_REPLAY!
+    add(
+        "d10-l1-federation-pii-nonce-replay-refuse",
+        ["SL-SERV-004"],
+        "multi_step_journal",
+        {
+            "journal": {"journal_id": _h32("l1-fed-j7")},
+            "steps": [
+                {"chain": fx_f10["chain"], "expect_entries_delta": 1, "grant": gf_env, "kind": "federation", "label": "first-pii-admit", "peer_ctx": base_fed_ctx, "policy": base_fed_pol, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"chain": fx_f10["chain"], "expect_entries_delta": 0, "grant": gf_env, "kind": "federation", "label": "replay-pii-refuse", "peer_ctx": base_fed_ctx, "policy": base_fed_pol, "want_refusal": "INVOKE_REPLAY", "want_verdict": "REFUSE"},
+            ],
+        },
+        "ADMIT",
+        None,
+        "L1 (D10-1 / SPEC-07 §3): Contour A PII disclosure durably records approval_command.nonce in FencedJournal and refuses replay with INVOKE_REPLAY.",
+        module="federated-screening",
+    )
+    # Ward origin in federation: activate slot 2 for 2-of-2 effect_grant quorum -> screening ADMITs, pii_disclosure refuses WARD_AUTONOMOUS_FORBIDDEN (post-v1.0 SLIP)!
+    of_wfed = rm._base_origin_fixture()
+    w_op_f = of_wfed["origin_bundle"]["origin"]["payload"]
+    w_oid_f = sl.object_id(w_op_f)
+    g2_own_f, g2_seal_f = rm._kp("o-g2-own"), _kp("l1-wfed-g2-seal")
+    g2_pin_f = {"name": "id/parent-b", "owner_policy": {"kind": "key", "pk": g2_own_f["comp"]}, "registration": {"txid": rm._h32("g2-reg"), "vout": 0}}
+    act_pol_2f = {"kind": "branch", "template": "either_of_2", "keys": sl.canonical_branch_pair(of_wfed["_keys"]["disp"]["comp"], g2_seal_f["comp"])}
+    g2_rec_pf = {
+        "active_policy": act_pol_2f,
+        "active_vout": 0,
+        "activation_mode": "initial",
+        "genesis": GENESIS_MAIN,
+        "guardian": g2_pin_f,
+        "issuer": w_op_f["issuer"],
+        "network": "main",
+        "origin_id": w_oid_f,
+        "prev_outpoint": {"txid": rm._h32("os2-vac"), "vout": 0},
+        "revision": 1,
+        "slot": 2,
+        "term": {"ceiling_height": 1750000, "mode": "calendar", "not_after_unix": of_wfed["_maj_unix"]},
+        "type": "seallink-guardian/1",
+    }
+    g2_rec_f = sl.sign_envelope(g2_rec_pf, [of_wfed["_keys"]["reg_cred"]["sk"]])
+    g2_assent_f = sl.sign_envelope(
+        {"expires_at": 1795400000, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main", "nonce": _h32("l1-wfed-g2a"), "party_id": "slot-2", "party_name": "id/parent-b", "party_role": "guardian", "target_id": sl.object_id(g2_rec_pf), "target_type": "seallink-guardian/1", "type": "seallink-assent/1"},
+        [of_wfed["_keys"]["g2_gr"]["sk"]],
+    )
+    g2_init_txf = _h32("l1-wfed-g2-0x12")
+    of_wfed["chain"]["names"]["id/parent-b"] = sv.make_name_history("id/parent-b", g2_pin_f["registration"], g2_pin_f["owner_policy"], {"link": {"grant": of_wfed["_keys"]["g2_gr"]["xonly"]}}, first_height=748000, update_height=748600)
+    of_wfed["chain"]["txs"][rm._h32("os2-vac")]["outputs"]["0"]["spent_by_txid"] = g2_init_txf
+    of_wfed["chain"]["txs"][g2_init_txf] = {"confirmed_height": 749020, "opreturn_hex": sl.encode_opreturn(0x12, sl.content_addr(g2_rec_f)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(act_pol_2f)}}}
+    of_wfed["origin_bundle"]["guardian_records"].append(g2_rec_f)
+    of_wfed["origin_bundle"]["guardian_assents"].append(g2_assent_f)
+    of_wfed["origin_bundle"]["initial_guardian_disclosures"]["2"] = {"name_pin": g2_pin_f, "salt_hex": rm._h32("salt-g2")}
+
+    w_seal_k = _kp("l1-wfed-seal")
+    w_seal_pol = {"kind": "key", "pk": w_seal_k["comp"]}
+    w_seal_tx = _h32("l1-wfed-stx")
+    w_recent_blk = _h32("l1-wfed-rblk")
+    of_wfed["chain"]["blocks"][w_recent_blk] = 750090
+    of_wfed["chain"]["txs"][w_seal_tx] = {"confirmed_height": 750095, "outputs": {"0": {"script_pubkey_hex": _spk_hex(w_seal_pol)}}}
+    w_fed_gp = {
+        "capabilities": [{"action": "mail/list", "quotas": [{"kind": "seallink/count", "max": "5", "resource": "mailbox:id/child-leo:inbox", "unit": "lists", "window": "term"}], "target": "mailbox:id/child-leo:inbox"}],
+        "executor": {"key": fx_f10["_keys"]["host_rcpt"]["xonly"], "name": "id/mail-host-a"},
+        "genesis": GENESIS_MAIN,
+        "guardian_context": {"event_class": "effect_grant", "origin_id": w_oid_f, "revision": 1, "ward_name": "id/child-leo"},
+        "issuer": {"name": "id/child-leo", "owner_policy": w_op_f["claims"]["intended_owner_policy"], "registration": of_wfed["origin_bundle"]["name_binding"]["registration"]},
+        "min_depth": 1,
+        "network": "main",
+        "not_after_height": 751000,
+        "not_before_height": 750000,
+        "recent_block": w_recent_blk,
+        "recipient": {"mode": "name", "name": "id/peer-b", "owner_policy": fx_f10["_host_owner_pol"], "registration": fx_f10["_host_reg"]},
+        "revocation": {"construction": "W", "kind": "revocable", "mode": "seal", "seal": {"script_policy": w_seal_pol, "txid": w_seal_tx, "vout": 0}},
+        "type": "seallink-grant/1",
+    }
+    w_fed_env = {
+        "guardian_approvals": [
+            {"guardian_name": "id/parent-a", "revision": 1, "signatures": sl.sign_envelope(w_fed_gp, [of_wfed["_keys"]["g1_gr"]["sk"]])["signatures"], "slot": 1},
+            {"guardian_name": "id/parent-b", "revision": 1, "signatures": sl.sign_envelope(w_fed_gp, [of_wfed["_keys"]["g2_gr"]["sk"]])["signatures"], "slot": 2},
+        ],
+        "payload": w_fed_gp,
+    }
+    add(
+        "d10-l1-federation-ward-screening-admit",
+        ["SL-SERV-004", "SL-ORIG-006"],
+        "federation",
+        {"chain": of_wfed["chain"], "grant": w_fed_env, "journal": {"journal_id": _h32("l1-wfed-j1")}, "peer_ctx": {"origin_bundle": of_wfed["origin_bundle"], "peer_id": "id/peer-b", "phase": "screening"}, "policy": base_fed_pol, "trusted_origin_issuer_pins": of_wfed["trusted_origin_issuer_pins"]},
+        "ADMIT",
+        None,
+        "L1 (D10-1): Ward-origin federated screening with valid guardian_approvals and active origin_bundle admits cleanly.",
+        module="federated-screening",
+    )
+    add(
+        "d10-l1-federation-ward-pii-deferred-refuse",
+        ["SL-SERV-004", "SL-ORIG-006"],
+        "federation",
+        {"chain": of_wfed["chain"], "grant": w_fed_env, "journal": {"journal_id": _h32("l1-wfed-j2")}, "peer_ctx": {"fields_sha256": _h32("wf"), "origin_bundle": of_wfed["origin_bundle"], "phase": "pii_disclosure", "route_hops": [{"actor": "id/peer-b", "role": "recipient"}]}, "policy": base_fed_pol, "trusted_origin_issuer_pins": of_wfed["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "WARD_AUTONOMOUS_FORBIDDEN",
+        "L1 (SPEC-07 §3): Ward-only pii_disclosure is deferred to a post-v1.0 SLIP and MUST refuse WARD_AUTONOMOUS_FORBIDDEN in v1.0.",
+        module="federated-screening",
+    )
+    add(
+        "d10-l1-federation-ward-missing-origin-bundle-refuse",
+        ["SL-SERV-004", "SL-ORIG-002"],
+        "federation",
+        {"chain": of_wfed["chain"], "grant": w_fed_env, "journal": {"journal_id": _h32("l1-wfed-j3")}, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": base_fed_pol, "trusted_origin_issuer_pins": of_wfed["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "ORIGIN_UNVERIFIED",
+        "L1 (D10-1): Origin-certified issuer in federation omitting origin_bundle MUST refuse ORIGIN_UNVERIFIED.",
+        module="federated-screening",
+    )
+
+    # L1-11: Exact boundary & branch-coverage regressions (100% 3-operator mutation kill across Layer 1)
+    # 1. FencedJournal.record_closure idempotency & monotonic tightening (kills boundary L932 & L937)
+    rc_base_subj = {
+        "name": "id/alice",
+        "policy_sha256": sv._policy_sha256({"m": 1, "pks": [k_a["xonly"]]}),
+        "registration": fx_aba["_alice_reg"],
+        "role": "grant",
+        "subject_kind": "role",
+    }
+    add(
+        "d10-l1-role-closure-idempotency-and-monotonic-tightening",
+        ["SL-CONT-009", "SL-IDEN-004", "SL-GRNT-014"],
+        "multi_step_journal",
+        {
+            "journal": {"journal_id": _h32("l1-rc-idem-j")},
+            "steps": [
+                {"cause": "CRED_ISSUER_CLOSED", "expect_entries_delta": 1, "kind": "record_closure", "label": "hc-init", "observed_at": 1795220000, "observed_height": 750010, "subject": {**rc_base_subj, "cutoff_height": 749400}},
+                {"cause": "CRED_ISSUER_CLOSED", "expect_entries_delta": 0, "kind": "record_closure", "label": "hc-same-idem", "observed_at": 1795220001, "observed_height": 750010, "subject": {**rc_base_subj, "cutoff_height": 749400}},
+                {"cause": "CRED_ISSUER_CLOSED", "expect_entries_delta": 1, "kind": "record_closure", "label": "hc-earlier-tighten", "observed_at": 1795220002, "observed_height": 750010, "subject": {**rc_base_subj, "cutoff_height": 749300}},
+                {"cause": "NAME_ROLE_CHANGED", "expect_entries_delta": 1, "kind": "record_closure", "label": "rbh-init", "observed_at": 1795220003, "observed_height": 750010, "subject": {**rc_base_subj, "retired_before_height": 749995}},
+                {"cause": "NAME_ROLE_CHANGED", "expect_entries_delta": 0, "kind": "record_closure", "label": "rbh-same-idem", "observed_at": 1795220004, "observed_height": 750010, "subject": {**rc_base_subj, "retired_before_height": 749995}},
+                {"cause": "NAME_ROLE_CHANGED", "expect_entries_delta": 1, "kind": "record_closure", "label": "rbh-later-tighten", "observed_at": 1795220005, "observed_height": 750010, "subject": {**rc_base_subj, "retired_before_height": 750000}},
+            ],
+        },
+        "ADMIT",
+        None,
+        "L1: FencedJournal.record_closure is idempotent on equal cutoff_height / retired_before_height (0 writes) and tightens monotonically.",
+    )
+
+    # 2. _first_role_change_height baseline at exact uh == recent_block_height (kills boundary L2208)
+    blk_749995 = _h32("l1-b-749995")
+    blk_749996 = _h32("l1-b-749996")
+    ch_b_exact = copy.deepcopy(fx_aba["chain"])
+    ch_b_exact["blocks"][blk_749995] = 749995
+    ch_b_exact["blocks"][blk_749996] = 749996
+    ch_b_exact["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx_aba["_alice_reg"],
+        fx_aba["_alice_owner_pol"],
+        alice_val_a,
+        first_height=748000,
+        update_height=749000,
+        extra_updates=[
+            {"confirmed_height": 749995, "txid": _h32("l1-bex-u1"), "value": alice_val_b},
+            {"confirmed_height": 749998, "txid": _h32("l1-bex-u2"), "value": alice_val_a},
+        ],
+    )
+    gp_b1 = copy.deepcopy(g_aba_old["payload"])
+    gp_b1["recent_block"] = blk_749995
+    gp_b1["issuer"]["role_policy"] = {"m": 1, "pks": [k_b["xonly"]]}
+    g_b1 = sl.sign_envelope(gp_b1, [k_b["sk"]])
+    gid_b1 = sl.object_id(gp_b1)
+    inv_b1 = sl.sign_envelope({**inv_aba_old["payload"], "nonce": _h32("l1-bex-n1"), "proof_path": [{"grant_id": gid_b1, "issuance_txid": _h32("l1-bex-itx1")}]}, [fx_aba["_keys"]["agent_req"]["sk"]])
+    gp_b2 = copy.deepcopy(g_aba_old["payload"])
+    gp_b2["recent_block"] = blk_749996
+    gp_b2["issuer"]["role_policy"] = {"m": 1, "pks": [k_b["xonly"]]}
+    g_b2 = sl.sign_envelope(gp_b2, [k_b["sk"]])
+    gid_b2 = sl.object_id(gp_b2)
+    inv_b2 = sl.sign_envelope({**inv_aba_old["payload"], "nonce": _h32("l1-bex-n2"), "proof_path": [{"grant_id": gid_b2, "issuance_txid": _h32("l1-bex-itx2")}]}, [fx_aba["_keys"]["agent_req"]["sk"]])
+    add(
+        "d10-l1-role-change-baseline-at-exact-recent-block",
+        ["SL-IDEN-004"],
+        "multi_step_journal",
+        {
+            "journal": {"journal_id": _h32("l1-bex-j")},
+            "steps": [
+                {"actual_message_meta": {"folder": "Invoices"}, "bundle": {**fx_aba["bundle"], "grants": [g_b1]}, "chain": ch_b_exact, "executor_cfg": fx_aba["executor_cfg"], "expect_entries_delta": 1, "invocation": inv_b1, "kind": "invocation", "label": "b-at-749995-records-749998", "want_refusal": "NAME_ROLE_CHANGED", "want_verdict": "REFUSE"},
+                {"actual_message_meta": {"folder": "Invoices"}, "bundle": {**fx_aba["bundle"], "grants": [g_b2]}, "chain": ch_b_exact, "executor_cfg": fx_aba["executor_cfg"], "expect_entries_delta": 0, "invocation": inv_b2, "kind": "invocation", "label": "b-at-749996-hits-persisted-749998", "want_refusal": "NAME_ROLE_CHANGED", "want_verdict": "REFUSE"},
+            ],
+        },
+        "ADMIT",
+        None,
+        "L1: _first_role_change_height treats uh == recent_block_height as baseline so rotation at 749998 (not 749995) is recorded as retired_before_height.",
+    )
+
+    # 3 & 4. Same-block A->B->A at 749995 with root_recent_h == retired_before_height == 749995 (kills L5199 & L6498)
+    ch_aba_sb = copy.deepcopy(fx_aba["chain"])
+    ch_aba_sb["blocks"][blk_749995] = 749995
+    sb_seal_tx = _h32("l1-sb-seal")
+    sb_iss_tx = _h32("l1-sb-iss")
+    gp_aba_sb = copy.deepcopy(g_aba_old["payload"])
+    gp_aba_sb["recent_block"] = blk_749995
+    gp_aba_sb["revocation"] = {"construction": "W", "kind": "revocable", "mode": "seal", "seal": {"script_policy": seal_pol_aba, "txid": sb_seal_tx, "vout": 0}}
+    g_aba_sb = sl.sign_envelope(gp_aba_sb, [k_a["sk"]])
+    gid_aba_sb = sl.object_id(gp_aba_sb)
+    iss_prep_sb = {"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(g_aba_sb), "grant_id": gid_aba_sb, "type": "seallink-issuance/1"}
+    inv_aba_sb = sl.sign_envelope({**inv_aba_old["payload"], "nonce": _h32("l1-sb-n"), "proof_path": [{"grant_id": gid_aba_sb, "issuance_txid": sb_iss_tx}]}, [fx_aba["_keys"]["agent_req"]["sk"]])
+    ch_aba_sb["txs"][sb_seal_tx] = {"confirmed_height": 749996, "inputs": [sv.make_segwit_input(_h32("l1-sb-fund"), 0)], "outputs": {"0": {"script_pubkey_hex": _spk_hex(seal_pol_aba)}, "1": {"script_pubkey_hex": _spk_hex(fx_aba["_alice_owner_pol"])}}}
+    ch_aba_sb["txs"][sb_iss_tx] = {"confirmed_height": 749997, "inputs": [sv.make_segwit_input(sb_seal_tx, 1)], "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest(iss_prep_sb).hex(), 0x00).hex(), "outputs": {}}
+    ch_aba_sb["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx_aba["_alice_reg"],
+        fx_aba["_alice_owner_pol"],
+        alice_val_a,
+        first_height=748000,
+        update_height=749000,
+        extra_updates=[
+            {"confirmed_height": 749995, "txid": _h32("l1-sb-rot-b"), "value": alice_val_b},
+            {"confirmed_height": 749995, "txid": _h32("l1-sb-rot-a2"), "value": alice_val_a},
+        ],
+    )
+    add(
+        "d10-l1-aba-same-block-restore-exact-rbh-admit",
+        ["SL-IDEN-004", "SL-GRNT-014"],
+        "multi_step_journal",
+        {
+            "journal": {"journal_id": _h32("l1-sb-j")},
+            "steps": [
+                {"actual_message_meta": {"folder": "Invoices"}, "bundle": fx_aba["bundle"], "chain": ch_aba_sb, "executor_cfg": fx_aba["executor_cfg"], "expect_closures_delta": 1, "invocation": inv_aba_old, "kind": "invocation", "label": "old-records-749995", "want_refusal": "NAME_ROLE_CHANGED", "want_verdict": "REFUSE"},
+                {"actual_message_meta": {"folder": "Invoices"}, "bundle": {**fx_aba["bundle"], "grants": [g_aba_sb]}, "chain": ch_aba_sb, "executor_cfg": fx_aba["executor_cfg"], "invocation": inv_aba_sb, "kind": "invocation", "label": "new-at-exact-749995-admits", "want_refusal": None, "want_verdict": "ADMIT"},
+            ],
+        },
+        "ADMIT",
+        None,
+        "L1: Same-block A->B->A at height 749995 admits new-epoch grant at exact recent_block_height == retired_before_height == 749995.",
+    )
+    j_sb_bs = sv.FencedJournal(_h32("l1-sb-bs-j"))
+    j_sb_bs.record_closure({**rc_base_subj, "retired_before_height": 749995}, "NAME_ROLE_CHANGED", observed_at=ch_aba_sb["now"], observed_height=ch_aba_sb["tip_height"])
+    so_aba_sb = sl.sign_envelope(
+        {"executor": inv_aba_sb["payload"]["executor"], "exp": ch_aba_sb["now"] + 600, "genesis": GENESIS_MAIN, "iat": ch_aba_sb["now"], "network": "main", "nonce": _h32("l1-sb-so-n"), "op": "open", "proof_path": [{"grant_id": gid_aba_sb, "issuance_txid": sb_iss_tx}], "quotas": [], "slot_binding": "slot-sb-bs", "type": "seallink-session-open/1"},
+        [fx_aba["_keys"]["agent_req"]["sk"]],
+    )
+    add(
+        "d10-l1-bearer-same-block-aba-exact-rbh-admit",
+        ["SL-GRNT-013", "SL-IDEN-004"],
+        "session_lifecycle",
+        {
+            "executor_cfg": fx_aba["executor_cfg"],
+            "journal": {"closures": j_sb_bs.closures, "journal_id": j_sb_bs.journal_id},
+            "steps": [
+                {"bundle": {**fx_aba["bundle"], "grants": [g_aba_sb]}, "chain": ch_aba_sb, "kind": "session_open", "label": "open-at-exact-rbh", "session_open": so_aba_sb, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m1"}, "chain": ch_aba_sb, "grant_env": g_aba_sb, "kind": "bearer_session", "label": "use-at-exact-rbh-admits", "slot_binding": "slot-sb-bs", "target": "mailbox:id/alice:work", "token": "__FROM_OPEN__", "want_refusal": None, "want_verdict": "ADMIT"},
+            ],
+        },
+        "ADMIT",
+        None,
+        "L1: Bearer session live recheck admits new-epoch grant at exact recent_block_height == retired_before_height == 749995.",
+        module="bearer-sessions",
+    )
+
+    # 5. _verify_issuance_anchor_live exact boundary regressions (kills all 3 L6333 operators: <, <=, >=)
+    fx_bs_b = rm._base_invocation_fixture()
+    gp_bs_b = copy.deepcopy(fx_bs_b["bundle"]["grants"][0]["payload"])
+    gp_bs_b["min_depth"] = 3
+    g_bs_b, gid_bs_b = _reanchor(fx_bs_b, gp_bs_b)
+    itx_bs_b = fx_bs_b["invocation"]["payload"]["proof_path"][0]["issuance_txid"]
+    so_bs_b = sl.sign_envelope(
+        {"executor": fx_bs_b["invocation"]["payload"]["executor"], "exp": fx_bs_b["chain"]["now"] + 600, "genesis": GENESIS_MAIN, "iat": fx_bs_b["chain"]["now"], "network": "main", "nonce": _h32("l1-bsb-n"), "op": "open", "proof_path": [{"grant_id": gid_bs_b, "issuance_txid": itx_bs_b}], "quotas": [], "slot_binding": "slot-bsb", "type": "seallink-session-open/1"},
+        [fx_bs_b["_keys"]["agent_req"]["sk"]],
+    )
+    a_h_bsb = fx_bs_b["chain"]["txs"][itx_bs_b]["confirmed_height"]
+    ch_bsb_eq_rh = copy.deepcopy(fx_bs_b["chain"])
+    ch_bsb_eq_rh["txs"][itx_bs_b]["confirmed_height"] = 749990  # a_h == r_h -> REFUSE
+    ch_bsb_max_k = copy.deepcopy(fx_bs_b["chain"])
+    ch_bsb_max_k["blocks"][gp_bs_b["recent_block"]] = a_h_bsb - 432  # exact a_h == r_h + 432 -> ADMIT
+    ch_bsb_min_d = copy.deepcopy(fx_bs_b["chain"])
+    rm.sync_chain_tip(ch_bsb_min_d, height=a_h_bsb + 2)  # exact (tip - a_h + 1) == 3 == min_depth -> ADMIT
+    add(
+        "d10-l1-bearer-anchor-exact-boundaries",
+        ["SL-GRNT-013", "SL-LDGR-008"],
+        "session_lifecycle",
+        {
+            "executor_cfg": fx_bs_b["executor_cfg"],
+            "journal": {"journal_id": _h32("l1-bsb-j")},
+            "steps": [
+                {"bundle": fx_bs_b["bundle"], "chain": fx_bs_b["chain"], "kind": "session_open", "label": "open-d3", "session_open": so_bs_b, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m1"}, "chain": ch_bsb_eq_rh, "expect_zero_writes": True, "grant_env": g_bs_b, "kind": "bearer_session", "label": "ah-eq-rh-refuse", "slot_binding": "slot-bsb", "target": "mailbox:id/alice:work", "token": "__FROM_OPEN__", "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m2"}, "chain": ch_bsb_max_k, "grant_env": g_bs_b, "kind": "bearer_session", "label": "ah-eq-rh-plus-432-admit", "slot_binding": "slot-bsb", "target": "mailbox:id/alice:work", "token": "__FROM_OPEN__", "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m3"}, "chain": ch_bsb_min_d, "grant_env": g_bs_b, "kind": "bearer_session", "label": "depth-eq-min-depth-admit", "slot_binding": "slot-bsb", "target": "mailbox:id/alice:work", "token": "__FROM_OPEN__", "want_refusal": None, "want_verdict": "ADMIT"},
+            ],
+        },
+        "ADMIT",
+        None,
+        "L1: Bearer session _verify_issuance_anchor_live enforces exact (r_h, r_h + 432] recency and depth >= max(min_depth, operator_min_depth).",
+        module="bearer-sessions",
+    )
+
+    # 6 & 7. Migration bad predecessor ScriptPolicy (kills L6894) & exact operator_min_depth == 9 admit (kills L6907)
+    m_fence_badsp_p = copy.deepcopy(m_fence["payload"])
+    m_fence_badsp_p["subject"]["predecessor_grant_seals"][0]["script_policy"] = {"kind": "multisig", "m": 2, "pks": [fx_mig["_keys"]["alice_seal"]["comp"]]}
+    m_fence_badsp = sl.sign_envelope(m_fence_badsp_p, [fx_mig["_keys"]["host_rcpt"]["sk"]])
+    add(
+        "d10-l1-migration-bad-predecessor-script-policy-refuse",
+        ["SL-SERV-003"],
+        "migration",
+        {"chain": ch_mig_ok, "dest_accept_stmt": m_acc, "export_bundle": {**eb_10, "fencing_statement": m_fence_badsp}, "holder_assent": m_ha, "journal": {"journal_id": _h32("l1-mig-j5")}, "local_executor_pin": d_pin, "manifests": fx_mig["bundle"]["manifests"], "migration": m_env, "mode": "activate"},
+        "REFUSE",
+        "SERVICE_MIGRATION_INVALID",
+        "L1: migration-fence listing a predecessor_grant_seal with uncompilable ScriptPolicy (m=2 > len(pks)=1) MUST refuse SERVICE_MIGRATION_INVALID.",
+        module="service-migration",
+    )
+    add(
+        "d10-l1-migration-exact-depth-predecessor-spend-admit",
+        ["SL-SERV-003"],
+        "migration",
+        {"chain": ch_mig_ok, "dest_accept_stmt": m_acc, "export_bundle": eb_10, "holder_assent": m_ha, "journal": {"journal_id": _h32("l1-mig-j6")}, "local_executor_pin": d_pin, "manifests": fx_mig["bundle"]["manifests"], "migration": m_env, "mode": "activate", "operator_min_depth": 9},
+        "ADMIT",
+        None,
+        "L1: Predecessor grant seal spend at exact depth == operator_min_depth (750010 - 750002 + 1 == 9) admits cleanly.",
+        module="service-migration",
+    )
+
+    # 8 & 9. Federation unrelated origin_bundle (kills L7088) & exact tip_height == h_c 0x0b break (kills L7103)
+    add(
+        "d10-l1-federation-unrelated-origin-bundle-refuse",
+        ["SL-SERV-004", "SL-ORIG-002"],
+        "federation",
+        {
+            "chain": {**fx_f10["chain"], "credible_utc_interval": fx_orig_l1["chain"]["credible_utc_interval"], "names": {**fx_f10["chain"]["names"], **fx_orig_l1["chain"]["names"]}, "tip_median_time_past": fx_orig_l1["chain"]["tip_median_time_past"], "txs": {**fx_f10["chain"]["txs"], **fx_orig_l1["chain"]["txs"]}},
+            "grant": gf_env,
+            "journal": {"journal_id": _h32("l1-fed-j8")},
+            "peer_ctx": {"origin_bundle": fx_orig_l1["origin_bundle"], "peer_id": "id/peer-b", "phase": "screening"},
+            "policy": base_fed_pol,
+            "trusted_origin_issuer_pins": fx_orig_l1["trusted_origin_issuer_pins"],
+        },
+        "REFUSE",
+        "ORIGIN_BINDING_INVALID",
+        "L1 (D10-1): Federation presented with an unrelated origin_bundle whose effective_binding != grant.issuer MUST refuse ORIGIN_BINDING_INVALID.",
+        module="federated-screening",
+    )
+    ch_f10_0b_tip = copy.deepcopy(fx_f10["chain"])
+    u_prev_f10_t = ch_f10_0b_tip["names"]["id/alice"]["updates"][-1]
+    brk_f10_tip = {
+        "compromised_policy": {"m": 1, "pks": [fx_f10["_keys"]["alice_gr"]["xonly"]]},
+        "genesis": GENESIS_MAIN,
+        "h_c": 750010,
+        "issuer": {"name": "id/alice", "owner_policy": fx_f10["_alice_owner_pol"], "registration": fx_f10["_alice_reg"]},
+        "name_input": {"txid": u_prev_f10_t["txid"], "vout": u_prev_f10_t["vout"]},
+        "role": "grant",
+        "type": "seallink-credential-break/1",
+    }
+    ch_f10_0b_tip["names"]["id/alice"] = sv.make_name_history(
+        "id/alice",
+        fx_f10["_alice_reg"],
+        fx_f10["_alice_owner_pol"],
+        {"link": {"grant": fx_f10["_keys"]["alice_gr"]["xonly"]}, "m": {"h": sl.content_addr(fx_f10["_alice_man"]), "s": 1}},
+        first_height=748000,
+        update_height=749000,
+        extra_updates=[{"confirmed_height": 750010, "opreturn_hex": sl.encode_opreturn(0x0B, sl.signing_digest(brk_f10_tip).hex(), 0x00, h_c=750010).hex(), "txid": _h32("l1-fed-0b-tip-u"), "value": {"link": {"grant": fx_f10["_keys"]["alice_gr"]["xonly"]}, "m": {"h": sl.content_addr(fx_f10["_alice_man"]), "s": 1}}}],
+    )
+    add(
+        "d10-l1-federation-0x0b-exact-tip-height-refuse",
+        ["SL-SERV-004", "SL-CONT-009"],
+        "federation",
+        {"chain": ch_f10_0b_tip, "grant": gf_env, "journal": {"journal_id": _h32("l1-fed-j9")}, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": base_fed_pol},
+        "REFUSE",
+        "CRED_ISSUER_CLOSED",
+        "L1 (D10-1): Federated screening MUST refuse CRED_ISSUER_CLOSED at exact tip_height == h_c (750010 == 750010).",
+        module="federated-screening",
+    )

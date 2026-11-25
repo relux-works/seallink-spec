@@ -168,6 +168,7 @@ def _collect_wire_hints(
     txids: set[str],
     block_hashes: set[str],
     continuation_vouts_by_frame: dict[tuple[str, str], set[int]],
+    recovery_delays: set[int] | None = None,
     _depth: int = 0,
     max_depth: int = 32,
 ) -> None:
@@ -191,12 +192,23 @@ def _collect_wire_hints(
                 txids=txids,
                 block_hashes=block_hashes,
                 continuation_vouts_by_frame=continuation_vouts_by_frame,
+                recovery_delays=recovery_delays,
                 _depth=_depth + 1,
                 max_depth=max_depth,
             )
         return
     if not isinstance(obj, dict):
         return
+
+    # Record dual_party_delayed recovery delay_blocks so quiet maturity blocks `h_rec + delay_blocks` get MTP fetched
+    if (
+        recovery_delays is not None
+        and obj.get("mode") == "dual_party_delayed"
+        and isinstance(obj.get("delay_blocks"), int)
+        and not isinstance(obj.get("delay_blocks"), bool)
+        and 0 <= obj["delay_blocks"] <= 100000
+    ):
+        recovery_delays.add(obj["delay_blocks"])
 
     # Index signed/unsigned continuation output indices strictly by cryptographic frame commitment!
     payload = obj.get("payload")
@@ -287,6 +299,7 @@ def _collect_wire_hints(
             txids=txids,
             block_hashes=block_hashes,
             continuation_vouts_by_frame=continuation_vouts_by_frame,
+            recovery_delays=recovery_delays,
             _depth=_depth + 1,
             max_depth=max_depth,
         )
@@ -447,7 +460,14 @@ class ColdNamecoinObserver:
 
         tip_hdr = self._get_header(tip_hash)
         hdr_time = int(tip_hdr["time"])
-        mtp = int(b_info.get("mediantime", tip_hdr.get("mediantime", hdr_time)))
+        raw_mtp = b_info.get("mediantime")
+        if not (isinstance(raw_mtp, int) and not isinstance(raw_mtp, bool) and raw_mtp > 0):
+            raw_mtp = tip_hdr.get("mediantime")
+        mtp: int | None = (
+            raw_mtp
+            if (isinstance(raw_mtp, int) and not isinstance(raw_mtp, bool) and raw_mtp > 0)
+            else None
+        )
 
         if self.clock_mode == "operational":
             now_ts = int(self.clock_now_fn())
@@ -554,9 +574,6 @@ class ColdNamecoinObserver:
         raw_mt = hdr.get("mediantime")
         if isinstance(raw_mt, int) and not isinstance(raw_mt, bool) and raw_mt > 0:
             return h, raw_mt
-        raw_t = hdr.get("time")
-        if isinstance(raw_t, int) and not isinstance(raw_t, bool) and raw_t > 0:
-            return h, raw_t
         return h, None
 
     def _get_block_by_height(self, height: int) -> dict[str, Any]:
@@ -1082,6 +1099,7 @@ class ColdNamecoinObserver:
         extra_outpoints: list[tuple[str, int]] | None = None,
         extra_txids: list[str] | None = None,
         extra_block_hashes: list[str] | None = None,
+        extra_block_heights: list[int] | set[int] | None = None,
         extra_policies: list[dict[str, Any]] | None = None,
         manifests: dict[str, Any] | None = None,
         max_spend_hops: int = 16,
@@ -1104,6 +1122,7 @@ class ColdNamecoinObserver:
         target_txids: set[str] = set(extra_txids or [])
         target_blocks: set[str] = set(extra_block_hashes or [])
         continuation_vouts_by_frame: dict[tuple[str, str], set[int]] = {}
+        recovery_delays: set[int] = set()
 
         for pol in (extra_policies or []):
             try:
@@ -1119,6 +1138,7 @@ class ColdNamecoinObserver:
                 txids=target_txids,
                 block_hashes=target_blocks,
                 continuation_vouts_by_frame=continuation_vouts_by_frame,
+                recovery_delays=recovery_delays,
             )
         if manifests:
             _collect_wire_hints(
@@ -1129,6 +1149,7 @@ class ColdNamecoinObserver:
                 txids=target_txids,
                 block_hashes=target_blocks,
                 continuation_vouts_by_frame=continuation_vouts_by_frame,
+                recovery_delays=recovery_delays,
             )
 
         # Bound presenter hint expansion (A-12)
@@ -1237,9 +1258,11 @@ class ColdNamecoinObserver:
                 for txid, txd in collected_txs.items()
             }
 
-            # Verify every target_block (recent_block) is on the active chain (A-2) and collect confirmed block_times (MTP)!
+            # Verify every target_block (recent_block) is on the active chain (A-2) and collect confirmed block_times (verified MTP ONLY, never header.time)!
             blocks_view: dict[str, int] = {tip_hash: tip_h}
-            block_times_view: dict[str, int] = {str(tip_h): start_s["mediantime"]}
+            block_times_view: dict[str, int] = {}
+            if start_s["mediantime"] is not None:
+                block_times_view[str(tip_h)] = start_s["mediantime"]
             for bh in sorted(target_blocks):
                 act_b = self._active_confirmed_height(bh)
                 if act_b is not None:
@@ -1249,6 +1272,36 @@ class ColdNamecoinObserver:
             for tv in txs_view.values():
                 if tv.get("confirmed_height") is not None and tv.get("block_time") is not None:
                     block_times_view[str(tv["confirmed_height"])] = int(tv["block_time"])
+
+            # SPEC-02 §4 / SPEC-04 §6: Populate verified active-chain MTP for quiet recovery maturity heights (h_rec + delay_blocks)
+            # and any caller-requested extra_block_heights inside the SAME observation bracket!
+            maturity_heights: set[int] = {
+                int(h) for h in (extra_block_heights or [])
+                if isinstance(h, int) and not isinstance(h, bool) and 0 <= h <= tip_h
+            }
+            if recovery_delays:
+                for tv in txs_view.values():
+                    h_tx = tv.get("confirmed_height")
+                    opret_h = tv.get("opreturn_hex")
+                    if h_tx is None or not isinstance(opret_h, str):
+                        continue
+                    try:
+                        dec_m = sl.decode_opreturn(bytes.fromhex(opret_h))
+                    except ValueError:
+                        continue
+                    if dec_m["action"] == "0x0c":
+                        for d_blk in recovery_delays:
+                            h_mat = int(h_tx) + d_blk
+                            if 0 <= h_mat <= tip_h:
+                                maturity_heights.add(h_mat)
+            for mh in sorted(maturity_heights):
+                if str(mh) in block_times_view:
+                    continue
+                mbh = self._get_active_blockhash(mh)
+                if mbh is not None:
+                    act_m = self._active_confirmed_height(mbh)
+                    if act_m is not None and act_m[1] is not None:
+                        block_times_view[str(act_m[0])] = act_m[1]
 
             # Closing tip bracket (hash_1, height_1) AFTER all queries (`SPEC-02 §4` item 1)
             end_s = self._sample_tip()
@@ -1290,10 +1343,11 @@ class ColdNamecoinObserver:
                 "tip_hash": tip_hash,
                 "tip_header_time": tip_time,
                 "tip_height": tip_h,
-                "tip_median_time_past": start_s["mediantime"],
                 "txindex": txindex_ok,
                 "txs": txs_view,
             }
+            if start_s["mediantime"] is not None:
+                last_view["tip_median_time_past"] = start_s["mediantime"]
             if consistent:
                 return last_view
             # Inconsistent mid-read tip transition: invalidate caches before retrying on new tip!
@@ -1330,7 +1384,10 @@ class ColdNamecoinObserver:
         b_info = re_start["b_info"]
         fresh["in_ibd"] = bool(b_info["initialblockdownload"])
         fresh["best_header_height"] = int(b_info["headers"])
-        fresh["tip_median_time_past"] = re_start["mediantime"]
+        if re_start["mediantime"] is not None:
+            fresh["tip_median_time_past"] = re_start["mediantime"]
+        else:
+            fresh.pop("tip_median_time_past", None)
         fresh["txindex"] = self._check_txindex()
         fresh["comparison_peers"] = self._poll_comparison_peers(re_start["height"])
 
@@ -1543,20 +1600,33 @@ def self_test() -> None:
             ],
         },
     }
+    b203 = hashlib.sha256(b"blk-203-quiet").hexdigest()
+    rec0c_txid = hashlib.sha256(b"rec-0c-tx").hexdigest()
+    txs[rec0c_txid] = {
+        "txid": rec0c_txid,
+        "blockhash": b200,
+        "confirmations": 5,
+        "vin": [],
+        "vout": [
+            {"n": 0, "value": 0.0, "scriptPubKey": {"hex": sl.encode_opreturn(0x0C, "33" * 32).hex()}},
+        ],
+    }
     hdrs = {
         b150: {"hash": b150, "height": 150, "time": 1795200000, "mediantime": 1795199900, "confirmations": 55},
         b151: {"hash": b151, "height": 151, "time": 1795200600, "mediantime": 1795200500, "confirmations": 54},
         b200: {"hash": b200, "height": 200, "time": 1795210000, "mediantime": 1795209900, "confirmations": 5},
+        b203: {"hash": b203, "height": 203, "time": 1795219000, "mediantime": 1795218777, "confirmations": 2},
         b204: {"hash": b204, "height": 204, "time": 1795220000, "mediantime": 1795219900, "confirmations": 1},
         b205: {"hash": b205, "height": 205, "time": 1795220020, "mediantime": 1795219950, "confirmations": 1},
         b204_orphan: {"hash": b204_orphan, "height": 204, "time": 1795219999, "mediantime": 1795219800, "confirmations": -1},
     }
     blocks_by_h = {
         200: {"hash": b200, "tx": [txs[vac_txid], txs[pend_txid]]},
+        203: {"hash": b203, "tx": []},
         204: {"hash": b204, "tx": [txs[act_txid]]},
         205: {"hash": b205, "tx": []},
     }
-    active_hashes = {0: gen, 150: b150, 151: b151, 200: b200, 204: b204, 205: b205}
+    active_hashes = {0: gen, 150: b150, 151: b151, 200: b200, 203: b203, 204: b204, 205: b205}
     state: dict[str, Any] = {
         "tip_h": 204,
         "tip_hash": b204,
@@ -1571,6 +1641,7 @@ def self_test() -> None:
         "gettxout_rpc_err": False,
         "name_hist_rpc_err": False,
         "corrupt_second_reg": False,
+        "strip_mediantime": False,
     }
     bad_mem_name_txid = hashlib.sha256(b"bad-mem-name").hexdigest()
     txs[bad_mem_name_txid] = {
@@ -1593,18 +1664,23 @@ def self_test() -> None:
             if state["flip_on_gbi_call"] is not None and state["gbi_calls"] == state["flip_on_gbi_call"]:
                 state["tip_h"] = 205
                 state["tip_hash"] = b205
-            return {
+            gbi_out: dict[str, Any] = {
                 "chain": state["chain_name"],
                 "blocks": state["tip_h"],
                 "headers": state["tip_h"],
                 "bestblockhash": state["tip_hash"],
-                "mediantime": hdrs[state["tip_hash"]]["mediantime"],
                 "initialblockdownload": False,
             }
+            if not state["strip_mediantime"]:
+                gbi_out["mediantime"] = hdrs[state["tip_hash"]]["mediantime"]
+            return gbi_out
         if method == "getindexinfo":
             return {"txindex": {"synced": state["txindex_synced"], "best_block_height": state["tip_h"]}} if state["txindex_synced"] else {}
         if method == "getblockheader":
-            return hdrs[args[0]]
+            h_res = dict(hdrs[args[0]])
+            if state["strip_mediantime"]:
+                h_res.pop("mediantime", None)
+            return h_res
         if method == "getrawmempool":
             return list(state["mempool"])
         if method == "getrawtransaction":
@@ -1838,6 +1914,22 @@ def self_test() -> None:
     assert rerr_bm == "NAME_HISTORY_UNAVAILABLE"
     state["mempool"] = []
 
+    # Test 13 (SPEC-02 §4 / SPEC-04 §6): Quiet recovery maturity block (h_rec=200 + delay_blocks=3 -> 203, zero txs) gets verified MTP automatically!
+    mock_origin_hint = {"payload": {"name_recovery": {"mode": "dual_party_delayed", "delay_blocks": 3}}}
+    cv_quiet = obs.build_chain_view(wire_objects=[mock_origin_hint], extra_txids=[rec0c_txid])
+    assert cv_quiet["block_times"].get("203") == 1795218777, f"Expected quiet maturity MTP 1795218777, got {cv_quiet['block_times']}"
+
+    # Test 14 (SPEC-02 §4): Missing mediantime in RPC header MUST NOT fall back to header.time (fails closed -> None/omitted)!
+    obs._invalidate_caches()
+    state["strip_mediantime"] = True
+    cv_nomtp = obs.build_chain_view(wire_objects=[mock_origin_hint], extra_txids=[rec0c_txid])
+    assert "tip_median_time_past" not in cv_nomtp
+    assert "203" not in cv_nomtp["block_times"]
+    assert "204" not in cv_nomtp["block_times"]
+    assert "block_time" not in cv_nomtp["txs"][rec0c_txid]
+    state["strip_mediantime"] = False
+    obs._invalidate_caches()
+
 
 if __name__ == "__main__":
     self_test()
@@ -1846,5 +1938,5 @@ if __name__ == "__main__":
         "(multi-reg + pending_vout=2 + bracket/retry + R1-B transactional clock & recheck + "
         "R3-H1 no-resurrection + A-1 absent_from_utxo + A-2 orphan filter + A-3 cache invalidation + "
         "A-4/R2-A-01/02 scoped truncated history + A-5/R2-A-03 mempool name update + A-9 mainnet clock guard + "
-        "A-11 chain/txindex + A-13 strict gettxout + H-23 dup SLNK)"
+        "A-11 chain/txindex + A-13 strict gettxout + H-23 dup SLNK + quiet maturity MTP + no header.time fallback)"
     )

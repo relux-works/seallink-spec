@@ -753,7 +753,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
     of_nr10_after_t = copy.deepcopy(of_nr10)
     of_nr10_after_t["chain"]["tip_height"] = 750500
     of_nr10_after_t["chain"]["best_header_height"] = 750500
-    of_nr10_after_t["chain"]["comparison_peers"] = [{"hash_at_tip": of_nr10["chain"]["tip_hash"], "healthy": True, "height": 750500}]
+    of_nr10_after_t["chain"]["comparison_peers"] = [{"id": "peer-1", "hash_at_tip": of_nr10["chain"]["tip_hash"], "healthy": True, "height": 750500}]
     of_nr10_after_t["chain"]["credible_utc_interval"] = [maj_nr10 + 100, maj_nr10 + 200]
     of_nr10_after_t["chain"]["tip_median_time_past"] = maj_nr10 + 50
     add(
@@ -769,7 +769,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
     of_h29 = copy.deepcopy(of_nr10)
     of_h29["chain"]["tip_height"] = 750500
     of_h29["chain"]["best_header_height"] = 750500
-    of_h29["chain"]["comparison_peers"] = [{"hash_at_tip": of_nr10["chain"]["tip_hash"], "healthy": True, "height": 750500}]
+    of_h29["chain"]["comparison_peers"] = [{"id": "peer-1", "hash_at_tip": of_nr10["chain"]["tip_hash"], "healthy": True, "height": 750500}]
     of_h29["chain"]["names"]["id/child-leo"]["updates"].append({
         "block_time": 1795219500,
         "confirmed_height": 750200,
@@ -2121,19 +2121,14 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
         {"anchor_height": 749500, "anchor_time": fx_aa["chain"]["now"], "assent": a_ok_aa, "chain": ch_aa_0b, "contract": c_aa}, "REFUSE", "CRED_ISSUER_CLOSED",
         "Anchored autonomous party assent with retroactive 0x0b break h_c <= anchor_height MUST refuse CRED_ISSUER_CLOSED.")
 
-    # Persisted closures on verify_credential (L3848) & verify_notary_act (L3953)
+    # Persisted closures on verify_credential (Step 8 per SPEC-05 §4.2) & verify_notary_act (Step 4 per SPEC-05 §5)
     c_iss_k = _kp("d8-mk-cr-iss")
     c_iss_pol = {"kind": "key", "pk": c_iss_k["comp"]}
     c_iss_reg = {"txid": _h32("d8-mk-cr-reg"), "vout": 0}
     cr_p = {"claims": {"k": "v"}, "credential_kind": "test/cert", "genesis": GENESIS_MAIN, "issued_at": 1795220000, "issuer": {"name": "id/uni-mk", "owner_policy": c_iss_pol, "registration": c_iss_reg, "role_policy": {"m": 1, "pks": [c_iss_k["xonly"]]}}, "lifecycle": "eternal", "network": "main", "not_before_height": 749000, "subject": {"key": _kp("d8-mk-cr-s")["xonly"], "mode": "key"}, "type": "seallink-credential/1"}
     cr_env = sl.sign_envelope(cr_p, [c_iss_k["sk"]])
     cr_id = sl.object_id(cr_p)
-    j_crcl = sv.FencedJournal(_h32("d8-mk-crcl"))
-    j_crcl.record_closure({"subject_id": cr_id, "subject_kind": "credential"}, "CRED_REVOKED_FOR_CAUSE", observed_at=fx_w0["chain"]["now"], observed_height=fx_w0["chain"]["tip_height"])
-    add("d8-mk-credential-persisted-closure", ["SL-CONT-008"], "credential",
-        {"anchor_txid": _h32("d8-mk-cr-atx"), "chain": fx_w0["chain"], "credential": cr_env, "journal": {"closures": j_crcl.closures, "journal_id": j_crcl.journal_id}},
-        "REFUSE", "CRED_REVOKED_FOR_CAUSE", "Persisted credential closure in FencedJournal MUST refuse CRED_REVOKED_FOR_CAUSE.")
-
+    cr_atx = _h32("d8-mk-cr-atx")
     not_p = {
         "act_kind": "fact-attestation",
         "attested_at": fx_w0["chain"]["now"],
@@ -2149,11 +2144,23 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     }
     not_env = sl.sign_envelope(not_p, [c_iss_k["sk"]])
     not_id = sl.object_id(not_p)
+    not_atx = _h32("d8-mk-not-atx")
+    ch_crcl = copy.deepcopy(fx_w0["chain"])
+    ch_crcl["names"]["id/uni-mk"] = sv.make_name_history("id/uni-mk", c_iss_reg, c_iss_pol, {"link": {"cred": c_iss_k["xonly"]}}, first_height=748000, update_height=748500)
+    ch_crcl["names"]["id/notary-mk"] = sv.make_name_history("id/notary-mk", c_iss_reg, c_iss_pol, {"link": {"notary": c_iss_k["xonly"]}}, first_height=748000, update_height=748500)
+    ch_crcl["txs"][cr_atx] = {"confirmed_height": 749100, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(cr_env)).hex(), "outputs": {}}
+    ch_crcl["txs"][not_atx] = {"confirmed_height": 749100, "opreturn_hex": sl.encode_opreturn(0x04, sl.content_addr(not_env)).hex(), "outputs": {}}
+    j_crcl = sv.FencedJournal(_h32("d8-mk-crcl"))
+    j_crcl.record_closure({"subject_id": cr_id, "subject_kind": "credential"}, "CRED_REVOKED_FOR_CAUSE", observed_at=fx_w0["chain"]["now"], observed_height=fx_w0["chain"]["tip_height"])
+    add("d8-mk-credential-persisted-closure", ["SL-CONT-008"], "credential",
+        {"anchor_txid": cr_atx, "chain": ch_crcl, "credential": cr_env, "journal": {"closures": j_crcl.closures, "journal_id": j_crcl.journal_id}},
+        "REFUSE", "CRED_REVOKED_FOR_CAUSE", "Persisted credential closure in FencedJournal MUST refuse CRED_REVOKED_FOR_CAUSE at Step 8 (SPEC-05 §4.2).")
+
     j_ncl = sv.FencedJournal(_h32("d8-mk-ncl"))
     j_ncl.record_closure({"subject_id": not_id, "subject_kind": "credential"}, "CRED_REVOKED_FOR_CAUSE", observed_at=fx_w0["chain"]["now"], observed_height=fx_w0["chain"]["tip_height"])
     add("d8-mk-notary-persisted-closure", ["SL-CONT-011"], "notary_act",
-        {"anchor_txid": _h32("d8-mk-not-atx"), "chain": fx_w0["chain"], "journal": {"closures": j_ncl.closures, "journal_id": j_ncl.journal_id}, "notary": not_env},
-        "REFUSE", "CRED_REVOKED_FOR_CAUSE", "Persisted notary act closure in FencedJournal MUST refuse CRED_REVOKED_FOR_CAUSE.")
+        {"anchor_txid": not_atx, "chain": ch_crcl, "journal": {"closures": j_ncl.closures, "journal_id": j_ncl.journal_id}, "notary": not_env},
+        "REFUSE", "CRED_REVOKED_FOR_CAUSE", "Persisted notary act closure in FencedJournal MUST refuse CRED_REVOKED_FOR_CAUSE at Step 4 (SPEC-05 §5).")
 
     # =========================================================================
     # C. Target Authority, Backing Grant Chain, commit_result, & 2A Modules

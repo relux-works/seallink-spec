@@ -2759,7 +2759,8 @@
             {
               "hash_at_tip": "4d967209ced0d31056e8e17dc0396169da6adff64d46b1e4ddd3a24cdf084a1b",
               "healthy": true,
-              "height": 750011
+              "height": 750011,
+              "id": "peer-1"
             }
           ],
           "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
@@ -16369,6 +16370,7 @@
         },
         "chain": {
           "best_header_height": 750100,
+          "blocks": {},
           "clock_watermark": 1795219000,
           "comparison_peers": [
             {
@@ -17080,6 +17082,7 @@
         },
         "chain": {
           "best_header_height": 750100,
+          "blocks": {},
           "clock_watermark": 1795219000,
           "comparison_peers": [
             {
@@ -17749,6 +17752,7 @@
       "inputs": {
         "chain": {
           "best_header_height": 750100,
+          "blocks": {},
           "clock_watermark": 1795219000,
           "comparison_peers": [
             {
@@ -18345,6 +18349,7 @@
       "inputs": {
         "chain": {
           "best_header_height": 750100,
+          "blocks": {},
           "clock_watermark": 1795219000,
           "comparison_peers": [
             {
@@ -26590,6 +26595,7 @@
       "inputs": {
         "chain": {
           "best_header_height": 750100,
+          "blocks": {},
           "clock_watermark": 1795219000,
           "comparison_peers": [
             {
@@ -27189,6 +27195,7 @@
       "inputs": {
         "chain": {
           "best_header_height": 750100,
+          "blocks": {},
           "clock_watermark": 1795219000,
           "comparison_peers": [
             {
@@ -27791,6 +27798,7 @@
       "inputs": {
         "chain": {
           "best_header_height": 750100,
+          "blocks": {},
           "clock_watermark": 1795219000,
           "comparison_peers": [
             {
@@ -29311,6 +29319,7 @@
         "assert_binding_id": "af207a57f31534f059ca6788382110ae9fc78347e55091215bc7bd3014d40ffb",
         "chain": {
           "best_header_height": 750100,
+          "blocks": {},
           "clock_watermark": 1795219000,
           "comparison_peers": [
             {
@@ -32006,6 +32015,7 @@
       "inputs": {
         "chain": {
           "best_header_height": 750100,
+          "blocks": {},
           "clock_watermark": 1795219000,
           "comparison_peers": [
             {
@@ -32683,6 +32693,7 @@
         },
         "chain": {
           "best_header_height": 750100,
+          "blocks": {},
           "clock_watermark": 1795219000,
           "comparison_peers": [
             {

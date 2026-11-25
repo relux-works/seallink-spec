@@ -482,6 +482,7 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         },
         "credible_utc_interval": [1795220000, 1795220020],
         "comparison_peers": [{"id": "peer-1", "healthy": True, "height": 750100, "hash_at_tip": _h32("otip-750100")}],
+        "blocks": {},
         "names": {
             "id/civil-registry": sv.make_name_history(
                 "id/civil-registry", reg_outpoint, reg_owner_pol, {"link": {"cred": reg_cred["xonly"]}}, first_height=748000, update_height=748500
@@ -875,7 +876,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     add("CHAIN_UNHEALTHY", "SL-LDGR-008", "invocation", fx)
 
     fx = _base_invocation_fixture()
-    fx["chain"]["comparison_peers"] = [{"healthy": True, "height": 750011, "hash_at_tip": _h32("peer-ahead")}]
+    fx["chain"]["comparison_peers"] = [{"id": "peer-1", "healthy": True, "height": 750011, "hash_at_tip": _h32("peer-ahead")}]
     add("CHAIN_NODE_DISAGREEMENT", "SL-LDGR-008", "invocation", fx)
 
     fx = _base_invocation_fixture()

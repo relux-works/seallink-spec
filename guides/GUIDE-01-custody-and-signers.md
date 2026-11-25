@@ -19,6 +19,7 @@ Normative key-role isolation lives in `SPEC-03 §2` and `registry/key-roles.json
 3. **Personal Key Service (macOS / Linux / Windows / iOS / Android):**
    - Exposes a local signing daemon with **typed field display** and **hardware presence (biometric / PIN)** per signature for `grant`, `cred`, `notary`, and L2 `device` keys.
    - Example macOS custody: non-exportable software `secp256k1` generic-password item in the macOS Data Protection Keychain gated by Touch ID (`biometryCurrentSet`, no passcode fallback) for BIP-340 `grant` keys, and hardware Secure Enclave `P-256` keys for L2 `device` commands.
+4. **Role key hygiene (`A -> B -> A` vs `0x0b`):** While `SL-IDEN-004` scopes routine `NAME_ROLE_CHANGED` journal closures by `retired_before_height` so multisig membership reversals (`A -> B -> A`) remain deterministic across stateful and freshly started verifiers, operators **SHOULD NOT** reuse retired single-key `grant`/`cred`/`notary` keys in production. Whenever any role key is suspected compromised (rather than routinely rotated), operators **MUST** broadcast an on-chain `0x0b` `CredentialBreak` (`SPEC-05 §4.1`) instead of relying on routine rotation alone.
 
 ---
 

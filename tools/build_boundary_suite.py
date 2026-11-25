@@ -335,7 +335,6 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     # 3c. Chain observation & rebracket exact boundaries (L768, L782, L786, L791, L806)
     ch_lag_eq = copy.deepcopy(fx0["chain"])
     ch_lag_eq["best_header_height"] = ch_lag_eq["tip_height"] + 1
-    ch_lag_eq["lag_limit"] = 1
     add("bnd-chain-obs-lag-eq-limit-admit", ["SL-LDGR-008"], "chain_obs",
         {"chain": ch_lag_eq, "risk_class": 1}, "ADMIT", None,
         "best_header_height - tip_height == lag_limit MUST admit.")
@@ -349,7 +348,6 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     ch_fut_eq = copy.deepcopy(fx0["chain"])
     ch_fut_eq["tip_header_time"] = ch_fut_eq["now"] + 600
     ch_fut_eq["tip_first_sight"] = ch_fut_eq["now"]
-    ch_fut_eq["future_bound_s"] = 600
     add("bnd-chain-obs-header-eq-future-bound-admit", ["SL-LDGR-008"], "chain_obs",
         {"chain": ch_fut_eq, "risk_class": 1}, "ADMIT", None,
         "tip_header_time - now == future_bound_s (600s) MUST admit.")

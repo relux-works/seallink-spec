@@ -1633,24 +1633,34 @@ def is_slnk_opreturn(script: bytes) -> bool:
 
 
 def decode_opreturn_with_criticality(script: bytes) -> dict[str, Any]:
-    """Decode an SLNK OP_RETURN frame in name history with forward-compatibility criticality rules (SPEC-02 §5.2).
+    """Decode an SLNK OP_RETURN frame in name history with outer-before-semantic criticality rules (SPEC-02 §5.2).
 
-    - Known v1.0 actions (0x01..0x05, 0x07..0x12): strict `decode_opreturn` (malformed -> CHAIN_FRAME_INVALID).
-    - Critical reserved range (0x13..0x1f): raises ValueError('ORIGIN_STATUS_INCOMPLETE').
-    - Advisory ignorable range (0x20..0x2f): validates standard 42B/74B framing (malformed -> CHAIN_FRAME_INVALID)
-      and returns {'advisory': True, ...} so v1.0 readers safely ignore non-critical future extensions.
-    - Reserved 0x06 or any other unknown action byte: raises ValueError('CHAIN_FRAME_INVALID').
+    1. Outer envelope checked FIRST on every SLNK output: 8 <= len <= 83, `6a 05 SLNK <action>`,
+       valid minimal Bitcoin Script data push reaching end-of-script with non-empty payload -> else CHAIN_FRAME_INVALID.
+    2. Known v1.0 actions (0x01..0x05, 0x07..0x12): strict `decode_opreturn` (malformed -> CHAIN_FRAME_INVALID).
+    3. Critical forward-only reserved range (0x13..0x1a): returns {'action': ..., 'critical_scope': 'forward_only'}.
+    4. Critical retroactive reserved range (0x1b..0x1f): returns {'action': ..., 'critical_scope': 'retroactive'}.
+    5. Advisory ignorable range (0x20..0x2f): validates standard 42B/74B v1 framing (malformed -> CHAIN_FRAME_INVALID)
+       and returns {'advisory': True, ...} so v1.0 readers safely ignore non-critical future extensions.
+    6. Reserved 0x06 or any other unknown action byte: raises ValueError('CHAIN_FRAME_INVALID').
     """
     if len(script) < 8 or len(script) > 83 or script[0] != 0x6A or script[1] != 0x05 or script[2:6] != SLNK_MAGIC:
         raise ValueError("CHAIN_FRAME_INVALID")
     action = script[6]
+    try:
+        payload, end = _read_push(script, 7)
+    except ValueError as exc:
+        raise ValueError("CHAIN_FRAME_INVALID") from exc
+    if end != len(script) or not payload:
+        raise ValueError("CHAIN_FRAME_INVALID")
     if action in ACTION_ALLOWED_LOCATORS:
         return decode_opreturn(script)
-    if 0x13 <= action <= 0x1F:
-        raise ValueError("ORIGIN_STATUS_INCOMPLETE")
+    if 0x13 <= action <= 0x1A:
+        return {"action": f"0x{action:02x}", "critical_scope": "forward_only"}
+    if 0x1B <= action <= 0x1F:
+        return {"action": f"0x{action:02x}", "critical_scope": "retroactive"}
     if 0x20 <= action <= 0x2F:
-        payload, end = _read_push(script, 7)
-        if end != len(script) or len(payload) < 34 or payload[0] != 0x01:
+        if len(payload) < 34 or payload[0] != 0x01:
             raise ValueError("CHAIN_FRAME_INVALID")
         comm = payload[1:33].hex()
         loc = payload[33]

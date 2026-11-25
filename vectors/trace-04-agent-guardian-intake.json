@@ -246,7 +246,8 @@
       {
         "hash_at_tip": "4554e70697ed3716583a0f5e90522a322e23d091b62d20c51859ddd6ad7663f4",
         "healthy": true,
-        "height": 750010
+        "height": 750010,
+        "id": "observer-1"
       }
     ],
     "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
