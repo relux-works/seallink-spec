@@ -19,7 +19,7 @@ import build_refusal_matrix as rm
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.8"
+VERSION = "1.0.0-draft.9"
 GENESIS_MAIN = rm.GENESIS_MAIN
 
 
@@ -45,12 +45,13 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         pinned_genesis=inp.get("pinned_genesis", GENESIS_MAIN),
         operator_min_depth=inp.get("operator_min_depth", 1),
         allow_window_only=inp.get("allow_window_only", False),
-        trusted_origin_issuers=set(inp.get("trusted_origin_issuers", [])),
+        trusted_origin_issuers=inp.get("trusted_origin_issuers"),
         trusted_origin_issuer_pins=inp.get("trusted_origin_issuer_pins"),
         enforce_schemas=True,
         require_jsonschema=require_jsonschema,
         max_history_steps=inp.get("max_history_steps", 500),
         require_observation_bracket=inp.get("require_observation_bracket", False),
+        enabled_modules=inp.get("enabled_modules"),
     )
     if runner == "origin_status":
         chain = sv.ChainView(inp["chain"])
@@ -316,6 +317,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
     if runner == "bearer_session":
         chain = sv.ChainView(inp["chain"])
         journal = sv.FencedJournal.from_dict(inp["journal"])
+        before_n = len(journal.entries)
         res = v.verify_bearer_session(
             inp["token"],
             inp["slot_binding"],
@@ -323,9 +325,12 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             journal,
             grant_env=inp.get("grant_env"),
             parent_grant_env=inp.get("parent_grant_env"),
+            contract_env=inp.get("contract_env"),
             action=inp.get("action"),
             arguments=inp.get("arguments"),
         )
+        if inp.get("expect_zero_writes") and len(journal.entries) != before_n:
+            return "REFUSE", f"UNEXPECTED_BEARER_WRITES:{len(journal.entries) - before_n}"
         return res.verdict, res.refusal_code
     if runner == "restart_recovery":
         # Full executor restart verification: pre-restart admit -> persist entries + receipt_store ->
@@ -466,6 +471,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         return res.verdict, res.refusal_code
     if runner == "session_lifecycle":
         j = sv.FencedJournal.from_dict(inp.get("journal", {"journal_id": _h32("sl-j")}))
+        captured_token: str | None = None
         for step in inp["steps"]:
             op_kind = step["kind"]
             if op_kind == "replay_restart":
@@ -482,6 +488,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                     return "REFUSE", f"SESSION_REPLAY_ERR:{rep_err}"
                 continue
             ch = sv.ChainView(step["chain"])
+            before_n = len(j.entries)
             if op_kind == "session_open":
                 res = v.verify_session_open(
                     step["session_open"],
@@ -491,14 +498,20 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                     inp["executor_cfg"],
                     bearer_token=step.get("bearer_token"),
                 )
+                if res.verdict == "ADMIT" and "bearer_token" in res.details:
+                    captured_token = res.details["bearer_token"]
+                if step.get("expect_bearer_token") and (not isinstance(res.details.get("bearer_token"), str) or len(res.details["bearer_token"]) != 64):
+                    return "REFUSE", f"MISSING_BEARER_TOKEN:{step['label']}"
             elif op_kind == "bearer_session":
+                tok_use = captured_token if step["token"] == "__FROM_OPEN__" and captured_token is not None else step["token"]
                 res = v.verify_bearer_session(
-                    step["token"],
+                    tok_use,
                     step["slot_binding"],
                     ch,
                     j,
                     grant_env=step.get("grant_env"),
                     parent_grant_env=step.get("parent_grant_env"),
+                    contract_env=step.get("contract_env"),
                     action=step.get("action"),
                     target=step.get("target"),
                     arguments=step.get("arguments"),
@@ -507,6 +520,12 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 raise ValueError(f"Unknown session_lifecycle step kind: {op_kind}")
             if (res.verdict, res.refusal_code) != (step["want_verdict"], step.get("want_refusal")):
                 return "REFUSE", f"SESSION_STEP_MISMATCH:{step['label']}:{(res.verdict, res.refusal_code)}"
+            if step.get("expect_zero_writes") and len(j.entries) != before_n:
+                return "REFUSE", f"SESSION_UNEXPECTED_WRITES:{step['label']}"
+            if "expect_debit_count" in step and res.journal_writes:
+                got_d = len(res.journal_writes[-1]["entry"]["body"].get("debits", []))
+                if got_d != step["expect_debit_count"]:
+                    return "REFUSE", f"SESSION_DEBIT_COUNT:{step['label']}:{got_d}"
         return "ADMIT", None
     if runner == "two_phase_commit":
         # Exercises R1-A atomic admit_and_reserve() -> optional retry while unsettled (UNCERTAIN) ->
@@ -619,23 +638,81 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         )
         if p1.verdict != "ADMIT":
             return p1.verdict, p1.refusal_code
-        p2 = v.commit_result(
-            inp["receipt_env"],
-            j,
-            inp["executor_cfg"],
-            invocation_id=p1.details["invocation_id"],
-            grant_id=inp.get("override_grant_id", p1.details["grant_id"]),
-            actual_quota_usage=inp.get("actual_quota_usage"),
-            single_use=p1.details["single_use"],
-            use_txid=p1.details["use_txid"],
-            recorded_at=p1.details["recorded_at"],
-            tip_height=p1.details["tip_height"],
-            expected_action=inp.get("expected_action"),
-        )
+        if inp.get("self_contained_restart"):
+            j = sv.FencedJournal.replay_persisted_entries(
+                j.journal_id,
+                json.loads(json.dumps(j.entries)),
+                receipt_store=json.loads(json.dumps(j.receipt_store)),
+                witness_pos=j.witness_pos,
+                witness_commitment=j.witness_commitment,
+                write_token_active=True,
+            )
+            rep_err = j.check_continuity()
+            if rep_err is not None:
+                return "REFUSE", rep_err
+            # Intentionally omit single_use & use_txid to prove 100% self-contained recovery from persisted JournalEntry[]!
+            p2 = v.commit_result(
+                inp["receipt_env"],
+                j,
+                inp["executor_cfg"],
+                invocation_id=p1.details["invocation_id"],
+                grant_id=inp.get("override_grant_id", p1.details["grant_id"]),
+                actual_quota_usage=inp.get("actual_quota_usage"),
+                single_use=False,
+                use_txid=None,
+                recorded_at=p1.details["recorded_at"],
+                tip_height=p1.details["tip_height"],
+                expected_action=inp.get("expected_action"),
+            )
+        else:
+            p2 = v.commit_result(
+                inp["receipt_env"],
+                j,
+                inp["executor_cfg"],
+                invocation_id=p1.details["invocation_id"],
+                grant_id=inp.get("override_grant_id", p1.details["grant_id"]),
+                actual_quota_usage=inp.get("actual_quota_usage"),
+                single_use=inp.get("override_single_use", p1.details["single_use"]),
+                use_txid=inp.get("override_use_txid", p1.details["use_txid"]),
+                recorded_at=p1.details["recorded_at"],
+                tip_height=p1.details["tip_height"],
+                expected_action=inp.get("expected_action"),
+            )
         if p2.verdict != "ADMIT":
             return p2.verdict, p2.refusal_code
         if "expect_total_entries" in inp and len(j.entries) != inp["expect_total_entries"]:
             return "REFUSE", f"ENTRY_COUNT_MISMATCH:{len(j.entries)}"
+        if "expect_settlement_order" in inp:
+            got_ord = [
+                f"{ln['account']}:{ln.get('row_ordinal', '')}:{ln['quota_kind']}:{ln['unit']}"
+                for ln in j.entries[-1]["body"].get("settlements", [])
+            ]
+            if got_ord != inp["expect_settlement_order"]:
+                return "REFUSE", f"SETTLEMENT_ORDER_MISMATCH:{got_ord}"
+        if "expect_head_commitment" in inp and j.commitment != inp["expect_head_commitment"]:
+            return "REFUSE", f"COMMITMENT_MISMATCH:{j.commitment}"
+        for ec in inp.get("extra_commits", []):
+            before_n = len(j.entries)
+            before_c = j.commitment
+            ec_res = v.commit_result(
+                ec["receipt_env"],
+                j,
+                inp["executor_cfg"],
+                invocation_id=p1.details["invocation_id"],
+                grant_id=p1.details["grant_id"],
+                recorded_at=ec.get("recorded_at", p1.details["recorded_at"]),
+            )
+            if (ec_res.verdict, ec_res.refusal_code) != (ec["want_verdict"], ec.get("want_refusal")):
+                return "REFUSE", f"EXTRA_COMMIT_MISMATCH:{ec['label']}:{(ec_res.verdict, ec_res.refusal_code)}"
+            if ec.get("expect_zero_writes") and (len(j.entries) != before_n or j.commitment != before_c):
+                return "REFUSE", f"EXTRA_COMMIT_MUTATED:{ec['label']}"
+            if "expect_pos" in ec and j.pos != ec["expect_pos"]:
+                return "REFUSE", f"EXTRA_COMMIT_POS:{ec['label']}:{j.pos}"
+            for bspec in ec.get("check_balances", []):
+                key = (bspec["scope"], bspec["qkey"], bspec["bucket_id"])
+                got_b = j.quotas_used.get(key, 0)
+                if got_b != bspec["expected"]:
+                    return "REFUSE", f"EXTRA_COMMIT_BAL:{ec['label']}:{got_b}"
         if inp.get("second_receipt_env") is not None:
             before_n = len(j.entries)
             before_c = j.commitment
@@ -1290,6 +1367,15 @@ def build_security_conformance_suite() -> dict[str, Any]:
 
     # 22. Positive Contour A federation disclosure with verified L2 P-256 OwnerCommand -> ADMIT
     fx_fed_pos = copy.deepcopy(fx_dev)
+    peer_b_own = _kp("peer-b-own-sec")
+    fed_gp = copy.deepcopy(fx_fed_pos["bundle"]["grants"][0]["payload"])
+    fed_gp["recipient"] = {
+        "mode": "name",
+        "name": "id/peer-b",
+        "owner_policy": {"kind": "key", "pk": peer_b_own["comp"]},
+        "registration": {"txid": _h32("peer-b-reg-sec"), "vout": 0},
+    }
+    fed_grant_env = sl.sign_envelope(fed_gp, [fx_fed_pos["_keys"]["alice_gr"]["sk"]])
     al_man_fed = copy.deepcopy(fx_fed_pos["_alice_man"])
     al_man_fed["seq"] = 2
     al_man_fed["sets"] = {"devices": {"seq": 1, "sha256": sl.content_addr(dev_list)}}
@@ -1305,7 +1391,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         {
             "arguments": {
                 "fields_sha256": _h32("contour-a-pii-fields"),
-                "grant_id": sl.object_id(fx_fed_pos["bundle"]["grants"][0]["payload"]),
+                "grant_id": sl.object_id(fed_grant_env["payload"]),
                 "recipient_name": "id/peer-b",
                 "route_mode": "direct",
             },
@@ -1337,12 +1423,12 @@ def build_security_conformance_suite() -> dict[str, Any]:
                 "fields_sha256": _h32("contour-a-pii-fields"),
                 "manifests": {al_man_fed_h: al_man_fed},
             },
-            "grant": fx_fed_pos["bundle"]["grants"][0],
+            "grant": fed_grant_env,
             "chain": fx_fed_pos["chain"],
         },
         "ADMIT",
         None,
-        "Direct Contour A routing (no screening_agent hop) backed by manifest-pinned L2 P-256 approve-pii-disclosure owner command admits PII disclosure.",
+        "Direct Contour A routing (no screening_agent hop) backed by named-recipient grant, fields_sha256 commitment, and manifest-pinned L2 P-256 approve-pii-disclosure owner command admits PII disclosure.",
     )
 
     import build_branch_suite as bbs
@@ -1353,6 +1439,8 @@ def build_security_conformance_suite() -> dict[str, Any]:
     bd7.add_draft7_conformance_cases(add)
     import build_draft8_suite as bd8
     bd8.add_draft8_conformance_cases(add)
+    import build_draft9_suite as bd9
+    bd9.add_draft9_conformance_cases(add)
 
     return {
         "suite": "security-conformance",

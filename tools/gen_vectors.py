@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.8.
+Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.9.
 
 Produces nine executable JSON vector suites under vectors/:
   1. wire-jcs-and-hashes.json
@@ -30,7 +30,7 @@ import build_security_suite as sec
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.8"
+VERSION = "1.0.0-draft.9"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 VECTORS_DIR = ROOT / "vectors"
 
@@ -1395,8 +1395,9 @@ def build_trace_02_guardian() -> dict[str, Any]:
         "majority_salt_hex": salt_maj,
     }
 
+    reg_issuer_pin = {k: origin_payload["issuer"][k] for k in ("name", "owner_policy", "registration")}
     # Live-execute all 3 ward assent verdicts through Tier1Verifier!
-    v = sv.Tier1Verifier(trusted_origin_issuers={"id/civil-registry"})
+    v = sv.Tier1Verifier(trusted_origin_issuer_pins=[reg_issuer_pin])
     ch = sv.ChainView(chain_state)
     res1 = v.verify_assent(assent_ward_alone, contract_obj, origin_bundle, ch)
     assert res1.verdict == "REFUSE" and res1.refusal_code == "WARD_AUTONOMOUS_FORBIDDEN", res1
@@ -1527,6 +1528,7 @@ def build_trace_02_guardian() -> dict[str, Any]:
         "description": "Executable RFC 8448-style trace: private origin/1 + status_seal, initial slot activation (0x12) + incoming guardian assent -> fast halt -> acyclic Stage 1 (0x0d) -> Stage 2 (0x0e) -> roster transition (0x0f), ward contract assent via guardian_approvals[] + party_id, co-tenant same-role party_id contract coverage, and both positive name_recovery continuation branches (0x10 cancel restores B1; post-delay promotes B3).",
         "chain_state": chain_state,
         "trusted_origin_issuers": ["id/civil-registry"],
+        "trusted_origin_issuer_pins": [reg_issuer_pin],
         "origin": envelope_record(origin_env, "schemas/origin.schema.json"),
         "origin_anchor_txid": origin_txid,
         "origin_opreturn_hex": origin_opreturn_hex,
@@ -2550,8 +2552,9 @@ def build_trace_04_agent_guardian_intake() -> dict[str, Any]:
     }
     jid = h32("t4-station-nova-journal")
 
+    ag_reg_issuer_pin = {k: origin_env["payload"]["issuer"][k] for k in ("name", "owner_policy", "registration")}
     # Live-execute all 4 steps through Tier1Verifier!
-    v = sv.Tier1Verifier(trusted_origin_issuers={"id/agent-registry"})
+    v = sv.Tier1Verifier(trusted_origin_issuer_pins=[ag_reg_issuer_pin])
     ch = sv.ChainView(initial_chain)
     jr = sv.FencedJournal.from_dict({"journal_id": jid})
     bundle_ok = {"grants": [ward_grant_ok], "origin_bundle": origin_bundle}
@@ -2577,6 +2580,7 @@ def build_trace_04_agent_guardian_intake() -> dict[str, Any]:
         "description": "Executable PROFILE-agent-v1 trace for agent/guardian-message: strict_drop rejects unauthenticated caller (WIRE_SIGNATURE), inactive guardian slot (GUARDIAN_INACTIVE), downgraded routine_read event_class (GUARDIAN_QUORUM_UNMET), and admits 2-of-2 effect_grant guardian_approvals[] into an Authority Frame.",
         "executor_config": exec_cfg,
         "trusted_origin_issuers": ["id/agent-registry"],
+        "trusted_origin_issuer_pins": [ag_reg_issuer_pin],
         "initial_chain_state": initial_chain,
         "initial_journal_state": {"journal_id": jid},
         "raw_message_utf8": raw_msg.decode("utf-8"),

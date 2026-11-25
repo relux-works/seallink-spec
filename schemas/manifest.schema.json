@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.8/schemas/manifest.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.9/schemas/manifest.schema.json",
   "title": "SealLink v1.0 Manifest, Sets & Statements",
   "type": "object",
   "additionalProperties": false,

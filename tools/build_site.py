@@ -984,7 +984,7 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build static website & live schema host for seallink.org.")
-    parser.add_argument("--version", default="v1.0.0-draft.8", help="Release version label (e.g. v1.0.0-draft.8)")
+    parser.add_argument("--version", default="v1.0.0-draft.9", help="Release version label (e.g. v1.0.0-draft.9)")
     parser.add_argument("--out", default=str(ROOT / "site"), help="Output directory for generated static site")
     parser.add_argument(
         "--archive-tags",

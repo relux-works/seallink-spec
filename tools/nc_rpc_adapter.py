@@ -616,11 +616,11 @@ class ColdNamecoinObserver:
           - `(spender, False)`: spender located in live mempool or active confirmed blocks.
           - `(None, True)`: output is ABSENT from the UTXO set and no spender was found (`A-1`, fail closed!).
         """
-        # 1. Fast check: is it STILL unspent in the node's UTXO set + mempool? (A-13 strict shape validation!)
+        # 1. Fast check: is it STILL unspent in the node's UTXO set + mempool? (A-13, D8-M2 strict fail-closed!)
         try:
             utxo = self.read_rpc("gettxout", txid, vout, True)
-        except RuntimeError:
-            return None, True
+        except RuntimeError as exc:
+            raise RuntimeError(f"RPC_GETTXOUT_UNAVAILABLE: {exc}") from exc
         if utxo is not None:
             if (
                 isinstance(utxo, dict)
@@ -629,8 +629,8 @@ class ColdNamecoinObserver:
                 and not isinstance(utxo.get("confirmations"), bool)
             ):
                 return None, False
-            # Malformed non-None gettxout response -> fail closed (A-13)!
-            return None, True
+            # Malformed non-None gettxout response -> transient node error (CHAIN_UNHEALTHY, 0 closures!), NEVER absent_from_utxo!
+            raise RuntimeError("RPC_GETTXOUT_MALFORMED")
         # 2. Check live mempool first (mempool spend before mining!)
         for mtx in mempool_txs.values():
             for vin in mtx.get("vin", []):
@@ -819,9 +819,9 @@ class ColdNamecoinObserver:
             raw_hist = self.read_rpc("name_history", name)
         except RuntimeError as exc:
             msg = str(exc).lower()
-            if "name not found" in msg or "not found" in msg:
+            if "name not found" in msg and "method not found" not in msg:
                 return []
-            # R2-A-01: Transient/RPC failure MUST fail closed with history_truncated=True!
+            # R2-A-01 / D8-M2: Transient/RPC failure or -32601 Method not found MUST fail closed with history_truncated=True!
             return [{
                 "history_truncated": True,
                 "registration": {"txid": "0" * 64, "vout": 0},
@@ -1160,6 +1160,7 @@ class ColdNamecoinObserver:
             # 4. Cold-discover spend chains following exact signed continuation output indices
             queue: list[tuple[str, int, int]] = [(txid, vout, 0) for txid, vout in sorted(target_outpoints)]
             visited_ops: set[tuple[str, int]] = set()
+            utxo_rpc_failed = False
             while queue:
                 op_txid, op_vout, hop = queue.pop(0)
                 if (op_txid, op_vout) in visited_ops or hop > max_spend_hops:
@@ -1178,9 +1179,13 @@ class ColdNamecoinObserver:
                     spender = collected_txs.get(spent_map[(op_txid, op_vout)])
                     absent = False
                 else:
-                    spender, absent = self._find_spender_cold(
-                        op_txid, op_vout, created_h, tip_height=tip_h, mempool_txs=mempool_txs
-                    )
+                    try:
+                        spender, absent = self._find_spender_cold(
+                            op_txid, op_vout, created_h, tip_height=tip_h, mempool_txs=mempool_txs
+                        )
+                    except RuntimeError:
+                        utxo_rpc_failed = True
+                        spender, absent = None, False
                 if spender is not None:
                     stxid = spender["txid"]
                     collected_txs[stxid] = spender
@@ -1223,7 +1228,7 @@ class ColdNamecoinObserver:
                 "name_registrations": name_regs_view,
                 "names": names_view,
                 "network": self.network,
-                "node_reachable": bool(start_s["chain_match"] and end_s["chain_match"]),
+                "node_reachable": bool(start_s["chain_match"] and end_s["chain_match"] and not utxo_rpc_failed),
                 "now": decision_now,
                 "observation_bracket": {
                     "attempts": attempt,
@@ -1305,6 +1310,7 @@ class ColdNamecoinObserver:
                 if "txid" in vin:
                     spent_map[(vin["txid"], int(vin["vout"]))] = mtx["txid"]
 
+        utxo_rpc_failed = False
         for op_txid, op_vout in seal_outpoints:
             tx_entry = fresh["txs"].get(op_txid)
             created_h = (
@@ -1312,9 +1318,13 @@ class ColdNamecoinObserver:
                 if tx_entry and tx_entry.get("confirmed_height") is not None
                 else re_start["height"]
             )
-            spender, absent = self._find_spender_cold(
-                op_txid, op_vout, created_h, tip_height=re_start["height"], mempool_txs=mempool_txs
-            )
+            try:
+                spender, absent = self._find_spender_cold(
+                    op_txid, op_vout, created_h, tip_height=re_start["height"], mempool_txs=mempool_txs
+                )
+            except RuntimeError:
+                utxo_rpc_failed = True
+                spender, absent = None, False
             if spender is not None:
                 stxid = spender["txid"]
                 spent_map[(op_txid, op_vout)] = stxid
@@ -1348,7 +1358,9 @@ class ColdNamecoinObserver:
         # Closing recheck bracket AFTER all refreshed reads (R1-B, A-6, R3 High #1)
         re_end = self._sample_tip()
         decision_now = re_end["now"]
-        fresh["node_reachable"] = bool(fresh.get("node_reachable", True) and re_start["chain_match"] and re_end["chain_match"])
+        fresh["node_reachable"] = bool(
+            fresh.get("node_reachable", True) and re_start["chain_match"] and re_end["chain_match"] and not utxo_rpc_failed
+        )
         fresh["now"] = decision_now
         fresh["clock_watermark"] = re_end["clock_watermark"]
         fresh["clock_source"] = re_end["clock_source"]
@@ -1514,6 +1526,7 @@ def self_test() -> None:
         "bad_name_hist": False,
         "chain_name": "regtest",
         "bad_gettxout": False,
+        "gettxout_rpc_err": False,
         "name_hist_rpc_err": False,
         "corrupt_second_reg": False,
     }
@@ -1556,6 +1569,8 @@ def self_test() -> None:
             return txs[args[0]]
         if method == "gettxout":
             txid_q, vout_q = args[0], args[1]
+            if state["gettxout_rpc_err"]:
+                raise RuntimeError("namecoin-cli gettxout failed: RPC timeout")
             if state["bad_gettxout"]:
                 return {}
             if txid_q == vac_txid and vout_q == 0:
@@ -1571,6 +1586,8 @@ def self_test() -> None:
             nm_q = args[0]
             if nm_q == "id/rpc-err" and state["name_hist_rpc_err"]:
                 raise RuntimeError("namecoin-cli name_history failed: connection reset by peer")
+            if nm_q == "id/no-method" and state["name_hist_rpc_err"]:
+                raise RuntimeError("namecoin-cli name_history failed: error code -32601: Method not found")
             if nm_q == "id/missing":
                 raise RuntimeError("namecoin-cli name_history failed: error code -4: name not found")
             if nm_q == "id/corrupt" and state["bad_name_hist"]:
@@ -1724,20 +1741,34 @@ def self_test() -> None:
     assert v_strict.check_chain_observation(sv.ChainView(cv_bad_chain)) == "CHAIN_UNHEALTHY"
     state["chain_name"] = "regtest"
 
-    # Test 10 (A-13): Malformed gettxout response ({}) -> absent_from_utxo=True -> SEAL_SPENT!
+    # Test 10 (A-13 / D8-M2): Malformed gettxout ({}) OR transient gettxout RPC timeout -> node_reachable=False -> CHAIN_UNHEALTHY (ZERO permanent closures!)
     state["bad_gettxout"] = True
     state["seal_spent"] = False
     cv_bad_utxo = obs.build_chain_view(extra_outpoints=[(seal_txid, 0)])
-    assert cv_bad_utxo["txs"][seal_txid]["outputs"]["0"].get("absent_from_utxo") is True
+    assert cv_bad_utxo["node_reachable"] is False
+    assert cv_bad_utxo["txs"][seal_txid]["outputs"]["0"].get("absent_from_utxo") is not True
+    assert v_strict.check_chain_observation(sv.ChainView(cv_bad_utxo)) == "CHAIN_UNHEALTHY"
     state["bad_gettxout"] = False
 
-    # Test 11 (R2-A-01 & R2-A-02): Transient name_history RPC error -> history_truncated=True; corrupt 2nd reg does NOT taint clean 1st reg!
+    state["gettxout_rpc_err"] = True
+    cv_rpc_utxo = obs.build_chain_view(extra_outpoints=[(seal_txid, 0)])
+    assert cv_rpc_utxo["node_reachable"] is False
+    assert cv_rpc_utxo["txs"][seal_txid]["outputs"]["0"].get("absent_from_utxo") is not True
+    assert v_strict.check_chain_observation(sv.ChainView(cv_rpc_utxo)) == "CHAIN_UNHEALTHY"
+    cv_pre_rpc_utxo = obs.pre_effect_recheck(cv_dict, [(seal_txid, 0)])
+    assert cv_pre_rpc_utxo["node_reachable"] is False
+    assert v_strict.check_chain_observation(sv.ChainView(cv_pre_rpc_utxo)) == "CHAIN_UNHEALTHY"
+    state["gettxout_rpc_err"] = False
+
+    # Test 11 (R2-A-01 / R2-A-02 / D8-M2): Transient name_history RPC error & -32601 Method not found -> history_truncated=True; corrupt 2nd reg does NOT taint clean 1st reg!
     state["name_hist_rpc_err"] = True
     state["corrupt_second_reg"] = True
-    cv_nh = obs.build_chain_view(extra_names=["id/rpc-err", "id/missing", "id/school"], extra_policies=[pol1, pol2])
+    cv_nh = obs.build_chain_view(extra_names=["id/rpc-err", "id/no-method", "id/missing", "id/school"], extra_policies=[pol1, pol2])
     assert cv_nh["names"]["id/rpc-err"].get("history_truncated") is True
+    assert cv_nh["names"]["id/no-method"].get("history_truncated") is True
     assert "id/missing" not in cv_nh["names"]
     assert v_strict.resolve_name("id/rpc-err", sv.ChainView(cv_nh))[1] == "NAME_HISTORY_UNAVAILABLE"
+    assert v_strict.resolve_name("id/no-method", sv.ChainView(cv_nh))[1] == "NAME_HISTORY_UNAVAILABLE"
     assert v_strict.resolve_name("id/missing", sv.ChainView(cv_nh))[1] == "NAME_NOT_FOUND"
     # Second reg is tainted, while clean historical first reg still resolves at height 157!
     assert cv_nh["names"]["id/school"].get("history_truncated") is True

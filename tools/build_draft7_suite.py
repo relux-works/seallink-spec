@@ -1669,6 +1669,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
             },
             "holder_assent": h_assent,
             "dest_accept_stmt": d_accept,
+            "local_executor_pin": dest_pin,
             "chain": fx_m4["chain"],
             "manifests": fx_m4["bundle"]["manifests"],
             "journal": {"journal_id": _h32("d7-m4-j")},
@@ -3290,17 +3291,17 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     ha5_ok = sl.sign_envelope({"expires_at": fx_m5["chain"]["now"] + 3600, "genesis": GENESIS_MAIN, "issued_at": fx_m5["chain"]["now"] - 10, "network": "main", "nonce": _h32("d7-m5-ha"), "party_id": "h", "party_name": "id/alice", "party_role": "holder", "target_id": sl.object_id(mig5_p), "target_type": "seallink-migration/1", "type": "seallink-assent/1"}, [fx_m5["_keys"]["alice_gr"]["sk"]])
     eb5 = {"inventory": mig5_inv, "open_predecessor_grants": [], "source_journal_commitment": _h32("d7-m5-jc"), "source_journal_pos": 10, "source_write_token_fenced": True}
     # Alice's manifest still points to id/mail-host-a, NOT dest id/mail-host-c -> SERVICE_PROVIDER_UNBOUND!
-    add("d7-6b-migration-holder-manifest-unbound-dest-refuse", ["SL-SERV-002"], "migration", {"chain": fx_m5["chain"], "export_bundle": eb5, "holder_assent": ha5_ok, "journal": {"journal_id": _h32("d7-m5-j1")}, "manifests": fx_m5["bundle"]["manifests"], "migration": mig5_env}, "REFUSE", "SERVICE_PROVIDER_UNBOUND", "Decision 6B: migration when holder manifest does not bind dest_executor refuses SERVICE_PROVIDER_UNBOUND.")
+    add("d7-6b-migration-holder-manifest-unbound-dest-refuse", ["SL-SERV-002"], "migration", {"chain": fx_m5["chain"], "export_bundle": eb5, "holder_assent": ha5_ok, "journal": {"journal_id": _h32("d7-m5-j1")}, "local_executor_pin": dest_pin5, "manifests": fx_m5["bundle"]["manifests"], "migration": mig5_env}, "REFUSE", "SERVICE_PROVIDER_UNBOUND", "Decision 6B: migration when holder manifest does not bind dest_executor refuses SERVICE_PROVIDER_UNBOUND.")
     # Bad holder assent signer -> SERVICE_MIGRATION_INVALID
     ha5_bad = sl.sign_envelope(ha5_ok["payload"], [_kp("d7-m5-stranger")["sk"]])
-    add("d7-6b-migration-bad-holder-assent-refuse", ["SL-SERV-002"], "migration", {"chain": fx_m5["chain"], "export_bundle": eb5, "holder_assent": ha5_bad, "journal": {"journal_id": _h32("d7-m5-j2")}, "manifests": fx_m5["bundle"]["manifests"], "migration": mig5_env}, "REFUSE", "SERVICE_MIGRATION_INVALID", "Decision 6B: migration with holder assent signed by wrong key refuses SERVICE_MIGRATION_INVALID.")
+    add("d7-6b-migration-bad-holder-assent-refuse", ["SL-SERV-002"], "migration", {"chain": fx_m5["chain"], "export_bundle": eb5, "holder_assent": ha5_bad, "journal": {"journal_id": _h32("d7-m5-j2")}, "local_executor_pin": dest_pin5, "manifests": fx_m5["bundle"]["manifests"], "migration": mig5_env}, "REFUSE", "SERVICE_MIGRATION_INVALID", "Decision 6B: migration with holder assent signed by wrong key refuses SERVICE_MIGRATION_INVALID.")
     # Holder has historical origin_id with missing origin_bundle -> ORIGIN_UNVERIFIED
     ch_m5_o = copy.deepcopy(fx_m5["chain"])
     ch_m5_o["names"]["id/alice"] = sv.make_name_history("id/alice", fx_m5["_alice_reg"], fx_m5["_alice_owner_pol"], {"link": {"grant": fx_m5["_keys"]["alice_gr"]["xonly"], "origin": _h32("m5-oid")}})
-    add("d7-6b-migration-origin-holder-missing-bundle-refuse", ["SL-SERV-002", "SL-ORIG-002"], "migration", {"chain": ch_m5_o, "export_bundle": eb5, "holder_assent": ha5_ok, "journal": {"journal_id": _h32("d7-m5-j3")}, "manifests": fx_m5["bundle"]["manifests"], "migration": mig5_env}, "REFUSE", "ORIGIN_UNVERIFIED", "Decision 6B: migration for origin-bearing holder without origin_bundle refuses ORIGIN_UNVERIFIED.")
+    add("d7-6b-migration-origin-holder-missing-bundle-refuse", ["SL-SERV-002", "SL-ORIG-002"], "migration", {"chain": ch_m5_o, "export_bundle": eb5, "holder_assent": ha5_ok, "journal": {"journal_id": _h32("d7-m5-j3")}, "local_executor_pin": dest_pin5, "manifests": fx_m5["bundle"]["manifests"], "migration": mig5_env}, "REFUSE", "ORIGIN_UNVERIFIED", "Decision 6B: migration for origin-bearing holder without origin_bundle refuses ORIGIN_UNVERIFIED.")
     # Bad dest_accept_stmt -> SERVICE_MIGRATION_INVALID
     da5_bad = sl.sign_envelope({"genesis": GENESIS_MAIN, "issuer": dest_pin5, "network": "main", "not_after": fx_m5["chain"]["now"] + 3600, "not_before": fx_m5["chain"]["now"] - 10, "seq": 1, "statement_kind": "migration-accept", "subject": {"holder": h_pin5, "inventory_sha256": _h32("wrong-inv"), "migration_id": mig5_id, "source_executor": s_pin5}, "type": "seallink-statement/1"}, [dest_rcpt5["sk"]])
-    add("d7-6b-migration-bad-dest-accept-refuse", ["SL-SERV-002"], "migration", {"chain": fx_m5["chain"], "dest_accept_stmt": da5_bad, "export_bundle": eb5, "journal": {"journal_id": _h32("d7-m5-j4")}, "manifests": fx_m5["bundle"]["manifests"], "migration": mig5_env}, "REFUSE", "SERVICE_MIGRATION_INVALID", "Decision 6B: migration with mismatched dest migration-accept statement refuses SERVICE_MIGRATION_INVALID.")
+    add("d7-6b-migration-bad-dest-accept-refuse", ["SL-SERV-002"], "migration", {"chain": fx_m5["chain"], "dest_accept_stmt": da5_bad, "export_bundle": eb5, "journal": {"journal_id": _h32("d7-m5-j4")}, "local_executor_pin": dest_pin5, "manifests": fx_m5["bundle"]["manifests"], "migration": mig5_env}, "REFUSE", "SERVICE_MIGRATION_INVALID", "Decision 6B: migration with mismatched dest migration-accept statement refuses SERVICE_MIGRATION_INVALID.")
 
     # --- Final 8 Precision Precedence & Boundary Kill Vectors ---
     # F1 (L1110): Observation bracket void MUST precede peer disagreement (SPEC-02 §4 Step 4a before 4d)
@@ -3374,7 +3375,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
 
     # F8 (L4848): migration holder_assent targeting wrong target_id -> SERVICE_MIGRATION_INVALID
     ha5_wrong_tid = sl.sign_envelope({**ha5_ok["payload"], "target_id": _h32("wrong-mig-tid")}, [fx_m5["_keys"]["alice_gr"]["sk"]])
-    add("d7-6b-migration-holder-assent-wrong-target-id-refuse", ["SL-SERV-002"], "migration", {"chain": fx_m5["chain"], "export_bundle": eb5, "holder_assent": ha5_wrong_tid, "journal": {"journal_id": _h32("d7-m5-j5")}, "manifests": fx_m5["bundle"]["manifests"], "migration": mig5_env}, "REFUSE", "SERVICE_MIGRATION_INVALID", "Decision 6B: migration holder_assent with wrong target_id refuses SERVICE_MIGRATION_INVALID.")
+    add("d7-6b-migration-holder-assent-wrong-target-id-refuse", ["SL-SERV-002"], "migration", {"chain": fx_m5["chain"], "export_bundle": eb5, "holder_assent": ha5_wrong_tid, "journal": {"journal_id": _h32("d7-m5-j5")}, "local_executor_pin": dest_pin5, "manifests": fx_m5["bundle"]["manifests"], "migration": mig5_env}, "REFUSE", "SERVICE_MIGRATION_INVALID", "Decision 6B: migration holder_assent with wrong target_id refuses SERVICE_MIGRATION_INVALID.")
 
     # F9 (L2749 wrong-code): 0x0f roster record signed by issuer with active 0x0b compromise break -> CRED_ISSUER_CLOSED
     of_r_0b = copy.deepcopy(of_r_d2)

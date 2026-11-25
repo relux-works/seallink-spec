@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Canonical Object Type Registry. Authoritative SSOT for object types, byte limits, signing roles, and schema targets. Signing domain tag equals the exact type string under SPEC-01.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.8",
+  "version": "1.0.0-draft.9",
   "reserved_internal_domains": [
     "seallink-clause/1",
     "seallink-journal/1",
@@ -192,11 +192,11 @@
     {
       "type": "seallink-credential-withdrawal/1",
       "signed": false,
-      "auth_mechanism": "credential_seal_spend",
+      "auth_mechanism": "seal_or_stop_coin_spend",
       "max_bytes": 1024,
       "owning_spec": "SPEC-05",
       "schema": "schemas/credential.schema.json#/$defs/CredentialWithdrawal",
-      "description": "Unsigned cause commitment authenticated by spending a revocable credential's seal (action 0x0a)."
+      "description": "Unsigned cause commitment authenticated by spending a revocable credential seal (action 0x0a), notary seal (action 0x05), or delegation row stop coin (action 0x05)."
     },
     {
       "type": "seallink-credential-break/1",

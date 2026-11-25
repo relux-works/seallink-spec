@@ -13,7 +13,7 @@ Validates:
   7. Every SPEC-*.md carries Status, Evidence / Maturity, References, and Security Considerations.
   8. Full cryptographic & structural re-verification of all vectors/*.json via seallink_ref.py.
   9. LIVE EXECUTION of trace-01, trace-02, trace-03, trace-04, negative semantic & SL-ORIG-016
-     fixtures, ALL 85/85 refusal codes in refusal-coverage-matrix.json, and ALL 30/30 registered
+     fixtures, ALL 86/86 refusal codes in refusal-coverage-matrix.json, and ALL 30/30 registered
      object types through tools/seallink_verifier.py — asserting computed verdicts, refusal codes,
      and journal hash-chain commitments match expected values.
  10. Full Draft 2020-12 metaschema + instance validation of all vectors, emitted JournalEntry
@@ -38,6 +38,7 @@ import seallink_ref as sl
 import seallink_verifier as sv
 
 REFUSAL_PREFIXES = (
+    "ACTION_",
     "WIRE_",
     "CHAIN_",
     "SEAL_",
@@ -300,7 +301,11 @@ def execute_traces_and_matrix(
     # --- Execute trace-02-guardian-succession-assent.json ---
     if "trace-02-guardian-succession-assent.json" in vectors:
         t2 = vectors["trace-02-guardian-succession-assent.json"]
-        v = sv.Tier1Verifier(trusted_origin_issuers=set(t2["trusted_origin_issuers"]), require_jsonschema=require_jsonschema)
+        v = sv.Tier1Verifier(
+            trusted_origin_issuers=None if t2.get("trusted_origin_issuer_pins") else set(t2["trusted_origin_issuers"]),
+            trusted_origin_issuer_pins=t2.get("trusted_origin_issuer_pins"),
+            require_jsonschema=require_jsonschema,
+        )
         ch = sv.ChainView(t2["chain_state"])
         origin_bundle = {
             "origin": t2["origin"]["object"],
@@ -491,7 +496,11 @@ def execute_traces_and_matrix(
     # --- Execute trace-04-agent-guardian-intake.json ---
     if "trace-04-agent-guardian-intake.json" in vectors:
         t4 = vectors["trace-04-agent-guardian-intake.json"]
-        v = sv.Tier1Verifier(trusted_origin_issuers=set(t4["trusted_origin_issuers"]), require_jsonschema=require_jsonschema)
+        v = sv.Tier1Verifier(
+            trusted_origin_issuers=None if t4.get("trusted_origin_issuer_pins") else set(t4["trusted_origin_issuers"]),
+            trusted_origin_issuer_pins=t4.get("trusted_origin_issuer_pins"),
+            require_jsonschema=require_jsonschema,
+        )
         ch = sv.ChainView(t4["initial_chain_state"])
         jr = sv.FencedJournal.from_dict(t4["initial_journal_state"])
         exec_cfg = t4["executor_config"]
@@ -527,7 +536,8 @@ def execute_traces_and_matrix(
                         _assert_journal_write(res.journal_writes[1], st["settlement_journal_write"], f"trace-04/step-{st['step']}/settlement", errors)
             exec_checks += 1
 
-    # --- Execute refusal-coverage-matrix.json (MUST cover 100% = 85/85 refusal codes!) ---
+    # --- Execute refusal-coverage-matrix.json (MUST cover 100% = 86/86 refusal codes, all tagged with module!) ---
+    valid_modules = {"core", "bearer-sessions", "service-migration", "federated-screening"}
     if fail_fast and errors:
         return exec_checks, len(covered_refusals), 0
     if "refusal-coverage-matrix.json" not in vectors:
@@ -535,6 +545,8 @@ def execute_traces_and_matrix(
     else:
         mat = vectors["refusal-coverage-matrix.json"]
         for case in mat.get("cases", []):
+            if case.get("module") not in valid_modules:
+                errors.append(f"refusal-coverage-matrix '{case.get('code')}': missing or invalid module tag {case.get('module')!r}")
             got = rm.execute_matrix_case(case, require_jsonschema=require_jsonschema)
             if got != case["expected_refusal"]:
                 errors.append(f"refusal-coverage-matrix '{case['code']}': expected {case['expected_refusal']}, verifier computed {got!r}")
@@ -544,7 +556,7 @@ def execute_traces_and_matrix(
                 covered_refusals.add(got)
             exec_checks += 1
 
-    # --- Execute security-conformance.json (all adversarial false-admit & interop cases!) ---
+    # --- Execute security-conformance.json (all adversarial false-admit & interop cases, all tagged with module!) ---
     mutations_killed = 0
     if "security-conformance.json" not in vectors:
         errors.append("Missing vectors/security-conformance.json")
@@ -553,6 +565,8 @@ def execute_traces_and_matrix(
         seen_sec_ids: set[str] = set()
         for case in ss.get("cases", []):
             cid = case["id"]
+            if case.get("module") not in valid_modules:
+                errors.append(f"security-conformance '{cid}': missing or invalid module tag {case.get('module')!r}")
             if cid in seen_sec_ids:
                 errors.append(f"Duplicate security-conformance case id: '{cid}'")
             seen_sec_ids.add(cid)

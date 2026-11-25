@@ -923,6 +923,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
     st_gr_k = _kp("d8-g7-01-st-gr")
     st_own_pol = {"kind": "key", "pk": st_own_k["comp"]}
     st_reg = {"txid": _h32("d8-g7-01-st-reg"), "vout": 0}
+    fx_st_own["executor_cfg"]["pin"] = {"name": "id/station-a", "owner_policy": st_own_pol, "registration": st_reg}
     fx_st_own["chain"]["names"]["id/station-a"] = sv.make_name_history("id/station-a", st_reg, st_own_pol, {"link": {"grant": st_gr_k["xonly"]}}, first_height=748000, update_height=749000)
     fx_st_own["bundle"]["contract"]["parties"][0]["signing_policy"] = {"m": 1, "pks": [st_gr_k["xonly"]]}
     cid_sto = sl.object_id(fx_st_own["bundle"]["contract"])
@@ -1498,6 +1499,15 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
 
     # 6c. Federated Screening & PII Disclosure (module="federated-screening"): mandatory holder manifest + strict direct hop!
     fx_fd = rm._base_invocation_fixture()
+    ag1_own = _kp("d8-fed-ag1-own")
+    fd_gp = copy.deepcopy(fx_fd["bundle"]["grants"][0]["payload"])
+    fd_gp["recipient"] = {
+        "mode": "name",
+        "name": "id/agent-1",
+        "owner_policy": {"kind": "key", "pk": ag1_own["comp"]},
+        "registration": {"txid": _h32("d8-fed-ag1-reg"), "vout": 0},
+    }
+    fx_fd["bundle"]["grants"][0] = sl.sign_envelope(fd_gp, [fx_fd["_keys"]["alice_gr"]["sk"]])
     p256_fd_sk = sl.deterministic_p256_privkey("d8-fed-p256-l2")
     p256_fd_pk = sl.p256_compressed_pubkey(p256_fd_sk)
     dseal_fd_pol = {"kind": "key", "pk": _kp("d8-fed-dseal")["comp"]}

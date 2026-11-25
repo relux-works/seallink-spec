@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.8/schemas/invocation.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.9/schemas/invocation.schema.json",
   "title": "SealLink v1.0 Invocation, Receipt, Sessions, Auth, Owner Control, Journal & Migration",
   "$defs": {
     "Invocation": {
@@ -506,7 +506,14 @@
                   "type": "array",
                   "maxItems": 64,
                   "items": { "$ref": "#/$defs/JournalReservationLine" }
-                }
+                },
+                "action": { "$ref": "common.schema.json#/$defs/ActionStr" },
+                "single_use": { "const": true },
+                "use_txid": { "$ref": "common.schema.json#/$defs/Hex64" }
+              },
+              "dependentRequired": {
+                "single_use": ["use_txid"],
+                "use_txid": ["single_use"]
               }
             }
           }
@@ -680,7 +687,7 @@
                 "recorded_at": { "$ref": "common.schema.json#/$defs/Uint53" },
                 "debits": {
                   "type": "array",
-                  "maxItems": 64,
+                  "maxItems": 96,
                   "items": { "$ref": "#/$defs/JournalReservationLine" }
                 }
               }

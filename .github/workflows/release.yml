@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Validate, Bundle & Publish Release
+  lint:
+    name: Spec Lint & Executable Verifier
     runs-on: ubuntu-latest
     steps:
       - name: Checkout tagged source
@@ -27,11 +27,40 @@ jobs:
       - name: Run specification consistency, schema, and vector linter
         run: python3 tools/speclint.py --require-jsonschema
 
-      - name: Run multi-operator verifier mutation audits (refusal-return, wrong-code, boundary)
-        run: |
-          python3 tools/mutation_audit.py --mode refusal-return --min-kill-pct 100
-          python3 tools/mutation_audit.py --mode wrong-code --min-kill-pct 100
-          python3 tools/mutation_audit.py --mode boundary --min-kill-pct 100
+  mutation_audit:
+    name: Mutation Audit (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        mode: [refusal-return, wrong-code, boundary]
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install JSON Schema validator
+        run: python3 -m pip install --quiet "jsonschema>=4.23"
+
+      - name: Run ${{ matrix.mode }} verifier mutation audit (100% kill bar)
+        run: python3 tools/mutation_audit.py --mode "${{ matrix.mode }}" --min-kill-pct 100
+
+  publish:
+    name: Bundle & Publish Release
+    needs: [lint, mutation_audit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Build single-file Markdown and standalone HTML/Print-PDF release bundles
         env:
@@ -80,14 +109,14 @@ jobs:
             --notes "$(cat <<EOF
           ## SealLink Protocol Specification \`${TAG}\`
 
-          Compiled single-file Markdown and standalone Print-to-PDF HTML editions (also published live with canonical \`\$id\` JSON Schemas at [seallink.org](https://seallink.org/)):
+          Compiled single-file Markdown and standalone Print-to-PDF HTML editions (also published live with canonical \`\$id\` JSON Schemas at [seallink.org](https://seallink.org/); for byte-exact SHA-256 verification of the standalone HTML bundle, verify the GitHub Release asset below, as CDN edge proxies may inject telemetry/optimization tags on HTML responses):
           - Normative Core Specifications (\`SPEC-00\` through \`SPEC-07\`)
           - Standard Profiles (\`PROFILE-mail-v1\`, \`PROFILE-agent-v1\`)
           - Conformance Requirements, Open Questions, and SLIP Template
           - Machine-Readable Registries (\`registry/*.json\`)
           - Formal Draft 2020-12 Wire JSON Schemas (\`schemas/*.schema.json\`) — live at \`https://seallink.org/releases/${TAG}/schemas/\`
-          - Informative Guides (\`GUIDE-01\`), Complete 114-Rule Inventory (mechanically checked against \`registry/refusal-codes.json\`), and Conformance Vector Manifest (9 deterministic suites, 7 registries including \`registry/actions.json\`, 203 crypto/logic checks, 700 live verifier checks across 588 module-tagged \`security-conformance.json\` cases, 3467 Draft 2020-12 schema checks, schema-validated 85/85 refusal-code matrix & 30/30 object types, hardened cold-observer RPC adapter \`tools/nc_rpc_adapter.py\` with 9-method read-only \`rpcwhitelist\` support, observation brackets, closed-bracket \`pre_effect_recheck\`, file-locked transactional state merge, schema-driven \`*_vout\` traversal, and operational/regtest clock modes, and multi-operator verifier mutation audits via \`tools/mutation_audit.py\`: \`339/339\` = 100.0% \`refusal-return\`, \`339/339\` = 100.0% \`wrong-code\` [0 exceptions], and \`145/145\` = 100.0% exact numeric \`boundary\` [0 exceptions])
-          - Two-node Namecoin Core \`nc28.0\` regtest proofs: standalone \`P2A\` package relay (\`conformance/p2a-regtest/\`) and live 5-trace cold-observer end-to-end suite (\`conformance/traces-regtest/\`, 34 live \`Tier1Verifier\` verdicts with \`require_observation_bracket=True\` and dedicated 9-method read-only \`rpcwhitelist\` Node B verified to reject \`sendrawtransaction\` with HTTP 403, covering flagship \`mail/read\` + \`executor_ref\` + named recipient + foreign-issuer \`GRANT_TARGET_UNAUTHORIZED\` + two-phase late-receipt commit + closed-bracket \`pre_effect_recheck\` + mempool revoke, native \`P2WSH\` 2-of-3 \`BranchKeySpec\` \`disposer_pk\` + \`P2WSH\` 2-of-3 \`namepsbt\` + non-default \`pending_vout = 2\` CSV + historical ward contract survival across \`0x0f\` & live guardian \`link.grant\` rotation + \`0x10\` + Decision \`1B\` confirmed \`capacity/1\` & \`P2WSH\` 2-of-3 handover -> State 4 autonomous adult assent, depth-2 sibling \`row_ordinal\` + \`(seal_txid, seal_vout + 1)\` linkage + witness-verified restart recovery + unified 2-write atomic \`single_use_1_of_2\` \`settlement\` + TRUC v3 \`P2A\` CPFP, \`agent/guardian-message\` + two-phase late-receipt separate-process restart recovery, and historical eternal diploma across live 30-block expiry, lawful re-registration, live mid-read tip-change bracket \`CHAIN_OBSERVATION_VOID\` -> retry \`ADMIT\`, live transfer-written \`NAME_WRITER_UNVERIFIED\` -> new owner self-update \`ADMIT\`, and live \`invalidateblock\` reorg exclusion)
+          - Informative Guides (\`GUIDE-01\`), Complete 114-Rule Inventory (mechanically checked against \`registry/refusal-codes.json\`), and Conformance Vector Manifest (9 deterministic suites, 7 registries including \`registry/actions.json\`, 203 crypto/logic checks, 737 live verifier checks across 624 module-tagged \`security-conformance.json\` cases and 86/86 module-tagged \`refusal-coverage-matrix.json\` cases, 3684 Draft 2020-12 schema checks, 30/30 object types, hardened cold-observer RPC adapter \`tools/nc_rpc_adapter.py\` with 9-method read-only \`rpcwhitelist\` support, fail-closed \`gettxout\` / \`name_history\` \`-32601\` handling, observation brackets, closed-bracket \`pre_effect_recheck\`, file-locked transactional state merge, schema-driven \`*_vout\` traversal, and operational/regtest clock modes, and parallel multi-operator verifier mutation audits via \`tools/mutation_audit.py\`: \`347/347\` = 100.0% \`refusal-return\`, \`347/347\` = 100.0% \`wrong-code\` [0 exceptions], and \`146/146\` = 100.0% exact numeric \`boundary\` [0 exceptions])
+          - Two-node Namecoin Core \`nc28.0\` regtest proofs: standalone \`P2A\` package relay (\`conformance/p2a-regtest/\`) and live 5-trace cold-observer end-to-end suite (\`conformance/traces-regtest/\`, 34 live \`Tier1Verifier\` verdicts with \`require_observation_bracket=True\` and dedicated 9-method read-only \`rpcwhitelist\` Node B verified to reject \`sendrawtransaction\` with HTTP 403, covering flagship \`mail/read\` + \`executor_ref\` + named recipient + foreign-issuer \`GRANT_TARGET_UNAUTHORIZED\` + two-phase late-receipt commit + closed-bracket \`pre_effect_recheck\` + mempool revoke, native \`P2WSH\` 2-of-3 \`BranchKeySpec\` \`disposer_pk\` + \`P2WSH\` 2-of-3 \`namepsbt\` + non-default \`pending_vout = 2\` CSV + historical ward contract survival across \`0x0f\` & live guardian \`link.grant\` rotation + \`0x10\` + Decision \`1B\` confirmed \`capacity/1\` & \`P2WSH\` 2-of-3 handover -> State 4 autonomous adult assent, depth-2 sibling \`row_ordinal\` + \`(seal_txid, seal_vout + 1)\` linkage + witness-verified restart recovery + self-contained Phase-1 -> restart -> Phase-2 \`single_use_1_of_2\` unified \`settlement\` + TRUC v3 \`P2A\` CPFP, \`agent/guardian-message\` + two-phase late-receipt separate-process restart recovery, and historical eternal diploma across live 30-block expiry, lawful re-registration, live mid-read tip-change bracket \`CHAIN_OBSERVATION_VOID\` -> retry \`ADMIT\`, live transfer-written \`NAME_WRITER_UNVERIFIED\` -> new owner self-update \`ADMIT\`, and live \`invalidateblock\` reorg exclusion)
 
           **SHA-256 (\`seallink-spec-${TAG}.md\`):** \`${SHA_MD}\`  
           **SHA-256 (\`seallink-spec-${TAG}.html\`):** \`${SHA_HTML}\`

@@ -963,12 +963,18 @@ class FencedJournal:
             if "nonce" in body:
                 self.nonces[body["nonce"]] = inv_id
             lines = body["reservations"] if "reservations" in body else [body]
-            self.unsettled_reservations[inv_id] = {
+            res_rec: dict[str, Any] = {
                 "grant_id": body["grant_id"],
                 "invocation_id": inv_id,
                 "recorded_at": body.get("recorded_at", 0),
                 "reservations": copy.deepcopy(lines),
             }
+            if "action" in body:
+                res_rec["action"] = body["action"]
+            if body.get("single_use") is True:
+                res_rec["single_use"] = True
+                res_rec["use_txid"] = body["use_txid"]
+            self.unsettled_reservations[inv_id] = res_rec
             rec_at = body.get("recorded_at")
             for ln in lines:
                 scope = (
@@ -1004,6 +1010,8 @@ class FencedJournal:
             if outcome != "uncertain":
                 self.unsettled_reservations.pop(inv_id, None)
                 self.terminal_invocations[inv_id] = {"outcome": outcome, "receipt_sha256": rsha}
+            elif inv_id in self.unsettled_reservations and rsha:
+                self.unsettled_reservations[inv_id]["uncertain_receipt_sha256"] = rsha
             # R3 Blocker #2: Unified atomic single-use terminal closure inside settlement entry (+1 witness advance!)
             if body.get("single_use_consumed") is True and "closes_grant_id" in body:
                 cgid = body["closes_grant_id"]
@@ -1188,6 +1196,7 @@ class Tier1Verifier:
         require_jsonschema: bool = True,
         max_history_steps: int = 500,
         require_observation_bracket: bool = False,
+        enabled_modules: set[str] | list[str] | None = None,
     ) -> None:
         self.pinned_network = pinned_network
         self.pinned_genesis = pinned_genesis
@@ -1215,6 +1224,11 @@ class Tier1Verifier:
         self.require_jsonschema = require_jsonschema
         self.max_history_steps = max_history_steps
         self.require_observation_bracket = require_observation_bracket
+        self.enabled_modules: set[str] = (
+            set(enabled_modules)
+            if enabled_modules is not None
+            else {"core", "bearer-sessions", "service-migration", "federated-screening"}
+        )
 
     # ------------------------------------------------------------------
     # SPEC-01 §7 Wire Pipeline (steps 1..10, closed Draft 2020-12 schemas)
@@ -1459,12 +1473,27 @@ class Tier1Verifier:
     def _is_bracket_consistent(self, chain: ChainView) -> bool:
         c = chain.raw
         ob = c.get("observation_bracket")
-        if isinstance(ob, dict) and ob.get("consistent") is False:
-            return False
+        ob_complete = False
+        if isinstance(ob, dict):
+            if ob.get("consistent") is False:
+                return False
+            st = ob.get("start")
+            en = ob.get("end")
+            if isinstance(st, dict) and isinstance(en, dict):
+                if (
+                    st.get("height") != en.get("height")
+                    or st.get("hash") != en.get("hash")
+                    or st.get("height") != chain.tip_height
+                    or st.get("hash") != chain.tip_hash
+                ):
+                    return False
+                ob_complete = ob.get("consistent") is True
         rb = c.get("rebracket_tip")
-        if not rb:
-            return not self.require_observation_bracket
-        return rb.get("height") == chain.tip_height and rb.get("hash") == chain.tip_hash
+        if rb:
+            return rb.get("height") == chain.tip_height and rb.get("hash") == chain.tip_hash
+        if ob_complete:
+            return True
+        return not self.require_observation_bracket
 
     def check_chain_observation(self, chain: ChainView, risk_class: int = 1) -> str | None:
         c = chain.raw
@@ -2392,13 +2421,17 @@ class Tier1Verifier:
         *,
         active_binding: dict[str, Any] | None = None,
         at_height: int | None = None,
+        cap_confirmed_height: int | None = None,
+        last_recovery_promo_height: int | None = None,
+        majority_cutoff_reached: bool = False,
     ) -> tuple[bool, dict[str, Any] | None]:
-        """Derive unified Decision 1B emancipation handover strictly from ward name.updates[] (R2G-02, R2G-04, B-13).
+        """Derive unified Decision 1B emancipation handover strictly from ward name.updates[] (R2G-02, R2G-04, B-13, D8-M5).
 
         Transition to State 4 (autonomous) ALWAYS requires cryptographically authenticated
         subject_new_owner_policy via either:
           - Confirmed seallink-capacity/1 (subject_new_owner_policy != None) + handover transfer + SIGHASH_ALL self-update, OR
-          - Confirmed dual_party_delayed 0x0c recovery (active_binding.seq >= 2, distinct owner_policy) + SIGHASH_ALL self-update.
+          - Confirmed dual_party_delayed 0x0c recovery (active_binding.seq >= 2, distinct owner_policy, taking effect at/after
+            cap_confirmed_height when emancipation is triggered solely by capacity/1, allowing K1->K2 recovery) + SIGHASH_ALL self-update.
         Calendar majority T alone NEVER transitions to State 4 without capacity/1 or 0x0c recovery.
         Returns `(True, current_subject_owner_policy)` on verified State 4 transition, else `(False, None)`.
         """
@@ -2419,13 +2452,18 @@ class Tier1Verifier:
         if latest_spk == init_spk:
             return False, None
 
-        # Case 1 (Decision 1B): Confirmed dual_party_delayed 0x0c recovery (seq >= 2) with fresh owner_policy + self-update
-        if active_binding is not None and active_binding.get("seq", 1) >= 2:
+        # Case 1 (Decision 1B / D8-M5): Confirmed dual_party_delayed 0x0c recovery (seq >= 2) with fresh owner_policy + self-update
+        rec_order_ok = (
+            majority_cutoff_reached
+            or cap_confirmed_height is None
+            or (last_recovery_promo_height is not None and last_recovery_promo_height >= cap_confirmed_height)
+        )
+        if active_binding is not None and active_binding.get("seq", 1) >= 2 and rec_order_ok:
             try:
                 b_spk, _ = sl.compile_script_policy(active_binding["owner_policy"])
             except (ValueError, KeyError, TypeError):
                 b_spk = b""
-            if b_spk and b_spk != init_spk and (target_spk is None or b_spk == target_spk):
+            if b_spk and b_spk != init_spk:
                 for j in range(1, len(updates)):
                     if self._is_owner_authored_update(updates[j], updates[j - 1]):
                         try:
@@ -2600,6 +2638,14 @@ class Tier1Verifier:
                 return None, iss_err
             return None, "ORIGIN_UNVERIFIED"
 
+        # D-6 / R2-03 / D8-M5: Eternal credential with subject.mode="origin" verifies historical origin existence & trusted issuance
+        # (h_origin <= eval_h, valid issuer link.cred, h_origin < h_c) WITHOUT requiring initial 0x0c NameBinding at eval_h!
+        if historical_existence_only:
+            return {
+                "origin_id": origin_id,
+                "capacity": "historical",
+            }, None
+
         # Verify initial NameBinding (0x0c) + binding_seal spend + intended_* + h_origin < h_firstupdate (B-5, R3 B3)
         binding = origin_bundle.get("name_binding")
         bind_txid = origin_bundle.get("name_binding_txid")
@@ -2650,15 +2696,6 @@ class Tier1Verifier:
         existing_oid = chain.raw.get("registered_bindings", {}).get(reg_key)
         if existing_oid is not None and existing_oid != origin_id:
             return None, "ORIGIN_BINDING_INVALID"
-
-        # D-6 / R2-03: Eternal credential with subject.mode="origin" verifies historical origin existence & binding only!
-        if historical_existence_only:
-            return {
-                "origin_id": origin_id,
-                "capacity": "historical",
-                "binding": binding,
-                "effective_binding": binding,
-            }, None
 
         # Expected exact NamePins for institutional authorities (B-14)
         exp_cap_auth = op.get("capacity_authority", op["issuer"])
@@ -2809,6 +2846,7 @@ class Tier1Verifier:
         # Walk full name_recovery continuation spine (SPEC-04 §6, 3-way D-1 R2G-01, non-retroactive D-2 R2G-05, H-28, H-29)
         active_binding = binding
         active_recovery_seal: dict[str, Any] | None = None
+        last_recovery_promo_height: int | None = None
         recovery_events: list[dict[str, Any]] = []
         recovery_burned = False
         nr = op["name_recovery"]
@@ -2947,16 +2985,12 @@ class Tier1Verifier:
                         author_spk, _ = sl.compile_script_policy(old_updates[u_idx - 1]["owner_policy"])
                     except (ValueError, KeyError, TypeError):
                         continue
-                    # Non-retroactive D-2 former-guardian lockout checked at (h_cancel, cancel_block_time) (R2G-05)
+                    # Non-retroactive D-2 / D8-M5 former-guardian lockout checked at (h_cancel, cancel_block_time); missing block_time fails closed!
                     if "guardian_policy" in op and author_spk == int_spk:
                         locked_by_cap = (cap_confirmed_height is not None and h_cancel >= cap_confirmed_height)
                         cancel_bt = u_c.get("block_time")
                         if opened_majority is not None:
-                            locked_by_maj = (
-                                int(cancel_bt) >= opened_majority
-                                if cancel_bt is not None
-                                else majority_cutoff_reached
-                            )
+                            locked_by_maj = True if cancel_bt is None else (int(cancel_bt) >= opened_majority)
                         else:
                             locked_by_maj = False
                         if locked_by_cap or locked_by_maj:
@@ -2971,11 +3005,10 @@ class Tier1Verifier:
                     active_recovery_seal = next_rec_seal
                     continue
                 if eval_h < deadline:
-                    if at_height is not None:
-                        break
                     return None, "RECOVERY_FORBIDDEN"
                 # Delay elapsed without valid 0x10 cancel -> B_{k+1} promoted!
                 prev_id = sl.object_id(active_binding)
+                last_recovery_promo_height = deadline
                 recovery_events.append({"candidate_id": cand_id, "outcome": "promoted", "superseded_id": prev_id, "next_recovery_seal": next_rec_seal})
                 if assert_binding_id is not None and assert_binding_id == prev_id:
                     return None, "ORIGIN_BINDING_INVALID"
@@ -2989,7 +3022,7 @@ class Tier1Verifier:
         if card_obj is not None and card_obj.get("name") != active_binding["name"]:
             return None, "ORIGIN_UNVERIFIED"
 
-        # Decision 1B: Unified emancipation state machine for BOTH person & agent (R2G-02, R2G-04)
+        # Decision 1B / D8-M5: Unified emancipation state machine for BOTH person & agent (R2G-02, R2G-04)
         emancipation_triggered = capacity_confirmed or majority_cutoff_reached
         if emancipation_triggered:
             handover_ok, emancipated_owner_policy = self._check_emancipation_handover(
@@ -3000,6 +3033,9 @@ class Tier1Verifier:
                 chain,
                 active_binding=active_binding,
                 at_height=at_height,
+                cap_confirmed_height=cap_confirmed_height,
+                last_recovery_promo_height=last_recovery_promo_height,
+                majority_cutoff_reached=majority_cutoff_reached,
             )
             if not handover_ok or emancipated_owner_policy is None:
                 return None, "GUARDIAN_TRANSFER_PENDING"
@@ -4650,18 +4686,19 @@ class Tier1Verifier:
                 ln["row_ordinal"] = op_rec["row_ordinal"]
             res_lines.append(ln)
 
-        jw_res, j_aerr = _append_journal_checked(
-            journal,
-            "reservation",
-            {
-                "expires_at": inv_p["exp"],
-                "grant_id": leaf_gid,
-                "invocation_id": inv_id,
-                "nonce": inv_p["nonce"],
-                "recorded_at": decision_now,
-                "reservations": res_lines,
-            },
-        )
+        res_body: dict[str, Any] = {
+            "action": action,
+            "expires_at": inv_p["exp"],
+            "grant_id": leaf_gid,
+            "invocation_id": inv_id,
+            "nonce": inv_p["nonce"],
+            "recorded_at": decision_now,
+            "reservations": res_lines,
+        }
+        if leaf_gp["revocation"].get("kind") == "single_use":
+            res_body["single_use"] = True
+            res_body["use_txid"] = use_txid
+        jw_res, j_aerr = _append_journal_checked(journal, "reservation", res_body)
         if j_aerr is not None:
             return VerifierResult("REFUSE", j_aerr)
         assert jw_res is not None
@@ -5333,7 +5370,8 @@ class Tier1Verifier:
 
         rcpt_caddr = sl.content_addr(r_res)
 
-        # R1 #2 / G7-07: Strict idempotency on retry with identical receipt_sha256 (0 writes!); refuse conflicting receipt or missing Phase-1 reservation (INVOKE_REPLAY)!
+        # R1 #2 / G7-07 / D8-B2: Strict idempotency on retry with identical receipt_sha256 (0 writes! — BOTH terminal AND uncertain!);
+        # refuse conflicting receipt or missing Phase-1 reservation (INVOKE_REPLAY); allow uncertain -> executed|refused reconciliation!
         res_rec: dict[str, Any] | None = None
         if invocation_id in journal.terminal_invocations:
             if journal.terminal_invocations[invocation_id].get("receipt_sha256") == rcpt_caddr:
@@ -5349,13 +5387,39 @@ class Tier1Verifier:
                 )
         elif invocation_id in journal.unsettled_reservations:
             res_rec = journal.unsettled_reservations[invocation_id]
+            prev_u_sha = res_rec.get("uncertain_receipt_sha256")
+            if rp["outcome"] == "uncertain" and prev_u_sha is not None:
+                if prev_u_sha == rcpt_caddr:
+                    journal.receipt_store[rcpt_caddr] = copy.deepcopy(r_res)
+                    journal.receipts[invocation_id] = copy.deepcopy(r_res)
+                    return VerifierResult(
+                        "ADMIT",
+                        None,
+                        outcome="uncertain",
+                        cached_receipt_content_addr=rcpt_caddr,
+                        journal_writes=[],
+                        details={"invocation_id": invocation_id, "receipt_sha256": rcpt_caddr, "idempotent_retry": True},
+                    )
+                return VerifierResult("REFUSE", "INVOKE_REPLAY")
         if res_rec is None:
             return VerifierResult("REFUSE", "INVOKE_REPLAY")
         if res_rec.get("grant_id") is not None and res_rec["grant_id"] != grant_id:
             return VerifierResult("REFUSE", "WIRE_MEMBER")
+        if "action" in res_rec and rp["action"] != res_rec["action"]:
+            return VerifierResult("REFUSE", "WIRE_MEMBER")
+        # D8-M3: Self-contained single_use restart recovery strictly from durable reservation + witness!
+        is_single_use = single_use or bool(res_rec.get("single_use"))
+        eff_use_txid = use_txid if use_txid is not None else res_rec.get("use_txid")
+        if is_single_use:
+            if (
+                not isinstance(eff_use_txid, str)
+                or len(eff_use_txid) != 64
+                or (res_rec.get("use_txid") is not None and eff_use_txid != res_rec["use_txid"])
+            ):
+                return VerifierResult("REFUSE", "WIRE_MEMBER")
         durable_res_lines = res_rec.get("reservations", [])
 
-        # R1 #2 / R3 Blocker #3 / G7-07: Derive settlements strictly 1-to-1 from verified signed receipt.payload.settlements[] reconciled against durable reservation!
+        # R1 #2 / R3 Blocker #3 / G7-07 / D8-B2: Derive settlements strictly 1-to-1 in verified signed receipt.payload.settlements[] order!
         rcpt_settlements = rp.get("settlements", [])
         if len(rcpt_settlements) != len(durable_res_lines):
             return VerifierResult("REFUSE", "WIRE_MEMBER")
@@ -5379,7 +5443,7 @@ class Tier1Verifier:
             rel_amt = int(rs["released"])
             if set_amt > res_amt:
                 return VerifierResult("REFUSE", "QUOTA_EXCEEDED")
-            if rcpt_res != res_amt or set_amt + rel_amt != res_amt or set_amt < 0:
+            if rcpt_res != res_amt or set_amt + rel_amt != res_amt or set_amt < 0 or (rp["outcome"] == "uncertain" and rel_amt != 0):
                 return VerifierResult("REFUSE", "WIRE_MEMBER")
             if actual_quota_usage is not None:
                 qkey = f"{rs['kind']}|{rs['resource']}|{rs['unit']}|{rs['window']}"
@@ -5415,9 +5479,9 @@ class Tier1Verifier:
             "recorded_at": rec_ts,
             "settlements": settle_lines,
         }
-        if single_use:
+        if is_single_use:
             set_body["single_use_consumed"] = True
-            set_body["use_txid"] = use_txid or ("0" * 64)
+            set_body["use_txid"] = eff_use_txid
             set_body["closes_grant_id"] = grant_id
         jw_set, j_aerr = _append_journal_checked(journal, "settlement", set_body)
         if j_aerr is not None:
@@ -5518,7 +5582,9 @@ class Tier1Verifier:
         *,
         bearer_token: str | None = None,
     ) -> VerifierResult:
-        """Verify seallink-session-open/1 (`open` | `extend` | `close`) via full SPEC-06 §4 backing-grant admission (2A, G7-03, R1 §3)."""
+        """Verify seallink-session-open/1 (`open` | `extend` | `close`) via full SPEC-06 §4 backing-grant admission (2A, G7-03, R1 §3, D8-B3, D8-M7)."""
+        if "bearer-sessions" not in self.enabled_modules:
+            return VerifierResult("REFUSE", "ACTION_UNSUPPORTED")
         ok_o, o_res = self._verify_object_wire(open_env, expected_type="seallink-session-open/1")
         if not ok_o:
             return VerifierResult("REFUSE", o_res)
@@ -5632,6 +5698,13 @@ class Tier1Verifier:
             if exp_pol is None
             else sl.verify_signature_set(sl.signing_digest(sp), o_res["signatures"], expected_policy=exp_pol, obj_type="seallink-session-open/1")
         )
+        # D8-M7: op == "close" MAY also be signed by the root grant issuer's live link.grant policy!
+        if not ok_s and op == "close" and (bg["wstate"] is None or bg["wstate"].get("capacity") != "ward"):
+            iss_pol, iss_rerr = self.resolve_role_policy(bg["nrec"], "grant", o_res["signatures"].get("policy"))
+            if iss_rerr is None and iss_pol is not None:
+                ok_s, scode = sl.verify_signature_set(
+                    sl.signing_digest(sp), o_res["signatures"], expected_policy=iss_pol, obj_type="seallink-session-open/1"
+                )
         if not ok_s:
             return VerifierResult("REFUSE", scode)
 
@@ -5700,7 +5773,7 @@ class Tier1Verifier:
                 None,
                 outcome="executed",
                 journal_writes=[jw],
-                details={"session_id": sid, "token_sha256": t_hash},
+                details={"bearer_token": tok, "session_id": sid, "token_sha256": t_hash},
             )
         return VerifierResult("ADMIT", None, outcome="executed", journal_writes=[jw], details={"session_id": sid, "op": op})
 
@@ -5711,8 +5784,9 @@ class Tier1Verifier:
         parent_grant_env: dict[str, Any] | None,
         chain: ChainView,
         journal: FencedJournal,
+        contract_env: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str | None]:
-        """Online live re-check of a bearer session's backing grant (and depth-2 parent) (2A, G7-09)."""
+        """Online live re-check of a bearer session's backing grant, mandatory depth-2 parent, and optional contract seal (2A, G7-09, D8-M7)."""
         if grant_env is None:
             return None, None, None
         ok_g, rg = self._verify_object_wire(grant_env, expected_type="seallink-grant/1")
@@ -5727,6 +5801,15 @@ class Tier1Verifier:
             or ("contract_id" in gp and journal.lookup_closure({"subject_id": gp["contract_id"], "subject_kind": "contract"}, legacy_key=gp["contract_id"]) is not None)
         ):
             return None, None, None
+        if "contract_id" in gp and contract_env is not None:
+            ok_c, rc = self._verify_object_wire(contract_env, expected_type="seallink-contract/1")
+            if (
+                not ok_c
+                or sl.object_id(rc) != gp["contract_id"]
+                or "seal" not in rc
+                or self.evaluate_seal(rc["seal"], chain, required_depth=1, journal=journal, subject_id=gp["contract_id"], subject_kind="contract")[1] is not None
+            ):
+                return None, None, None
         s_op = {"txid": gp["revocation"]["seal"]["txid"], "vout": gp["revocation"]["seal"]["vout"]}
         if (
             journal.lookup_closure({"outpoint": s_op, "subject_kind": "seal"}, legacy_key=_outpoint_key(s_op)) is not None
@@ -5739,19 +5822,19 @@ class Tier1Verifier:
             parent_gid = gp["parent"]["grant_id"]
             row_ord = gp["parent"]["ordinal"]
             if (
-                journal.lookup_closure({"subject_id": parent_gid, "subject_kind": "grant"}, legacy_key=parent_gid) is not None
+                parent_grant_env is None
+                or journal.lookup_closure({"subject_id": parent_gid, "subject_kind": "grant"}, legacy_key=parent_gid) is not None
                 or journal.lookup_closure({"grant_id": parent_gid, "ordinal": row_ord, "subject_kind": "row"}, legacy_key=f"{parent_gid}:{row_ord}") is not None
             ):
                 return None, None, None
-            if parent_grant_env is not None:
-                ok_pg, rpg = self._verify_object_wire(parent_grant_env, expected_type="seallink-grant/1")
-                if not ok_pg or sl.object_id(rpg["payload"]) != parent_gid:
-                    return None, None, None
-                parent_gp = rpg["payload"]
-                if not (parent_gp["not_before_height"] <= chain.tip_height < parent_gp["not_after_height"]):
-                    return None, None, None
-                if parent_gp["revocation"]["mode"] == "seal" and self.evaluate_seal(parent_gp["revocation"]["seal"], chain, required_depth=1, journal=journal, subject_id=parent_gid, subject_kind="grant")[1] is not None:
-                    return None, None, None
+            ok_pg, rpg = self._verify_object_wire(parent_grant_env, expected_type="seallink-grant/1")
+            if not ok_pg or sl.object_id(rpg["payload"]) != parent_gid:
+                return None, None, None
+            parent_gp = rpg["payload"]
+            if not (parent_gp["not_before_height"] <= chain.tip_height < parent_gp["not_after_height"]):
+                return None, None, None
+            if parent_gp["revocation"]["mode"] == "seal" and self.evaluate_seal(parent_gp["revocation"]["seal"], chain, required_depth=1, journal=journal, subject_id=parent_gid, subject_kind="grant")[1] is not None:
+                return None, None, None
         return gp, parent_gp, parent_gid
 
     def verify_bearer_session(
@@ -5763,11 +5846,14 @@ class Tier1Verifier:
         *,
         grant_env: dict[str, Any] | None = None,
         parent_grant_env: dict[str, Any] | None = None,
+        contract_env: dict[str, Any] | None = None,
         action: str | None = None,
         target: str | None = None,
         arguments: dict[str, Any] | None = None,
     ) -> VerifierResult:
-        """Per-use bearer session verification: mandatory live grant recheck + durable atomic `session-use` debits across session/own/row (2A, R1 §3, G7-09)."""
+        """Per-use bearer session verification: mandatory live grant recheck + durable atomic `session-use` debits across session/own/row (2A, R1 §3, G7-09, D8-B3, D8-M7)."""
+        if "bearer-sessions" not in self.enabled_modules:
+            return VerifierResult("REFUSE", "ACTION_UNSUPPORTED")
         obs_err = self.check_chain_observation(chain, risk_class=2)
         if obs_err:
             return VerifierResult("REFUSE", obs_err)
@@ -5790,7 +5876,7 @@ class Tier1Verifier:
             and journal.lookup_closure({"subject_id": gid, "subject_kind": "grant"}, legacy_key=gid) is None
         )
         gp, parent_gp, parent_gid = (
-            self._validate_session_backing_grant(gid, grant_env, parent_grant_env, chain, journal)
+            self._validate_session_backing_grant(gid, grant_env, parent_grant_env, chain, journal, contract_env=contract_env)
             if (sess_ok and gid is not None)
             else (None, None, None)
         )
@@ -5838,10 +5924,9 @@ class Tier1Verifier:
                 ("session", f"session:{sid}", gid, None, sess.get("quotas", []), gp["not_before_height"]),
                 ("own", f"own:{gid}", gid, None, matched_cap.get("quotas", []), gp["not_before_height"]),
             ]
-            if "parent" in gp and parent_gid is not None:
+            if "parent" in gp and parent_gid is not None and parent_gp is not None:
                 r_ord = int(gp["parent"]["ordinal"])
-                p_nb = parent_gp["not_before_height"] if parent_gp is not None else gp["not_before_height"]
-                acct_batches.append(("row", f"row:{parent_gid}:{r_ord}", parent_gid, r_ord, matched_cap.get("quotas", []), p_nb))
+                acct_batches.append(("row", f"row:{parent_gid}:{r_ord}", parent_gid, r_ord, matched_cap.get("quotas", []), parent_gp["not_before_height"]))
 
             for acct_kind, scope_id, g_ref, r_ord_opt, q_list, nb_h in acct_batches:
                 for q in q_list:
@@ -5908,7 +5993,9 @@ class Tier1Verifier:
         mode: str = "activate",
         local_executor_pin: dict[str, Any] | None = None,
     ) -> VerifierResult:
-        """Verify exclusive service migration (`stage` vs mandatory-proof `activate`) per SPEC-07 §2 (2A, G7-04, R1 §3)."""
+        """Verify exclusive service migration (`stage` vs mandatory-proof `activate`) per SPEC-07 §2 (2A, G7-04, R1 §3, D8-B3, D8-M8)."""
+        if "service-migration" not in self.enabled_modules:
+            return VerifierResult("REFUSE", "ACTION_UNSUPPORTED")
         if mode not in ("stage", "activate"):
             return VerifierResult("REFUSE", "SERVICE_MIGRATION_INVALID")
         ok_w, res = self._verify_object_wire(migration_env, expected_type="seallink-migration/1")
@@ -5974,25 +6061,25 @@ class Tier1Verifier:
             and sl.sha256(sl.jcs_encode(inv_obj)).hex() == mp["inventory_sha256"]
         )
 
-        # 3. Require fenced source journal matching pos/commitment, zero unclosed predecessor grants, & unique migration_id
+        # 3. Verify inventory, journal pos/commitment, and unique migration_id; stage returns BEFORE fencing! (D8-M8)
         mid = mp["migration_id"]
         if (
             not inv_ok
             or export_bundle.get("source_journal_pos") != mp["journal_pos"]
             or export_bundle.get("source_journal_commitment") != mp["journal_commitment"]
-            or not export_bundle.get("source_write_token_fenced", False)
-            or bool(export_bundle.get("open_predecessor_grants", []))
             or mid in journal.migrations_applied
         ):
             return VerifierResult("REFUSE", "SERVICE_MIGRATION_INVALID")
 
-        # Stage mode validates source bundle only and performs ZERO activation / journal writes!
+        # Stage mode validates source bundle BEFORE source fencing and performs ZERO activation / journal writes!
         if mode == "stage":
             return VerifierResult("ADMIT", None, outcome="reserved", journal_writes=[], details={"mode": "stage", "migration_id": mid})
 
-        # 4. ACTIVATE mode (default): FAIL CLOSED unless ALL 4 normative cut-over proofs are present & verified (2A, G7-04, R1 §3)!
+        # 4. ACTIVATE mode (default): require fenced source, zero open predecessor grants, mandatory local_executor_pin, & ALL 4 proofs!
+        if not export_bundle.get("source_write_token_fenced", False) or bool(export_bundle.get("open_predecessor_grants", [])):
+            return VerifierResult("REFUSE", "SERVICE_MIGRATION_INVALID")
         dest = mp["dest_executor"]
-        if local_executor_pin is not None and not _name_pin_equal(local_executor_pin, dest):
+        if local_executor_pin is None or not _name_pin_equal(local_executor_pin, dest):
             return VerifierResult("REFUSE", "GRANT_EXECUTOR_MISMATCH")
 
         # 4a. Mandatory holder_assent (with ward custody_change quorum when holder is a ward!)
@@ -6102,7 +6189,9 @@ class Tier1Verifier:
         presented_manifests: dict[str, dict[str, Any]] | None = None,
         journal: FencedJournal | None = None,
     ) -> VerifierResult:
-        """Verify two-phase federated screening and L2-gated Contour A direct PII disclosure (SPEC-07 §3, 2A, G7-10)."""
+        """Verify two-phase federated screening and L2-gated Contour A direct PII disclosure (SPEC-07 §3, 2A, G7-10, D8-B3, D8-M9)."""
+        if "federated-screening" not in self.enabled_modules:
+            return VerifierResult("REFUSE", "ACTION_UNSUPPORTED")
         ok_g, g_res = self._verify_object_wire(grant_env, expected_type="seallink-grant/1")
         if not ok_g:
             return VerifierResult("REFUSE", g_res)
@@ -6169,8 +6258,10 @@ class Tier1Verifier:
                         and cp.get("command") == "approve-pii-disclosure"
                         and cargs.get("grant_id") == gid
                         and cargs.get("route_mode") == "direct"
-                        and not (gp["recipient"].get("mode") == "name" and cargs.get("recipient_name") != gp["recipient"]["name"])
-                        and not ("fields_sha256" in peer_ctx and cargs.get("fields_sha256") != peer_ctx["fields_sha256"])
+                        and gp["recipient"].get("mode") == "name"
+                        and cargs.get("recipient_name") == gp["recipient"]["name"]
+                        and isinstance(peer_ctx.get("fields_sha256"), str)
+                        and cargs.get("fields_sha256") == peer_ctx["fields_sha256"]
                     )
                     if cmd_ok:
                         return VerifierResult("ADMIT", None, outcome="executed", details={"grant_id": gid, "route_mode": "direct"})

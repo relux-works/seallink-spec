@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.8.
+Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.9.
 
 Executes five end-to-end SealLink protocol traces on two fresh loopback-only
 Namecoin Core 28 regtest nodes under strict standard policy (`-acceptnonstdtxn=0`,
@@ -2156,12 +2156,29 @@ def run_trace_03(cl: RegtestCluster) -> dict[str, Any]:
         },
         [host_rcpt["sk"]],
     )
-    r_su1 = v.verify_invocation(inv1_env, {"grants": [g1_env], "manifests": t3_manifests}, ch, restarted_j, exec_cfg, use_txid=use1_txid, receipt_env_for_cache=rcpt_su1)
-    assert r_su1.verdict == "ADMIT", f"Trace 03 su1 failed: {r_su1}"
-    # R3 Blocker #2: single_use commits in ONE unified atomic terminal `settlement` entry (2 total writes: reservation + settlement)!
-    assert len(r_su1.journal_writes) == 2 and r_su1.journal_writes[1]["entry"]["kind"] == "settlement" and r_su1.journal_writes[1]["entry"]["body"].get("single_use_consumed") is True, (
-        f"Expected 2 unified journal writes for single_use, got {len(r_su1.journal_writes)}"
+    # D8-M3 + R3 Blocker #2: True two-phase self-contained single_use restart recovery strictly from JournalEntry[] + witness!
+    p1_su1 = v.admit_and_reserve(inv1_env, {"grants": [g1_env], "manifests": t3_manifests}, ch, restarted_j, exec_cfg, use_txid=use1_txid)
+    assert p1_su1.verdict == "ADMIT" and len(p1_su1.journal_writes) == 1, f"Trace 03 su1 Phase 1 failed: {p1_su1}"
+    assert p1_su1.journal_writes[0]["entry"]["body"].get("single_use") is True and p1_su1.journal_writes[0]["entry"]["body"].get("use_txid") == use1_txid
+    restarted_j = sv.FencedJournal.replay_persisted_entries(
+        restarted_j.journal_id,
+        json.loads(json.dumps(restarted_j.entries)),
+        receipt_store=json.loads(json.dumps(restarted_j.receipt_store)),
+        witness_pos=restarted_j.witness_pos,
+        witness_commitment=restarted_j.witness_commitment,
     )
+    p2_su1 = v.commit_result(
+        rcpt_su1,
+        restarted_j,
+        exec_cfg,
+        invocation_id=sl.object_id(inv1_env["payload"]),
+        grant_id=g1_id,
+        single_use=False,
+        use_txid=None,
+    )
+    assert p2_su1.verdict == "ADMIT" and len(p2_su1.journal_writes) == 1, f"Trace 03 su1 self-contained Phase 2 failed: {p2_su1}"
+    assert p2_su1.journal_writes[0]["entry"]["kind"] == "settlement" and p2_su1.journal_writes[0]["entry"]["body"].get("single_use_consumed") is True and p2_su1.journal_writes[0]["entry"]["body"].get("use_txid") == use1_txid
+    r_su1 = p2_su1
     inv1_replay = sl.sign_envelope({**inv1_env["payload"], "nonce": sl.sha256(b"t3-su1-replay").hex()}, [agent_req["sk"]])
     r_su1_rep = v.verify_invocation(inv1_replay, {"grants": [g1_env], "manifests": t3_manifests}, ch, restarted_j, exec_cfg, use_txid=use1_txid)
     assert (r_su1_rep.verdict, r_su1_rep.refusal_code) == ("REFUSE", "INVOKE_REPLAY"), f"Trace 03 su1 replay got {r_su1_rep}"
@@ -2887,7 +2904,7 @@ def main() -> int:
         elapsed = round(time.monotonic() - t0, 2)
         report = {
             "suite": "seallink-nc28-live-traces-regtest",
-            "spec_version": "1.0.0-draft.8",
+            "spec_version": "1.0.0-draft.9",
             "chain": "regtest",
             "policy": "standard (-acceptnonstdtxn=0 -txindex=1 -namehistory=1), two loopback-only nodes (node A writer outbound -> node B read-only cold observer with -disablewallet=1 and -rpcwhitelistdefault=0)",
             "node_b_rpcwhitelist": cl.obs_whitelist.split(","),

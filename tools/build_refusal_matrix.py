@@ -20,7 +20,7 @@ import seallink_ref as sl
 import seallink_verifier as sv
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = "1.0.0-draft.8"
+VERSION = "1.0.0-draft.9"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 
 
@@ -210,6 +210,7 @@ def _build_base_invocation_fixture() -> dict[str, Any]:
     executor_cfg = {
         "name": "id/mail-host-a",
         "key": host_rcpt["xonly"],
+        "pin": {"name": "id/mail-host-a", "owner_policy": host_owner_pol, "registration": host_reg},
         "actions": ["mail/list", "mail/read", "mail/send", "agent/tool", "agent/session", "agent/brief", "agent/guardian-message"],
     }
     bundle = {
@@ -475,6 +476,7 @@ def _build_base_origin_fixture() -> dict[str, Any]:
         "contract": contract,
         "chain": chain,
         "trusted_origin_issuers": ["id/civil-registry"],
+        "trusted_origin_issuer_pins": [{"name": "id/civil-registry", "owner_policy": reg_owner_pol, "registration": reg_outpoint}],
         "_keys": {
             "reg_own": reg_own, "reg_cred": reg_cred, "disp": disp, "arb": arb,
             "ward_gr": ward_gr, "g1_gr": g1_gr, "g2_gr": g2_gr, "sch_gr": sch_gr,
@@ -489,6 +491,7 @@ def _build_base_origin_fixture() -> dict[str, Any]:
 def _contract_fx() -> dict[str, Any]:
     f = _base_invocation_fixture()
     f["executor_cfg"]["name"] = "id/station-a"
+    f["executor_cfg"].pop("pin", None)
     f["executor_cfg"]["station_slot_bindings"] = {
         "station:id/station-a:slot1": [{"name": "id/alice", "owner_policy": f["_alice_owner_pol"], "registration": f["_alice_reg"]}]
     }
@@ -656,9 +659,11 @@ def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = True
         pinned_genesis=inp.get("pinned_genesis", GENESIS_MAIN),
         operator_min_depth=inp.get("operator_min_depth", 1),
         allow_window_only=inp.get("allow_window_only", False),
-        trusted_origin_issuers=set(inp.get("trusted_origin_issuers", [])),
+        trusted_origin_issuers=inp.get("trusted_origin_issuers"),
+        trusted_origin_issuer_pins=inp.get("trusted_origin_issuer_pins"),
         enforce_schemas=True,
         require_jsonschema=require_jsonschema,
+        enabled_modules=inp.get("enabled_modules"),
     )
 
     if runner == "wire_raw":
@@ -729,9 +734,16 @@ def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = True
 def build_refusal_coverage_matrix() -> dict[str, Any]:
     cases: list[dict[str, Any]] = []
 
-    def add(code: str, rule: str, runner: str, inputs: dict[str, Any]) -> None:
+    MODULE_BY_CODE = {
+        "SESSION_INVALID": "bearer-sessions",
+        "SERVICE_MIGRATION_INVALID": "service-migration",
+        "FEDERATION_POLICY_DENIED": "federated-screening",
+    }
+
+    def add(code: str, rule: str, runner: str, inputs: dict[str, Any], *, module: str | None = None) -> None:
         clean_inputs = _strip_private(inputs)
-        case = {"code": code, "rule": rule, "runner": runner, "inputs": clean_inputs, "expected_refusal": code}
+        mod = module if module is not None else MODULE_BY_CODE.get(code, "core")
+        case = {"code": code, "module": mod, "rule": rule, "runner": runner, "inputs": clean_inputs, "expected_refusal": code}
         got = execute_matrix_case(case)
         assert got == code, f"Matrix case {code} failed self-check: got {got!r}"
         cases.append(case)
@@ -1772,6 +1784,16 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "chain": fx_fed["chain"],
     })
 
+    # ACTION_UNSUPPORTED: core-only verifier (optional modules disabled) MUST refuse optional module requests fail-closed (D8-B3)
+    fx_au = _base_invocation_fixture()
+    add("ACTION_UNSUPPORTED", "SL-GRNT-013", "bearer_session", {
+        "enabled_modules": ["core"],
+        "token": _h32("disabled-mod-tok"),
+        "slot_binding": "slot-1",
+        "chain": fx_au["chain"],
+        "journal": {"journal_id": _h32("au-j")},
+    }, module="core")
+
     # Verify 100% coverage against registry/refusal-codes.json
     reg_codes = {e["code"] for e in json.loads((ROOT / "registry" / "refusal-codes.json").read_text(encoding="utf-8"))["codes"]}
     built_codes = {c["code"] for c in cases}
@@ -1782,7 +1804,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     return {
         "suite": "refusal-coverage-matrix",
         "version": VERSION,
-        "description": "Executable 85/85 refusal-code conformance matrix with Draft 2020-12 schema-validated semantic fixtures and derived ChainView evidence.",
+        "description": "Executable 86/86 refusal-code conformance matrix with Draft 2020-12 schema-validated semantic fixtures, explicit module selection tags, and derived ChainView evidence.",
         "total_registered_codes": len(reg_codes),
         "total_covered_codes": len(built_codes),
         "cases": sorted(cases, key=lambda c: c["code"]),

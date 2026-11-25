@@ -1,6 +1,6 @@
 # SPEC-03: Identity, Name Value, Manifest, Key Taxonomy, Authentication, and Owner Control
 
-- **Version:** `1.0.0-draft.8`
+- **Version:** `1.0.0-draft.9`
 - **Status:** `draft` (normative rules `decided`; domain-binding verification and FIDO2/SSH device extensions tracked `open` in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/service-types.json`, `registry/refusal-codes.json`

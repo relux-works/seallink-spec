@@ -1,6 +1,258 @@
 {
   "cases": [
     {
+      "code": "ACTION_UNSUPPORTED",
+      "expected_refusal": "ACTION_UNSUPPORTED",
+      "inputs": {
+        "chain": {
+          "best_header_height": 750010,
+          "blocks": {
+            "543a756ce9eaf98201ccb6afbe71c0ba8e119818fea89209ed0e6a2d80c7b564": 749990
+          },
+          "clock_watermark": 1795219000,
+          "comparison_peers": [
+            {
+              "hash_at_tip": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+              "healthy": true,
+              "height": 750010
+            }
+          ],
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "in_ibd": false,
+          "manifests": {
+            "d4b1220f59889c2a09e6302c4acbaa4dc08127b2fdcd6f8db0c2a7c4cfde098f": {
+              "network": "main",
+              "owner": "id/mail-host-a",
+              "seq": 1,
+              "service": {
+                "actions": [
+                  "mail/list",
+                  "mail/read",
+                  "mail/send"
+                ],
+                "endpoint": "https://mail-a.example/seallink/v1",
+                "receipt_key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
+                "service_type": "mail",
+                "tls_spki_sha256": "5d6be3856dce5c449bb5edf7ad97a36137a1f76409ad38ac2920c9bb26f1d445"
+              },
+              "type": "seallink-manifest/1"
+            },
+            "e46c81013bdfb7df483ebd1a301cd378132a5925d02bf63187fb13297a045dca": {
+              "network": "main",
+              "owner": "id/alice",
+              "providers": [
+                {
+                  "label": "work",
+                  "provider": {
+                    "name": "id/mail-host-a",
+                    "owner_policy": {
+                      "kind": "key",
+                      "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                    },
+                    "registration": {
+                      "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                      "vout": 0
+                    }
+                  },
+                  "service_type": "mail"
+                }
+              ],
+              "seq": 1,
+              "type": "seallink-manifest/1"
+            }
+          },
+          "names": {
+            "id/alice": {
+              "registration": {
+                "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 748000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "520869642f616c69636514d7cf29331fa142da7710e5787836c3a18af03d524ca87b226c696e6b223a7b226772616e74223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337227d2c226d223a7b2268223a2265343663383130313362646662376466343833656264316133303163643337383133326135393235643032626636333138376662313332393761303435646361222c2273223a317d7d6d6d00145146d95d43f56374709f6e1535b76efa260f3783",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
+                  },
+                  "prev_input": null,
+                  "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "530869642f616c6963654ca87b226c696e6b223a7b226772616e74223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337227d2c226d223a7b2268223a2265343663383130313362646662376466343833656264316133303163643337383133326135393235643032626636333138376662313332393761303435646361222c2273223a317d7d6d7500145146d95d43f56374709f6e1535b76efa260f3783",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
+                    }
+                  },
+                  "txid": "d64a8e1b13e909ff17aa176831e51d80df991c313cb5f5da6d4d9a7ced3abb01",
+                  "vout": 0
+                }
+              ]
+            },
+            "id/alice-acct-agent": {
+              "registration": {
+                "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 748000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "521369642f616c6963652d616363742d6167656e741478cdc8ea064148bfecd727764db0c9b78cdc0f894c4c7b226e6f737472223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037227d6d6d0014d0174a960143676a0bce41b924d1aeb0e626168b",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
+                  },
+                  "prev_input": null,
+                  "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "531369642f616c6963652d616363742d6167656e744c4c7b226e6f737472223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037227d6d750014d0174a960143676a0bce41b924d1aeb0e626168b",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
+                    }
+                  },
+                  "txid": "983d44c274dc053751917132ba3c1d373605ed3ff5ac935c7648e8403f51f2d9",
+                  "vout": 0
+                }
+              ]
+            },
+            "id/mail-host-a": {
+              "registration": {
+                "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 748000,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "520e69642f6d61696c2d686f73742d6114d40f221b864c45b83ad824fa2dd20e164dce0b994c547b226d223a7b2268223a2264346231323230663539383839633261303965363330326334616362616134646330383132376232666463643666386462306332613763346366646530393866222c2273223a317d7d6d6d001439182066c15ca099fe831d16d18edef5a42b7a37",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                  },
+                  "prev_input": null,
+                  "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 749000,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "530e69642f6d61696c2d686f73742d614c547b226d223a7b2268223a2264346231323230663539383839633261303965363330326334616362616134646330383132376232666463643666386462306332613763346366646530393866222c2273223a317d7d6d75001439182066c15ca099fe831d16d18edef5a42b7a37",
+                  "owner_policy": {
+                    "kind": "key",
+                    "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "key",
+                      "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+                    }
+                  },
+                  "txid": "d2ae9928874791c1fd1d1fa62b4e85ad75401075be157ab5e6c05723095677a0",
+                  "vout": 0
+                }
+              ]
+            }
+          },
+          "network": "main",
+          "node_reachable": true,
+          "now": 1795220010,
+          "tip_first_sight": 1795220005,
+          "tip_hash": "ad031c77e07c66cd82e962346a38bfc8d2f5c6236c6cb02fee9bde180e19d823",
+          "tip_header_time": 1795220000,
+          "tip_height": 750010,
+          "tip_median_time_past": 1795219900,
+          "txindex": true,
+          "txs": {
+            "13ba8c1099dcd48c609c62445f503cddceb3cf871f6ba32ee8aba91b3467a3cf": {
+              "confirmed_height": 749995,
+              "inputs": [
+                {
+                  "prev_txid": "ee28aaff80dc02e2d175cb7ba88bd82a6d4f765b579a2ebecdef28dcb7aa42d2",
+                  "prev_vout": 0,
+                  "script_sig_hex": "",
+                  "witness": [
+                    "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                    "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  ]
+                }
+              ],
+              "outputs": {
+                "0": {
+                  "script_pubkey_hex": "00148bd108ec2a48baa40c1eeb83c6378336b1143922"
+                },
+                "1": {
+                  "script_pubkey_hex": "00145146d95d43f56374709f6e1535b76efa260f3783"
+                }
+              }
+            },
+            "33425504179ee36cecd2de7261e4951d1f7b208afc1f823237df169f15bbc193": {
+              "confirmed_height": 749998,
+              "inputs": [
+                {
+                  "prev_txid": "13ba8c1099dcd48c609c62445f503cddceb3cf871f6ba32ee8aba91b3467a3cf",
+                  "prev_vout": 1,
+                  "script_sig_hex": "",
+                  "witness": [
+                    "3044aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01",
+                    "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  ]
+                }
+              ],
+              "opreturn_hex": "6a05534c4e4b012201b1e79e46875b9f3875824f11d46c1c9478dd73340cc5f04bdc26a9f02eb86b4f00",
+              "outputs": {}
+            }
+          }
+        },
+        "enabled_modules": [
+          "core"
+        ],
+        "journal": {
+          "journal_id": "dfe54c92d73abbafcc6fcfd46a43cb9e12cc12c63e2ed1312ff5502274645385"
+        },
+        "slot_binding": "slot-1",
+        "token": "14fceaa4165fcb29c10e77dfd9aec79a1dfcd95ef467b03e12c0d5eaf7aa73a9"
+      },
+      "module": "core",
+      "rule": "SL-GRNT-013",
+      "runner": "bearer_session"
+    },
+    {
       "code": "AUTH_CHALLENGE_EXPIRED",
       "expected_refusal": "AUTH_CHALLENGE_EXPIRED",
       "inputs": {
@@ -319,6 +571,7 @@
         },
         "service_id": "id/mail-host-a"
       },
+      "module": "core",
       "rule": "SL-IDEN-010",
       "runner": "auth_challenge"
     },
@@ -641,6 +894,7 @@
         },
         "service_id": "id/mail-host-a"
       },
+      "module": "core",
       "rule": "SL-IDEN-010",
       "runner": "auth_challenge"
     },
@@ -963,6 +1217,7 @@
         },
         "service_id": "id/mail-host-a"
       },
+      "module": "core",
       "rule": "SL-IDEN-010",
       "runner": "auth_challenge"
     },
@@ -1337,7 +1592,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -1383,6 +1649,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-LDGR-008",
       "runner": "invocation"
     },
@@ -1757,7 +2024,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -1804,6 +2082,7 @@
         },
         "operator_min_depth": 6
       },
+      "module": "core",
       "rule": "SL-LDGR-008",
       "runner": "invocation"
     },
@@ -1813,6 +2092,7 @@
       "inputs": {
         "script_hex": "6a05534c4e4b062201e08b7e949eca20a3e4763f917d6c0d61773b5cb7b0aedffdbb8292781b077b7c00"
       },
+      "module": "core",
       "rule": "SL-LDGR-010",
       "runner": "opreturn_decode"
     },
@@ -2187,7 +2467,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -2233,6 +2524,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-LDGR-003",
       "runner": "invocation"
     },
@@ -2607,7 +2899,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -2653,6 +2956,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-LDGR-008",
       "runner": "invocation"
     },
@@ -3031,7 +3335,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -3077,6 +3392,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-LDGR-008",
       "runner": "invocation"
     },
@@ -3451,7 +3767,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -3497,6 +3824,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-LDGR-008",
       "runner": "invocation"
     },
@@ -3506,6 +3834,7 @@
       "inputs": {
         "script_hex": "530869642f616c696365027b7d6d7576a914111111111111111111111111111111111111111188ac"
       },
+      "module": "core",
       "rule": "SL-LDGR-005",
       "runner": "script_parse"
     },
@@ -3880,7 +4209,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -3926,6 +4266,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-LDGR-008",
       "runner": "invocation"
     },
@@ -4300,7 +4641,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -4346,6 +4698,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-LDGR-009",
       "runner": "invocation"
     },
@@ -4720,7 +5073,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -4766,6 +5130,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-LDGR-008",
       "runner": "invocation"
     },
@@ -5259,6 +5624,17 @@
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
           "name": "id/station-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          },
           "runtime_config_sha256": "60f9272c90408942f28191e08a2584a9b2a261c4db2c6ac9e25fd99cea71ef1b"
         },
         "invocation": {
@@ -5306,6 +5682,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-CONT-004",
       "runner": "invocation"
     },
@@ -5827,6 +6204,17 @@
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
           "name": "id/station-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          },
           "runtime_config_sha256": "851313fbfa3571c036c25b5d30b9afd5b0f2f4d6adcf43f4fba3526c59b1e3df"
         },
         "invocation": {
@@ -5874,6 +6262,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-CONT-006",
       "runner": "invocation"
     },
@@ -6395,6 +6784,17 @@
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
           "name": "id/station-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          },
           "runtime_config_sha256": "60f9272c90408942f28191e08a2584a9b2a261c4db2c6ac9e25fd99cea71ef1b"
         },
         "invocation": {
@@ -6442,6 +6842,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-CONT-002",
       "runner": "invocation"
     },
@@ -6911,6 +7312,17 @@
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
           "name": "id/station-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          },
           "runtime_config_sha256": "60f9272c90408942f28191e08a2584a9b2a261c4db2c6ac9e25fd99cea71ef1b"
         },
         "invocation": {
@@ -6958,6 +7370,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-CONT-002",
       "runner": "invocation"
     },
@@ -7467,6 +7880,17 @@
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
           "name": "id/station-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          },
           "runtime_config_sha256": "60f9272c90408942f28191e08a2584a9b2a261c4db2c6ac9e25fd99cea71ef1b"
         },
         "invocation": {
@@ -7514,6 +7938,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-CONT-005",
       "runner": "invocation"
     },
@@ -8011,6 +8436,17 @@
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
           "name": "id/station-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          },
           "runtime_config_sha256": "60f9272c90408942f28191e08a2584a9b2a261c4db2c6ac9e25fd99cea71ef1b"
         },
         "invocation": {
@@ -8058,6 +8494,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-CONT-002",
       "runner": "invocation"
     },
@@ -8203,6 +8640,7 @@
           }
         }
       },
+      "module": "core",
       "rule": "SL-CONT-008",
       "runner": "credential"
     },
@@ -8363,6 +8801,7 @@
           }
         }
       },
+      "module": "core",
       "rule": "SL-CONT-009",
       "runner": "credential"
     },
@@ -8514,6 +8953,7 @@
           }
         }
       },
+      "module": "core",
       "rule": "SL-CONT-010",
       "runner": "credential"
     },
@@ -8659,6 +9099,7 @@
           }
         }
       },
+      "module": "core",
       "rule": "SL-CONT-010",
       "runner": "credential"
     },
@@ -8957,6 +9398,7 @@
         },
         "is_foreign_service": true
       },
+      "module": "core",
       "rule": "SL-IDEN-011",
       "runner": "owner_command"
     },
@@ -9359,6 +9801,7 @@
           ]
         }
       },
+      "module": "federated-screening",
       "rule": "SL-SERV-004",
       "runner": "federation"
     },
@@ -9928,7 +10371,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/station-a"
+          "name": "id/station-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -9979,6 +10433,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-010",
       "runner": "invocation"
     },
@@ -10353,7 +10808,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -10406,6 +10872,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-012",
       "runner": "invocation"
     },
@@ -10782,7 +11249,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -10829,6 +11307,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-CONT-001",
       "runner": "invocation"
     },
@@ -11203,7 +11682,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/different-executor"
+          "name": "id/different-executor",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -11249,6 +11739,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-012",
       "runner": "invocation"
     },
@@ -11617,7 +12108,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -11665,6 +12167,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-003",
       "runner": "invocation"
     },
@@ -12173,7 +12676,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/station-a"
+          "name": "id/station-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -12224,6 +12738,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-009",
       "runner": "invocation"
     },
@@ -12784,7 +13299,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/station-a"
+          "name": "id/station-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -12835,6 +13361,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-009",
       "runner": "invocation"
     },
@@ -13419,7 +13946,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/station-a"
+          "name": "id/station-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -13470,6 +14008,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-011",
       "runner": "invocation"
     },
@@ -13834,7 +14373,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -13880,6 +14430,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-004",
       "runner": "invocation"
     },
@@ -14296,7 +14847,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -14342,6 +14904,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-MAIL-003",
       "runner": "invocation"
     },
@@ -14717,7 +15280,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -14763,6 +15337,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-005",
       "runner": "invocation"
     },
@@ -15137,7 +15712,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -15183,6 +15769,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-004",
       "runner": "invocation"
     },
@@ -15866,6 +16453,7 @@
           "id/civil-registry"
         ]
       },
+      "module": "core",
       "rule": "SL-ORIG-007",
       "runner": "assent"
     },
@@ -16549,6 +17137,7 @@
           "id/civil-registry"
         ]
       },
+      "module": "core",
       "rule": "SL-ORIG-005",
       "runner": "assent"
     },
@@ -17117,6 +17706,7 @@
           "id/civil-registry"
         ]
       },
+      "module": "core",
       "rule": "SL-ORIG-010",
       "runner": "origin_status"
     },
@@ -17685,6 +18275,7 @@
           "id/civil-registry"
         ]
       },
+      "module": "core",
       "rule": "SL-ORIG-011",
       "runner": "origin_status"
     },
@@ -18059,7 +18650,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -18105,6 +18707,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-012",
       "runner": "invocation"
     },
@@ -18479,7 +19082,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -18525,6 +19139,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-WIRE-016",
       "runner": "invocation"
     },
@@ -18899,7 +19514,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -18948,6 +19574,7 @@
           }
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-007",
       "runner": "invocation"
     },
@@ -19322,7 +19949,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -19368,6 +20006,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-006",
       "runner": "invocation"
     },
@@ -19742,7 +20381,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -19789,6 +20439,7 @@
           "write_token_active": false
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-014",
       "runner": "invocation"
     },
@@ -20163,7 +20814,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -20210,6 +20872,7 @@
           "witness_readable": false
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-014",
       "runner": "invocation"
     },
@@ -20527,7 +21190,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -20573,6 +21247,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-IDEN-009",
       "runner": "invocation"
     },
@@ -20948,7 +21623,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -21003,6 +21689,7 @@
           ]
         }
       },
+      "module": "core",
       "rule": "SL-IDEN-008",
       "runner": "invocation"
     },
@@ -21296,7 +21983,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -21342,6 +22040,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-IDEN-009",
       "runner": "invocation"
     },
@@ -21716,7 +22415,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -21762,6 +22472,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-LDGR-003",
       "runner": "invocation"
     },
@@ -22137,7 +22848,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -22183,6 +22905,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-IDEN-004",
       "runner": "invocation"
     },
@@ -22515,7 +23238,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -22561,6 +23295,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-IDEN-004",
       "runner": "invocation"
     },
@@ -22935,7 +23670,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -22981,6 +23727,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-IDEN-004",
       "runner": "invocation"
     },
@@ -23377,7 +24124,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -23423,6 +24181,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-IDEN-003",
       "runner": "invocation"
     },
@@ -23797,7 +24556,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -23843,6 +24613,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-IDEN-003",
       "runner": "invocation"
     },
@@ -24195,7 +24966,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -24241,6 +25023,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-LDGR-007",
       "runner": "invocation"
     },
@@ -24824,7 +25607,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/station-a"
+          "name": "id/station-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -24875,6 +25669,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-011",
       "runner": "invocation"
     },
@@ -25446,6 +26241,7 @@
           "id/civil-registry"
         ]
       },
+      "module": "core",
       "rule": "SL-ORIG-003",
       "runner": "origin_status"
     },
@@ -26020,6 +26816,7 @@
           "id/civil-registry"
         ]
       },
+      "module": "core",
       "rule": "SL-ORIG-002",
       "runner": "origin_status"
     },
@@ -26588,6 +27385,7 @@
           "id/other-trusted-registry"
         ]
       },
+      "module": "core",
       "rule": "SL-ORIG-002",
       "runner": "origin_status"
     },
@@ -26971,7 +27769,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -27020,6 +27829,7 @@
           }
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-007",
       "runner": "invocation"
     },
@@ -27403,7 +28213,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -27457,6 +28278,7 @@
           ]
         }
       },
+      "module": "core",
       "rule": "SL-GRNT-007",
       "runner": "invocation"
     },
@@ -28102,6 +28924,7 @@
           "id/civil-registry"
         ]
       },
+      "module": "core",
       "rule": "SL-ORIG-014",
       "runner": "origin_status"
     },
@@ -28477,7 +29300,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -28523,6 +29357,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-LDGR-011",
       "runner": "invocation"
     },
@@ -28897,7 +29732,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -28943,6 +29789,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-LDGR-011",
       "runner": "invocation"
     },
@@ -29312,6 +30159,7 @@
           }
         }
       },
+      "module": "service-migration",
       "rule": "SL-SERV-002",
       "runner": "migration"
     },
@@ -29701,7 +30549,18 @@
             "agent/guardian-message"
           ],
           "key": "a38554a5aa41c91719f6ccf24dab77079c6fd7c083d1830f65828299504a2d99",
-          "name": "id/mail-host-a"
+          "name": "id/mail-host-a",
+          "pin": {
+            "name": "id/mail-host-a",
+            "owner_policy": {
+              "kind": "key",
+              "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
+            },
+            "registration": {
+              "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
+              "vout": 0
+            }
+          }
         },
         "invocation": {
           "payload": {
@@ -29747,6 +30606,7 @@
           "journal_id": "85d5ad8d4ffecae2210745e2638ab548f3755d1b42290971ceebcaa08973a47d"
         }
       },
+      "module": "core",
       "rule": "SL-SERV-001",
       "runner": "invocation"
     },
@@ -30003,6 +30863,7 @@
         "slot_binding": "slot-1",
         "token": "secret-bearer-token-xyz"
       },
+      "module": "bearer-sessions",
       "rule": "SL-GRNT-013",
       "runner": "bearer_session"
     },
@@ -30623,6 +31484,7 @@
           "id/civil-registry"
         ]
       },
+      "module": "core",
       "rule": "SL-ORIG-012",
       "runner": "origin_status"
     },
@@ -31293,6 +32155,7 @@
           "id/civil-registry"
         ]
       },
+      "module": "core",
       "rule": "SL-ORIG-006",
       "runner": "assent"
     },
@@ -31302,6 +32165,7 @@
       "inputs": {
         "raw_hex": "7b227061796c6f6164223a7b226361706162696c6974696573223a5b7b22616374696f6e223a226d61696c2f72656164222c22746172676574223a226d61696c626f783a69642f616c6963653a776f726b222c227768657265223a7b22666f6c646572223a7b22696e223a5b225a657461222c22416c706861225d7d7d7d5d2c226578656375746f72223a7b226b6579223a2261333835353461356161343163393137313966366363663234646162373730373963366664376330383364313833306636353832383239393530346132643939222c226e616d65223a2269642f6d61696c2d686f73742d61227d2c2267656e65736973223a2230303030303030303030363262373263356532636562343566626338353837653830376331353562306461373335653634383364666261326630613963373730222c22697373756572223a7b226e616d65223a2269642f616c696365222c226f776e65725f706f6c696379223a7b226b696e64223a226b6579222c22706b223a22303336616164353265646133333837613735623638356632336538386666613534336163663432356431396565396261366535353266356434626535393131376239227d2c22726567697374726174696f6e223a7b2274786964223a2238343565626438633066643038363064376333633236646632623034386634366433383839326165363731343033333465346130333131633361663337373363222c22766f7574223a307d2c22726f6c655f706f6c696379223a7b226d223a312c22706b73223a5b2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337225d7d7d2c226e6574776f726b223a226d61696e222c226e6f745f61667465725f686569676874223a3736303030302c226e6f745f6265666f72655f686569676874223a3735303030302c22726563656e745f626c6f636b223a2235343361373536636539656166393832303163636236616662653731633062613865313139383138666561383932303965643065366132643830633762353634222c22726563697069656e74223a7b226b6579223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037222c226d6f6465223a226b6579227d2c227265766f636174696f6e223a7b22636f6e737472756374696f6e223a2257222c226b696e64223a227265766f6361626c65222c226d6f6465223a227365616c222c227365616c223a7b227363726970745f706f6c696379223a7b226b696e64223a226b6579222c22706b223a22303233613933653861653064623065323335343039353534613331383064663034336261346234336638363164396532373865313337393333643166363431396361227d2c2274786964223a2231336261386331303939646364343863363039633632343435663530336364646365623363663837316636626133326565386162613931623334363761336366222c22766f7574223a307d7d2c2274797065223a227365616c6c696e6b2d6772616e742f31227d2c227369676e617475726573223a7b22706f6c696379223a7b226d223a312c22706b73223a5b2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337225d7d2c2273696773223a5b7b22706b223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337222c22736967223a223562653234316539333362366637623363373131653163393633336266383162333438336162336363313862326462313834656162396633316365393634343635346464343931643164373766383561383235366238326238316162303133316535643161376436346636333864653532306164613134663530363865386338227d5d7d7d"
       },
+      "module": "core",
       "rule": "SL-WIRE-016",
       "runner": "wire_raw"
     },
@@ -31311,6 +32175,7 @@
       "inputs": {
         "raw_hex": "7b2261223a312c2261223a327d"
       },
+      "module": "core",
       "rule": "SL-WIRE-003",
       "runner": "wire_raw"
     },
@@ -31320,6 +32185,7 @@
       "inputs": {
         "raw_hex": "7b227061796c6f6164223a7b226361706162696c6974696573223a5b7b22616374696f6e223a226d61696c2f72656164222c22746172676574223a226d61696c626f783a69642f616c6963653a776f726b222c227768657265223a7b22666f6c646572223a7b22696e223a5b22496e766f69636573225d7d7d7d5d2c226578656375746f72223a7b226b6579223a2261333835353461356161343163393137313966366363663234646162373730373963366664376330383364313833306636353832383239393530346132643939222c226e616d65223a2269642f6d61696c2d686f73742d61227d2c2267656e65736973223a2230303030303030303030363262373263356532636562343566626338353837653830376331353562306461373335653634383364666261326630613963373730222c22697373756572223a7b226e616d65223a2269642f616c696365222c226f776e65725f706f6c696379223a7b226b696e64223a226b6579222c22706b223a22303336616164353265646133333837613735623638356632336538386666613534336163663432356431396565396261366535353266356434626535393131376239227d2c22726567697374726174696f6e223a7b2274786964223a2238343565626438633066643038363064376333633236646632623034386634366433383839326165363731343033333465346130333131633361663337373363222c22766f7574223a307d2c22726f6c655f706f6c696379223a7b226d223a312c22706b73223a5b2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337225d7d7d2c226e6574776f726b223a226d61696e222c226e6f745f61667465725f686569676874223a3735303130302c226e6f745f6265666f72655f686569676874223a3735303030302c22726563656e745f626c6f636b223a2235343361373536636539656166393832303163636236616662653731633062613865313139383138666561383932303965643065366132643830633762353634222c22726563697069656e74223a7b226b6579223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037222c226d6f6465223a226b6579227d2c227265766f636174696f6e223a7b226d6f6465223a2277696e646f775f6f6e6c79227d2c2274797065223a227365616c6c696e6b2d6772616e742f31227d2c227369676e617475726573223a7b22706f6c696379223a7b226d223a312c22706b73223a5b2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337225d7d2c2273696773223a5b7b22706b223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337222c22736967223a226331353130383165626661663532386462643937626263306231313463643165616466613838316336303661656431653363303239336366346132326530333666353935633264626562663134333365353736663637633235303764316531666537303535633262333064383566613961383863633262356637643033616233227d5d7d7d"
       },
+      "module": "core",
       "rule": "SL-WIRE-008",
       "runner": "wire_raw"
     },
@@ -31329,6 +32195,7 @@
       "inputs": {
         "raw_hex": "efbbbf7b2261223a317d"
       },
+      "module": "core",
       "rule": "SL-WIRE-002",
       "runner": "wire_raw"
     },
@@ -31338,6 +32205,7 @@
       "inputs": {
         "raw_hex": "7b227061796c6f6164223a7b226361706162696c6974696573223a5b7b22616374696f6e223a226d61696c2f72656164222c22746172676574223a226d61696c626f783a69642f616c6963653a776f726b222c227768657265223a7b22666f6c646572223a7b22696e223a5b22496e766f69636573225d7d7d7d5d2c226578656375746f72223a7b226b6579223a2261333835353461356161343163393137313966366363663234646162373730373963366664376330383364313833306636353832383239393530346132643939222c226e616d65223a2269642f6d61696c2d686f73742d61227d2c2267656e65736973223a2230303030303030303030363262373263356532636562343566626338353837653830376331353562306461373335653634383364666261326630613963373730222c22697373756572223a7b226e616d65223a2269642f616c696365222c226f776e65725f706f6c696379223a7b226b696e64223a226b6579222c22706b223a22303336616164353265646133333837613735623638356632336538386666613534336163663432356431396565396261366535353266356434626535393131376239227d2c22726567697374726174696f6e223a7b2274786964223a2238343565626438633066643038363064376333633236646632623034386634366433383839326165363731343033333465346130333131633361663337373363222c22766f7574223a307d2c22726f6c655f706f6c696379223a7b226d223a312c22706b73223a5b2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337225d7d7d2c226e6574776f726b223a226d61696e222c226e6f745f61667465725f686569676874223a3736303030302c226e6f745f6265666f72655f686569676874223a3735303030302c22726563656e745f626c6f636b223a2235343361373536636539656166393832303163636236616662653731633062613865313139383138666561383932303965643065366132643830633762353634222c22726563697069656e74223a7b226b6579223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037222c226d6f6465223a226b6579227d2c227265766f636174696f6e223a7b22636f6e737472756374696f6e223a2257222c226b696e64223a227265766f6361626c65222c226d6f6465223a227365616c222c227365616c223a7b227363726970745f706f6c696379223a7b226b696e64223a226b6579222c22706b223a22303233613933653861653064623065323335343039353534613331383064663034336261346234336638363164396532373865313337393333643166363431396361227d2c2274786964223a2231336261386331303939646364343863363039633632343435663530336364646365623363663837316636626133326565386162613931623334363761336366222c22766f7574223a307d7d2c2274797065223a227365616c6c696e6b2d6772616e742f31227d2c227369676e617475726573223a7b22706f6c696379223a7b226d223a312c22706b73223a5b2230303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303035225d7d2c2273696773223a5b7b22706b223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337222c22736967223a226433343261666666396166336432363063663766356631613035646561373763626262323539343262653164633839633338393231653366373230626231396134613333363531643665626237366335636535663936633165663732633363616534626362383836653136306433643131323661633631333961313730653834227d5d7d7d"
       },
+      "module": "core",
       "rule": "SL-WIRE-012",
       "runner": "wire_raw"
     },
@@ -31347,6 +32215,7 @@
       "inputs": {
         "raw_hex": "7b227061796c6f6164223a7b226361706162696c6974696573223a5b7b22616374696f6e223a226d61696c2f72656164222c22746172676574223a226d61696c626f783a69642f616c6963653a776f726b222c227768657265223a7b22666f6c646572223a7b22696e223a5b22496e766f69636573225d7d7d7d5d2c226578656375746f72223a7b226b6579223a2261333835353461356161343163393137313966366363663234646162373730373963366664376330383364313833306636353832383239393530346132643939222c226e616d65223a2269642f6d61696c2d686f73742d61227d2c2267656e65736973223a2230303030303030303030363262373263356532636562343566626338353837653830376331353562306461373335653634383364666261326630613963373730222c22697373756572223a7b226e616d65223a2269642f616c696365222c226f776e65725f706f6c696379223a7b226b696e64223a226b6579222c22706b223a22303336616164353265646133333837613735623638356632336538386666613534336163663432356431396565396261366535353266356434626535393131376239227d2c22726567697374726174696f6e223a7b2274786964223a2238343565626438633066643038363064376333633236646632623034386634366433383839326165363731343033333465346130333131633361663337373363222c22766f7574223a307d2c22726f6c655f706f6c696379223a7b226d223a312c22706b73223a5b2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337225d7d7d2c226e6574776f726b223a226d61696e222c226e6f745f61667465725f686569676874223a3736303030302c226e6f745f6265666f72655f686569676874223a3735303030302c22726563656e745f626c6f636b223a2235343361373536636539656166393832303163636236616662653731633062613865313139383138666561383932303965643065366132643830633762353634222c22726563697069656e74223a7b226b6579223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037222c226d6f6465223a226b6579227d2c227265766f636174696f6e223a7b22636f6e737472756374696f6e223a2257222c226b696e64223a227265766f6361626c65222c226d6f6465223a227365616c222c227365616c223a7b227363726970745f706f6c696379223a7b226b696e64223a226b6579222c22706b223a22303233613933653861653064623065323335343039353534613331383064663034336261346234336638363164396532373865313337393333643166363431396361227d2c2274786964223a2231336261386331303939646364343863363039633632343435663530336364646365623363663837316636626133326565386162613931623334363761336366222c22766f7574223a307d7d2c2274797065223a227365616c6c696e6b2d6772616e742f31222c22756e6b6e6f776e5f6669656c64223a317d2c227369676e617475726573223a7b22706f6c696379223a7b226d223a312c22706b73223a5b2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337225d7d2c2273696773223a5b7b22706b223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337222c22736967223a226533383066613264303265633232653464326637383630653939383731626566646536393234303034626334656262613934333138393734653366653038623161303564623366626463303832363163613965383636323735353537343030643066383364323361343064346530326565633330353564373933353064336166227d5d7d7d"
       },
+      "module": "core",
       "rule": "SL-WIRE-010",
       "runner": "wire_raw"
     },
@@ -31356,6 +32225,7 @@
       "inputs": {
         "raw_hex": "7b2262223a312c2261223a327d"
       },
+      "module": "core",
       "rule": "SL-WIRE-006",
       "runner": "wire_raw"
     },
@@ -31365,6 +32235,7 @@
       "inputs": {
         "raw_hex": "7b2261223a312e357d"
       },
+      "module": "core",
       "rule": "SL-WIRE-007",
       "runner": "wire_raw"
     },
@@ -31374,6 +32245,7 @@
       "inputs": {
         "raw_hex": "7b227061796c6f6164223a7b226361706162696c6974696573223a5b7b22616374696f6e223a226d61696c2f72656164222c22746172676574223a226d61696c626f783a69642f616c6963653a776f726b222c227768657265223a7b22666f6c646572223a7b22696e223a5b22496e766f69636573225d7d7d7d5d2c226578656375746f72223a7b226b6579223a2261333835353461356161343163393137313966366363663234646162373730373963366664376330383364313833306636353832383239393530346132643939222c226e616d65223a2269642f6d61696c2d686f73742d61227d2c2267656e65736973223a2230303030303030303030363262373263356532636562343566626338353837653830376331353562306461373335653634383364666261326630613963373730222c22697373756572223a7b226e616d65223a2269642f616c696365222c226f776e65725f706f6c696379223a7b226b696e64223a226b6579222c22706b223a22303336616164353265646133333837613735623638356632336538386666613534336163663432356431396565396261366535353266356434626535393131376239227d2c22726567697374726174696f6e223a7b2274786964223a2238343565626438633066643038363064376333633236646632623034386634366433383839326165363731343033333465346130333131633361663337373363222c22766f7574223a307d2c22726f6c655f706f6c696379223a7b226d223a312c22706b73223a5b2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337225d7d7d2c226e6574776f726b223a226d61696e222c226e6f745f61667465725f686569676874223a3736303030302c226e6f745f6265666f72655f686569676874223a3735303030302c22726563656e745f626c6f636b223a2235343361373536636539656166393832303163636236616662653731633062613865313139383138666561383932303965643065366132643830633762353634222c22726563697069656e74223a7b226b6579223a2238313932363531363632383062336663643464613037643230353739313632386537336131646564313231616663353239373665613331366630393265303037222c226d6f6465223a226b6579227d2c227265766f636174696f6e223a7b22636f6e737472756374696f6e223a2257222c226b696e64223a227265766f6361626c65222c226d6f6465223a227365616c222c227365616c223a7b227363726970745f706f6c696379223a7b226b696e64223a226b6579222c22706b223a22303233613933653861653064623065323335343039353534613331383064663034336261346234336638363164396532373865313337393333643166363431396361227d2c2274786964223a2231336261386331303939646364343863363039633632343435663530336364646365623363663837316636626133326565386162613931623334363761336366222c22766f7574223a307d7d2c2274797065223a227365616c6c696e6b2d6772616e742f31227d2c227369676e617475726573223a7b22706f6c696379223a7b226d223a312c22706b73223a5b2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337225d7d2c2273696773223a5b7b22706b223a2266663364643564393264393833316466663363333561646330636662343430383135633935316539393566383435326138653762303766383639376532313337222c22736967223a223033343261666666396166336432363063663766356631613035646561373763626262323539343262653164633839633338393231653366373230626231396134613333363531643665626237366335636535663936633165663732633363616534626362383836653136306433643131323661633631333961313730653834227d5d7d7d"
       },
+      "module": "core",
       "rule": "SL-WIRE-013",
       "runner": "wire_raw"
     },
@@ -31384,6 +32256,7 @@
         "max_bytes": 16,
         "raw_hex": "7b2261223a223031323334353637383930313233343536373839227d"
       },
+      "module": "core",
       "rule": "SL-WIRE-001",
       "runner": "wire_raw"
     },
@@ -31393,6 +32266,7 @@
       "inputs": {
         "raw_hex": "7b2261223a226261647f737472227d"
       },
+      "module": "core",
       "rule": "SL-WIRE-005",
       "runner": "wire_raw"
     },
@@ -31402,6 +32276,7 @@
       "inputs": {
         "raw_hex": "7b2274797065223a227365616c6c696e6b2d756e6b6e6f776e2f3939227d"
       },
+      "module": "core",
       "rule": "SL-WIRE-010",
       "runner": "wire_raw"
     },
@@ -31411,13 +32286,14 @@
       "inputs": {
         "raw_hex": "7b2261223a6e756c6c7d"
       },
+      "module": "core",
       "rule": "SL-WIRE-004",
       "runner": "wire_raw"
     }
   ],
-  "description": "Executable 85/85 refusal-code conformance matrix with Draft 2020-12 schema-validated semantic fixtures and derived ChainView evidence.",
+  "description": "Executable 86/86 refusal-code conformance matrix with Draft 2020-12 schema-validated semantic fixtures, explicit module selection tags, and derived ChainView evidence.",
   "suite": "refusal-coverage-matrix",
-  "total_covered_codes": 85,
-  "total_registered_codes": 85,
-  "version": "1.0.0-draft.8"
+  "total_covered_codes": 86,
+  "total_registered_codes": 86,
+  "version": "1.0.0-draft.9"
 }

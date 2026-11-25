@@ -1,6 +1,6 @@
 # SealLink Conformance Requirements
 
-- **Version:** `1.0.0-draft.8`
+- **Version:** `1.0.0-draft.9`
 - **Status:** `draft`
 - **Normative Language:** [RFC2119], [RFC8174]
 
@@ -58,6 +58,6 @@ A production **Tier 1 Verifier** or **Effect Executor** claiming full operationa
 ## 4. Interoperability Bar for Advancing Specification Maturity
 
 Per `SPEC-00 §5.1`:
-- **`prose` -> `vectors`:** Every registered refusal code (`85/85`) and every canonical object type (`30/30`) is exercised by schema-valid semantic refusal fixtures and raw wire fixtures, every `decided` normative rule is explicitly mapped in the rule-coverage audit, negative security/false-admit, restart-recovery, historical re-registration, and exact-boundary regressions plus multi-operator verifier mutation audits pass, and all suites execute live through `tools/seallink_verifier.py` and Draft 2020-12 metaschemas in CI.
+- **`prose` -> `vectors`:** Every registered refusal code (`86/86`) and every canonical object type (`30/30`) is exercised by schema-valid semantic refusal fixtures and raw wire fixtures (with every case in `vectors/refusal-coverage-matrix.json` and `vectors/security-conformance.json` tagged with `"module"`), every `decided` normative rule is explicitly mapped in the rule-coverage audit, negative security/false-admit, restart-recovery, historical re-registration, and exact-boundary regressions plus multi-operator verifier mutation audits pass, and all suites execute live through `tools/seallink_verifier.py` and Draft 2020-12 metaschemas in CI.
 - **`vectors` -> `dual-impl`:** At least two independent implementations with disjoint cryptographic and JSON stacks pass 100% of `vectors/` byte-for-byte (identical object IDs, digests, content addresses, refusal codes, and journal commitments).
 - **`dual-impl` -> `chain-tested`:** All five end-to-end traces (`trace-01` `PROFILE-mail-v1` `mail/read` + `executor_ref` + named recipient + `pre_effect_recheck` + offline mempool revoke, `trace-02` initial & successor guardian activation + `P2WSH` `namepsbt` + non-default `pending_vout = 2` CSV `guardian_slot_pending` + ward assent + `0x10` recovery cancel, `trace-03` depth-2 parent pool + sibling `row_ordinal` + crash-uncertain + restart replay + single-use `0x11` + TRUC v3 `P2A` CPFP, `trace-04` ward agent guardian intake + separate-process quota-free restart recovery, `trace-05` historical eternal credential across live expiry and lawful re-registration + live mid-read tip-change observation bracket) are executed with raw transaction artifacts via a cold read-only observer against a live Namecoin Core `nc28.0` regtest network (reference regtest proofs provided in `conformance/p2a-regtest/` and `conformance/traces-regtest/`) and qualified under production/mainnet conditions across independent implementations.

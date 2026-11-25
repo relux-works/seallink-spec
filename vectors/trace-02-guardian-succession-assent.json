@@ -2290,8 +2290,21 @@
     "opreturn_hex": "6a05534c4e4b0e220189340fba01c25be941314f5a813919bb036a9d27531405b1cb9604d9e9cca46400"
   },
   "suite": "trace-02-guardian-succession-assent",
+  "trusted_origin_issuer_pins": [
+    {
+      "name": "id/civil-registry",
+      "owner_policy": {
+        "kind": "key",
+        "pk": "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
+      },
+      "registration": {
+        "txid": "0fbc9f555f92ade88547b08f2d5abea8299937bd41d2f3d0d6b166fb9419f6eb",
+        "vout": 0
+      }
+    }
+  ],
   "trusted_origin_issuers": [
     "id/civil-registry"
   ],
-  "version": "1.0.0-draft.8"
+  "version": "1.0.0-draft.9"
 }
