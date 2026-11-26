@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.10.
+Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.12.
 
 Produces nine executable JSON vector suites under vectors/:
   1. wire-jcs-and-hashes.json
@@ -30,7 +30,7 @@ import build_security_suite as sec
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.11"
+VERSION = "1.0.0-draft.12"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 VECTORS_DIR = ROOT / "vectors"
 
@@ -275,10 +275,44 @@ def build_wire_vectors() -> dict[str, Any]:
     bad_explicit_bip340["signatures"]["policy"]["alg"] = "bip340"
     assert sl.verify_envelope_signatures(bad_explicit_bip340) == (False, "WIRE_MEMBER")
 
+    # Standalone atomic golden vectors for draft.11/draft.12 primitives (fsverity, target_id, log_id, RFC 9162, SMT256)
+    fsv_empty = sl.fsverity_sha256_digest(b"")
+    assert fsv_empty == "3d248ca542a24fc62d1c43b916eae5016878e2533c88238480b26128a1f1af95"
+    fsv_small_data = b"SealLink v1.0"
+    fsv_small = sl.fsverity_sha256_digest(fsv_small_data)
+    fsv_multi_data = (b"A" * 4096) + (b"B" * 100)
+    fsv_multi = sl.fsverity_sha256_digest(fsv_multi_data)
+    art_sha = {"digest": sl.sha256(fsv_small_data).hex(), "scheme": "sha256"}
+    art_fsv = {"digest": fsv_empty, "params": {"block_size": 4096, "hash_alg": "sha256", "salt_hex": "", "version": 1}, "scheme": "fsverity-sha256"}
+    g_log_reg = {"txid": h32("golden-log-reg"), "vout": 0}
+    g_log_gen = {"txid": h32("golden-log-gen"), "vout": 2}
+    g_log_id = sl.compute_log_id("main", GENESIS_MAIN, "notary", "id/notary-golden", g_log_reg, g_log_gen)
+    g_ckpts = [sl.ckpt_leaf(i + 1, h32(f"golden-cp-{i + 1}")) for i in range(5)]
+    g_mth_3 = sl.rfc9162_mth(g_ckpts[:3]).hex()
+    g_peaks_3 = sl.rfc9162_peaks(g_ckpts[:3])
+    g_mth_4 = sl.rfc9162_mth(g_ckpts[:4]).hex()
+    assert sl.rfc9162_append_leaf_to_peaks(g_peaks_3, 3, g_ckpts[3]) == g_mth_4
+    g_mth_5 = sl.rfc9162_mth(g_ckpts).hex()
+    g_inc_2_in_5 = sl.rfc9162_inclusion_proof(g_ckpts, 2)
+    assert sl.rfc9162_verify_inclusion(g_ckpts[2], 2, 5, g_inc_2_in_5["hashes"], g_mth_5)
+    g_smt_kv = {
+        f"act:{h32('golden-act')}|*": h32("golden-rev-1"),
+        f"target:{sl.artifact_target_id(art_fsv)}|*": h32("golden-rev-2"),
+    }
+    g_smt_root = sl.smt_root(g_smt_kv)
+    g_smt_inc = sl.smt_prove(g_smt_kv, f"act:{h32('golden-act')}|*")
+    g_smt_abs = sl.smt_prove(g_smt_kv, f"rel:{h32('golden-absent')}|*")
+    assert (
+        sl.smt_verify_proof(g_smt_inc)
+        and g_smt_inc["root"] == g_smt_root
+        and sl.smt_verify_proof(g_smt_abs)
+        and g_smt_abs["root"] == g_smt_root
+    )
+
     return {
         "suite": "wire-jcs-and-hashes",
         "version": VERSION,
-        "description": "Restricted RFC 8785 JCS positive/negative vectors (incl. depth 16/17/1000 & leading-zero), 3 hashes, clause_commit, BIP-340 SignatureSet, and strict cofactorless Ed25519 + low-S NIST P-256 device-key signature checks.",
+        "description": "Restricted RFC 8785 JCS positive/negative vectors (incl. depth 16/17/1000 & leading-zero), 3 hashes, clause_commit, BIP-340 SignatureSet, strict cofactorless Ed25519 + low-S NIST P-256 device-key signature checks, and atomic Linux fsverity-sha256 / RFC 9162 / SMT256 golden vectors.",
         "jcs_positive": positive_jcs,
         "jcs_negative": negative_jcs,
         "clause_commitment": {
@@ -309,6 +343,50 @@ def build_wire_vectors() -> dict[str, Any]:
             "rule": "SL-WIRE-012",
             "owner_command_ed25519": envelope_record(env_cmd_ed25519, "schemas/invocation.schema.json#/$defs/OwnerCommand"),
             "owner_command_p256_low_s": envelope_record(env_cmd_p256, "schemas/invocation.schema.json#/$defs/OwnerCommand"),
+        },
+        "artifact_and_log_primitives": {
+            "rules": ["SL-ARTF-002", "SL-CONT-012"],
+            "fsverity_sha256_linux": [
+                {"id": "fsverity-empty", "data_hex": "", "data_len": 0, "digest": fsv_empty},
+                {"id": "fsverity-13b", "data_hex": fsv_small_data.hex(), "data_len": len(fsv_small_data), "digest": fsv_small},
+                {"id": "fsverity-4196b-2blocks", "pattern": "4096*0x41 || 100*0x42", "data_len": len(fsv_multi_data), "digest": fsv_multi},
+            ],
+            "artifact_target_ids": [
+                {"id": "target-id-sha256", "artifact_identity": art_sha, "target_id": sl.artifact_target_id(art_sha)},
+                {"id": "target-id-fsverity-empty", "artifact_identity": art_fsv, "target_id": sl.artifact_target_id(art_fsv)},
+            ],
+            "log_id_golden": {
+                "network": "main",
+                "genesis": GENESIS_MAIN,
+                "role": "notary",
+                "name": "id/notary-golden",
+                "registration": g_log_reg,
+                "genesis_seal_outpoint": g_log_gen,
+                "log_id": g_log_id,
+            },
+            "log_entry_digests": {
+                "entry_0x01": sl.log_entry_digest(0x01, h32("golden-entry")),
+                "entry_0x02": sl.log_entry_digest(0x02, h32("golden-entry")),
+                "entry_0x03": sl.log_entry_digest(0x03, h32("golden-entry")),
+            },
+            "rfc9162_checkpoints_tree": {
+                "empty_root": sl.EMPTY_CHECKPOINTS_ROOT,
+                "checkpoint_content_addrs": [h32(f"golden-cp-{i + 1}") for i in range(5)],
+                "mth_3": g_mth_3,
+                "peaks_3": g_peaks_3,
+                "mth_4": g_mth_4,
+                "mth_5": g_mth_5,
+                "inclusion_idx2_in_5": g_inc_2_in_5,
+            },
+            "smt256_fixed_depth": {
+                "D0": sl.SMT_DEFAULTS[0].hex(),
+                "D1": sl.SMT_DEFAULTS[1].hex(),
+                "D256_empty_root": sl.SMT_EMPTY_ROOT,
+                "kv": g_smt_kv,
+                "root": g_smt_root,
+                "inclusion_proof": g_smt_inc,
+                "absence_proof": g_smt_abs,
+            },
         },
     }
 
@@ -395,6 +473,8 @@ def build_ledger_vectors() -> dict[str, Any]:
         (0x10, "RECOVERY_CANCEL", 0x00, None, None),
         (0x11, "SINGLE_USE_CONSUMPTION", 0x00, None, None),
         (0x12, "GUARDIAN_INITIAL_ACTIVATION", 0x00, None, None),
+        (0x13, "VOLUNTARY_REBIND", 0x00, None, None),
+        (0x14, "LOG_CHECKPOINT", 0x00, None, None),
     ]:
         comm = root_hex if act == 0x02 else h32(f"comm-{label}")
         scr = sl.encode_opreturn(act, comm, loc_type=loc, pointer_hex=ptr, h_c=hc)
@@ -409,11 +489,43 @@ def build_ledger_vectors() -> dict[str, Any]:
 
     reserved_06_hex = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x06, 0x22, 0x01]) + bytes.fromhex(h32("bad06")) + bytes([0x00])).hex()
     bad_loc_04_hex = (bytes([0x6A, 0x47]) + b"SLNK" + bytes([0x04, 0x42, 0x01]) + bytes.fromhex(h32("bad04c")) + bytes([0x01]) + bytes.fromhex(h32("bad04p"))).hex()
+    valid_14_raw = sl.encode_opreturn(0x14, h32("nonmin-14"))
+    nonminimal_pushdata1_hex = (valid_14_raw[:7] + bytes([0x4C, len(valid_14_raw) - 8]) + valid_14_raw[8:]).hex()
+
+    opreturn_criticality = []
+    for act_c, scope_lbl in [(0x15, "forward_only"), (0x1B, "retroactive"), (0x20, "advisory")]:
+        pl_c = bytes([0x01]) + bytes.fromhex(h32(f"crit-{act_c:02x}")) + bytes([0x00])
+        scr_c = bytes([0x6A, 0x05]) + b"SLNK" + bytes([act_c, len(pl_c)]) + pl_c
+        dec_c = sl.decode_opreturn_with_criticality(scr_c)
+        if scope_lbl == "advisory":
+            assert dec_c.get("advisory") is True
+        else:
+            assert dec_c.get("critical_scope") == scope_lbl
+        opreturn_criticality.append({"id": f"future-0x{act_c:02x}-{scope_lbl}", "script_hex": scr_c.hex(), "decoded": dec_c})
+
+    # Real Namecoin Core nc28.0 mainnet archival retarget tuples (verifying post-AuxPoW H - 2017 ancestor!)
+    retarget_vectors = []
+    for h_rt, prev_b, anc_h, anc_t, prev_t, exp_b in [
+        (24192, 0x1B00B269, 22175, 1318761208, 1319487998, 0x1A6B32B1),
+        (30240, 0x1A385BFC, 28223, 1321247518, 1322148153, 0x1A29F6AE),
+        (733824, 0x1705D999, 731807, 1723460218, 1724608760, 0x17058E00),
+    ]:
+        assert sl.namecoin_retarget_ancestor_height(h_rt, network="main") == anc_h
+        got_b = sl.compute_namecoin_next_bits(prev_b, anc_t, prev_t, network="main")
+        assert got_b == exp_b, f"retarget {h_rt}: {got_b:#x} != {exp_b:#x}"
+        retarget_vectors.append({
+            "height": h_rt,
+            "ancestor_height": anc_h,
+            "prev_bits_hex": f"{prev_b:08x}",
+            "epoch_start_time": anc_t,
+            "prev_block_time": prev_t,
+            "expected_next_bits_hex": f"{exp_b:08x}",
+        })
 
     return {
         "suite": "ledger-scripts-and-opreturn",
         "version": VERSION,
-        "description": "Namecoin prefix scripts (NAME_NEW/NAME_FIRSTUPDATE/NAME_UPDATE incl. OP_0 empty value), ScriptPolicy compilations (incl. BranchKeySpec native P2WSH m-of-n), TRUC/P2A CPFP, SLNK OP_RETURN frames (0x01-0x12) with per-action locator rules, and 5-leaf Merkle batch 0x02 proofs.",
+        "description": "Namecoin prefix scripts (NAME_NEW/NAME_FIRSTUPDATE/NAME_UPDATE incl. OP_0 empty value), ScriptPolicy compilations (incl. BranchKeySpec native P2WSH m-of-n), TRUC/P2A CPFP, SLNK OP_RETURN frames (0x01-0x14 + 0x15..0x2f criticality + minimal push), 5-leaf Merkle batch 0x02 proofs, and real Namecoin mainnet archival retarget tuples (H - 2017).",
         "script_policies": compiled_policies,
         "namecoin_prefix_scripts": {
             "positive": [
@@ -438,9 +550,11 @@ def build_ledger_vectors() -> dict[str, Any]:
             "regtest_evidence_dir": "conformance/p2a-regtest",
         },
         "opreturn_frames": opreturn_frames,
+        "opreturn_criticality": opreturn_criticality,
         "opreturn_negative": [
             {"id": "reserved-action-0x06", "script_hex": reserved_06_hex, "expected_refusal": "CHAIN_FRAME_INVALID"},
             {"id": "forbidden-locator-0x01-on-0x04", "script_hex": bad_loc_04_hex, "expected_refusal": "CHAIN_FRAME_INVALID"},
+            {"id": "non-minimal-op-pushdata1", "script_hex": nonminimal_pushdata1_hex, "expected_refusal": "CHAIN_FRAME_INVALID"},
         ],
         "merkle_batch_0x02": {
             "rule": "SL-LDGR-014",
@@ -450,6 +564,10 @@ def build_ledger_vectors() -> dict[str, Any]:
             "opreturn_hex": sl.encode_opreturn(0x02, root_hex, 0x00).hex(),
             "proofs": [proofs[d] for d in sorted(batch_items, key=bytes.fromhex)],
             "negative_tampered_proof": tampered_pf,
+        },
+        "namecoin_consensus_retargets": {
+            "rule": "SL-ARTF-006",
+            "mainnet_archival": retarget_vectors,
         },
     }
 
@@ -2023,7 +2141,6 @@ def build_trace_03_delegation() -> dict[str, Any]:
                 "outputs": {},
             },
             use_txid: {
-                "confirmed_height": None,
                 "mempool": True,
                 "inputs": [sv.make_single_use_spend_input(c1_payload["revocation"]["seal"], branch=0)],
                 "opreturn_hex": use_opreturn_hex,
@@ -2038,7 +2155,6 @@ def build_trace_03_delegation() -> dict[str, Any]:
                 },
             },
             c2_revoke_tx: {
-                "confirmed_height": None,
                 "mempool": True,
                 "inputs": [sv.make_single_use_spend_input(c2_payload["revocation"]["seal"], branch=1)],
                 "outputs": {},

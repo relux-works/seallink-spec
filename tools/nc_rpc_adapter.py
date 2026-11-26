@@ -292,6 +292,27 @@ def _collect_wire_hints(
             txids.add(obj["stop_txid"])
             for v in range(obj["stop_first"], obj["stop_first"] + obj["count"]):
                 outpoints.add((obj["stop_txid"], v))
+    # Explicitly track next_log_vout UTXO liveness on any presented 0x14 checkpoint + txid pair
+    for cp_k, tx_k in (
+        ("checkpoint", "checkpoint_txid"),
+        ("head_checkpoint", "head_checkpoint_txid"),
+        ("release_checkpoint", "release_checkpoint_txid"),
+        ("release_head_checkpoint", "release_head_checkpoint_txid"),
+    ):
+        cp_o = obj.get(cp_k)
+        tx_o = obj.get(tx_k)
+        if (
+            isinstance(cp_o, dict)
+            and isinstance(cp_o.get("payload"), dict)
+            and cp_o["payload"].get("terminal") is False
+            and isinstance(cp_o["payload"].get("next_log_vout"), int)
+            and not isinstance(cp_o["payload"].get("next_log_vout"), bool)
+            and isinstance(tx_o, str)
+            and len(tx_o) == 64
+        ):
+            outpoints.add((tx_o, int(cp_o["payload"]["next_log_vout"])))
+            txids.add(tx_o)
+
     # Explicit txid references in proof_path / origin_bundle / log checkpoints & fraud proofs
     for tk in (
         "issuance_txid", "origin_anchor_txid", "name_binding_txid", "anchor_txid", "use_txid",
@@ -731,17 +752,22 @@ class ColdNamecoinObserver:
             n = int(vout["n"])
             spk_hex = vout["scriptPubKey"]["hex"]
             o_ent: dict[str, Any] = {"script_pubkey_hex": spk_hex}
+            if isinstance(vout.get("value_sat"), int) and not isinstance(vout.get("value_sat"), bool):
+                o_ent["value_sat"] = int(vout["value_sat"])
+            elif isinstance(vout.get("value"), (int, float)) and not isinstance(vout.get("value"), bool):
+                o_ent["value_sat"] = int(round(float(vout["value"]) * 100_000_000))
             if (txid, n) in spent_map:
                 o_ent["spent_by_txid"] = spent_map[(txid, n)]
             elif (txid, n) in absent_outpoints:
                 o_ent["absent_from_utxo"] = True
             outputs_v[str(n)] = o_ent
         obj: dict[str, Any] = {
-            "confirmed_height": conf_h,
             "in_mempool": txid in mempool_set,
             "inputs": inputs_v,
             "outputs": outputs_v,
         }
+        if conf_h is not None:
+            obj["confirmed_height"] = conf_h
         raw_ver = txd.get("version")
         if isinstance(raw_ver, int) and not isinstance(raw_ver, bool):
             obj["version"] = raw_ver
@@ -797,10 +823,11 @@ class ColdNamecoinObserver:
                 and sl.is_valid_compressed_pubkey(wit[1])
             ):
                 cand = {"kind": "key", "pk": wit[1]}
-                if sl.compile_script_policy(cand)[0].hex() == wit_pol.get("spk_hex"):
+                cand_spk_hex = sl.compile_script_policy(cand)[0].hex()
+                if cand_spk_hex == wit_pol.get("spk_hex"):
                     wit_pol = cand
                     last_confirmed["owner_policy"] = cand
-                    policies_by_spk.setdefault(wit_pol["pk"], cand)
+                    policies_by_spk.setdefault(cand_spk_hex, cand)
 
             parsed_any_for_name = False
             saw_unparseable_name_out = False
@@ -1315,6 +1342,11 @@ class ColdNamecoinObserver:
             for tv in txs_view.values():
                 if tv.get("confirmed_height") is not None and tv.get("block_time") is not None:
                     block_times_view[str(tv["confirmed_height"])] = int(tv["block_time"])
+            for lins in name_regs_view.values():
+                for lin in lins:
+                    for u in lin.get("updates", []):
+                        if u.get("confirmed_height") is not None and u.get("block_time") is not None:
+                            block_times_view[str(u["confirmed_height"])] = int(u["block_time"])
 
             # SPEC-02 §4 / SPEC-04 §6: Populate verified active-chain MTP for quiet recovery maturity heights (h_rec + delay_blocks)
             # and any caller-requested extra_block_heights inside the SAME observation bracket!
@@ -1989,6 +2021,7 @@ def self_test() -> None:
         "denials_delta_root": sl.EMPTY_BATCH_ROOT,
         "denials_root": sl.SMT_EMPTY_ROOT,
         "genesis": gen,
+        "genesis_seal_outpoint": {"txid": log_gen_txid, "vout": 0},
         "issuer": {"name": "id/school", "owner_policy": pol2, "registration": {"txid": fu2_txid, "vout": 0}, "role_policy": {"m": 1, "pks": [sl.xonly_pubkey(reg_sk)]}},
         "log_id": log_id_t,
         "network": "regtest",

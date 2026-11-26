@@ -19,7 +19,7 @@ import build_refusal_matrix as rm
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.11"
+VERSION = "1.0.0-draft.12"
 GENESIS_MAIN = rm.GENESIS_MAIN
 
 
@@ -62,6 +62,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         enforce_schemas=True,
         require_jsonschema=require_jsonschema,
         max_history_steps=inp.get("max_history_steps", 500),
+        max_automaton_steps=inp.get("max_automaton_steps", 1024),
         require_observation_bracket=inp.get("require_observation_bracket", True),
         enabled_modules=inp.get("enabled_modules"),
     )
@@ -200,6 +201,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             supported_kinds=sk,
             withdrawal_doc=inp.get("withdrawal_doc"),
             origin_bundle=inp.get("origin_bundle"),
+            issuer_origin_bundle=inp.get("issuer_origin_bundle"),
         )
         return res.verdict, res.refusal_code
     if runner == "issuer_role":
@@ -327,6 +329,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             journal,
             inp["service_id"],
             inp.get("manifests", {}),
+            origin_bundle=inp.get("origin_bundle"),
         )
         return res.verdict, res.refusal_code
     if runner == "contract_assents":
@@ -489,8 +492,10 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             prev_cp_env=inp.get("prev_checkpoint"),
             prev_cp_txid=inp.get("prev_checkpoint_txid"),
             genesis_seal=inp.get("genesis_seal"),
+            predecessor_terminal_checkpoint=inp.get("predecessor_terminal_checkpoint"),
             journal=j,
             required_depth=inp.get("required_depth"),
+            is_head=inp.get("is_head", True),
         )
         if res.verdict == "ADMIT" and "expect_journal_writes" in inp and j is not None:
             if len(j.entries) - before_n != int(inp["expect_journal_writes"]):

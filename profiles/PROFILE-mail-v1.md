@@ -1,6 +1,6 @@
 # PROFILE-mail-v1: Sovereign Email Hosting and Delegated Mailbox Access
 
-- **Version:** `1.0.0-draft.11`
+- **Version:** `1.0.0-draft.12`
 - **Service Type:** `mail` (`registry/service-types.json`)
 - **Status:** `draft` (normative profile rules `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/refusal-coverage-matrix.json`)

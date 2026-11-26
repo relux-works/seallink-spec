@@ -184,7 +184,6 @@
               "kind": "key",
               "pk": "0398f3cacd40151403dcf7451288bf7a65c8b23a17a1bd3b05b3cec5ed5498c761"
             },
-            "prev_input": null,
             "txid": "cb5537b9d9768982b51e49423d19634329e0456bb5746f57f56a61f361780451",
             "vout": 0
           },
@@ -226,7 +225,6 @@
               "kind": "key",
               "pk": "022b962349449262c584142223d7b523ba719a3a1a85eb7f960bd6d2ef2686cefc"
             },
-            "prev_input": null,
             "txid": "84620db17ec258c3bff4cd50a171ebcb3214dad689166a382e589824520326a8",
             "vout": 0
           },
@@ -268,7 +266,6 @@
               "kind": "key",
               "pk": "0329ec9f2eaebebd406b40b7c1688f434d6e3d896f45828bb3c307aded972b23c2"
             },
-            "prev_input": null,
             "txid": "925527c11b33214cacad527983af94f40d1ded991e3a3d8481f01ef303e36a11",
             "vout": 0
           },
@@ -891,5 +888,5 @@
     }
   ],
   "suite": "trace-01-mail-offline-revoke",
-  "version": "1.0.0-draft.11"
+  "version": "1.0.0-draft.12"
 }

@@ -195,7 +195,6 @@
                 "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
               ]
             },
-            "prev_input": null,
             "txid": "351061827fb3386e023c11ff92727d2508622dcc971d057439c3fde399cdfed0",
             "vout": 0
           },
@@ -247,7 +246,6 @@
               "kind": "key",
               "pk": "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
             },
-            "prev_input": null,
             "txid": "0fbc9f555f92ade88547b08f2d5abea8299937bd41d2f3d0d6b166fb9419f6eb",
             "vout": 0
           },
@@ -289,7 +287,6 @@
               "kind": "key",
               "pk": "029b8120ebd623d62032d8dde12e7f218ce3d97b80f177d46c39f80852df4f741e"
             },
-            "prev_input": null,
             "txid": "8f4e4fc6f391d15f948d7241298aac037fab1f457f525e3e960a714be83cdd58",
             "vout": 0
           },
@@ -331,7 +328,6 @@
               "kind": "key",
               "pk": "038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f"
             },
-            "prev_input": null,
             "txid": "88219b100cf3d16c26f7e6f53d496e0382d9fa9e21c45e8941870ff3df0e6b75",
             "vout": 0
           },
@@ -895,7 +891,6 @@
                     "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
                   ]
                 },
-                "prev_input": null,
                 "txid": "351061827fb3386e023c11ff92727d2508622dcc971d057439c3fde399cdfed0",
                 "vout": 0
               },
@@ -981,7 +976,6 @@
                   "kind": "key",
                   "pk": "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
                 },
-                "prev_input": null,
                 "txid": "0fbc9f555f92ade88547b08f2d5abea8299937bd41d2f3d0d6b166fb9419f6eb",
                 "vout": 0
               },
@@ -1023,7 +1017,6 @@
                   "kind": "key",
                   "pk": "029b8120ebd623d62032d8dde12e7f218ce3d97b80f177d46c39f80852df4f741e"
                 },
-                "prev_input": null,
                 "txid": "8f4e4fc6f391d15f948d7241298aac037fab1f457f525e3e960a714be83cdd58",
                 "vout": 0
               },
@@ -1065,7 +1058,6 @@
                   "kind": "key",
                   "pk": "038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f"
                 },
-                "prev_input": null,
                 "txid": "88219b100cf3d16c26f7e6f53d496e0382d9fa9e21c45e8941870ff3df0e6b75",
                 "vout": 0
               },
@@ -1306,7 +1298,6 @@
                     "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
                   ]
                 },
-                "prev_input": null,
                 "txid": "351061827fb3386e023c11ff92727d2508622dcc971d057439c3fde399cdfed0",
                 "vout": 0
               },
@@ -1392,7 +1383,6 @@
                   "kind": "key",
                   "pk": "0354764cd4811f673edc325484d18767df188d3d1119a0e33842c1c50909157f35"
                 },
-                "prev_input": null,
                 "txid": "0bb758905eeaa0e870a10c1c76500b6c08baaab252953989a8202299a956eec2",
                 "vout": 0
               },
@@ -1434,7 +1424,6 @@
                   "kind": "key",
                   "pk": "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
                 },
-                "prev_input": null,
                 "txid": "0fbc9f555f92ade88547b08f2d5abea8299937bd41d2f3d0d6b166fb9419f6eb",
                 "vout": 0
               },
@@ -1476,7 +1465,6 @@
                   "kind": "key",
                   "pk": "029b8120ebd623d62032d8dde12e7f218ce3d97b80f177d46c39f80852df4f741e"
                 },
-                "prev_input": null,
                 "txid": "8f4e4fc6f391d15f948d7241298aac037fab1f457f525e3e960a714be83cdd58",
                 "vout": 0
               },
@@ -1518,7 +1506,6 @@
                   "kind": "key",
                   "pk": "038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f"
                 },
-                "prev_input": null,
                 "txid": "88219b100cf3d16c26f7e6f53d496e0382d9fa9e21c45e8941870ff3df0e6b75",
                 "vout": 0
               },
@@ -2360,5 +2347,5 @@
       }
     }
   ],
-  "version": "1.0.0-draft.11"
+  "version": "1.0.0-draft.12"
 }

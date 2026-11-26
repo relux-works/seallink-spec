@@ -77,7 +77,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -119,7 +118,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -161,7 +159,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -341,7 +338,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -383,7 +379,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -425,7 +420,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -467,7 +461,6 @@
                     "kind": "key",
                     "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
                   },
-                  "prev_input": null,
                   "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
                   "vout": 0
                 },
@@ -578,7 +571,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b142201de2ddf2e10f743aee4fe4b5b988e971611e6aeb0a248237aa94531b1f0542cc900",
+              "opreturn_hex": "6a05534c4e4b142201bb6e82657c5d26799fc55b909de7a70051500d37c5f0436306a5af542e8fcd9e00",
               "outputs": {
                 "1": {
                   "script_pubkey_hex": "0014c8214084b632b0495dc66cdc5ecd7221d24c0fe6"
@@ -641,6 +634,10 @@
                   "denials_delta_root": "9d3bb7c7f17316c64266e25abb574ffd2047e71b93862cb75c6d6c307cfa500d",
                   "denials_root": "eb70f696a4410a79b11b5d39d4ed57f16bf79a5dda3a630a98afcfc3caccdd16",
                   "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+                  "genesis_seal_outpoint": {
+                    "txid": "04151ce3dfa357e4d3f1eaffa019a7055f29284d52fb600b372dfe773768ec58",
+                    "vout": 0
+                  },
                   "issuer": {
                     "name": "id/notary-m1",
                     "owner_policy": {
@@ -684,7 +681,7 @@
                   "sigs": [
                     {
                       "pk": "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f",
-                      "sig": "d68b786147c2acb81b763ebfc27f190cab4567c219a6ea682190799545cbe5050a96b4a91a6cde46bbdc01e6dda6f131c30d4bf3b277bdb2a18e3b094176ca87"
+                      "sig": "2ad57f0c8b80ff2be9fe57df69c6eaeb9245083ef96c1564d0fe5debff026cee7dce867ee9055641f05457e4ce6b74d37d110e68e7985571b2b282c83cd7c4c3"
                     }
                   ]
                 }
@@ -842,7 +839,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -884,7 +880,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -926,7 +921,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -1177,7 +1171,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -1219,7 +1212,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -1261,7 +1253,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -1512,7 +1503,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -1554,7 +1544,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -1596,7 +1585,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -1971,7 +1959,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -2013,7 +2000,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -2055,7 +2041,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -2418,7 +2403,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -2460,7 +2444,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -2502,7 +2485,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -2876,7 +2858,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -2918,7 +2899,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -2960,7 +2940,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -3323,7 +3302,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -3365,7 +3343,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -3407,7 +3384,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -3770,7 +3746,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -3812,7 +3787,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -3854,7 +3828,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -4221,7 +4194,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -4263,7 +4235,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -4305,7 +4276,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -4678,7 +4648,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -4720,7 +4689,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -4762,7 +4730,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -5125,7 +5092,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -5167,7 +5133,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -5209,7 +5174,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -5572,7 +5536,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -5614,7 +5577,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -5656,7 +5618,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -6129,7 +6090,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -6171,7 +6131,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -6213,7 +6172,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -6724,7 +6682,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -6766,7 +6723,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -6808,7 +6764,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -7319,7 +7274,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -7361,7 +7315,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -7403,7 +7356,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -7862,7 +7814,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -7904,7 +7855,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -7946,7 +7896,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -8445,7 +8394,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -8487,7 +8435,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -8529,7 +8476,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -9016,7 +8962,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -9058,7 +9003,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -9100,7 +9044,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -9305,7 +9248,6 @@
                     "kind": "key",
                     "pk": "03a14f1a38bbb99859cc286d00c4cfcdc8e06160ec782f070d92a2327057060609"
                   },
-                  "prev_input": null,
                   "txid": "4a42e9093fda74b4ad72cf5fe9d380e75c98958adc2ae5eb852536e8586788c2",
                   "vout": 0
                 },
@@ -9468,7 +9410,6 @@
                     "kind": "key",
                     "pk": "03a14f1a38bbb99859cc286d00c4cfcdc8e06160ec782f070d92a2327057060609"
                   },
-                  "prev_input": null,
                   "txid": "4a42e9093fda74b4ad72cf5fe9d380e75c98958adc2ae5eb852536e8586788c2",
                   "vout": 0
                 },
@@ -9646,7 +9587,6 @@
                     "kind": "key",
                     "pk": "03a14f1a38bbb99859cc286d00c4cfcdc8e06160ec782f070d92a2327057060609"
                   },
-                  "prev_input": null,
                   "txid": "4a42e9093fda74b4ad72cf5fe9d380e75c98958adc2ae5eb852536e8586788c2",
                   "vout": 0
                 },
@@ -9815,7 +9755,6 @@
                     "kind": "key",
                     "pk": "03a14f1a38bbb99859cc286d00c4cfcdc8e06160ec782f070d92a2327057060609"
                   },
-                  "prev_input": null,
                   "txid": "4a42e9093fda74b4ad72cf5fe9d380e75c98958adc2ae5eb852536e8586788c2",
                   "vout": 0
                 },
@@ -10022,7 +9961,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -10064,7 +10002,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -10106,7 +10043,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -10333,7 +10269,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -10375,7 +10310,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -10417,7 +10351,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -11008,7 +10941,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -11050,7 +10982,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -11092,7 +11023,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -11523,7 +11453,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -11565,7 +11494,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -11607,7 +11535,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -11979,7 +11906,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -12021,7 +11947,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -12063,7 +11988,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -12427,7 +12351,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -12469,7 +12392,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -12511,7 +12433,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -12868,7 +12789,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -12910,7 +12830,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -12952,7 +12871,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -13388,7 +13306,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -13430,7 +13347,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -13472,7 +13388,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -14035,7 +13950,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -14077,7 +13991,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -14119,7 +14032,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -14679,7 +14591,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -14721,7 +14632,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -14763,7 +14673,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -15193,7 +15102,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -15235,7 +15143,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -15277,7 +15184,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -15640,7 +15546,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -15682,7 +15587,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -15724,7 +15628,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -15766,7 +15669,6 @@
                     "kind": "key",
                     "pk": "0345139440089c68f7e76d4c0b97383c25a14309d1f349eaae3f49293f489a7bd2"
                   },
-                  "prev_input": null,
                   "txid": "b62f19ed7eb897352e48fcc3e1a2948f6c9e684c454333b88f179e9d6c99f325",
                   "vout": 0
                 },
@@ -16130,7 +16032,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -16172,7 +16073,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -16214,7 +16114,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -16577,7 +16476,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -16619,7 +16517,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -16661,7 +16558,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -16907,7 +16803,6 @@
                       "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                     ]
                   },
-                  "prev_input": null,
                   "txid": "83a6273b4a16c92a73da7ba148af612386cab800941527f6b53850dc0c85dd7c",
                   "vout": 0
                 },
@@ -16959,7 +16854,6 @@
                     "kind": "key",
                     "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
                   },
-                  "prev_input": null,
                   "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
                   "vout": 0
                 },
@@ -17001,7 +16895,6 @@
                     "kind": "key",
                     "pk": "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                   },
-                  "prev_input": null,
                   "txid": "22b81e6f5cbfeb60c458c79c70d0bd122263c451ec3f783669880b1237cbebb0",
                   "vout": 0
                 },
@@ -17620,7 +17513,6 @@
                       "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                     ]
                   },
-                  "prev_input": null,
                   "txid": "83a6273b4a16c92a73da7ba148af612386cab800941527f6b53850dc0c85dd7c",
                   "vout": 0
                 },
@@ -17672,7 +17564,6 @@
                     "kind": "key",
                     "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
                   },
-                  "prev_input": null,
                   "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
                   "vout": 0
                 },
@@ -17714,7 +17605,6 @@
                     "kind": "key",
                     "pk": "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                   },
-                  "prev_input": null,
                   "txid": "22b81e6f5cbfeb60c458c79c70d0bd122263c451ec3f783669880b1237cbebb0",
                   "vout": 0
                 },
@@ -18291,7 +18181,6 @@
                       "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                     ]
                   },
-                  "prev_input": null,
                   "txid": "83a6273b4a16c92a73da7ba148af612386cab800941527f6b53850dc0c85dd7c",
                   "vout": 0
                 },
@@ -18343,7 +18232,6 @@
                     "kind": "key",
                     "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
                   },
-                  "prev_input": null,
                   "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
                   "vout": 0
                 },
@@ -18385,7 +18273,6 @@
                     "kind": "key",
                     "pk": "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                   },
-                  "prev_input": null,
                   "txid": "22b81e6f5cbfeb60c458c79c70d0bd122263c451ec3f783669880b1237cbebb0",
                   "vout": 0
                 },
@@ -18889,7 +18776,6 @@
                       "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                     ]
                   },
-                  "prev_input": null,
                   "txid": "83a6273b4a16c92a73da7ba148af612386cab800941527f6b53850dc0c85dd7c",
                   "vout": 0
                 },
@@ -18941,7 +18827,6 @@
                     "kind": "key",
                     "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
                   },
-                  "prev_input": null,
                   "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
                   "vout": 0
                 },
@@ -18983,7 +18868,6 @@
                     "kind": "key",
                     "pk": "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                   },
-                  "prev_input": null,
                   "txid": "22b81e6f5cbfeb60c458c79c70d0bd122263c451ec3f783669880b1237cbebb0",
                   "vout": 0
                 },
@@ -19646,7 +19530,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -19688,7 +19571,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -19730,7 +19612,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -20093,7 +19974,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -20135,7 +20015,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -20177,7 +20056,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -20540,7 +20418,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -20582,7 +20459,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -20624,7 +20500,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -20990,7 +20865,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -21032,7 +20906,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -21074,7 +20947,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -21437,7 +21309,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -21479,7 +21350,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -21521,7 +21391,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -21885,7 +21754,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -21927,7 +21795,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -21969,7 +21836,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -22276,7 +22142,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -22318,7 +22183,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -22360,7 +22224,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -22724,7 +22587,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -22766,7 +22628,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -22808,7 +22669,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -23099,7 +22959,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -23141,7 +23000,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -23183,7 +23041,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -23546,7 +23403,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -23588,7 +23444,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -23630,7 +23485,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -23994,7 +23848,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -24036,7 +23889,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -24078,7 +23930,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -24441,7 +24292,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -24483,7 +24333,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -24846,7 +24695,6 @@
                     "kind": "key",
                     "pk": "02069e896e8127a2aab618b4c9e2139f1e8962ddbfd13b489dd44d0c19677a0d8c"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -24888,7 +24736,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -24930,7 +24777,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -25293,7 +25139,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -25357,7 +25202,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -25399,7 +25243,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -25762,7 +25605,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -25804,7 +25646,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -25846,7 +25687,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -26209,7 +26049,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 }
@@ -26229,7 +26068,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -26271,7 +26109,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -26510,7 +26347,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -26552,7 +26388,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -26594,7 +26429,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -26636,7 +26470,6 @@
                     "kind": "key",
                     "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
                   },
-                  "prev_input": null,
                   "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
                   "vout": 0
                 },
@@ -26747,7 +26580,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b142201de2ddf2e10f743aee4fe4b5b988e971611e6aeb0a248237aa94531b1f0542cc900",
+              "opreturn_hex": "6a05534c4e4b142201bb6e82657c5d26799fc55b909de7a70051500d37c5f0436306a5af542e8fcd9e00",
               "outputs": {
                 "1": {
                   "script_pubkey_hex": "0014c8214084b632b0495dc66cdc5ecd7221d24c0fe6"
@@ -26765,6 +26598,10 @@
             "denials_delta_root": "9d3bb7c7f17316c64266e25abb574ffd2047e71b93862cb75c6d6c307cfa500d",
             "denials_root": "eb70f696a4410a79b11b5d39d4ed57f16bf79a5dda3a630a98afcfc3caccdd16",
             "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+            "genesis_seal_outpoint": {
+              "txid": "04151ce3dfa357e4d3f1eaffa019a7055f29284d52fb600b372dfe773768ec58",
+              "vout": 0
+            },
             "issuer": {
               "name": "id/notary-m1",
               "owner_policy": {
@@ -26808,7 +26645,7 @@
             "sigs": [
               {
                 "pk": "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f",
-                "sig": "d68b786147c2acb81b763ebfc27f190cab4567c219a6ea682190799545cbe5050a96b4a91a6cde46bbdc01e6dda6f131c30d4bf3b277bdb2a18e3b094176ca87"
+                "sig": "2ad57f0c8b80ff2be9fe57df69c6eaeb9245083ef96c1564d0fe5debff026cee7dce867ee9055641f05457e4ce6b74d37d110e68e7985571b2b282c83cd7c4c3"
               }
             ]
           }
@@ -27179,7 +27016,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -27221,7 +27057,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -27263,7 +27098,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -27535,7 +27369,6 @@
                       "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                     ]
                   },
-                  "prev_input": null,
                   "txid": "83a6273b4a16c92a73da7ba148af612386cab800941527f6b53850dc0c85dd7c",
                   "vout": 0
                 },
@@ -27587,7 +27420,6 @@
                     "kind": "key",
                     "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
                   },
-                  "prev_input": null,
                   "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
                   "vout": 0
                 },
@@ -27629,7 +27461,6 @@
                     "kind": "key",
                     "pk": "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                   },
-                  "prev_input": null,
                   "txid": "22b81e6f5cbfeb60c458c79c70d0bd122263c451ec3f783669880b1237cbebb0",
                   "vout": 0
                 },
@@ -28136,7 +27967,6 @@
                       "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                     ]
                   },
-                  "prev_input": null,
                   "txid": "83a6273b4a16c92a73da7ba148af612386cab800941527f6b53850dc0c85dd7c",
                   "vout": 0
                 },
@@ -28188,7 +28018,6 @@
                     "kind": "key",
                     "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
                   },
-                  "prev_input": null,
                   "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
                   "vout": 0
                 },
@@ -28230,7 +28059,6 @@
                     "kind": "key",
                     "pk": "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                   },
-                  "prev_input": null,
                   "txid": "22b81e6f5cbfeb60c458c79c70d0bd122263c451ec3f783669880b1237cbebb0",
                   "vout": 0
                 },
@@ -28740,7 +28568,6 @@
                       "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                     ]
                   },
-                  "prev_input": null,
                   "txid": "83a6273b4a16c92a73da7ba148af612386cab800941527f6b53850dc0c85dd7c",
                   "vout": 0
                 },
@@ -28792,7 +28619,6 @@
                     "kind": "key",
                     "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
                   },
-                  "prev_input": null,
                   "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
                   "vout": 0
                 },
@@ -28834,7 +28660,6 @@
                     "kind": "key",
                     "pk": "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                   },
-                  "prev_input": null,
                   "txid": "22b81e6f5cbfeb60c458c79c70d0bd122263c451ec3f783669880b1237cbebb0",
                   "vout": 0
                 },
@@ -29506,7 +29331,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -29548,7 +29372,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -29590,7 +29413,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -29965,7 +29787,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -30007,7 +29828,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -30049,7 +29869,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -30262,7 +30081,6 @@
                       "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                     ]
                   },
-                  "prev_input": null,
                   "txid": "83a6273b4a16c92a73da7ba148af612386cab800941527f6b53850dc0c85dd7c",
                   "vout": 0
                 },
@@ -30348,7 +30166,6 @@
                     "kind": "key",
                     "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
                   },
-                  "prev_input": null,
                   "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
                   "vout": 0
                 },
@@ -30390,7 +30207,6 @@
                     "kind": "key",
                     "pk": "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                   },
-                  "prev_input": null,
                   "txid": "22b81e6f5cbfeb60c458c79c70d0bd122263c451ec3f783669880b1237cbebb0",
                   "vout": 0
                 },
@@ -31097,7 +30913,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -31139,7 +30954,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -31181,7 +30995,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -31545,7 +31358,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -31587,7 +31399,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -31629,7 +31440,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -31868,7 +31678,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -31910,7 +31719,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -31952,7 +31760,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -32403,7 +32210,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -32445,7 +32251,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -32487,7 +32292,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -32726,7 +32530,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -32768,7 +32571,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -32810,7 +32612,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -32960,7 +32761,6 @@
                       "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                     ]
                   },
-                  "prev_input": null,
                   "txid": "83a6273b4a16c92a73da7ba148af612386cab800941527f6b53850dc0c85dd7c",
                   "vout": 0
                 },
@@ -33012,7 +32812,6 @@
                     "kind": "key",
                     "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
                   },
-                  "prev_input": null,
                   "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
                   "vout": 0
                 },
@@ -33054,7 +32853,6 @@
                     "kind": "key",
                     "pk": "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                   },
-                  "prev_input": null,
                   "txid": "22b81e6f5cbfeb60c458c79c70d0bd122263c451ec3f783669880b1237cbebb0",
                   "vout": 0
                 },
@@ -33645,7 +33443,6 @@
                     "kind": "key",
                     "pk": "036aad52eda3387a75b685f23e88ffa543acf425d19ee9ba6e552f5d4be59117b9"
                   },
-                  "prev_input": null,
                   "txid": "845ebd8c0fd0860d7c3c26df2b048f46d38892ae67140334e4a0311c3af3773c",
                   "vout": 0
                 },
@@ -33687,7 +33484,6 @@
                     "kind": "key",
                     "pk": "030650897f3a00cabff0ea0428ad1f42631cb2e88941a96c60863ee129843cacd1"
                   },
-                  "prev_input": null,
                   "txid": "f9e15711eaf00293092f349ea6998e6ae7522c1c48bda3c00cc9131da63f5d01",
                   "vout": 0
                 },
@@ -33729,7 +33525,6 @@
                     "kind": "key",
                     "pk": "033934a06a708f49f44071f280f1dab523ab482e5de81265a64db3cf939e357b43"
                   },
-                  "prev_input": null,
                   "txid": "fb47e4cac8a09f927da99325f7be2a50afff13bfce76654464e29968b9448bc7",
                   "vout": 0
                 },
@@ -33771,7 +33566,6 @@
                     "kind": "key",
                     "pk": "0269e036e878a732fb88f96fc05a48754aaf95a0c29c4ba90ff2669cd18defbd01"
                   },
-                  "prev_input": null,
                   "txid": "4aef4a1d0887d07b725b25e330dc588ac244e7de7f3295ed70a1a57c95e094d0",
                   "vout": 0
                 },
@@ -33882,7 +33676,7 @@
                   ]
                 }
               ],
-              "opreturn_hex": "6a05534c4e4b142201de2ddf2e10f743aee4fe4b5b988e971611e6aeb0a248237aa94531b1f0542cc900",
+              "opreturn_hex": "6a05534c4e4b142201bb6e82657c5d26799fc55b909de7a70051500d37c5f0436306a5af542e8fcd9e00",
               "outputs": {
                 "1": {
                   "script_pubkey_hex": "0014c8214084b632b0495dc66cdc5ecd7221d24c0fe6"
@@ -33945,6 +33739,10 @@
                   "denials_delta_root": "9d3bb7c7f17316c64266e25abb574ffd2047e71b93862cb75c6d6c307cfa500d",
                   "denials_root": "eb70f696a4410a79b11b5d39d4ed57f16bf79a5dda3a630a98afcfc3caccdd16",
                   "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+                  "genesis_seal_outpoint": {
+                    "txid": "04151ce3dfa357e4d3f1eaffa019a7055f29284d52fb600b372dfe773768ec58",
+                    "vout": 0
+                  },
                   "issuer": {
                     "name": "id/notary-m1",
                     "owner_policy": {
@@ -33988,7 +33786,7 @@
                   "sigs": [
                     {
                       "pk": "ac333416d1792e8d9303db25f0ae27fcdffb9fb93167658726a808d1f34f603f",
-                      "sig": "d68b786147c2acb81b763ebfc27f190cab4567c219a6ea682190799545cbe5050a96b4a91a6cde46bbdc01e6dda6f131c30d4bf3b277bdb2a18e3b094176ca87"
+                      "sig": "2ad57f0c8b80ff2be9fe57df69c6eaeb9245083ef96c1564d0fe5debff026cee7dce867ee9055641f05457e4ce6b74d37d110e68e7985571b2b282c83cd7c4c3"
                     }
                   ]
                 }
@@ -34140,7 +33938,6 @@
                       "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                     ]
                   },
-                  "prev_input": null,
                   "txid": "83a6273b4a16c92a73da7ba148af612386cab800941527f6b53850dc0c85dd7c",
                   "vout": 0
                 },
@@ -34192,7 +33989,6 @@
                     "kind": "key",
                     "pk": "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe"
                   },
-                  "prev_input": null,
                   "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
                   "vout": 0
                 },
@@ -34234,7 +34030,6 @@
                     "kind": "key",
                     "pk": "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
                   },
-                  "prev_input": null,
                   "txid": "22b81e6f5cbfeb60c458c79c70d0bd122263c451ec3f783669880b1237cbebb0",
                   "vout": 0
                 },
@@ -34905,5 +34700,5 @@
   "suite": "refusal-coverage-matrix",
   "total_covered_codes": 89,
   "total_registered_codes": 89,
-  "version": "1.0.0-draft.11"
+  "version": "1.0.0-draft.12"
 }

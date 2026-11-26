@@ -20,7 +20,7 @@ import seallink_ref as sl
 import seallink_verifier as sv
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = "1.0.0-draft.11"
+VERSION = "1.0.0-draft.12"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 
 
@@ -1943,6 +1943,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "denials_delta_root": sl.EMPTY_BATCH_ROOT,
         "denials_root": sl.SMT_EMPTY_ROOT,
         "genesis": GENESIS_MAIN,
+        "genesis_seal_outpoint": {"txid": gen_seal_tx, "vout": 0},
         "issuer": not_issuer,
         "log_id": mat_log_id,
         "network": "main",

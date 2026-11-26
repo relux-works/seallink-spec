@@ -657,6 +657,45 @@ def verify_all_vectors(
             verify_envelope_record(dsa["owner_command_ed25519"], "wire/ed25519", errors)
             verify_envelope_record(dsa["owner_command_p256_low_s"], "wire/p256_low_s", errors)
             checked += 2
+        if "artifact_and_log_primitives" in v:
+            alp = v["artifact_and_log_primitives"]
+            for fv in alp["fsverity_sha256_linux"]:
+                raw_b = bytes.fromhex(fv["data_hex"]) if "data_hex" in fv else ((b"A" * 4096) + (b"B" * 100))
+                if sl.fsverity_sha256_digest(raw_b) != fv["digest"]:
+                    errors.append(f"wire fsverity '{fv['id']}' digest mismatch")
+                checked += 1
+            for tv in alp["artifact_target_ids"]:
+                if sl.artifact_target_id(tv["artifact_identity"]) != tv["target_id"]:
+                    errors.append(f"wire artifact_target_id '{tv['id']}' mismatch")
+                checked += 1
+            lg = alp["log_id_golden"]
+            if sl.compute_log_id(lg["network"], lg["genesis"], lg["role"], lg["name"], lg["registration"], lg["genesis_seal_outpoint"]) != lg["log_id"]:
+                errors.append("wire log_id_golden mismatch")
+            checked += 1
+            rt = alp["rfc9162_checkpoints_tree"]
+            ck_leaves = [sl.ckpt_leaf(i + 1, ca) for i, ca in enumerate(rt["checkpoint_content_addrs"])]
+            if (
+                sl.rfc9162_mth(ck_leaves[:3]).hex() != rt["mth_3"]
+                or sl.rfc9162_peaks(ck_leaves[:3]) != rt["peaks_3"]
+                or sl.rfc9162_append_leaf_to_peaks(rt["peaks_3"], 3, ck_leaves[3]) != rt["mth_4"]
+                or sl.rfc9162_mth(ck_leaves).hex() != rt["mth_5"]
+                or not sl.rfc9162_verify_inclusion(ck_leaves[2], 2, 5, rt["inclusion_idx2_in_5"]["hashes"], rt["mth_5"])
+            ):
+                errors.append("wire rfc9162_checkpoints_tree mismatch")
+            checked += 5
+            sm = alp["smt256_fixed_depth"]
+            if (
+                sl.SMT_DEFAULTS[0].hex() != sm["D0"]
+                or sl.SMT_DEFAULTS[1].hex() != sm["D1"]
+                or sl.SMT_EMPTY_ROOT != sm["D256_empty_root"]
+                or sl.smt_root(sm["kv"]) != sm["root"]
+                or not sl.smt_verify_proof(sm["inclusion_proof"])
+                or sm["inclusion_proof"]["root"] != sm["root"]
+                or not sl.smt_verify_proof(sm["absence_proof"])
+                or sm["absence_proof"]["root"] != sm["root"]
+            ):
+                errors.append("wire smt256_fixed_depth mismatch")
+            checked += 4
 
     # 2. ledger-scripts-and-opreturn.json
     if "ledger-scripts-and-opreturn.json" in vectors:
@@ -692,6 +731,19 @@ def verify_all_vectors(
                 if str(exc) != item["expected_refusal"]:
                     errors.append(f"ledger opreturn negative '{item['id']}' wrong refusal: {exc}")
             checked += 1
+        for item in v.get("opreturn_criticality", []):
+            dec_c = sl.decode_opreturn_with_criticality(bytes.fromhex(item["script_hex"]))
+            if dec_c != item["decoded"]:
+                errors.append(f"ledger opreturn_criticality '{item['id']}' mismatch")
+            checked += 1
+        for item in v.get("namecoin_consensus_retargets", {}).get("mainnet_archival", []):
+            h_rt = int(item["height"])
+            if sl.namecoin_retarget_ancestor_height(h_rt, network="main") != int(item["ancestor_height"]):
+                errors.append(f"ledger retarget {h_rt} ancestor height mismatch")
+            got_nb = sl.compute_namecoin_next_bits(int(item["prev_bits_hex"], 16), int(item["epoch_start_time"]), int(item["prev_block_time"]), network="main")
+            if f"{got_nb:08x}" != item["expected_next_bits_hex"]:
+                errors.append(f"ledger retarget {h_rt} next bits mismatch: {got_nb:08x} != {item['expected_next_bits_hex']}")
+            checked += 2
         mb = v["merkle_batch_0x02"]
         root, _ = sl.build_merkle_tree(mb["unsorted_input_digests"])
         if root != mb["merkle_root"]:
@@ -902,6 +954,7 @@ def verify_jsonschema(
                     validated += 1
         # Validate trace-01..04 initial chain snapshots against closed ChainViewSnapshot schema (SL-LDGR-015)!
         val_cvs = get_validator("schemas/common.schema.json#/$defs/ChainViewSnapshot")
+        val_bhp = get_validator("schemas/profile-artifact.schema.json#/$defs/BlockHeaderProof")
         if vname.startswith("trace-0"):
             for ck in ("initial_chain_state", "chain_state"):
                 if ck in vdoc and isinstance(vdoc[ck], dict):
@@ -938,6 +991,12 @@ def verify_jsonschema(
                             errs_cv = list(val_cvs.iter_errors(st["chain"]))
                             if errs_cv:
                                 errors.append(f"Security conformance positive step '{case['id']}[{st.get('label', st_i)}]' chain FAILED ChainViewSnapshot schema: {errs_cv[0].message}")
+                            validated += 1
+                    if case.get("kind") == "tier2_name_history" and isinstance(inp_c.get("headers"), list):
+                        for h_i, h_ent in enumerate(inp_c["headers"]):
+                            errs_bh = list(val_bhp.iter_errors(h_ent))
+                            if errs_bh:
+                                errors.append(f"Security conformance positive case '{case['id']}' headers[{h_i}] FAILED BlockHeaderProof schema: {errs_bh[0].message}")
                             validated += 1
                 if exp_r.startswith("WIRE_") and exp_r not in ("WIRE_SIGNATURE", "WIRE_KEY"):
                     continue
@@ -997,7 +1056,31 @@ def main() -> int:
         if data is not None:
             schemas[p.name] = data
 
+    # 2b. Portable regex audit across all schemas (B5: forbid {m,n}/{n} quantifiers > 1000 incompatible with Go RE2 / Rust regex)
+    def _audit_portable_regex(node: Any, sname: str, path: str = "#") -> None:
+        if isinstance(node, dict):
+            pat = node.get("pattern")
+            if isinstance(pat, str):
+                for m_q in re.finditer(r"\{(\d+)(?:,(\d*))?\}", pat):
+                    hi_s = m_q.group(2) if m_q.group(2) is not None else m_q.group(1)
+                    if hi_s and int(hi_s) > 1000:
+                        errors.append(f"Non-portable regex quantifier '{m_q.group(0)}' (> 1000, breaks Go RE2) in schemas/{sname}{path}: {pat!r}")
+            for k_s, v_s in node.items():
+                if k_s == "patternProperties" and isinstance(v_s, dict):
+                    for pk_s, pv_s in v_s.items():
+                        for m_q in re.finditer(r"\{(\d+)(?:,(\d*))?\}", pk_s):
+                            hi_s = m_q.group(2) if m_q.group(2) is not None else m_q.group(1)
+                            if hi_s and int(hi_s) > 1000:
+                                errors.append(f"Non-portable patternProperties regex quantifier in schemas/{sname}{path}: {pk_s!r}")
+                        _audit_portable_regex(pv_s, sname, f"{path}/patternProperties/{pk_s}")
+                else:
+                    _audit_portable_regex(v_s, sname, f"{path}/{k_s}")
+        elif isinstance(node, list):
+            for idx_s, it_s in enumerate(node):
+                _audit_portable_regex(it_s, sname, f"{path}/{idx_s}")
+
     for name, schema in schemas.items():
+        _audit_portable_regex(schema, name)
         refs: list[str] = []
         walk_refs(schema, refs)
         for ref in refs:

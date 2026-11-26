@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SealLink v1.0.0-draft.11 Conformance Suite:
+SealLink v1.0.0-draft.11 / v1.0.0-draft.12 Conformance Suite:
   - Section A: 0x13 VOLUNTARY_REBIND (5-subphase 1->2->3->4->4b automaton, T_offer/T_rebind,
                awaiting_activation, first_error_height isolation, verify_assent _name_pin_equal)
   - Section B: 0x14 LOG_CHECKPOINT, acyclic RFC 9162 checkpoints_root, O(1) handover,
@@ -8,8 +8,10 @@ SealLink v1.0.0-draft.11 Conformance Suite:
                seallink-release/1 & log_tracked seallink-notary/1
   - Section C: PROFILE-artifact-v1 Gatekeeper (seallink-ticket/1, m-of-n, inconclusive, absent-notary veto,
                release_floor, fsverity-sha256, hardened bootstrap ban, provisional gossip deny-wins) &
-               Tier-2 consensus-exact SegWitNameUpdateProof (P2WPKH low-S + high-S, P2WSH 2-of-2,
-               64-byte leaf rejection, Namecoin AuxPoW & retarget [302400, 4838400]).
+               Tier-2 consensus-exact SegWitNameUpdateProof (OP_NAME_FIRSTUPDATE + OP_NAME_UPDATE,
+               P2WPKH low-S + high-S, P2WSH 2-of-2, 64-byte leaf rejection, Namecoin nc28.0 AuxPoW & retarget).
+  - Section D/E: Mutation-closure & exact numeric boundary matrix.
+  - Section F: v1.0.0-draft.12 audit closure regressions (B1-B8, H1-H5, M3-M6).
 """
 
 from __future__ import annotations
@@ -127,30 +129,56 @@ def _build_synthetic_spv_proof(
     sighash_byte: int = 0x01,
     tx_version: int = 0x7100,
     extra_dummy_txs: int = 1,
+    op_kind: str = "NAME_UPDATE",
+    prev_raw_override: bytes | None = None,
+    prev_vout: int = 0,
+    new_owner_pol: dict[str, Any] | None = None,
+    opreturns: list[bytes] | None = None,
+    header_version: int = (0x0001 << 16) | 2,
+    script_sig_override: bytes = b"",
 ) -> tuple[dict[str, Any], bytes]:
-    """Build a consensus-exact synthetic SegWitNameUpdateProof + 80B block header."""
+    """Build a consensus-exact synthetic SegWitNameUpdateProof (OP_NAME_FIRSTUPDATE or OP_NAME_UPDATE) + 80B Namecoin block header."""
     exp_spk, exp_ws = sl.compile_script_policy(owner_pol)
-    prev_name_spk = sl.encode_name_output("NAME_FIRSTUPDATE", exp_spk, name=name.encode("utf-8"), rand=b"\x11" * 20, value=b"{}")
-    prev_raw = _encode_raw_tx(
-        0x7100,
-        [{"prev_txid": _h32(f"spv-fund-{label}"), "prev_vout": 0, "script_sig": b"\x01\x01"}],
-        [(1_000_000, prev_name_spk), (500_000, b"\x00\x14" + (b"\x22" * 20))],
-    )
+    out_spk, _ = sl.compile_script_policy(new_owner_pol if new_owner_pol is not None else owner_pol)
+    rand_b = sl.sha256(f"spv-rand-{label}".encode("utf-8"))[:20]
+    if prev_raw_override is not None:
+        prev_raw = prev_raw_override
+    elif op_kind == "NAME_FIRSTUPDATE":
+        h20 = sl.hash160(rand_b + name.encode("utf-8"))
+        prev_name_spk = sl.encode_name_output("NAME_NEW", exp_spk, hash20=h20)
+        prev_raw = _encode_raw_tx(
+            0x7100,
+            [{"prev_txid": _h32(f"spv-fund-{label}"), "prev_vout": 0, "script_sig": b"\x01\x01"}],
+            [(1_000_000, prev_name_spk), (500_000, b"\x00\x14" + (b"\x22" * 20))],
+        )
+    else:
+        prev_name_spk = sl.encode_name_output("NAME_FIRSTUPDATE", exp_spk, name=name.encode("utf-8"), rand=b"\x11" * 20, value=b"{}")
+        prev_raw = _encode_raw_tx(
+            0x7100,
+            [{"prev_txid": _h32(f"spv-fund-{label}"), "prev_vout": 0, "script_sig": b"\x01\x01"}],
+            [(1_000_000, prev_name_spk), (500_000, b"\x00\x14" + (b"\x22" * 20))],
+        )
     prev_parsed = sl.parse_raw_tx(prev_raw)
+    prev_val_sat = prev_parsed["vout"][prev_vout]["value_sat"]
 
-    new_name_spk = sl.encode_name_output("NAME_UPDATE", exp_spk, name=name.encode("utf-8"), value=value_str.encode("utf-8"))
-    tx_vins = [{"prev_txid": prev_parsed["txid"], "prev_vout": 0, "script_sig": b"", "sequence": 0xFFFFFFFF}]
-    tx_vouts = [(1_000_000, new_name_spk), (400_000, b"\x00\x14" + (b"\x33" * 20))]
+    if op_kind == "NAME_FIRSTUPDATE":
+        new_name_spk = sl.encode_name_output("NAME_FIRSTUPDATE", out_spk, name=name.encode("utf-8"), rand=rand_b, value=value_str.encode("utf-8"))
+    else:
+        new_name_spk = sl.encode_name_output("NAME_UPDATE", out_spk, name=name.encode("utf-8"), value=value_str.encode("utf-8"))
+    tx_vins = [{"prev_txid": prev_parsed["txid"], "prev_vout": prev_vout, "script_sig": script_sig_override, "sequence": 0xFFFFFFFF}]
+    tx_vouts: list[tuple[int, bytes]] = [(1_000_000, new_name_spk), (400_000, b"\x00\x14" + (b"\x33" * 20))]
+    for opr in (opreturns or []):
+        tx_vouts.append((0, opr))
     unsigned_tx = sl.parse_raw_tx(_encode_raw_tx(tx_version, tx_vins, tx_vouts))
     if owner_pol["kind"] == "key":
         pk_b = bytes.fromhex(owner_pol["pk"])
         script_code = b"\x76\xa9\x14" + sl.hash160(pk_b) + b"\x88\xac"
-        sighash = sl.compute_bip143_sighash(unsigned_tx, 0, script_code, 1_000_000, sighash_byte)
+        sighash = sl.compute_bip143_sighash(unsigned_tx, 0, script_code, prev_val_sat, sighash_byte)
         sig_b = _ecdsa_sign_bip66(sighash, sign_sks[0], high_s=high_s, sighash_byte=sighash_byte)
         wit = [[sig_b, pk_b]]
     else:
         assert exp_ws is not None
-        sighash = sl.compute_bip143_sighash(unsigned_tx, 0, exp_ws, 1_000_000, sighash_byte)
+        sighash = sl.compute_bip143_sighash(unsigned_tx, 0, exp_ws, prev_val_sat, sighash_byte)
         sigs_b = [_ecdsa_sign_bip66(sighash, sk, high_s=high_s, sighash_byte=sighash_byte) for sk in sign_sks]
         wit = [[b""] + sigs_b + [exp_ws]]
     tx_raw = _encode_raw_tx(tx_version, tx_vins, tx_vouts, witnesses=wit)
@@ -182,11 +210,11 @@ def _build_synthetic_spv_proof(
     txids_le = [cb_parsed["txid_le"], tx_parsed["txid_le"]] + [d["txid_le"] for d in dummies]
     merkle_root_le, t_branches = _btc_merkle_root_and_branches(txids_le)
 
-    # Regtest-style easy nBits (0x207fffff) mined to real valid regtest PoW!
+    # Regtest-style easy nBits (0x207fffff) mined to real valid regtest PoW with Namecoin chain_id=1!
     tgt = sl.bits_to_target(0x207FFFFF)
     hdr = b""
     for nonce in range(100000):
-        cand = struct.pack("<I", 2) + (b"\x00" * 32) + merkle_root_le + struct.pack("<III", 1795220000, 0x207FFFFF, nonce)
+        cand = struct.pack("<I", header_version) + (b"\x00" * 32) + merkle_root_le + struct.pack("<III", 1795220000, 0x207FFFFF, nonce)
         if int.from_bytes(sl.dsha256(cand), "little") <= tgt:
             hdr = cand
             break
@@ -206,6 +234,80 @@ def _build_synthetic_spv_proof(
         "wtxid_coinbase_branch": w_branches[0],
     }
     return proof, hdr
+
+
+def _build_same_block_chained_spv_pair(
+    label: str,
+    owner_pol: dict[str, Any],
+    sign_sk: bytes,
+    name: str,
+    val0: str,
+    val1: str,
+    *,
+    block_height: int = 750010,
+    high_s_second: bool = True,
+    header_version: int = (0x0001 << 16) | 2,
+) -> tuple[list[dict[str, Any]], bytes, dict[str, Any]]:
+    """Build two chained SegWitNameUpdateProofs (OP_NAME_FIRSTUPDATE at tx_index=1, OP_NAME_UPDATE at tx_index=2) in ONE block."""
+    exp_spk, _ = sl.compile_script_policy(owner_pol)
+    pk_b = bytes.fromhex(owner_pol["pk"])
+    script_code = b"\x76\xa9\x14" + sl.hash160(pk_b) + b"\x88\xac"
+    rand_b = sl.sha256(f"spv-pair-rand-{label}".encode("utf-8"))[:20]
+    h20 = sl.hash160(rand_b + name.encode("utf-8"))
+    new_raw = _encode_raw_tx(
+        0x7100,
+        [{"prev_txid": _h32(f"spv-pair-fund-{label}"), "prev_vout": 0, "script_sig": b"\x01\x01"}],
+        [(1_000_000, sl.encode_name_output("NAME_NEW", exp_spk, hash20=h20))],
+    )
+    new_p = sl.parse_raw_tx(new_raw)
+
+    fu_vins = [{"prev_txid": new_p["txid"], "prev_vout": 0, "script_sig": b"", "sequence": 0xFFFFFFFF}]
+    fu_vouts = [(1_000_000, sl.encode_name_output("NAME_FIRSTUPDATE", exp_spk, name=name.encode("utf-8"), rand=rand_b, value=val0.encode("utf-8")))]
+    fu_u = sl.parse_raw_tx(_encode_raw_tx(0x7100, fu_vins, fu_vouts))
+    fu_sig = _ecdsa_sign_bip66(sl.compute_bip143_sighash(fu_u, 0, script_code, 1_000_000, 0x01), sign_sk, high_s=False)
+    fu_raw = _encode_raw_tx(0x7100, fu_vins, fu_vouts, witnesses=[[fu_sig, pk_b]])
+    fu_p = sl.parse_raw_tx(fu_raw)
+
+    u1_vins = [{"prev_txid": fu_p["txid"], "prev_vout": 0, "script_sig": b"", "sequence": 0xFFFFFFFF}]
+    u1_vouts = [(1_000_000, sl.encode_name_output("NAME_UPDATE", exp_spk, name=name.encode("utf-8"), value=val1.encode("utf-8")))]
+    u1_u = sl.parse_raw_tx(_encode_raw_tx(0x7100, u1_vins, u1_vouts))
+    u1_sig = _ecdsa_sign_bip66(sl.compute_bip143_sighash(u1_u, 0, script_code, 1_000_000, 0x01), sign_sk, high_s=high_s_second)
+    u1_raw = _encode_raw_tx(0x7100, u1_vins, u1_vouts, witnesses=[[u1_sig, pk_b]])
+    u1_p = sl.parse_raw_tx(u1_raw)
+
+    wtxids_le = [b"\x00" * 32, fu_p["wtxid_le"], u1_p["wtxid_le"]]
+    wroot_le, w_branches = _btc_merkle_root_and_branches(wtxids_le)
+    wit_res = b"\x00" * 32
+    cb_raw = _encode_raw_tx(
+        2,
+        [{"prev_txid": "00" * 32, "prev_vout": 0xFFFFFFFF, "script_sig": b"\x03" + struct.pack("<I", block_height)[:3] + b"slpair"}],
+        [(5_000_000_000, b"\x00\x14" + (b"\x55" * 20)), (0, b"\x6a\x24\xaa\x21\xa9\xed" + sl.dsha256(wroot_le + wit_res))],
+        witnesses=[[wit_res]],
+    )
+    cb_p = sl.parse_raw_tx(cb_raw)
+    troot_le, t_branches = _btc_merkle_root_and_branches([cb_p["txid_le"], fu_p["txid_le"], u1_p["txid_le"]])
+    tgt = sl.bits_to_target(0x207FFFFF)
+    hdr = b""
+    for nonce in range(100000):
+        cand = struct.pack("<I", header_version) + (b"\x00" * 32) + troot_le + struct.pack("<III", 1795220000, 0x207FFFFF, nonce)
+        if int.from_bytes(sl.dsha256(cand), "little") <= tgt:
+            hdr = cand
+            break
+    assert hdr
+    bhash = sl.dsha256(hdr)[::-1].hex()
+    p0 = {
+        "block_hash": bhash, "block_header_hex": hdr.hex(), "block_height": block_height,
+        "coinbase_merkle_branch": t_branches[0], "coinbase_tx_hex": cb_raw.hex(),
+        "prevout_tx_hex": new_raw.hex(), "tx_hex": fu_raw.hex(), "tx_index": 1,
+        "txid_branch": t_branches[1], "wtxid_branch": w_branches[1], "wtxid_coinbase_branch": w_branches[0],
+    }
+    p1 = {
+        "block_hash": bhash, "block_header_hex": hdr.hex(), "block_height": block_height,
+        "coinbase_merkle_branch": t_branches[0], "coinbase_tx_hex": cb_raw.hex(),
+        "prevout_tx_hex": fu_raw.hex(), "tx_hex": u1_raw.hex(), "tx_index": 2,
+        "txid_branch": t_branches[2], "wtxid_branch": w_branches[2], "wtxid_coinbase_branch": w_branches[0],
+    }
+    return [p0, p1], hdr, {"txid": fu_p["txid"], "vout": 0}
 
 
 def _build_autonomous_origin_rebind_fixture(
@@ -543,6 +645,7 @@ def _build_log_ecosystem(label: str, *, role: str = "notary", with_4_checkpoints
 
     entry_1 = sl.log_entry_digest(0x01, sl.content_addr(item_env))
     b1_root, b1_proofs = sl.build_log_batch_root([entry_1])
+    gen_op = {"txid": gen_tx, "vout": 0}
     cp1_p = {
         "batch_count": 1,
         "batch_root": b1_root,
@@ -551,12 +654,13 @@ def _build_log_ecosystem(label: str, *, role: str = "notary", with_4_checkpoints
         "denials_delta_root": sl.EMPTY_BATCH_ROOT,
         "denials_root": sl.SMT_EMPTY_ROOT,
         "genesis": GENESIS_MAIN,
+        "genesis_seal_outpoint": gen_op,
         "issuer": iss_role_pin,
         "log_id": log_id,
         "network": "main",
         "next_log_policy": seal_pol,
         "next_log_vout": 1,
-        "prev_log_outpoint": {"txid": gen_tx, "vout": 0},
+        "prev_log_outpoint": gen_op,
         "role": role,
         "seq": 1,
         "terminal": False,
@@ -564,6 +668,7 @@ def _build_log_ecosystem(label: str, *, role: str = "notary", with_4_checkpoints
     }
     cp1_env = sl.sign_envelope(cp1_p, [iss_role["sk"]])
     cp1_ca = sl.content_addr(cp1_env)
+    cp1_oid = sl.object_id(cp1_p)
 
     # Revocation record (seq=1) & reinstatement record (seq=2) & second revocation (seq=3)
     rev1_p = {
@@ -623,6 +728,7 @@ def _build_log_ecosystem(label: str, *, role: str = "notary", with_4_checkpoints
         "denials_delta_root": sl.EMPTY_BATCH_ROOT,
         "denials_root": sl.SMT_EMPTY_ROOT,
         "genesis": GENESIS_MAIN,
+        "genesis_seal_outpoint": gen_op,
         "issuer": iss_role_pin,
         "log_id": log_id,
         "network": "main",
@@ -637,6 +743,7 @@ def _build_log_ecosystem(label: str, *, role: str = "notary", with_4_checkpoints
     }
     cp2_env = sl.sign_envelope(cp2_p, [iss_role["sk"]])
     cp2_ca = sl.content_addr(cp2_env)
+    cp2_oid = sl.object_id(cp2_p)
 
     chain = copy.deepcopy(base_fx["chain"])
     chain["names"][iss_name] = sv.make_name_history(
@@ -658,20 +765,31 @@ def _build_log_ecosystem(label: str, *, role: str = "notary", with_4_checkpoints
         "outputs": {"1": {"script_pubkey_hex": _spk_hex(seal_pol)}},
     }
 
+    chain_at_cp1 = copy.deepcopy(chain)
+    chain_at_cp1["txs"].pop(cp2_tx, None)
+    chain_at_cp1["txs"][cp1_tx]["outputs"]["1"].pop("spent_by_txid", None)
+    chain_at_cp2 = copy.deepcopy(chain)
+
     res: dict[str, Any] = {
         "art": art,
         "b1_proof": b1_proofs[entry_1],
         "chain": chain,
+        "chain_at_cp1": chain_at_cp1,
+        "chain_at_cp2": chain_at_cp2,
         "cp1_ca": cp1_ca,
         "cp1_env": cp1_env,
+        "cp1_oid": cp1_oid,
         "cp1_tx": cp1_tx,
         "cp2_ca": cp2_ca,
         "cp2_env": cp2_env,
+        "cp2_oid": cp2_oid,
         "cp2_tx": cp2_tx,
         "cp1_in_cp2_proof": sl.rfc9162_inclusion_proof(leaves_1, 0),
         "denial_key": denial_key,
+        "gen_op": gen_op,
         "gen_seal": {"script_policy": seal_pol, "txid": gen_tx, "vout": 0},
         "iss_name": iss_name,
+        "iss_own": iss_own,
         "iss_pin": iss_pin,
         "iss_pol": iss_pol,
         "iss_reg": iss_reg,
@@ -704,6 +822,7 @@ def _build_log_ecosystem(label: str, *, role: str = "notary", with_4_checkpoints
             "denials_delta_root": b3_root,
             "denials_root": sl.smt_root(kv3),
             "genesis": GENESIS_MAIN,
+            "genesis_seal_outpoint": gen_op,
             "issuer": iss_role_pin,
             "log_id": log_id,
             "network": "main",
@@ -720,7 +839,7 @@ def _build_log_ecosystem(label: str, *, role: str = "notary", with_4_checkpoints
         cp3_ca = sl.content_addr(cp3_env)
         leaves_3 = leaves_2 + [sl.ckpt_leaf(3, cp3_ca)]
         e_re2 = sl.log_entry_digest(0x03, reinst2_ca)
-        b4_root, _ = sl.build_log_batch_root([e_re2])
+        b4_root, b4_proofs = sl.build_log_batch_root([e_re2])
         kv4 = {denial_key: reinst2_ca}
         cp4_p = {
             "batch_count": 1,
@@ -730,6 +849,7 @@ def _build_log_ecosystem(label: str, *, role: str = "notary", with_4_checkpoints
             "denials_delta_root": b4_root,
             "denials_root": sl.smt_root(kv4),
             "genesis": GENESIS_MAIN,
+            "genesis_seal_outpoint": gen_op,
             "issuer": iss_role_pin,
             "log_id": log_id,
             "network": "main",
@@ -750,6 +870,8 @@ def _build_log_ecosystem(label: str, *, role: str = "notary", with_4_checkpoints
             "opreturn_hex": sl.encode_opreturn(0x14, cp3_ca).hex(),
             "outputs": {"1": {"script_pubkey_hex": _spk_hex(seal_pol), "spent_by_txid": cp4_tx}},
         }
+        chain_at_cp3 = copy.deepcopy(chain)
+        chain_at_cp3["txs"][cp3_tx]["outputs"]["1"].pop("spent_by_txid", None)
         chain["txs"][cp4_tx] = {
             "block_hash": _h32(f"{label}-blk-cp4"),
             "confirmed_height": 749998,
@@ -759,6 +881,8 @@ def _build_log_ecosystem(label: str, *, role: str = "notary", with_4_checkpoints
         }
         res.update({
             "b3_proof": b3_proofs[e_rev1],
+            "b4_proof": b4_proofs[e_re2],
+            "chain_at_cp3": chain_at_cp3,
             "cp3_ca": cp3_ca,
             "cp3_env": cp3_env,
             "cp3_tx": cp3_tx,
@@ -1227,6 +1351,15 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     # A14. first_error_height isolation (P0-4): post-maturity corruption of B_1 NEVER taints B_2 or < h_13 lookups,
     # whereas in-window corruption (first_error_height < deadline) fails closed ORIGIN_STATUS_INCOMPLETE!
     rb_feh_ok = copy.deepcopy(rb_none)
+    prev_feh_u = rb_feh_ok["chain"]["names"]["id/alice-v1"]["updates"][-1]
+    rb_feh_ok["chain"]["names"]["id/alice-v1"]["updates"].append({
+        "block_time": 1795215000, "confirmed_height": 749744, "op": "NAME_UPDATE",
+        "opreturn_hex": "6a05534c4e4b060100",  # malformed SLNK at exact first_error_height (MUST be excluded by < feh_b!)
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rb_none["_b1_pol"])), name=b"id/alice-v1", value=b"{}").hex(),
+        "owner_policy": rb_none["_b1_pol"],
+        "prev_input": {"sighash_bytes": [1], "txid": prev_feh_u["txid"], "vout": prev_feh_u["vout"], "witness_policy": rb_none["_b1_pol"]},
+        "txid": _h32("reb-feh-bad-at-deadline"), "vout": 0,
+    })
     rb_feh_ok["chain"]["names"]["id/alice-v1"]["history_truncated"] = True
     rb_feh_ok["chain"]["names"]["id/alice-v1"]["first_error_height"] = 749744  # exact deadline -> outside [749600, 749744)!
     add(
@@ -1260,15 +1393,15 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-ORIG-017 P0-4: Truncated B_1 history with first_error_height == h_13 + D - 1 inside cancel window MUST refuse ORIGIN_STATUS_INCOMPLETE.",
     )
 
-    # A15. Historical resolve_name at_height < h_13 (with post-h_13 first_error_height!) ADMITS; at_height == h_13 without origin_bundle refuses ORIGIN_STATUS_INCOMPLETE
+    # A15. Historical resolve_name at_height < h_13 (untruncated) ADMITS; truncated with later first_error_height refuses NAME_HISTORY_UNAVAILABLE (H2); at_height == h_13 without origin_bundle refuses ORIGIN_STATUS_INCOMPLETE
     add(
         "d11-0x13-resolve-name-before-h13-with-later-feh-admit",
         ["SL-ORIG-017", "SL-LDGR-010"],
         "name_resolve",
-        {"at_height": 749599, "chain": rb_feh_ok["chain"], "name": "id/alice-v1"},
+        {"at_height": 749599, "chain": rb_none["chain"], "name": "id/alice-v1"},
         "ADMIT",
         None,
-        "SL-ORIG-017: Historical resolve_name at at_height == h_13 - 1 succeeds despite confirmed 0x13 and later first_error_height.",
+        "SL-ORIG-017: Historical resolve_name at at_height == h_13 - 1 succeeds on untruncated lineage despite later confirmed 0x13.",
     )
     add(
         "d11-0x13-resolve-name-at-h13-without-origin-incomplete",
@@ -1352,7 +1485,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-CONT-012", "SL-GRNT-014"],
         "log_checkpoint",
         {
-            "chain": nlog["chain"],
+            "chain": nlog["chain_at_cp1"],
             "checkpoint": nlog["cp1_env"],
             "checkpoint_txid": nlog["cp1_tx"],
             "genesis_seal": nlog["gen_seal"],
@@ -1368,7 +1501,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-CONT-012"],
         "log_checkpoint",
         {
-            "chain": nlog["chain"],
+            "chain": nlog["chain_at_cp2"],
             "checkpoint": nlog["cp2_env"],
             "checkpoint_txid": nlog["cp2_tx"],
             "prev_checkpoint": nlog["cp1_env"],
@@ -1394,32 +1527,35 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-CONT-012: Terminal 0x14 checkpoint (terminal=True, no next_log_vout) admits cleanly.",
     )
 
-    # B2. O(1) log handover on seq == 1 (matching predecessor_terminal_denials_root -> ADMIT; mismatch -> CHAIN_FRAME_INVALID)
+    # B2. O(1) log handover on seq == 1 (authenticated against predecessor_terminal_checkpoint!)
     ho_gen_tx = _h32("d11-ho-gen")
     ho_cp1_tx = _h32("d11-ho-cp1")
-    ho_lid = sl.compute_log_id("main", GENESIS_MAIN, "notary", nlog["iss_name"], nlog["iss_reg"], {"txid": ho_gen_tx, "vout": 0})
+    ho_gen_op = {"txid": ho_gen_tx, "vout": 0}
+    ho_lid = sl.compute_log_id("main", GENESIS_MAIN, "notary", nlog["iss_name"], nlog["iss_reg"], ho_gen_op)
     ho_cp1_p = {
         "batch_count": 0, "batch_root": sl.EMPTY_BATCH_ROOT, "checkpoints_root": sl.EMPTY_CHECKPOINTS_ROOT,
         "cumulative_entries_count": 0, "denials_delta_root": sl.EMPTY_BATCH_ROOT,
         "denials_root": nlog["cp4_env"]["payload"]["denials_root"], "genesis": GENESIS_MAIN,
+        "genesis_seal_outpoint": ho_gen_op,
         "issuer": nlog["iss_role_pin"], "log_id": ho_lid, "network": "main",
         "next_log_policy": nlog["seal_pol"], "next_log_vout": 0,
         "predecessor_log_id": nlog["log_id"], "predecessor_terminal_denials_root": nlog["cp4_env"]["payload"]["denials_root"],
-        "prev_log_outpoint": {"txid": ho_gen_tx, "vout": 0}, "role": "notary", "seq": 1, "terminal": False,
+        "prev_log_outpoint": ho_gen_op, "role": "notary", "seq": 1, "terminal": False,
         "type": "seallink-log-checkpoint/1",
     }
     ho_cp1_env = sl.sign_envelope(ho_cp1_p, [nlog["iss_role"]["sk"]])
     ch_ho = copy.deepcopy(nlog["chain"])
     ch_ho["txs"][ho_gen_tx] = {"confirmed_height": 749995, "outputs": {"0": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"]), "spent_by_txid": ho_cp1_tx}}}
-    ch_ho["txs"][ho_cp1_tx] = {"confirmed_height": 749999, "inputs": [sv.make_segwit_input(ho_gen_tx, 0)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(ho_cp1_env)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"])}}}
+    ch_ho["txs"][ho_cp1_tx] = {"block_hash": _h32("d11-ho-blk"), "confirmed_height": 749999, "inputs": [sv.make_segwit_input(ho_gen_tx, 0)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(ho_cp1_env)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"])}}}
+    ho_pred_term = {"checkpoint": nlog["cp4_env"], "checkpoint_txid": nlog["cp4_tx"]}
     add(
         "d11-0x14-o1-handover-seq1-admit",
         ["SL-CONT-012"],
         "log_checkpoint",
-        {"chain": ch_ho, "checkpoint": ho_cp1_env, "checkpoint_txid": ho_cp1_tx},
+        {"chain": ch_ho, "checkpoint": ho_cp1_env, "checkpoint_txid": ho_cp1_tx, "predecessor_terminal_checkpoint": ho_pred_term},
         "ADMIT",
         None,
-        "SL-CONT-012 P1: seq=1 O(1) log handover with denials_root == predecessor_terminal_denials_root and empty denials_delta_root admits.",
+        "SL-CONT-012 P1: seq=1 O(1) log handover authenticated against predecessor_terminal_checkpoint with matching denials_root admits.",
     )
     ho_bad_p = dict(ho_cp1_p, denials_root=sl.SMT_EMPTY_ROOT)
     ho_bad_env = sl.sign_envelope(ho_bad_p, [nlog["iss_role"]["sk"]])
@@ -1429,19 +1565,19 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-0x14-o1-handover-seq1-mismatch-refuse",
         ["SL-CONT-012"],
         "log_checkpoint",
-        {"chain": ch_ho_bad, "checkpoint": ho_bad_env, "checkpoint_txid": ho_cp1_tx},
+        {"chain": ch_ho_bad, "checkpoint": ho_bad_env, "checkpoint_txid": ho_cp1_tx, "predecessor_terminal_checkpoint": ho_pred_term},
         "REFUSE",
         "CHAIN_FRAME_INVALID",
         "SL-CONT-012 P1: seq=1 O(1) log handover dropping predecessor denials_root MUST refuse CHAIN_FRAME_INVALID.",
     )
 
-    # B3. Checkpoint rollback against persisted journal log-head -> NOTARY_LOG_COMPROMISED
+    # B3. Stale checkpoint rollback against persisted journal log-head -> non-closing CHAIN_FRAME_INVALID (fresh/stateful parity!)
     add(
         "d11-0x14-checkpoint-journal-head-rollback-refuse",
         ["SL-CONT-012"],
         "log_checkpoint",
         {
-            "chain": nlog["chain"],
+            "chain": nlog["chain_at_cp2"],
             "checkpoint": nlog["cp1_env"],
             "checkpoint_txid": nlog["cp1_tx"],
             "journal": {
@@ -1449,16 +1585,20 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
                 "log_heads": {
                     nlog["log_id"]: {
                         "block_hash": _h32("nlog1-blk-cp2"), "checkpoint_id": nlog["cp2_ca"],
+                        "checkpoint_object_id": nlog["cp2_oid"],
                         "checkpoint_txid": nlog["cp2_tx"], "checkpoints_root": nlog["cp2_env"]["payload"]["checkpoints_root"],
                         "confirmed_height": 749990, "denials_root": sl.SMT_EMPTY_ROOT,
-                        "log_id": nlog["log_id"], "max_seq": 2, "role": "notary", "terminal": False,
+                        "log_id": nlog["log_id"], "max_seq": 2,
+                        "next_log_outpoint": {"txid": nlog["cp2_tx"], "vout": 1},
+                        "next_log_policy": nlog["seal_pol"],
+                        "role": "notary", "terminal": False,
                     }
                 },
             },
         },
         "REFUSE",
-        "NOTARY_LOG_COMPROMISED",
-        "SL-CONT-012: Checkpoint with seq < persisted journal log_head.max_seq refuses NOTARY_LOG_COMPROMISED.",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012: Stale checkpoint with seq < persisted journal log_head.max_seq refuses non-closing CHAIN_FRAME_INVALID.",
     )
 
     # B4. 4-Mode seallink-log-fraud/1 + Unified 100% CLOSE!
@@ -1467,8 +1607,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     cp1_fork_env = sl.sign_envelope(cp1_fork_p, [nlog["iss_role"]["sk"]])
     fraud_eq = {
         "cp_a": nlog["cp1_env"], "cp_a_txid": nlog["cp1_tx"], "cp_b": cp1_fork_env,
-        "fraud_mode": "equivocation", "genesis": GENESIS_MAIN, "log_id": nlog["log_id"],
-        "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
+        "fraud_mode": "equivocation", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+        "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
     }
     post_tkt = {
         "artifact_identity": nlog["art"], "genesis": GENESIS_MAIN, "network": "main",
@@ -1487,7 +1627,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-CONT-012", "SL-ARTF-003"],
         "log_fraud",
         {
-            "chain": nlog["chain"], "fraud": fraud_eq, "journal": {"journal_id": _h32("d11-f-eq-j")},
+            "chain": nlog["chain_at_cp1"], "fraud": fraud_eq, "journal": {"journal_id": _h32("d11-f-eq-j")},
             "post_fraud_policy": post_pol, "post_fraud_ticket": post_tkt,
         },
         "REFUSE",
@@ -1515,7 +1655,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     fraud_om_same = {
         "batch_proof": nlog["b3_proof"], "cp_a": cp3_om_env, "cp_a_txid": nlog["cp3_tx"],
         "cp_b": cp3_om_env, "cp_b_txid": nlog["cp3_tx"], "fraud_mode": "revocation_omission",
-        "genesis": GENESIS_MAIN, "log_id": nlog["log_id"], "network": "main",
+        "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+        "log_id": nlog["log_id"], "network": "main",
         "revocation": nlog["rev1_env"], "role": "notary",
         "smt_proof": sl.smt_prove({}, nlog["denial_key"]), "type": "seallink-log-fraud/1",
     }
@@ -1535,8 +1676,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     fraud_om_desc = {
         "batch_proof": nlog["b3_proof"], "checkpoints_proof": sl.rfc9162_inclusion_proof(leaves_om, 2),
         "cp_a": cp3_om_env, "cp_a_txid": nlog["cp3_tx"], "cp_b": cp4_om_env, "cp_b_txid": nlog["cp4_tx"],
-        "fraud_mode": "revocation_omission", "genesis": GENESIS_MAIN, "log_id": nlog["log_id"],
-        "network": "main", "revocation": nlog["rev1_env"], "role": "notary",
+        "fraud_mode": "revocation_omission", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+        "log_id": nlog["log_id"], "network": "main", "revocation": nlog["rev1_env"], "role": "notary",
         "smt_proof": sl.smt_prove({}, nlog["denial_key"]), "type": "seallink-log-fraud/1",
     }
     add(
@@ -1566,8 +1707,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
                 "checkpoints_proof": sl.rfc9162_inclusion_proof(nlog["leaves_3"], 2),
                 "cp_a": nlog["cp3_env"], "cp_a_txid": nlog["cp3_tx"],
                 "cp_b": cp4_del_env, "cp_b_txid": nlog["cp4_tx"],
-                "fraud_mode": "illegal_reversion", "genesis": GENESIS_MAIN, "log_id": nlog["log_id"],
-                "network": "main", "rec_a": nlog["rev1_env"], "role": "notary",
+                "fraud_mode": "illegal_reversion", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "rec_a": nlog["rev1_env"], "role": "notary",
                 "smt_proof_a": sl.smt_prove(nlog["kv3"], nlog["denial_key"]),
                 "smt_proof_b": sl.smt_prove({}, nlog["denial_key"]),
                 "type": "seallink-log-fraud/1",
@@ -1594,8 +1735,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
                 "checkpoints_proof": sl.rfc9162_inclusion_proof(nlog["leaves_3"], 2),
                 "cp_a": nlog["cp3_env"], "cp_a_txid": nlog["cp3_tx"],
                 "cp_b": cp4_3b_env, "cp_b_txid": nlog["cp4_tx"],
-                "fraud_mode": "illegal_reversion", "genesis": GENESIS_MAIN, "log_id": nlog["log_id"],
-                "network": "main", "rec_a": nlog["rev1_env"], "rec_b": rev1_alt_env, "role": "notary",
+                "fraud_mode": "illegal_reversion", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "rec_a": nlog["rev1_env"], "rec_b": rev1_alt_env, "role": "notary",
                 "smt_proof_a": sl.smt_prove(nlog["kv3"], nlog["denial_key"]),
                 "smt_proof_b": sl.smt_prove(kv4_rb, nlog["denial_key"]),
                 "type": "seallink-log-fraud/1",
@@ -1621,8 +1762,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
                 "checkpoints_proof": sl.rfc9162_inclusion_proof(nlog["leaves_3"], 2),
                 "cp_a": nlog["cp3_env"], "cp_a_txid": nlog["cp3_tx"],
                 "cp_b": cp4_3c_env, "cp_b_txid": nlog["cp4_tx"],
-                "fraud_mode": "illegal_reversion", "genesis": GENESIS_MAIN, "log_id": nlog["log_id"],
-                "network": "main", "rec_a": nlog["rev1_env"], "rec_b": reinst2_bad_env, "role": "notary",
+                "fraud_mode": "illegal_reversion", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "rec_a": nlog["rev1_env"], "rec_b": reinst2_bad_env, "role": "notary",
                 "smt_proof_a": sl.smt_prove(nlog["kv3"], nlog["denial_key"]),
                 "smt_proof_b": sl.smt_prove(kv4_3c, nlog["denial_key"]),
                 "type": "seallink-log-fraud/1",
@@ -1647,8 +1788,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
                 "checkpoints_proof": sl.rfc9162_inclusion_proof(nlog["leaves_3"], 2),
                 "cp_a": nlog["cp3_env"], "cp_a_txid": nlog["cp3_tx"],
                 "cp_b": cp4_ok3_env, "cp_b_txid": nlog["cp4_tx"],
-                "fraud_mode": "illegal_reversion", "genesis": GENESIS_MAIN, "log_id": nlog["log_id"],
-                "network": "main", "rec_a": nlog["rev1_env"], "rec_b": nlog["rev3_env"], "role": "notary",
+                "fraud_mode": "illegal_reversion", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "rec_a": nlog["rev1_env"], "rec_b": nlog["rev3_env"], "role": "notary",
                 "smt_proof_a": sl.smt_prove(nlog["kv3"], nlog["denial_key"]),
                 "smt_proof_b": sl.smt_prove(kv4_ok3, nlog["denial_key"]),
                 "type": "seallink-log-fraud/1",
@@ -1671,7 +1812,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
             "chain": ch_m4_1,
             "fraud": {
                 "cp_next": cp1_bad_cr, "cp_next_txid": nlog["cp1_tx"], "fraud_mode": "invalid_checkpoint_chain",
-                "genesis": GENESIS_MAIN, "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
+                "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
             },
         },
         "ADMIT",
@@ -1686,7 +1828,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
             "chain": nlog["chain"],
             "fraud": {
                 "cp_next": nlog["cp1_env"], "cp_next_txid": nlog["cp1_tx"], "fraud_mode": "invalid_checkpoint_chain",
-                "genesis": GENESIS_MAIN, "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
+                "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
             },
         },
         "REFUSE",
@@ -1706,8 +1849,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
             "fraud": {
                 "cp_next": cp4_bad_cr, "cp_next_txid": nlog["cp4_tx"],
                 "cp_prev": nlog["cp3_env"], "cp_prev_txid": nlog["cp3_tx"],
-                "fraud_mode": "invalid_checkpoint_chain", "genesis": GENESIS_MAIN, "log_id": nlog["log_id"],
-                "network": "main", "peaks": peaks_2, "role": "notary", "type": "seallink-log-fraud/1",
+                "fraud_mode": "invalid_checkpoint_chain", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "peaks": peaks_2, "role": "notary", "type": "seallink-log-fraud/1",
             },
             "journal": {"journal_id": _h32("d11-f-m4-j")},
         },
@@ -1724,8 +1867,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
             "fraud": {
                 "cp_next": nlog["cp4_env"], "cp_next_txid": nlog["cp4_tx"],
                 "cp_prev": nlog["cp3_env"], "cp_prev_txid": nlog["cp3_tx"],
-                "fraud_mode": "invalid_checkpoint_chain", "genesis": GENESIS_MAIN, "log_id": nlog["log_id"],
-                "network": "main", "peaks": peaks_2, "role": "notary", "type": "seallink-log-fraud/1",
+                "fraud_mode": "invalid_checkpoint_chain", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "peaks": peaks_2, "role": "notary", "type": "seallink-log-fraud/1",
             },
         },
         "REFUSE",
@@ -1789,7 +1932,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-release-log-tracked-admit",
         ["SL-CONT-013", "SL-CONT-012"],
         "release",
-        {"chain": rlog["chain"], "log_ctx": rel_ctx_ok, "release": rlog["item_env"]},
+        {"chain": rlog["chain_at_cp2"], "log_ctx": rel_ctx_ok, "release": rlog["item_env"]},
         "ADMIT",
         None,
         "SL-CONT-013: log_tracked seallink-release/1 with 0x14 batch proof, checkpoints_proof, and SMT absence admits.",
@@ -1802,7 +1945,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-smt-non-canonical-empty-sibling-refuse",
         ["SL-CONT-012"],
         "release",
-        {"chain": rlog["chain"], "log_ctx": dict(rel_ctx_ok, smt_proof=bad_smt_canon), "release": rlog["item_env"]},
+        {"chain": rlog["chain_at_cp2"], "log_ctx": dict(rel_ctx_ok, smt_proof=bad_smt_canon), "release": rlog["item_env"]},
         "REFUSE",
         "CHAIN_FRAME_INVALID",
         "SL-CONT-012 P1: Non-canonical SmtProof supplying D[h-1] for a 1-bit in bitmap_hex MUST refuse CHAIN_FRAME_INVALID.",
@@ -1838,7 +1981,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-release-heartbeat-stale-refuse",
         ["SL-CONT-012"],
         "release",
-        {"chain": rlog["chain"], "heartbeat_max_blocks": 19, "log_ctx": rel_ctx_ok, "release": rlog["item_env"]},
+        {"chain": rlog["chain_at_cp2"], "heartbeat_max_blocks": 19, "log_ctx": rel_ctx_ok, "release": rlog["item_env"]},
         "REFUSE",
         "CRED_WINDOW_CLOSED",
         "SL-CONT-012: Non-terminal log head older than heartbeat_max_blocks refuses CRED_WINDOW_CLOSED.",
@@ -1847,7 +1990,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-release-heartbeat-exact-boundary-admit",
         ["SL-CONT-012"],
         "release",
-        {"chain": rlog["chain"], "heartbeat_max_blocks": 20, "log_ctx": rel_ctx_ok, "release": rlog["item_env"]},
+        {"chain": rlog["chain_at_cp2"], "heartbeat_max_blocks": 20, "log_ctx": rel_ctx_ok, "release": rlog["item_env"]},
         "ADMIT",
         None,
         "SL-CONT-012: Non-terminal log head at exact tip_height - h_head == heartbeat_max_blocks admits.",
@@ -1858,7 +2001,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-CONT-011", "SL-CONT-012"],
         "notary_act",
         {
-            "chain": nlog["chain"],
+            "chain": nlog["chain_at_cp2"],
             "log_ctx": {
                 "batch_proof": nlog["b1_proof"], "checkpoint": nlog["cp1_env"], "checkpoint_txid": nlog["cp1_tx"],
                 "checkpoints_proof": nlog["cp1_in_cp2_proof"], "head_checkpoint": nlog["cp2_env"], "head_checkpoint_txid": nlog["cp2_tx"],
@@ -1919,13 +2062,15 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         cp_p = {
             "batch_count": len(entries), "batch_root": b_root, "checkpoints_root": sl.EMPTY_CHECKPOINTS_ROOT,
             "cumulative_entries_count": len(entries), "denials_delta_root": d_root,
-            "denials_root": sl.smt_root(kv), "genesis": GENESIS_MAIN, "issuer": eco["iss_role_pin"],
+            "denials_root": sl.smt_root(kv), "genesis": GENESIS_MAIN,
+            "genesis_seal_outpoint": {"txid": g_tx, "vout": 0},
+            "issuer": eco["iss_role_pin"],
             "log_id": lid, "network": "main", "prev_log_outpoint": {"txid": g_tx, "vout": 0},
             "role": "notary", "seq": 1, "terminal": True, "type": "seallink-log-checkpoint/1",
         }
         cp_env = sl.sign_envelope(cp_p, [eco["iss_role"]["sk"]])
         gk_chain["txs"][g_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(eco["seal_pol"]), "spent_by_txid": c_tx}}}
-        gk_chain["txs"][c_tx] = {"confirmed_height": 749995, "inputs": [sv.make_segwit_input(g_tx, 0)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(cp_env)).hex(), "outputs": {}}
+        gk_chain["txs"][c_tx] = {"block_hash": _h32(f"gk-blk-{tag}"), "confirmed_height": 749995, "inputs": [sv.make_segwit_input(g_tx, 0)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(cp_env)).hex(), "outputs": {}}
         entry = {
             "act_smt_proof": sl.smt_prove(kv, f"act:{na_id}|*"),
             "batch_proof": b_proofs[e1],
@@ -2175,12 +2320,49 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     proof_bad_ver, _ = _build_synthetic_spv_proof("badver", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', tx_version=2)
     proof_bad_sh, _ = _build_synthetic_spv_proof("badsh", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', sighash_byte=0x81)
 
-    def _mk_page(nm: str, upds: list[dict[str, Any]], *, limit: int = 10) -> dict[str, Any]:
-        return {
-            "genesis": GENESIS_MAIN, "has_more": False, "limit": limit, "name": nm,
-            "network": "main", "registration": {"txid": _h32(f"spv-reg-{nm}"), "vout": 0},
+    def _mk_page(
+        nm: str,
+        upds: list[dict[str, Any]],
+        *,
+        limit: int = 10,
+        registration: dict[str, Any] | None = None,
+        cursor_height: int | None = None,
+        cursor_txid: str | None = None,
+        cursor_vout: int | None = None,
+        next_cursor: dict[str, Any] | None = None,
+        has_more: bool = False,
+    ) -> dict[str, Any]:
+        reg = registration
+        if reg is None:
+            if upds:
+                t0 = sl.parse_raw_tx(bytes.fromhex(upds[0]["tx_hex"]))
+                p0 = sl.parse_raw_tx(bytes.fromhex(upds[0]["prevout_tx_hex"]))
+                n_op = None
+                for vo in t0["vout"]:
+                    try:
+                        pn = sl.parse_name_output(vo["script_pubkey"])
+                        if pn.get("name") == nm:
+                            n_op = pn.get("op")
+                            break
+                    except ValueError:
+                        pass
+                reg = {"txid": t0["txid"] if n_op == "NAME_FIRSTUPDATE" else p0["txid"], "vout": 0}
+            else:
+                reg = {"txid": _h32(f"spv-reg-{nm}"), "vout": 0}
+        pg: dict[str, Any] = {
+            "genesis": GENESIS_MAIN, "has_more": has_more, "limit": limit, "name": nm,
+            "network": "main", "registration": reg,
             "type": "seallink-tier2-name-history/1", "updates": upds,
         }
+        if cursor_height is not None:
+            pg["cursor_height"] = cursor_height
+        if cursor_txid is not None:
+            pg["cursor_txid"] = cursor_txid
+        if cursor_vout is not None:
+            pg["cursor_vout"] = cursor_vout
+        if next_cursor is not None:
+            pg["next_cursor"] = next_cursor
+        return pg
 
     page_low = _mk_page("id/spv-notary", [proof_low])
     add(
@@ -2268,7 +2450,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         raise AssertionError("regtest header mine failed")
 
     aux_ver = (0x0001 << 16) | 0x00000100 | 2
-    prev_hdr_2015 = _mine_regtest_hdr(2, b"\x00" * 32, b"\x11" * 32, 1795000000 + 604800, 0x207FFFFF)
+    nmc_nonaux_ver = (0x0001 << 16) | 2
+    prev_hdr_2015 = _mine_regtest_hdr(nmc_nonaux_ver, b"\x00" * 32, b"\x11" * 32, 1795000000 + 604800, 0x207FFFFF)
     prev_hash_2015_le = sl.dsha256(prev_hdr_2015)
     exp_bits_2016 = sl.compute_namecoin_next_bits(0x207FFFFF, 1795000000, 1795000000 + 604800, network="regtest")
     hdr_2016 = struct.pack("<I", aux_ver) + prev_hash_2015_le + bytes.fromhex(proof_low["block_header_hex"])[36:68] + struct.pack("<III", 1795000000 + 605400, exp_bits_2016, 0)
@@ -2305,7 +2488,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         module="artifact-notarization",
     )
     # Real retarget failure at H=2016: valid non-AuxPoW regtest PoW with wrong nBits (0x203fffff != exp 0x207fffff)!
-    hdr_2016_bad_bits = _mine_regtest_hdr(2, prev_hash_2015_le, bytes.fromhex(proof_low["block_header_hex"])[36:68], 1795000000 + 605400, 0x203FFFFF)
+    hdr_2016_bad_bits = _mine_regtest_hdr(nmc_nonaux_ver, prev_hash_2015_le, bytes.fromhex(proof_low["block_header_hex"])[36:68], 1795000000 + 605400, 0x203FFFFF)
     add(
         "d11-tier2-retarget-2016-bad-bits-refuse",
         ["SL-ARTF-006"],
@@ -2473,7 +2656,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-mut-cp-chain-mismatch",
         ["SL-CONT-012"],
         "log_checkpoint",
-        {"chain": nlog["chain"], "checkpoint": cp1_wrong_gen, "checkpoint_txid": nlog["cp1_tx"]},
+        {"chain": nlog["chain_at_cp1"], "checkpoint": cp1_wrong_gen, "checkpoint_txid": nlog["cp1_tx"]},
         "REFUSE",
         "CHAIN_MISMATCH",
         "SL-CONT-012: Checkpoint with wrong genesis MUST refuse CHAIN_MISMATCH.",
@@ -2482,7 +2665,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-mut-cp-anchor-missing",
         ["SL-CONT-012"],
         "log_checkpoint",
-        {"chain": nlog["chain"], "checkpoint": nlog["cp1_env"], "checkpoint_txid": _h32("missing-cp-tx")},
+        {"chain": nlog["chain_at_cp1"], "checkpoint": nlog["cp1_env"], "checkpoint_txid": _h32("missing-cp-tx")},
         "REFUSE",
         "CRED_ANCHOR_MISSING",
         "SL-CONT-012: Unanchored 0x14 checkpoint MUST refuse CRED_ANCHOR_MISSING.",
@@ -2492,7 +2675,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-mut-cp-depth-insufficient",
         ["SL-CONT-012"],
         "log_checkpoint",
-        {"chain": nlog["chain"], "checkpoint": nlog["cp2_env"], "checkpoint_txid": nlog["cp2_tx"], "operator_min_depth": 22},
+        {"chain": nlog["chain_at_cp2"], "checkpoint": nlog["cp2_env"], "checkpoint_txid": nlog["cp2_tx"], "operator_min_depth": 22},
         "REFUSE",
         "CHAIN_DEPTH_INSUFFICIENT",
         "SL-CONT-012: 0x14 checkpoint depth 21 < required_depth 22 MUST refuse CHAIN_DEPTH_INSUFFICIENT.",
@@ -2501,12 +2684,12 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-mut-cp-depth-exact-admit",
         ["SL-CONT-012"],
         "log_checkpoint",
-        {"chain": nlog["chain"], "checkpoint": nlog["cp2_env"], "checkpoint_txid": nlog["cp2_tx"], "operator_min_depth": 21},
+        {"chain": nlog["chain_at_cp2"], "checkpoint": nlog["cp2_env"], "checkpoint_txid": nlog["cp2_tx"], "operator_min_depth": 21},
         "ADMIT",
         None,
         "SL-CONT-012: 0x14 checkpoint at exact depth == required_depth (21) admits.",
     )
-    ch_cp_unspent = copy.deepcopy(nlog["chain"])
+    ch_cp_unspent = copy.deepcopy(nlog["chain_at_cp1"])
     nlog_gen_tx = nlog["cp1_env"]["payload"]["prev_log_outpoint"]["txid"]
     ch_cp_unspent["txs"][nlog_gen_tx]["outputs"]["0"]["spent_by_txid"] = _h32("other-spender")
     add(
@@ -2519,7 +2702,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-CONT-012: 0x14 checkpoint whose prev_log_outpoint was spent by another tx MUST refuse CHAIN_FRAME_INVALID.",
     )
     cp2_bad_zero = sl.sign_envelope({**nlog["cp2_env"]["payload"], "batch_root": _h32("nonzero-empty-batch")}, [nlog["iss_role"]["sk"]])
-    ch_cp_b0 = copy.deepcopy(nlog["chain"])
+    ch_cp_b0 = copy.deepcopy(nlog["chain_at_cp2"])
     ch_cp_b0["txs"][nlog["cp2_tx"]]["opreturn_hex"] = sl.encode_opreturn(0x14, sl.content_addr(cp2_bad_zero)).hex()
     add(
         "d11-mut-cp-batch-count-zero-nonempty-root",
@@ -2531,7 +2714,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-CONT-012: batch_count==0 with non-empty batch_root MUST refuse CHAIN_FRAME_INVALID.",
     )
     cp1_bad_lid = sl.sign_envelope({**nlog["cp1_env"]["payload"], "log_id": _h32("fake-log-id")}, [nlog["iss_role"]["sk"]])
-    ch_cp_lid = copy.deepcopy(nlog["chain"])
+    ch_cp_lid = copy.deepcopy(nlog["chain_at_cp1"])
     ch_cp_lid["txs"][nlog["cp1_tx"]]["opreturn_hex"] = sl.encode_opreturn(0x14, sl.content_addr(cp1_bad_lid)).hex()
     add(
         "d11-mut-cp-seq1-wrong-log-id",
@@ -2547,7 +2730,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-CONT-012"],
         "log_checkpoint",
         {
-            "chain": nlog["chain"], "checkpoint": nlog["cp1_env"], "checkpoint_txid": nlog["cp1_tx"],
+            "chain": nlog["chain_at_cp1"], "checkpoint": nlog["cp1_env"], "checkpoint_txid": nlog["cp1_tx"],
             "genesis_seal": {"script_policy": nlog["seal_pol"], "txid": _h32("wrong-gen-seal"), "vout": 0},
         },
         "REFUSE",
@@ -2559,14 +2742,14 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-CONT-012"],
         "log_checkpoint",
         {
-            "chain": nlog["chain"], "checkpoint": nlog["cp2_env"], "checkpoint_txid": nlog["cp2_tx"],
+            "chain": nlog["chain_at_cp2"], "checkpoint": nlog["cp2_env"], "checkpoint_txid": nlog["cp2_tx"],
             "prev_checkpoint": nlog["cp2_env"], "prev_checkpoint_txid": nlog["cp2_tx"],
         },
         "REFUSE",
         "CHAIN_FRAME_INVALID",
         "SL-CONT-012: Checkpoint with mismatched prev_checkpoint MUST refuse CHAIN_FRAME_INVALID.",
     )
-    ch_cp_nonxt = copy.deepcopy(nlog["chain"])
+    ch_cp_nonxt = copy.deepcopy(nlog["chain_at_cp2"])
     ch_cp_nonxt["txs"][nlog["cp2_tx"]]["outputs"] = {}
     add(
         "d11-mut-cp-nonterminal-missing-next-out",
@@ -2581,7 +2764,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     # D7. verify_log_fraud exhaustive negative cases (all 4 modes + CHAIN_MISMATCH + _auth_cp errors)
     fr_eq_base = {
         "cp_a": nlog["cp2_env"], "cp_b": nlog["cp2_env"], "fraud_mode": "equivocation",
-        "genesis": GENESIS_MAIN, "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
+        "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+        "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
     }
     add(
         "d11-mut-fraud-chain-mismatch",
@@ -2615,8 +2799,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "batch_proof": rlog["b1_proof"], "cp_a": rlog["cp1_env"], "cp_a_txid": rlog["cp1_tx"],
         "cp_b": rlog["cp2_env"], "cp_b_txid": rlog["cp2_tx"],
         "checkpoints_proof": rlog["cp1_in_cp2_proof"],
-        "fraud_mode": "revocation_omission", "genesis": GENESIS_MAIN, "log_id": rlog["log_id"],
-        "network": "main", "revocation": rlog["rev1_env"], "role": "release",
+        "fraud_mode": "revocation_omission", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": rlog["gen_op"],
+        "log_id": rlog["log_id"], "network": "main", "revocation": rlog["rev1_env"], "role": "release",
         "smt_proof": sl.smt_prove({}, rlog["denial_key"]), "type": "seallink-log-fraud/1",
     }
     add(
@@ -2641,8 +2825,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "checkpoints_proof": rlog_cp3_in_cp4,
         "cp_a": rlog["cp3_env"], "cp_a_txid": rlog["cp3_tx"],
         "cp_b": rlog["cp4_env"], "cp_b_txid": rlog["cp4_tx"],
-        "fraud_mode": "illegal_reversion", "genesis": GENESIS_MAIN, "log_id": rlog["log_id"],
-        "network": "main", "rec_a": rlog["rev1_env"], "rec_b": rlog["reinst2_env"], "role": "release",
+        "fraud_mode": "illegal_reversion", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": rlog["gen_op"],
+        "log_id": rlog["log_id"], "network": "main", "rec_a": rlog["rev1_env"], "rec_b": rlog["reinst2_env"], "role": "release",
         "smt_proof_a": rlog_smt_rev1_cp3, "smt_proof_b": rlog_smt_reinst2_cp4,
         "type": "seallink-log-fraud/1",
     }
@@ -2663,7 +2847,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
             "chain": nlog["chain"],
             "fraud": {
                 "cp_next": nlog["cp1_env"], "cp_next_txid": nlog["cp1_tx"], "fraud_mode": "invalid_checkpoint_chain",
-                "genesis": GENESIS_MAIN, "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
+                "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
             },
         },
         "REFUSE",
@@ -2678,7 +2863,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
             "chain": nlog["chain"],
             "fraud": {
                 "cp_next": nlog["cp2_env"], "cp_next_txid": nlog["cp2_tx"], "fraud_mode": "invalid_checkpoint_chain",
-                "genesis": GENESIS_MAIN, "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
+                "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
             },
         },
         "REFUSE",
@@ -2694,8 +2880,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
             "fraud": {
                 "cp_next": nlog["cp2_env"], "cp_next_txid": nlog["cp2_tx"],
                 "cp_prev": nlog["cp1_env"], "cp_prev_txid": nlog["cp1_tx"],
-                "fraud_mode": "invalid_checkpoint_chain", "genesis": GENESIS_MAIN, "log_id": nlog["log_id"],
-                "network": "main", "peaks": [], "role": "notary", "type": "seallink-log-fraud/1",
+                "fraud_mode": "invalid_checkpoint_chain", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "peaks": [], "role": "notary", "type": "seallink-log-fraud/1",
             },
         },
         "REFUSE",
@@ -2808,7 +2994,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-mut-ticket-release-revoked-policy-denied",
         ["SL-ARTF-003"],
         "artifact_ticket",
-        {"chain": rlog["chain"], "policy": pol_lt_rel, "ticket": tkt_lt_rel_base},
+        {"chain": rlog["chain_at_cp3"], "policy": pol_lt_rel, "ticket": tkt_lt_rel_base},
         "REFUSE",
         "ARTIFACT_POLICY_DENIED",
         "SL-ARTF-003: Revoked log_tracked release in ticket maps CRED_REVOKED_FOR_CAUSE -> ARTIFACT_POLICY_DENIED.",
@@ -2825,7 +3011,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-mut-ticket-release-log-compromised",
         ["SL-ARTF-003", "SL-CONT-013"],
         "artifact_ticket",
-        {"chain": rlog["chain"], "journal": j_rel_comp_cfg, "policy": pol_lt_rel, "ticket": tkt_lt_rel_base},
+        {"chain": rlog["chain_at_cp3"], "journal": j_rel_comp_cfg, "policy": pol_lt_rel, "ticket": tkt_lt_rel_base},
         "REFUSE",
         "NOTARY_LOG_COMPROMISED",
         "SL-ARTF-003: Ticket release from fraud-closed log refuses NOTARY_LOG_COMPROMISED.",
@@ -2874,7 +3060,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-ARTF-003"],
         "artifact_ticket",
         {
-            "chain": gk_chain,
+            "chain": nlog["chain_at_cp1"],
             "policy": {
                 "allow_reinstatement": False, "mode": "standard", "quorum_m": 1, "require_release": False,
                 "required_claims": ["seallink.org/build-repro"],
@@ -3083,14 +3269,17 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-ARTF-005: Tier-2 page with wrong genesis refuses CHAIN_MISMATCH.",
         module="artifact-notarization",
     )
+    spv_pair_upds, spv_pair_hdr, spv_pair_reg = _build_same_block_chained_spv_pair(
+        "sameblk", spv_p2wpkh, spv_k1["sk"], "id/spv-chained", "{}", '{"link":{}}', block_height=750010, high_s_second=True
+    )
     add(
         "d11-mut-tier2-over-limit-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_high], limit=1)},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-chained", spv_pair_upds, limit=1, registration=spv_pair_reg)},
         "REFUSE",
         "TICKET_PROOF_INVALID",
-        "SL-ARTF-005: len(updates) > limit refuses TICKET_PROOF_INVALID.",
+        "SL-ARTF-005: Validly chained len(updates) > limit refuses TICKET_PROOF_INVALID.",
         module="artifact-notarization",
     )
     bad_aux_proof = {**aux_proof_ok, "chain_merkle_nonce": 12345}
@@ -3113,7 +3302,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-ARTF-006: Invalid AuxPoW commitment refuses TICKET_PROOF_INVALID.",
         module="artifact-notarization",
     )
-    unmined_hdr = struct.pack("<I", 2) + (b"\x00" * 32) + (b"\x11" * 32) + struct.pack("<III", 1795220000, 0x1D00FFFF, 0)
+    unmined_hdr = struct.pack("<I", nmc_nonaux_ver) + (b"\x00" * 32) + (b"\x11" * 32) + struct.pack("<III", 1795220000, 0x1D00FFFF, 0)
     add(
         "d11-mut-tier2-non-auxpow-bad-pow-refuse",
         ["SL-ARTF-006"],
@@ -3129,7 +3318,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-ARTF-006: Non-AuxPoW header failing PoW target refuses TICKET_PROOF_INVALID.",
         module="artifact-notarization",
     )
-    hdr_bad_prev = _mine_regtest_hdr(2, b"\xff" * 32, b"\x22" * 32, 1795000000 + 605400, 0x207FFFFF)
+    hdr_bad_prev = _mine_regtest_hdr(nmc_nonaux_ver, b"\xff" * 32, b"\x22" * 32, 1795000000 + 605400, 0x207FFFFF)
     add(
         "d11-mut-tier2-header-prevhash-mismatch-refuse",
         ["SL-ARTF-006"],
@@ -3148,7 +3337,10 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-ARTF-006: Consecutive headers with broken prev_block_hash link refuse TICKET_PROOF_INVALID.",
         module="artifact-notarization",
     )
-    proof_earlier, _ = _build_synthetic_spv_proof("earlier", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750009)
+    proof_earlier, _ = _build_synthetic_spv_proof(
+        "earlier", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}',
+        block_height=750009, prev_raw_override=bytes.fromhex(proof_low["tx_hex"]),
+    )
     add(
         "d11-mut-tier2-out-of-order-heights-refuse",
         ["SL-ARTF-005"],
@@ -3179,7 +3371,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     # SECTION E: EXACT NUMERIC BOUNDARY CLOSURE (100% BOUNDARY MUTATION BAR)
     # =========================================================================
 
-    # E1. resolve_name first_error_height exact boundaries: at_height == feh (refuse) & at_height == feh-1 with bad update AT feh (admit)
+    # E1. resolve_name H2 fail-closed: ANY history_truncated=True MUST refuse NAME_HISTORY_UNAVAILABLE even at at_height < first_error_height!
     rn_feh_bnd = rm._base_invocation_fixture()
     al_hist_b = rn_feh_bnd["chain"]["names"]["id/alice"]
     prev_al_b = al_hist_b["updates"][-1]
@@ -3200,16 +3392,16 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         {"at_height": feh_exact, "chain": rn_feh_bnd["chain"], "name": "id/alice"},
         "REFUSE",
         "NAME_HISTORY_UNAVAILABLE",
-        "SL-LDGR-015: Exact at_height == first_error_height MUST refuse NAME_HISTORY_UNAVAILABLE (boundary <).",
+        "SL-LDGR-015: Exact at_height == first_error_height MUST refuse NAME_HISTORY_UNAVAILABLE.",
     )
     add(
-        "d11-bnd-resolve-name-at-height-lt-feh-excludes-eq-admit",
+        "d11-bnd-resolve-name-truncated-at-height-lt-feh-unavailable",
         ["SL-LDGR-015"],
         "name_resolve",
         {"at_height": feh_exact - 1, "chain": rn_feh_bnd["chain"], "name": "id/alice"},
-        "ADMIT",
-        None,
-        "SL-LDGR-015: at_height == first_error_height - 1 excludes the malformed update at confirmed_height == feh (boundary <).",
+        "REFUSE",
+        "NAME_HISTORY_UNAVAILABLE",
+        "SL-LDGR-015 H2: Truncated history MUST ALWAYS refuse NAME_HISTORY_UNAVAILABLE even at at_height < first_error_height (prevents masking retroactive 0x0b / 0x1b..0x1f).",
     )
 
     # E2. _validate_b2_invariant exact boundaries (L2935, L2936, L2949, L2969, L2973, L2990)
@@ -3279,34 +3471,37 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-ORIG-017: B_2 expired at exact check_until_h == updates[-1] + 36000 MUST reject 0x13 (boundary >=).",
     )
 
-    # E3. delay_blocks == 52560 exact maximum boundary (L3018) -> ADMIT_AUTONOMOUS!
-    rb_max_d = _build_autonomous_origin_rebind_fixture("bnd-max-52560", recovery_mode="none", delay_blocks=52560, h_offer=749500, h_13=749600, h_act=802160, tip_h=802170)
-    # Insert benign renewals of B_2 inside the 52560-block delay (at 775000 & 795000) before Step 3 at 802160 so B_2 stays live!
+    # E3. delay_blocks == 35000 exact maximum boundary (M6: strictly < 36000 mainnet expiry!) -> ADMIT_AUTONOMOUS!
+    rb_max_d = _build_autonomous_origin_rebind_fixture("bnd-max-35000", recovery_mode="none", delay_blocks=35000, h_offer=749500, h_13=749600, h_act=784600, tip_h=784610)
+    # Insert benign renewal of B_2 inside the 35000-block delay (at 770000) before Step 3 at 784600 so B_2 stays live!
     b2_u_max = rb_max_d["chain"]["names"]["id/alice-v2"]["updates"]
     s3_u = b2_u_max.pop()
-    ren1_tx, ren2_tx = _h32("maxd-ren1"), _h32("maxd-ren2")
+    ren1_tx = _h32("maxd-ren1")
     b2_u_max.append({
-        "block_time": 1795212000, "confirmed_height": 775000, "op": "NAME_UPDATE",
+        "block_time": 1795212000, "confirmed_height": 770000, "op": "NAME_UPDATE",
         "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rb_max_d["_b2_pol"])), name=b"id/alice-v2", value=b"{}").hex(),
         "owner_policy": rb_max_d["_b2_pol"], "prev_input": {"sighash_bytes": [1], "txid": b2_u_max[-1]["txid"], "vout": 0, "witness_policy": rb_max_d["_b2_pol"]},
         "txid": ren1_tx, "vout": 0,
     })
-    b2_u_max.append({
-        "block_time": 1795214000, "confirmed_height": 795000, "op": "NAME_UPDATE",
-        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rb_max_d["_b2_pol"])), name=b"id/alice-v2", value=b"{}").hex(),
-        "owner_policy": rb_max_d["_b2_pol"], "prev_input": {"sighash_bytes": [1], "txid": ren1_tx, "vout": 0, "witness_policy": rb_max_d["_b2_pol"]},
-        "txid": ren2_tx, "vout": 0,
-    })
-    s3_u["prev_input"]["txid"] = ren2_tx
+    s3_u["prev_input"]["txid"] = ren1_tx
     b2_u_max.append(s3_u)
     add(
-        "d11-bnd-0x13-delay-exact-max-52560-admit",
+        "d11-bnd-0x13-delay-exact-max-35000-admit",
         ["SL-ORIG-017"],
         "origin_status",
         {"chain": rb_max_d["chain"], "expect_active_name": "id/alice-v2", "origin_bundle": rb_max_d["origin_bundle"], "trusted_origin_issuer_pins": rb_max_d["trusted_origin_issuer_pins"]},
         "ADMIT_AUTONOMOUS",
         None,
-        "SL-ORIG-017: Voluntary rebind at exact maximum delay_blocks == 52560 admits (boundary <= 52560).",
+        "SL-ORIG-017 M6: Voluntary rebind at exact maximum delay_blocks == 35000 (< 36000 mainnet expiry) admits (boundary <= 35000).",
+    )
+    add(
+        "d12-m6-0x13-delay-above-35000-wire-integer",
+        ["SL-ORIG-017"],
+        "raw_wire",
+        {"object": dict(rb_max_d["_b2"], delay_blocks=35001)},
+        "REFUSE",
+        "WIRE_INTEGER",
+        "SL-ORIG-017 M6: Voluntary NameBinding with delay_blocks=35001 (> 35000 schema maximum) MUST refuse WIRE_INTEGER.",
     )
 
     # E4. _check_b2_step3_activated exact expiry boundary (L3080)
@@ -3571,15 +3766,20 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     ]:
         add(f"d11-{m_tag}-exact-boundary-admit", ["SL-ORIG-017", "SL-ORIG-011"], "origin_status", _build_exact_emancipate_then_rebind(m_tag, mode=m_mode), "ADMIT_AUTONOMOUS", None, f"SL-ORIG-017: {m_desc}")
 
-    # E7. verify_log_checkpoint idempotent re-verification of exact same seq == max_seq (0 journal writes -> kills L5220 & L5222!)
+    # E7. verify_log_checkpoint idempotent re-verification of exact same seq == max_seq (0 journal writes!)
     j_idem_cp2 = {
         "initial_entries": [{
             "body": {
                 "block_hash": nlog["chain"]["txs"][nlog["cp2_tx"]]["block_hash"],
-                "checkpoint_id": nlog["cp2_ca"], "checkpoint_txid": nlog["cp2_tx"],
+                "checkpoint_id": nlog["cp2_ca"],
+                "checkpoint_object_id": nlog["cp2_oid"],
+                "checkpoint_txid": nlog["cp2_tx"],
                 "checkpoints_root": nlog["cp2_env"]["payload"]["checkpoints_root"],
                 "confirmed_height": 749990, "denials_root": nlog["cp2_env"]["payload"]["denials_root"],
-                "log_id": nlog["log_id"], "max_seq": 2, "role": "notary", "terminal": False,
+                "log_id": nlog["log_id"], "max_seq": 2,
+                "next_log_outpoint": {"txid": nlog["cp2_tx"], "vout": 1},
+                "next_log_policy": nlog["seal_pol"],
+                "role": "notary", "terminal": False,
             },
             "kind": "log-head",
         }],
@@ -3589,13 +3789,13 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-bnd-cp-idempotent-same-seq-log-head-zero-writes",
         ["SL-CONT-012"],
         "log_checkpoint",
-        {"chain": nlog["chain"], "checkpoint": nlog["cp2_env"], "checkpoint_txid": nlog["cp2_tx"], "expect_journal_writes": 0, "journal": j_idem_cp2},
+        {"chain": nlog["chain_at_cp2"], "checkpoint": nlog["cp2_env"], "checkpoint_txid": nlog["cp2_tx"], "expect_journal_writes": 0, "journal": j_idem_cp2},
         "ADMIT",
         None,
         "SL-CONT-012: Re-verifying identical checkpoint at exact seq == max_seq admits with 0 duplicate log-head writes.",
     )
 
-    # E8. verify_log_fraud _auth_cp exact depth boundary (tip 750010 - h_cp2 749990 + 1 == 21 -> kills L5284!)
+    # E8. verify_log_fraud _auth_cp exact depth boundary (tip 750010 - h_cp2 749990 + 1 == 21!)
     cp2_eq_alt = sl.sign_envelope({**nlog["cp2_env"]["payload"], "denials_root": _h32("alt-denials-eq")}, [nlog["iss_role"]["sk"]])
     add(
         "d11-bnd-fraud-auth-cp-exact-depth-admit",
@@ -3605,8 +3805,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
             "chain": nlog["chain"],
             "fraud": {
                 "cp_a": nlog["cp2_env"], "cp_a_txid": nlog["cp2_tx"], "cp_b": cp2_eq_alt,
-                "fraud_mode": "equivocation", "genesis": GENESIS_MAIN, "log_id": nlog["log_id"],
-                "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
+                "fraud_mode": "equivocation", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
             },
             "operator_min_depth": 21,
         },
@@ -3615,26 +3815,34 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-CONT-013: Fraud proof confirmed checkpoint at exact depth == operator_min_depth (21) admits.",
     )
 
-    # E9. verify_tier2_name_history_page exact len(updates)==limit AND same-block-height updates (kills L5884 & L5924!)
+    # E9. verify_tier2_name_history_page exact len(updates)==limit AND chained same-block updates (OP_NAME_FIRSTUPDATE -> OP_NAME_UPDATE)!
     add(
         "d11-bnd-tier2-exact-limit-and-same-height-admit",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_high], limit=2)},
+        {
+            "expected_owner_policy": spv_p2wpkh,
+            "headers": [{"header_hex": spv_pair_hdr.hex(), "height": 750010}],
+            "page": {
+                **_mk_page("id/spv-chained", spv_pair_upds, limit=2, registration=spv_pair_reg),
+                "network": "regtest",
+            },
+            "pinned_network": "regtest",
+        },
         "ADMIT",
         None,
-        "SL-ARTF-005: Tier-2 page with len(updates) == limit (2) and equal block_height (750010, 750010) admits.",
+        "SL-ARTF-005 B4: Tier-2 page with len(updates) == limit (2), OP_NAME_FIRSTUPDATE -> OP_NAME_UPDATE chained in the same block (tx_index 1 < 2), admits.",
         module="artifact-notarization",
     )
 
     # E10. Journal log-head already at cp2 (seq=2): ancestor inclusion cp1 with fresh head cp2 ADMITS,
-    #      whereas presenting stale head cp1 (seq=1 < max_seq=2) REFUSES NOTARY_LOG_COMPROMISED!
+    #      whereas presenting stale head cp1 (seq=1 < max_seq=2) REFUSES non-closing CHAIN_FRAME_INVALID!
     add(
         "d11-bnd-log-ancestor-cp1-admits-when-journal-at-cp2",
         ["SL-CONT-012", "SL-CONT-010"],
         "notary_act",
         {
-            "chain": nlog["chain"],
+            "chain": nlog["chain_at_cp2"],
             "journal": j_idem_cp2,
             "log_ctx": {
                 "batch_proof": nlog["b1_proof"],
@@ -3656,7 +3864,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         ["SL-CONT-012", "SL-CONT-010"],
         "notary_act",
         {
-            "chain": nlog["chain"],
+            "chain": nlog["chain_at_cp2"],
             "journal": j_idem_cp2,
             "log_ctx": {
                 "batch_proof": nlog["b1_proof"],
@@ -3667,6 +3875,1473 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
             "notary": nlog["item_env"],
         },
         "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012 B2: Presenting stale head checkpoint cp1 (seq=1 < journal max_seq=2) refuses non-closing CHAIN_FRAME_INVALID (matching fresh verifier).",
+    )
+
+    # =========================================================================
+    # SECTION F: v1.0.0-draft.12 AUDIT CLOSURE REGRESSIONS (B1-B8, H1-H5, M3-M4)
+    # =========================================================================
+
+    # F1 (B1): Cross-issuer log_id forgery on seq>=2 checkpoint & equivocation fraud, plus journal same-seq equivocation vs multisig subset invariance
+    n2_forg_cp2_p = {
+        **nlog["cp2_env"]["payload"],
+        "issuer": n2["iss_role_pin"],  # Attacker n2 claims victim nlog's log_id & genesis_seal_outpoint!
+    }
+    n2_forg_cp2 = sl.sign_envelope(n2_forg_cp2_p, [n2["iss_role"]["sk"]])
+    ch_b1_forg = copy.deepcopy(gk_chain)
+    b1_forg_tx = _h32("d12-b1-forg-cp2-tx")
+    ch_b1_forg["txs"][nlog["cp1_tx"]]["outputs"]["1"]["spent_by_txid"] = b1_forg_tx
+    ch_b1_forg["txs"][b1_forg_tx] = {
+        "block_hash": _h32("d12-b1-forg-blk"),
+        "confirmed_height": 749991,
+        "inputs": [sv.make_segwit_input(nlog["cp1_tx"], 1)],
+        "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(n2_forg_cp2)).hex(),
+        "outputs": {"1": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"])}},
+    }
+    add(
+        "d12-b1-cross-issuer-log-id-forgery-cp-refuse",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": ch_b1_forg, "checkpoint": n2_forg_cp2, "checkpoint_txid": b1_forg_tx},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012 B1: Attacker signing seq>=2 checkpoint claiming victim log_id MUST fail unconditional compute_log_id binding.",
+    )
+    add(
+        "d12-b1-cross-issuer-equivocation-fraud-refuse",
+        ["SL-CONT-012"],
+        "log_fraud",
+        {
+            "chain": gk_chain,
+            "fraud": {
+                "cp_a": nlog["cp2_env"], "cp_a_txid": nlog["cp2_tx"], "cp_b": n2_forg_cp2,
+                "fraud_mode": "equivocation", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main", "role": "notary", "type": "seallink-log-fraud/1",
+            },
+        },
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012 B1: Cross-issuer equivocation fraud proof forging victim log_id MUST refuse CHAIN_FRAME_INVALID.",
+    )
+    cp2_diff_oid = sl.sign_envelope({**nlog["cp2_env"]["payload"], "denials_root": _h32("d12-b1-equiv-root")}, [nlog["iss_role"]["sk"]])
+    ch_b1_eq = copy.deepcopy(nlog["chain_at_cp2"])
+    ch_b1_eq["txs"][nlog["cp2_tx"]]["opreturn_hex"] = sl.encode_opreturn(0x14, sl.content_addr(cp2_diff_oid)).hex()
+    add(
+        "d12-b1-same-seq-equivocation-journal-compromised",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": ch_b1_eq, "checkpoint": cp2_diff_oid, "checkpoint_txid": nlog["cp2_tx"], "journal": j_idem_cp2},
+        "REFUSE",
         "NOTARY_LOG_COMPROMISED",
-        "SL-CONT-012: Presenting stale head checkpoint cp1 (seq=1 < journal max_seq=2) MUST refuse NOTARY_LOG_COMPROMISED.",
+        "SL-CONT-012 B1: Same-seq checkpoint with different object_id(payload) against persisted log-head MUST refuse NOTARY_LOG_COMPROMISED.",
+    )
+    # 2-of-3 multisig notary signing SAME cp1 payload with subset {k1,k2} vs {k1,k3}: identical object_id(payload) -> NOT equivocation!
+    ms_own = _kp("d12-ms-own")
+    ms_r1, ms_r2, ms_r3 = _kp("d12-ms-r1"), _kp("d12-ms-r2"), _kp("d12-ms-r3")
+    ms_pks = sorted([ms_r1["xonly"], ms_r2["xonly"], ms_r3["xonly"]])
+    ms_pol = {"kind": "key", "pk": ms_own["comp"]}
+    ms_reg = {"txid": _h32("d12-ms-reg"), "vout": 0}
+    ms_gen = _h32("d12-ms-gen")
+    ms_cp1_tx = _h32("d12-ms-cp1-tx")
+    ms_lid = sl.compute_log_id("main", GENESIS_MAIN, "notary", "id/d12-ms-notary", ms_reg, {"txid": ms_gen, "vout": 0})
+    ms_role_pol = {"m": 2, "pks": ms_pks}
+    ms_iss_pin = {"name": "id/d12-ms-notary", "owner_policy": ms_pol, "registration": ms_reg, "role_policy": ms_role_pol}
+    ms_cp1_p = {
+        "batch_count": 0, "batch_root": sl.EMPTY_BATCH_ROOT, "checkpoints_root": sl.EMPTY_CHECKPOINTS_ROOT,
+        "cumulative_entries_count": 0, "denials_delta_root": sl.EMPTY_BATCH_ROOT, "denials_root": sl.SMT_EMPTY_ROOT,
+        "genesis": GENESIS_MAIN, "genesis_seal_outpoint": {"txid": ms_gen, "vout": 0},
+        "issuer": ms_iss_pin, "log_id": ms_lid, "network": "main",
+        "next_log_policy": nlog["seal_pol"], "next_log_vout": 1,
+        "prev_log_outpoint": {"txid": ms_gen, "vout": 0}, "role": "notary", "seq": 1, "terminal": False,
+        "type": "seallink-log-checkpoint/1",
+    }
+    ms_sk_map = {ms_r1["xonly"]: ms_r1["sk"], ms_r2["xonly"]: ms_r2["sk"], ms_r3["xonly"]: ms_r3["sk"]}
+    ms_cp1_ab = sl.sign_envelope(ms_cp1_p, [ms_sk_map[ms_pks[0]], ms_sk_map[ms_pks[1]]], policy_pks=ms_pks, m=2)
+    ms_cp1_ac = sl.sign_envelope(ms_cp1_p, [ms_sk_map[ms_pks[0]], ms_sk_map[ms_pks[2]]], policy_pks=ms_pks, m=2)
+    assert sl.content_addr(ms_cp1_ab) != sl.content_addr(ms_cp1_ac) and sl.object_id(ms_cp1_ab["payload"]) == sl.object_id(ms_cp1_ac["payload"])
+    ch_ms = copy.deepcopy(nlog["chain_at_cp1"])
+    ch_ms["names"]["id/d12-ms-notary"] = sv.make_name_history("id/d12-ms-notary", ms_reg, ms_pol, {"link": {"notary": {"p": sv._policy_sha256(ms_role_pol)}}}, first_height=749000, update_height=749100)
+    ch_ms["txs"][ms_gen] = {"confirmed_height": 749150, "outputs": {"0": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"]), "spent_by_txid": ms_cp1_tx}}}
+    ch_ms["txs"][ms_cp1_tx] = {"block_hash": _h32("d12-ms-blk"), "confirmed_height": 749990, "inputs": [sv.make_segwit_input(ms_gen, 0)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(ms_cp1_ac)).hex(), "outputs": {"1": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"])}}}
+    add(
+        "d12-b1-multisig-different-subset-same-payload-not-equivocation-admit",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {
+            "chain": ch_ms, "checkpoint": ms_cp1_ac, "checkpoint_txid": ms_cp1_tx,
+            "journal": {
+                "journal_id": _h32("d12-ms-j"),
+                "initial_entries": [{
+                    "body": {
+                        "block_hash": _h32("d12-ms-blk"), "checkpoint_id": sl.content_addr(ms_cp1_ab),
+                        "checkpoint_object_id": sl.object_id(ms_cp1_p), "checkpoint_txid": ms_cp1_tx,
+                        "checkpoints_root": sl.EMPTY_CHECKPOINTS_ROOT, "confirmed_height": 749990,
+                        "denials_root": sl.SMT_EMPTY_ROOT, "log_id": ms_lid, "max_seq": 1,
+                        "next_log_outpoint": {"txid": ms_cp1_tx, "vout": 1}, "next_log_policy": nlog["seal_pol"],
+                        "role": "notary", "terminal": False,
+                    },
+                    "kind": "log-head",
+                }],
+            },
+        },
+        "ADMIT",
+        None,
+        "SL-CONT-012 B1: Re-signing identical checkpoint payload with different m-of-n threshold subset has identical object_id(payload) and is NOT equivocation.",
+    )
+
+    # F2 (B2): Fresh verifier stale head suppression, log_seal UTXO chain auth, & authenticated O(1) handover!
+    add(
+        "d12-b2-fresh-verifier-stale-cp2-head-rejected",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": nlog["chain"], "checkpoint": nlog["cp2_env"], "checkpoint_txid": nlog["cp2_tx"]},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012 B2: Fresh verifier (no journal) MUST reject stale non-terminal cp2 whose next_log_vout is already spent by cp3.",
+    )
+    tkt_stale_fresh = {
+        "artifact_identity": nlog["art"], "genesis": GENESIS_MAIN, "network": "main",
+        "notarizations": [{
+            "act_smt_proof": sl.smt_prove({}, nlog["denial_key"]),
+            "batch_proof": nlog["b1_proof"],
+            "checkpoint": nlog["cp1_env"], "checkpoint_txid": nlog["cp1_tx"],
+            "checkpoints_proof": nlog["cp1_in_cp2_proof"],
+            "head_checkpoint": nlog["cp2_env"], "head_checkpoint_txid": nlog["cp2_tx"],
+            "notary_act": nlog["item_env"],
+            "target_smt_proof": sl.smt_prove({}, f"target:{nlog['tid']}|*"),
+        }],
+        "target_sha256": nlog["tid"], "type": "seallink-ticket/1",
+    }
+    add(
+        "d12-b2-fresh-verifier-stale-ticket-head-rejected",
+        ["SL-CONT-012", "SL-ARTF-003"],
+        "artifact_ticket",
+        {"chain": nlog["chain"], "policy": post_pol, "ticket": tkt_stale_fresh},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-CONT-012 B2: Fresh Gatekeeper verifier MUST reject ticket presenting superseded head cp2 when cp3 spent cp2:next_log_vout.",
+        module="artifact-notarization",
+    )
+    # Forged cp2 spending an arbitrary non-log UTXO (not cp1:1) -> CHAIN_FRAME_INVALID!
+    rand_utxo_tx = _h32("d12-b2-rand-utxo")
+    forg_cp2_tx = _h32("d12-b2-forg-cp2")
+    forg_cp2_p = {**nlog["cp2_env"]["payload"], "prev_log_outpoint": {"txid": rand_utxo_tx, "vout": 0}}
+    forg_cp2_env = sl.sign_envelope(forg_cp2_p, [nlog["iss_role"]["sk"]])
+    ch_b2_utxo = copy.deepcopy(nlog["chain_at_cp1"])
+    ch_b2_utxo["txs"][rand_utxo_tx] = {"confirmed_height": 749500, "outputs": {"0": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"]), "spent_by_txid": forg_cp2_tx}}}
+    ch_b2_utxo["txs"][forg_cp2_tx] = {"block_hash": _h32("d12-b2-blk"), "confirmed_height": 749991, "inputs": [sv.make_segwit_input(rand_utxo_tx, 0)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(forg_cp2_env)).hex(), "outputs": {"1": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"])}}}
+    add(
+        "d12-b2-forged-cp2-spending-random-utxo-refuse",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": ch_b2_utxo, "checkpoint": forg_cp2_env, "checkpoint_txid": forg_cp2_tx},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012 B2: seq>=2 checkpoint spending an arbitrary non-log UTXO (not chained back to genesis_seal_outpoint) refuses CHAIN_FRAME_INVALID.",
+    )
+    add(
+        "d12-b2-unauthenticated-o1-handover-refuse",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": ch_ho, "checkpoint": ho_cp1_env, "checkpoint_txid": ho_cp1_tx},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012 B2: seq=1 O(1) log handover WITHOUT predecessor_terminal_checkpoint or persisted terminal log-head refuses CHAIN_FRAME_INVALID.",
+    )
+    add(
+        "d12-b2-compromised-predecessor-o1-handover-refuse",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {
+            "chain": ch_ho, "checkpoint": ho_cp1_env, "checkpoint_txid": ho_cp1_tx,
+            "predecessor_terminal_checkpoint": ho_pred_term,
+            "journal": {
+                "journal_id": _h32("d12-b2-ho-comp"),
+                "initial_entries": [{
+                    "body": {"cause": "NOTARY_LOG_COMPROMISED", "observed_at": 1795219900, "observed_height": 750000, "subject": {"log_id": nlog["log_id"], "role": "notary", "subject_kind": "log"}},
+                    "kind": "closure",
+                }],
+            },
+        },
+        "REFUSE",
+        "NOTARY_LOG_COMPROMISED",
+        "SL-CONT-012 B2: O(1) handover from a fraud-closed predecessor log MUST refuse NOTARY_LOG_COMPROMISED.",
+    )
+
+    # F3 (B3): Namecoin Core nc28.0 consensus header checks (non-contiguous, non-retarget nBits drift, parent.IsAuxpow, parent_chain_id==1, missing chain_id)
+    hdr_2017_gap = _mine_regtest_hdr(nmc_nonaux_ver, prev_hash_2015_le, b"\x33" * 32, 1795000000 + 605400, 0x207FFFFF)
+    add(
+        "d12-b3-non-contiguous-headers-refuse",
+        ["SL-ARTF-006"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "headers": [{"header_hex": prev_hdr_2015.hex(), "height": 2015}, {"header_hex": hdr_2017_gap.hex(), "height": 2017}], "page": page_reg_empty, "pinned_network": "regtest"},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-006 B3: Non-contiguous header heights (2015 -> 2017) MUST refuse TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    hdr_2017_drift = _mine_regtest_hdr(nmc_nonaux_ver, bhash_2016_le, b"\x44" * 32, 1795000000 + 606000, 0x203FFFFF)
+    add(
+        "d12-b3-non-retarget-nbits-drift-refuse",
+        ["SL-ARTF-006"],
+        "tier2_name_history",
+        {
+            "expected_owner_policy": spv_p2wpkh,
+            "headers": [
+                {"header_hex": prev_hdr_2015.hex(), "height": 2015},
+                {"auxpow": aux_proof_ok, "epoch_start_time": 1795000000, "header_hex": hdr_2016.hex(), "height": 2016},
+                {"header_hex": hdr_2017_drift.hex(), "height": 2017},
+            ],
+            "page": page_reg_empty, "pinned_network": "regtest",
+        },
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-006 B3: Non-retarget height 2017 changing nBits (0x203fffff != prev 0x207fffff) refuses TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    parent_hdr_is_aux = _mine_regtest_hdr(0x00000102, b"\x00" * 32, parent_cb_txid_le, 1795000000 + 605400, 0x207FFFFF)
+    add(
+        "d12-b3-auxpow-parent-is-auxpow-refuse",
+        ["SL-ARTF-006"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "headers": [{"auxpow": {**aux_proof_ok, "parent_header_hex": parent_hdr_is_aux.hex()}, "header_hex": hdr_2016.hex(), "height": 2016}], "page": page_reg_empty, "pinned_network": "regtest"},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-006 B3: AuxPoW parent header with AuxPoW flag 0x100 set MUST refuse TICKET_PROOF_INVALID (!parentBlock.IsAuxpow()).",
+        module="artifact-notarization",
+    )
+    parent_hdr_cid1 = _mine_regtest_hdr((0x0001 << 16) | 2, b"\x00" * 32, parent_cb_txid_le, 1795000000 + 605400, 0x207FFFFF)
+    add(
+        "d12-b3-auxpow-parent-chain-id-1-refuse",
+        ["SL-ARTF-006"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "headers": [{"auxpow": {**aux_proof_ok, "parent_header_hex": parent_hdr_cid1.hex()}, "header_hex": hdr_2016.hex(), "height": 2016}], "page": page_reg_empty, "pinned_network": "regtest"},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-006 B3: AuxPoW parent header with chain_id==1 (fStrictChainId) MUST refuse TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    hdr_no_cid = _mine_regtest_hdr(2, b"\x00" * 32, b"\x11" * 32, 1795000000, 0x207FFFFF)
+    add(
+        "d12-b3-non-auxpow-missing-chain-id-refuse",
+        ["SL-ARTF-006"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "headers": [{"header_hex": hdr_no_cid.hex(), "height": 2015}], "page": page_reg_empty, "pinned_network": "regtest"},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-006 B3: Non-AuxPoW header with chain_id==0 (!= 1) MUST refuse TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+
+    # F4 (B4): Tier-2 OP_NAME_FIRSTUPDATE, unlinked update, cursor pagination, branch unsupported, non-empty scriptSig, same-block tx_index tie, bad SLNK
+    proof_fu, hdr_fu = _build_synthetic_spv_proof("fu-only", spv_p2wpkh, [spv_k1["sk"]], "id/spv-fu", '{"link":{}}', op_kind="NAME_FIRSTUPDATE", block_height=750010)
+    add(
+        "d12-b4-tier2-firstupdate-only-admit",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "headers": [{"header_hex": hdr_fu.hex(), "height": 750010}], "page": {**_mk_page("id/spv-fu", [proof_fu]), "network": "regtest"}, "pinned_network": "regtest"},
+        "ADMIT",
+        None,
+        "SL-ARTF-005 B4: Standalone OP_NAME_FIRSTUPDATE spending OP_NAME_NEW (HASH160(rand||name)==hash20) admits in Tier-2.",
+        module="artifact-notarization",
+    )
+    spv_reg_pol = {"kind": "key", "pk": spv_k2["comp"]}
+    proof_fu_reg, hdr_fu_reg = _build_synthetic_spv_proof("fu-reg-fund", spv_reg_pol, [spv_k2["sk"]], "id/spv-fu-reg", '{"link":{}}', op_kind="NAME_FIRSTUPDATE", new_owner_pol=spv_p2wpkh, block_height=750010)
+    add(
+        "d12-b4-tier2-firstupdate-registrar-funded-admit",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "headers": [{"header_hex": hdr_fu_reg.hex(), "height": 750010}], "page": {**_mk_page("id/spv-fu-reg", [proof_fu_reg]), "network": "regtest"}, "pinned_network": "regtest"},
+        "ADMIT",
+        None,
+        "SL-ARTF-005 B4: Registrar-funded OP_NAME_FIRSTUPDATE (funding P2WPKH NAME_NEW -> owner_policy output, matching real nc28.0 & SL-LDGR-007) admits with owner_authored=false.",
+        module="artifact-notarization",
+    )
+    proof_fu_wrong_out, _ = _build_synthetic_spv_proof("fu-wrong-out", spv_reg_pol, [spv_k2["sk"]], "id/spv-fu-bad", '{"link":{}}', op_kind="NAME_FIRSTUPDATE", new_owner_pol=spv_reg_pol, block_height=750010)
+    add(
+        "d12-b4-tier2-firstupdate-wrong-output-owner-refuse",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-fu-bad", [proof_fu_wrong_out])},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-005 B4: OP_NAME_FIRSTUPDATE whose output trailing script mismatches expected_owner_policy MUST refuse TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    proof_unlinked_next, _ = _build_synthetic_spv_proof("unlinked-next", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750011)
+    add(
+        "d12-b4-tier2-unlinked-second-update-refuse",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_unlinked_next])},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-005 B4: Unchained updates[1] (at later height 750011) not spending updates[0]'s name output MUST refuse TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    p0_txid = sl.parse_raw_tx(bytes.fromhex(spv_pair_upds[0]["tx_hex"]))["txid"]
+    p1_txid = sl.parse_raw_tx(bytes.fromhex(spv_pair_upds[1]["tx_hex"]))["txid"]
+    add(
+        "d12-b4-tier2-cursor-pagination-admit",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {
+            "expected_owner_policy": spv_p2wpkh,
+            "page": _mk_page(
+                "id/spv-chained", [spv_pair_upds[1]], limit=1, registration=spv_pair_reg,
+                cursor_height=750010, cursor_txid=p0_txid, cursor_vout=0,
+                next_cursor={"height": 750010, "txid": p1_txid, "vout": 0}, has_more=True,
+            ),
+        },
+        "ADMIT",
+        None,
+        "SL-ARTF-005 B4: Paginated Tier-2 page with cursor_txid/cursor_vout/cursor_height and matching next_cursor admits.",
+        module="artifact-notarization",
+    )
+    spv_branch_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(spv_k1["comp"], spv_k2["comp"])}
+    add(
+        "d12-b4-tier2-branch-policy-unsupported",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_branch_pol, "page": _mk_page("id/spv-notary", [proof_low])},
+        "REFUSE",
+        "CHAIN_SCRIPT_UNSUPPORTED",
+        "SL-ARTF-005 B4: Tier-2 SPV is scoped to key/multisig; branch ScriptPolicy refuses CHAIN_SCRIPT_UNSUPPORTED.",
+        module="artifact-notarization",
+    )
+    proof_nonempty_ss, _ = _build_synthetic_spv_proof("nonempty-ss", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', script_sig_override=b"\x01\x01")
+    add(
+        "d12-b4-tier2-non-empty-script-sig-refuse",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_nonempty_ss])},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-005 B4: Native SegWit name spend with non-empty scriptSig MUST refuse TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    proof_bad_slnk, _ = _build_synthetic_spv_proof("bad-slnk", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', opreturns=[b"\x6a\x05SLNK\x06\x01\x00"])
+    add(
+        "d12-b4-tier2-bad-slnk-frame-refuse",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_bad_slnk])},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-005 B4: Tier-2 name update carrying malformed SLNK OP_RETURN MUST refuse TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+
+    # F5 (B6): Closed 3-key DenialKeyStr (forbid |cap:) + provisional gossip act: veto
+    bad_cap_rev = sl.sign_envelope({
+        **nlog["rev1_env"]["payload"],
+        "denial_key": f"act:{nlog['item_id']}|cap:seallink.org/build-repro",
+    }, [nlog["iss_role"]["sk"]])
+    add(
+        "d12-b6-denial-key-cap-suffix-wire-member",
+        ["SL-CONT-012", "SL-ARTF-003"],
+        "raw_wire",
+        {"object": bad_cap_rev},
+        "REFUSE",
+        "WIRE_MEMBER",
+        "SL-CONT-012 B6: DenialKeyStr |cap:<claim_id> suffix is removed in v1.0 closed 3-key universe and MUST refuse WIRE_MEMBER.",
+    )
+    gn1_act_id = sl.object_id(gn1["entry"]["notary_act"]["payload"])
+    gossip_act_rev = sl.sign_envelope({
+        "denial_key": f"act:{gn1_act_id}|*", "genesis": GENESIS_MAIN, "issued_at": 1795219991,
+        "issuer": nlog["iss_role_pin"], "log_id": gn1["log_id"], "network": "main",
+        "reason_code": "act-recalled-gossip", "role": "notary", "state_seq": 1, "type": "seallink-log-revocation/1",
+    }, [nlog["iss_role"]["sk"]])
+    add(
+        "d12-b6-provisional-gossip-act-veto-refuse",
+        ["SL-ARTF-003", "SL-CONT-012"],
+        "artifact_ticket",
+        {"chain": gk_chain, "policy": gk_pol_hardened, "provisional_revocations": [gossip_act_rev], "ticket": gk_ticket_2of3},
+        "REFUSE",
+        "ARTIFACT_POLICY_DENIED",
+        "SL-ARTF-003 B6: Live-signed provisional gossip act:<act_id>|* revocation triggers deny-wins ARTIFACT_POLICY_DENIED.",
+        module="artifact-notarization",
+    )
+
+    # F6 (B8): Routine link.notary K1->K2 + cold owner_policy P1->P2 rotation + StateRecordInclusion + unchanged rec_b==rec_a NOT fraud!
+    rot_eco = _build_log_ecosystem("d12rot", role="notary", with_4_checkpoints=True)
+    rot_k2 = _kp("d12rot-role-k2")
+    rot_p2 = {"kind": "key", "pk": _kp("d12rot-own-p2")["comp"]}
+    rot_ch = copy.deepcopy(rot_eco["chain"])
+    # Make cp4 non-terminal so we can rotate K1->K2 & P1->P2 at height 750000 and emit cp5 (terminal) signed by K2 at height 750005!
+    cp4_nt_p = {**rot_eco["cp4_env"]["payload"], "next_log_policy": rot_eco["seal_pol"], "next_log_vout": 1, "terminal": False}
+    cp4_nt_env = sl.sign_envelope(cp4_nt_p, [rot_eco["iss_role"]["sk"]])
+    cp4_nt_ca = sl.content_addr(cp4_nt_env)
+    cp5_tx = _h32("d12rot-cp5-tx")
+    rot_ch["txs"][rot_eco["cp4_tx"]]["opreturn_hex"] = sl.encode_opreturn(0x14, cp4_nt_ca).hex()
+    rot_ch["txs"][rot_eco["cp4_tx"]]["outputs"] = {"1": {"script_pubkey_hex": _spk_hex(rot_eco["seal_pol"]), "spent_by_txid": cp5_tx}}
+    # Rotate both owner_policy P1->P2 and link.notary K1->K2 on id/d12rot-op at height 750000!
+    rot_nu = rot_ch["names"][rot_eco["iss_name"]]["updates"]
+    prev_rn = rot_nu[-1]
+    u_rot1 = _h32("d12rot-u-rot1")
+    u_rot2 = _h32("d12rot-u-rot2")
+    rot_nu.append({
+        "block_time": 1795219800, "confirmed_height": 750000, "op": "NAME_UPDATE",
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rot_p2)), name=rot_eco["iss_name"].encode("utf-8"), value=sl.jcs_encode({"link": {"notary": rot_k2["xonly"]}})).hex(),
+        "owner_policy": rot_p2, "prev_input": {"sighash_bytes": [1], "txid": prev_rn["txid"], "vout": prev_rn["vout"], "witness_policy": rot_eco["iss_pol"]},
+        "txid": u_rot1, "vout": 0,
+    })
+    rot_nu.append({
+        "block_time": 1795219850, "confirmed_height": 750002, "op": "NAME_UPDATE",
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rot_p2)), name=rot_eco["iss_name"].encode("utf-8"), value=sl.jcs_encode({"link": {"notary": rot_k2["xonly"]}})).hex(),
+        "owner_policy": rot_p2, "prev_input": {"sighash_bytes": [1], "txid": u_rot1, "vout": 0, "witness_policy": rot_p2},
+        "txid": u_rot2, "vout": 0,
+    })
+    rot_iss_pin_v2 = {"name": rot_eco["iss_name"], "owner_policy": rot_p2, "registration": rot_eco["iss_reg"], "role_policy": {"m": 1, "pks": [rot_k2["xonly"]]}}
+    leaves_4_rot = rot_eco["leaves_3"] + [sl.ckpt_leaf(4, cp4_nt_ca)]
+    cp5_p = {
+        "batch_count": 0, "batch_root": sl.EMPTY_BATCH_ROOT, "checkpoints_root": sl.rfc9162_mth(leaves_4_rot).hex(),
+        "cumulative_entries_count": 3, "denials_delta_root": sl.EMPTY_BATCH_ROOT,
+        "denials_root": rot_eco["cp4_env"]["payload"]["denials_root"], "genesis": GENESIS_MAIN,
+        "genesis_seal_outpoint": rot_eco["gen_op"], "issuer": rot_iss_pin_v2, "log_id": rot_eco["log_id"],
+        "network": "main", "prev_checkpoint_id": cp4_nt_ca, "prev_log_outpoint": {"txid": rot_eco["cp4_tx"], "vout": 1},
+        "role": "notary", "seq": 5, "terminal": True, "type": "seallink-log-checkpoint/1",
+    }
+    cp5_env = sl.sign_envelope(cp5_p, [rot_k2["sk"]])
+    rot_ch["txs"][cp5_tx] = {"block_hash": _h32("d12rot-blk-cp5"), "confirmed_height": 750005, "inputs": [sv.make_segwit_input(rot_eco["cp4_tx"], 1)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(cp5_env)).hex(), "outputs": {}}
+    reinst2_inc = {
+        "batch_proof": rot_eco["b4_proof"], "checkpoint": cp4_nt_env, "checkpoint_txid": rot_eco["cp4_tx"],
+        "checkpoints_proof": sl.rfc9162_inclusion_proof(leaves_4_rot, 3),
+    }
+    add(
+        "d12-b8-routine-role-and-owner-rotation-state-inclusion-admit",
+        ["SL-CONT-012"],
+        "notary_act",
+        {
+            "allow_reinstatement": True, "chain": rot_ch,
+            "log_ctx": {
+                "batch_proof": rot_eco["b1_proof"], "checkpoint": rot_eco["cp1_env"], "checkpoint_txid": rot_eco["cp1_tx"],
+                "checkpoints_proof": sl.rfc9162_inclusion_proof(leaves_4_rot, 0),
+                "head_checkpoint": cp5_env, "head_checkpoint_txid": cp5_tx,
+                "smt_proof": sl.smt_prove(rot_eco["kv4"], rot_eco["denial_key"]),
+                "state_record": rot_eco["reinst2_env"],
+                "state_record_inclusion": reinst2_inc,
+            },
+            "notary": rot_eco["item_env"],
+        },
+        "ADMIT",
+        None,
+        "SL-CONT-012 B8: Routine link.notary K1->K2 + cold owner_policy P1->P2 rotation preserves historical K1-signed state_record verification via state_record_inclusion.",
+    )
+    add(
+        "d12-b8-unchanged-rec-after-rotation-not-fraud-refuse",
+        ["SL-CONT-012"],
+        "log_fraud",
+        {
+            "chain": rot_ch,
+            "fraud": {
+                "checkpoints_proof": sl.rfc9162_inclusion_proof(leaves_4_rot, 3),
+                "cp_a": cp4_nt_env, "cp_a_txid": rot_eco["cp4_tx"],
+                "cp_b": cp5_env, "cp_b_txid": cp5_tx,
+                "fraud_mode": "illegal_reversion", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": rot_eco["gen_op"],
+                "log_id": rot_eco["log_id"], "network": "main",
+                "rec_a": rot_eco["reinst2_env"], "rec_b": rot_eco["reinst2_env"], "role": "notary",
+                "smt_proof_a": sl.smt_prove(rot_eco["kv4"], rot_eco["denial_key"]),
+                "smt_proof_b": sl.smt_prove(rot_eco["kv4"], rot_eco["denial_key"]),
+                "type": "seallink-log-fraud/1",
+            },
+        },
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012 B8: Unchanged SMT leaf rec_b == rec_a (signed by K1 before K1->K2 rotation) MUST NOT trigger false illegal_reversion fraud.",
+    )
+
+    # F7 (H1): 0x13 automaton hardening (pre-offer B_2 rotation, non-SIGHASH_ALL inert, unknown-preimage rescue & ward ignore, post-emancipation 0x10 cancel, post-step3 corruption, origin_bundle invocation)
+    rb_pre_rot = _build_autonomous_origin_rebind_fixture("d12-b2-prerot", recovery_mode="none", h_act=749744)
+    b2_old_pol = {"kind": "key", "pk": _kp("d12-b2-old-pol")["comp"]}
+    b2_u_pr = rb_pre_rot["chain"]["names"]["id/alice-v2"]["updates"]
+    # Insert pre-offer cold rotation from b2_old_pol -> b2_pol BEFORE T_offer!
+    b2_u_pr[0]["owner_policy"] = b2_old_pol
+    b2_u_pr[0]["output_script_hex"] = sl.encode_name_output("NAME_FIRSTUPDATE", bytes.fromhex(_spk_hex(b2_old_pol)), name=b"id/alice-v2", rand=b"\x07" * 20, value=b"{}").hex()
+    rot_b2_tx = _h32("d12-b2-preoffer-rot")
+    b2_u_pr.insert(1, {
+        "block_time": 1795205500, "confirmed_height": 749450, "op": "NAME_UPDATE",
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rb_pre_rot["_b2_pol"])), name=b"id/alice-v2", value=b"{}").hex(),
+        "owner_policy": rb_pre_rot["_b2_pol"],
+        "prev_input": {"sighash_bytes": [1], "txid": b2_u_pr[0]["txid"], "vout": 0, "witness_policy": b2_old_pol},
+        "txid": rot_b2_tx, "vout": 0,
+    })
+    b2_u_pr[2]["prev_input"] = {"sighash_bytes": [1], "txid": rot_b2_tx, "vout": 0, "witness_policy": rb_pre_rot["_b2_pol"]}
+    add(
+        "d12-h1-pre-offer-b2-owner-rotation-admit",
+        ["SL-ORIG-017"],
+        "origin_status",
+        {"chain": rb_pre_rot["chain"], "expect_active_name": "id/alice-v2", "origin_bundle": rb_pre_rot["origin_bundle"], "trusted_origin_issuer_pins": rb_pre_rot["trusted_origin_issuer_pins"]},
+        "ADMIT_AUTONOMOUS",
+        None,
+        "SL-ORIG-017 H1: Cold owner rotation on B_2 BEFORE T_offer (while keeping b2_pol invariant on [h_offer, h_act]) admits cleanly.",
+    )
+    rb_nonsha = _build_autonomous_origin_rebind_fixture("d12-nonsha", recovery_mode="none", h_act=None)
+    rb_nonsha["chain"]["names"]["id/alice-v1"]["updates"][-1]["prev_input"]["sighash_bytes"] = [0x81]  # SIGHASH_ANYONECANPAY -> inert!
+    add(
+        "d12-h1-non-sighash-all-0x13-inert-admit",
+        ["SL-ORIG-017", "SL-LDGR-010"],
+        "origin_status",
+        {"chain": rb_nonsha["chain"], "expect_active_name": "id/alice-v1", "origin_bundle": rb_nonsha["origin_bundle"], "trusted_origin_issuer_pins": rb_nonsha["trusted_origin_issuer_pins"]},
+        "ADMIT_AUTONOMOUS",
+        None,
+        "SL-ORIG-017 H1: Non-SIGHASH_ALL (0x81) 0x13 frame is inert and MUST NOT stall B_1.",
+    )
+    rb_resc = _build_autonomous_origin_rebind_fixture("d12-resc", recovery_mode="none", h_act=None)
+    rb_resc["origin_bundle"]["voluntary_rebind_bindings"] = []  # withheld preimage!
+    prev_r1 = rb_resc["chain"]["names"]["id/alice-v1"]["updates"][-1]
+    rb_resc["chain"]["names"]["id/alice-v1"]["updates"].append({
+        "block_time": 1795211000, "confirmed_height": 749650, "op": "NAME_UPDATE",
+        "opreturn_hex": sl.encode_opreturn(0x10, rb_resc["_b2_id"]).hex(),
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rb_resc["_b1_pol"])), name=b"id/alice-v1", value=sl.jcs_encode({"link": {"grant": rb_resc["_b1_gr"]["xonly"], "origin": rb_resc["_oid"]}})).hex(),
+        "owner_policy": rb_resc["_b1_pol"],
+        "prev_input": {"sighash_bytes": [1], "txid": prev_r1["txid"], "vout": prev_r1["vout"], "witness_policy": rb_resc["_b1_pol"]},
+        "txid": _h32("d12-resc-0x10"), "vout": 0,
+    })
+    add(
+        "d12-h1-unknown-preimage-0x13-rescued-by-0x10-admit",
+        ["SL-ORIG-017"],
+        "origin_status",
+        {"chain": rb_resc["chain"], "expect_active_name": "id/alice-v1", "origin_bundle": rb_resc["origin_bundle"], "trusted_origin_issuer_pins": rb_resc["trusted_origin_issuer_pins"]},
+        "ADMIT_AUTONOMOUS",
+        None,
+        "SL-ORIG-017 H1: Confirmed 0x13 with withheld preimage is rescued by owner-signed 0x10 cancel within 35000 blocks -> ADMIT_AUTONOMOUS.",
+    )
+    of_ward_13 = rm._base_origin_fixture()
+    wu = of_ward_13["chain"]["names"]["id/child-leo"]["updates"]
+    prev_wu = wu[-1]
+    wu.append({
+        "block_time": 1795211000, "confirmed_height": 749500, "op": "NAME_UPDATE",
+        "opreturn_hex": sl.encode_opreturn(0x13, _h32("ward-unknown-b2")).hex(),
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(prev_wu["owner_policy"])), name=b"id/child-leo", value=b"{}").hex(),
+        "owner_policy": prev_wu["owner_policy"],
+        "prev_input": {"sighash_bytes": [1], "txid": prev_wu["txid"], "vout": prev_wu["vout"], "witness_policy": prev_wu["owner_policy"]},
+        "txid": _h32("d12-ward-0x13"), "version": 0x7100, "vout": 0,
+    })
+    add(
+        "d12-h1-unknown-preimage-0x13-ignored-on-ward-admit",
+        ["SL-ORIG-017"],
+        "origin_status",
+        {"chain": of_ward_13["chain"], "origin_bundle": of_ward_13["origin_bundle"], "trusted_origin_issuer_pins": of_ward_13["trusted_origin_issuer_pins"]},
+        "ADMIT_WARD",
+        None,
+        "SL-ORIG-017 H1: Precondition check runs before preimage lookup so unknown-preimage 0x13 on a ward origin is ignored (ADMIT_WARD).",
+    )
+    # Post-emancipation 0x13 cancelled by 0x10 (must bypass State-3 lockout since is_autonomous=True and h_emancipated < h_10!)
+    em_c = _build_exact_emancipate_then_rebind("d12-em10", mode="p1_cap")
+    em_b1_u = em_c["chain"]["names"]["id/child-leo"]["updates"]
+    prev_em_b1 = em_b1_u[-1]
+    em_b2_id = sl.object_id(em_c["origin_bundle"]["voluntary_rebind_bindings"][0])
+    em_b1_u.append({
+        "block_time": 1795213000, "confirmed_height": 749350, "op": "NAME_UPDATE",
+        "opreturn_hex": sl.encode_opreturn(0x10, em_b2_id).hex(),
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(prev_em_b1["owner_policy"])), name=b"id/child-leo", value=sl.jcs_encode({"link": {"origin": sl.object_id(em_c["origin_bundle"]["origin"]["payload"])}})).hex(),
+        "owner_policy": prev_em_b1["owner_policy"],
+        "prev_input": {"sighash_bytes": [1], "txid": prev_em_b1["txid"], "vout": prev_em_b1["vout"], "witness_policy": prev_em_b1["owner_policy"]},
+        "txid": _h32("d12-em10-cancel"), "vout": 0,
+    })
+    add(
+        "d12-h1-post-emancipation-0x13-0x10-cancel-admit",
+        ["SL-ORIG-017", "SL-ORIG-011"],
+        "origin_status",
+        {"chain": em_c["chain"], "expect_active_name": "id/child-leo", "origin_bundle": em_c["origin_bundle"], "trusted_origin_issuer_pins": em_c["trusted_origin_issuer_pins"]},
+        "ADMIT_AUTONOMOUS",
+        None,
+        "SL-ORIG-017 H1: Emancipated adult (State 4) cancelling a post-emancipation 0x13 via 0x10 bypasses State-3 lockout and restores active binding.",
+    )
+    # Post-Step-3 B_2 later corrupted (non-SIGHASH_ALL update breaking writer authorship after Step 3) -> ORIGIN_BINDING_INVALID!
+    rb_post_corrupt = _build_autonomous_origin_rebind_fixture("d12-post-cor", recovery_mode="none", h_act=749744, tip_h=749800)
+    b2_u_pc = rb_post_corrupt["chain"]["names"]["id/alice-v2"]["updates"]
+    prev_pc = b2_u_pc[-1]
+    b2_u_pc.append({
+        "block_time": 1795218000, "confirmed_height": 749780, "op": "NAME_UPDATE",
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rb_post_corrupt["_b2_pol"])), name=b"id/alice-v2", value=b"{}").hex(),
+        "owner_policy": rb_post_corrupt["_b2_pol"],
+        "prev_input": {"sighash_bytes": [0x81], "txid": prev_pc["txid"], "vout": prev_pc["vout"], "witness_policy": rb_post_corrupt["_b2_pol"]},
+        "txid": _h32("d12-post-cor-tx"), "vout": 0,
+    })
+    add(
+        "d12-h1-post-step3-b2-corrupted-refuse",
+        ["SL-ORIG-017"],
+        "origin_status",
+        {"chain": rb_post_corrupt["chain"], "origin_bundle": rb_post_corrupt["origin_bundle"], "trusted_origin_issuer_pins": rb_post_corrupt["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "ORIGIN_BINDING_INVALID",
+        "SL-ORIG-017 H1: Post-Step-3 non-SIGHASH_ALL update corrupting B_2 authorship MUST fail final _check_b2_step3_activated -> ORIGIN_BINDING_INVALID.",
+    )
+    # Issuer invocation on B_1 after a cancelled 0x13 ADMITS when issuer_origin_bundle is wired into verify_invocation!
+    fx_inv_13 = rm._base_invocation_fixture()
+    rb_inv13 = _build_autonomous_origin_rebind_fixture("d12-inv13", recovery_mode="none", h_act=None)
+    # Cancel the 0x13 at 749600 via same-block 0x10 and republish link.grant + link.origin + manifest on id/alice-v1!
+    inv13_mans = copy.deepcopy(fx_inv_13["bundle"]["manifests"])
+    al_man_old = next(m for m in inv13_mans.values() if m.get("owner") == "id/alice")
+    al_man_v1 = copy.deepcopy(al_man_old)
+    al_man_v1["owner"] = "id/alice-v1"
+    al_man_v1_ca = sl.content_addr(al_man_v1)
+    inv13_mans[al_man_v1_ca] = al_man_v1
+    p_inv13 = rb_inv13["chain"]["names"]["id/alice-v1"]["updates"][-1]
+    rb_inv13["chain"]["names"]["id/alice-v1"]["updates"].append({
+        "block_time": 1795210005, "confirmed_height": 749600, "op": "NAME_UPDATE",
+        "opreturn_hex": sl.encode_opreturn(0x10, rb_inv13["_b2_id"]).hex(),
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rb_inv13["_b1_pol"])), name=b"id/alice-v1", value=sl.jcs_encode({"link": {"grant": rb_inv13["_b1_gr"]["xonly"], "origin": rb_inv13["_oid"]}, "m": {"h": al_man_v1_ca, "s": 1}})).hex(),
+        "owner_policy": rb_inv13["_b1_pol"],
+        "prev_input": {"sighash_bytes": [1], "txid": p_inv13["txid"], "vout": p_inv13["vout"], "witness_policy": rb_inv13["_b1_pol"]},
+        "txid": _h32("d12-inv13-0x10"), "vout": 0,
+    })
+    ch_inv13 = copy.deepcopy(fx_inv_13["chain"])
+    ch_inv13["names"].update(rb_inv13["chain"]["names"])
+    ch_inv13["txs"].update(rb_inv13["chain"]["txs"])
+    g_inv13_p = copy.deepcopy(fx_inv_13["bundle"]["grants"][0]["payload"])
+    g_inv13_p["issuer"] = {"name": "id/alice-v1", "owner_policy": rb_inv13["_b1_pol"], "registration": rb_inv13["_b1"]["registration"], "role_policy": {"m": 1, "pks": [rb_inv13["_b1_gr"]["xonly"]]}}
+    if "executor_ref" in g_inv13_p:
+        g_inv13_p["executor_ref"] = {**g_inv13_p["executor_ref"], "provider_of": "id/alice-v1"}
+    g_inv13_p["capabilities"] = [{"action": "mail/read", "target": "mailbox:id/alice-v1:work", "where": {"folder": {"in": ["Invoices"]}}}]
+    g_inv13_env = sl.sign_envelope(g_inv13_p, [rb_inv13["_b1_gr"]["sk"]])
+    g_inv13_id = sl.object_id(g_inv13_p)
+    iss_tx_13 = fx_inv_13["invocation"]["payload"]["proof_path"][0]["issuance_txid"]
+    ch_inv13["txs"][iss_tx_13]["opreturn_hex"] = sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(g_inv13_env), "grant_id": g_inv13_id, "type": "seallink-issuance/1"}).hex()).hex()
+    inv_13_p = copy.deepcopy(fx_inv_13["invocation"]["payload"])
+    inv_13_p["target"] = "mailbox:id/alice-v1:work"
+    inv_13_p["proof_path"] = [{"grant_id": g_inv13_id, "issuance_txid": iss_tx_13}]
+    inv_13_env = sl.sign_envelope(inv_13_p, [fx_inv_13["_keys"]["agent_req"]["sk"]])
+    add(
+        "d12-h1-invocation-after-cancelled-0x13-with-origin-bundle-admit",
+        ["SL-ORIG-017", "SL-GRNT-010"],
+        "invocation",
+        {
+            "actual_message_meta": {"folder": "Invoices"},
+            "bundle": {**fx_inv_13["bundle"], "grants": [g_inv13_env], "manifests": inv13_mans, "origin_bundle": rb_inv13["origin_bundle"]},
+            "chain": ch_inv13, "executor_cfg": fx_inv_13["executor_cfg"],
+            "invocation": inv_13_env, "journal": fx_inv_13["journal"],
+            "trusted_origin_issuer_pins": rb_inv13["trusted_origin_issuer_pins"],
+        },
+        "ADMIT",
+        None,
+        "SL-ORIG-017 H1: Backing grant on B_1 after cancelled 0x13 admits when origin_bundle resolves active binding.",
+    )
+
+    # F8 (H3): Untrusted notary skipped first, required_claims=[] all-inconclusive denied, dup absent_notary_proofs refused, 0x0b CRED_ISSUER_CLOSED propagated
+    untrusted_entry = copy.deepcopy(nlog_valid_other_entry)
+    pol_h3_untr = copy.deepcopy(gk_pol_hardened)
+    pol_h3_untr["mode"] = "standard"
+    pol_h3_untr["quorum_m"] = 1
+    pol_h3_untr["trusted_notaries"] = [{"log_id": gn2["log_id"], "notary_pin": gn2["pin"]}]
+    add(
+        "d12-h3-untrusted-notary-wrong-target-ignored-admit",
+        ["SL-ARTF-003"],
+        "artifact_ticket",
+        {
+            "chain": gk_chain, "policy": pol_h3_untr,
+            "ticket": {**tkt_no_abs, "notarizations": [untrusted_entry, gn2["entry"]]},
+        },
+        "ADMIT",
+        None,
+        "SL-ARTF-003 H3: Untrusted third-party notarization (even targeting a different artifact) is skipped before proof/target checks.",
+        module="artifact-notarization",
+    )
+    add(
+        "d12-h3-empty-required-claims-inconclusive-denied",
+        ["SL-ARTF-004"],
+        "artifact_ticket",
+        {
+            "chain": gk_chain,
+            "policy": {"allow_reinstatement": False, "mode": "standard", "quorum_m": 1, "require_release": False, "required_claims": [], "trusted_notaries": [{"log_id": gn2_inc["log_id"], "notary_pin": gn2_inc["pin"]}]},
+            "ticket": {"artifact_identity": fsv_art, "genesis": GENESIS_MAIN, "network": "main", "notarizations": [gn2_inc["entry"]], "target_sha256": fsv_tid, "type": "seallink-ticket/1"},
+        },
+        "REFUSE",
+        "ARTIFACT_POLICY_DENIED",
+        "SL-ARTF-004 H3: required_claims=[] MUST require at least one passed claim per quorum vote (inconclusive-only abstains -> ARTIFACT_POLICY_DENIED).",
+        module="artifact-notarization",
+    )
+    tkt_dup_abs = copy.deepcopy(gk_ticket_2of3)
+    tkt_dup_abs["absent_notary_proofs"] = [tkt_dup_abs["absent_notary_proofs"][0], tkt_dup_abs["absent_notary_proofs"][0]]
+    add(
+        "d12-h3-duplicate-absent-notary-log-id-refuse",
+        ["SL-ARTF-004"],
+        "artifact_ticket",
+        {"chain": gk_chain, "policy": gk_pol_hardened, "ticket": tkt_dup_abs},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-004 H3: Duplicate log_id in absent_notary_proofs[] MUST refuse TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    gk_ch_0b_rel = copy.deepcopy(gk_chain)
+    prev_ru_gk = gk_ch_0b_rel["names"][rlog["iss_name"]]["updates"][-1]
+    brk_gk_rel = {
+        "compromised_policy": {"m": 1, "pks": [rlog["iss_role"]["xonly"]]},
+        "genesis": GENESIS_MAIN, "h_c": 749990,
+        "issuer": rlog["iss_pin"], "name_input": {"txid": prev_ru_gk["txid"], "vout": prev_ru_gk["vout"]},
+        "role": "release", "type": "seallink-credential-break/1",
+    }
+    gk_ch_0b_rel["names"][rlog["iss_name"]]["updates"].append({
+        "block_time": 1795219950, "confirmed_height": 750000, "op": "NAME_UPDATE",
+        "opreturn_hex": sl.encode_opreturn(0x0B, sl.signing_digest(brk_gk_rel).hex(), h_c=749990).hex(),
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rlog["iss_pol"])), name=rlog["iss_name"].encode("utf-8"), value=b"{}").hex(),
+        "owner_policy": rlog["iss_pol"],
+        "prev_input": {"sighash_bytes": [1], "txid": prev_ru_gk["txid"], "vout": prev_ru_gk["vout"], "witness_policy": rlog["iss_pol"]},
+        "txid": _h32("d12-gk-rel-0x0b-tx"), "vout": 0,
+    })
+    add(
+        "d12-h3-0x0b-cred-issuer-closed-propagated",
+        ["SL-ARTF-003", "SL-CONT-009"],
+        "artifact_ticket",
+        {"chain": gk_ch_0b_rel, "policy": gk_pol_hardened, "ticket": gk_ticket_2of3},
+        "REFUSE",
+        "CRED_ISSUER_CLOSED",
+        "SL-ARTF-003 H3: Release issuer 0x0b compromise MUST propagate CRED_ISSUER_CLOSED instead of downgrading to TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+
+    # F9 (H4): revocation_omission proving stale rec_b (state_seq 1 < rev3.state_seq 3) in denials_root!
+    ch_h4 = copy.deepcopy(nlog["chain"])
+    e_rev3 = sl.log_entry_digest(0x02, nlog["rev3_ca"])
+    b4_rev3_root, b4_rev3_pfs = sl.build_log_batch_root([e_rev3])
+    # cp4 batches rev3 (state_seq=3) in batch_root, but keeps STALE rev1 (state_seq=1) in denials_root!
+    cp4_h4_p = {**nlog["cp4_env"]["payload"], "batch_root": b4_rev3_root, "denials_delta_root": b4_rev3_root, "denials_root": sl.smt_root(nlog["kv3"])}
+    cp4_h4_env = sl.sign_envelope(cp4_h4_p, [nlog["iss_role"]["sk"]])
+    ch_h4["txs"][nlog["cp4_tx"]]["opreturn_hex"] = sl.encode_opreturn(0x14, sl.content_addr(cp4_h4_env)).hex()
+    add(
+        "d12-h4-revocation-omission-stale-rec-b-admit",
+        ["SL-CONT-012"],
+        "log_fraud",
+        {
+            "chain": ch_h4,
+            "fraud": {
+                "batch_proof": b4_rev3_pfs[e_rev3], "cp_a": cp4_h4_env, "cp_a_txid": nlog["cp4_tx"],
+                "cp_b": cp4_h4_env, "cp_b_txid": nlog["cp4_tx"],
+                "fraud_mode": "revocation_omission", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main",
+                "rec_b": nlog["rev1_env"], "revocation": nlog["rev3_env"], "role": "notary",
+                "smt_proof": sl.smt_prove(nlog["kv3"], nlog["denial_key"]),
+                "type": "seallink-log-fraud/1",
+            },
+        },
+        "ADMIT",
+        None,
+        "SL-CONT-012 H4: revocation_omission with stale rec_b (state_seq 1 < rev3.state_seq 3) in denials_root proves fraud.",
+    )
+
+    # F10 (H5): Bearer session root_recent_height reorg check, federation single_use ban, resolve_role_policy mempool rotation without rbh
+    fx_h5_bs = rm._base_invocation_fixture()
+    g_h5_bs = fx_h5_bs["bundle"]["grants"][0]
+    gid_h5_bs = sl.object_id(g_h5_bs["payload"])
+    itx_h5_bs = fx_h5_bs["invocation"]["payload"]["proof_path"][0]["issuance_txid"]
+    so_h5_bs = sl.sign_envelope(
+        {"executor": fx_h5_bs["invocation"]["payload"]["executor"], "exp": fx_h5_bs["chain"]["now"] + 600, "genesis": GENESIS_MAIN, "iat": fx_h5_bs["chain"]["now"], "network": "main", "nonce": _h32("d12-h5-so"), "op": "open", "proof_path": [{"grant_id": gid_h5_bs, "issuance_txid": itx_h5_bs}], "quotas": [], "slot_binding": "slot-h5", "type": "seallink-session-open/1"},
+        [fx_h5_bs["_keys"]["agent_req"]["sk"]],
+    )
+    ch_h5_reorg = copy.deepcopy(fx_h5_bs["chain"])
+    ch_h5_reorg["blocks"][g_h5_bs["payload"]["recent_block"]] = 749989  # Shifted from persisted root_recent_height=749990!
+    add(
+        "d12-h5-bearer-session-recent-block-reorg-refuse",
+        ["SL-GRNT-013"],
+        "session_lifecycle",
+        {
+            "executor_cfg": fx_h5_bs["executor_cfg"],
+            "journal": {"journal_id": _h32("d12-h5-bs-j")},
+            "steps": [
+                {"bundle": fx_h5_bs["bundle"], "chain": fx_h5_bs["chain"], "kind": "session_open", "label": "open-h5", "session_open": so_h5_bs, "want_refusal": None, "want_verdict": "ADMIT"},
+                {"action": "mail/read", "actual_message_meta": {"folder": "Invoices"}, "arguments": {"folder": "Invoices", "message_id": "m1"}, "chain": ch_h5_reorg, "expect_zero_writes": True, "grant_env": g_h5_bs, "kind": "bearer_session", "label": "reorged-recent-block-refuse", "slot_binding": "slot-h5", "target": "mailbox:id/alice:work", "token": "__FROM_OPEN__", "want_refusal": "SESSION_INVALID", "want_verdict": "REFUSE"},
+            ],
+        },
+        "ADMIT",
+        None,
+        "SL-GRNT-013 H5: Bearer session live recheck MUST refuse SESSION_INVALID when recent_block height shifts from persisted root_recent_height.",
+        module="bearer-sessions",
+    )
+    fx_h5_fed = rm._base_invocation_fixture()
+    g_fed_su_p = copy.deepcopy(fx_h5_fed["bundle"]["grants"][0]["payload"])
+    g_fed_su_p["revocation"] = {"construction": "W", "kind": "single_use", "mode": "seal", "seal": {"script_policy": {"kind": "branch", "template": "single_use_1_of_2", "keys": {"grantee": _kp("d12-fsu-g")["comp"], "issuer": _kp("d12-fsu-i")["comp"]}}, "txid": _h32("d12-fsu-tx"), "vout": 0}}
+    g_fed_su = sl.sign_envelope(g_fed_su_p, [fx_h5_fed["_keys"]["alice_gr"]["sk"]])
+    add(
+        "d12-h5-federation-single-use-grant-refuse",
+        ["SL-SERV-004"],
+        "federation",
+        {
+            "chain": fx_h5_fed["chain"],
+            "grant": g_fed_su,
+            "journal": {"journal_id": _h32("d12-h5-fed-j")},
+            "peer_ctx": {"phase": "screening"},
+            "policy": {"federation_id": "fed.example/a", "peer_min_tier": 1, "pii_contour": "A"},
+        },
+        "REFUSE",
+        "FEDERATION_POLICY_DENIED",
+        "SL-SERV-004 H5: verify_federation_disclosure MUST forbid single_use grants (revocable UTXO seal only).",
+        module="federated-screening",
+    )
+    # resolve_role_policy mempool rotation without recent_block_height (live verify_assent) -> NAME_ROLE_CHANGED!
+    ch_h5_mp = copy.deepcopy(rb_ass["chain"])
+    mp_new_gr = _kp("d12-h5-mp-new-gr")
+    last_v2_u = ch_h5_mp["names"]["id/alice-v2"]["updates"][-1]
+    ch_h5_mp["names"]["id/alice-v2"]["mempool_updates"] = [{
+        "op": "NAME_UPDATE",
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rb_none["_b2_pol"])), name=b"id/alice-v2", value=sl.jcs_encode({"link": {"grant": mp_new_gr["xonly"], "origin": rb_none["_oid"]}})).hex(),
+        "owner_policy": rb_none["_b2_pol"],
+        "prev_input": {"sighash_bytes": [1], "txid": last_v2_u["txid"], "vout": last_v2_u["vout"], "witness_policy": rb_none["_b2_pol"]},
+        "txid": _h32("d12-h5-mp-rot"),
+    }]
+    add(
+        "d12-h5-assent-mempool-role-rotation-without-rbh-refuse",
+        ["SL-IDEN-004"],
+        "assent",
+        {
+            "assent": ass_b2, "chain": ch_h5_mp, "contract": c_p01_b2,
+            "origin_bundle": rb_ass["origin_bundle"], "trusted_origin_issuer_pins": rb_ass["trusted_origin_issuer_pins"],
+        },
+        "REFUSE",
+        "CONTRACT_ASSENT_INVALID",
+        "SL-IDEN-004 H5: Live resolve_role_policy without recent_block_height MUST honor mempool role rotation (mapped by verify_assent to CONTRACT_ASSENT_INVALID).",
+    )
+
+    # F11 (M3 & M4): updates[0] malformed SLNK frame caught (CHAIN_FRAME_INVALID) + verify_notary_act log_tracked expected_child_binding!
+    fx_m3 = rm._base_invocation_fixture()
+    fx_m3["chain"]["names"]["id/alice"]["updates"][0]["opreturn_hex"] = "6a05534c4e4b060100"  # malformed SLNK on updates[0]!
+    add(
+        "d12-m3-updates0-bad-slnk-frame-invalid",
+        ["SL-LDGR-010"],
+        "name_resolve",
+        {"chain": fx_m3["chain"], "name": "id/alice"},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-LDGR-010 M3: Outer SLNK framing MUST scan updates[0] (NAME_FIRSTUPDATE) and refuse CHAIN_FRAME_INVALID on malformed frame.",
+    )
+    add(
+        "d12-m4-notary-act-log-tracked-expected-child-binding-refuse",
+        ["SL-CONT-011", "SL-CONT-012"],
+        "notary_act",
+        {
+            "chain": nlog["chain_at_cp2"],
+            "expected_child_binding": {"child_grant_id": _h32("child-g"), "ordinal": 1, "parent_grant_id": _h32("parent-g")},
+            "log_ctx": {
+                "batch_proof": nlog["b1_proof"], "checkpoint": nlog["cp1_env"], "checkpoint_txid": nlog["cp1_tx"],
+                "checkpoints_proof": nlog["cp1_in_cp2_proof"], "head_checkpoint": nlog["cp2_env"], "head_checkpoint_txid": nlog["cp2_tx"],
+                "smt_proof": sl.smt_prove({}, nlog["denial_key"]),
+            },
+            "notary": nlog["item_env"],
+        },
+        "REFUSE",
+        "NOTARY_REQUIRED",
+        "SL-CONT-011 M4: verify_notary_act MUST enforce expected_child_binding uniformly on log_tracked acts as well as eternal/revocable acts.",
+    )
+
+    # =========================================================================
+    # SECTION G: 100% 3-OPERATOR MUTATION CLOSURE FOR v1.0.0-draft.12 HARDENING
+    # =========================================================================
+
+    # G1. _verify_rebound_pin: revocable credential targeting superseded B_1 with origin_bundle -> ORIGIN_BINDING_INVALID
+    cred_iss_k = _kp("d12-g1-cred-iss")
+    cred_iss_own = _kp("d12-g1-cred-own")
+    cred_iss_pol = {"kind": "key", "pk": cred_iss_own["comp"]}
+    cred_iss_reg = {"txid": _h32("d12-g1-cred-reg"), "vout": 0}
+    cred_seal_pol = {"kind": "key", "pk": _kp("d12-g1-cseal")["comp"]}
+    cred_seal_tx = _h32("d12-g1-cseal-tx")
+    cred_anc_tx = _h32("d12-g1-canc-tx")
+    cred_b1_p = {
+        "claims": {"degree": "MSc"}, "credential_kind": "org.seallink/degree-v1",
+        "genesis": GENESIS_MAIN, "issued_at": 1795218000,
+        "issuer": {"name": "id/univ-g1", "owner_policy": cred_iss_pol, "registration": cred_iss_reg, "role_policy": {"m": 1, "pks": [cred_iss_k["xonly"]]}},
+        "lifecycle": "revocable", "network": "main", "not_before_height": 749000,
+        "revocation_seal": {"script_policy": cred_seal_pol, "txid": cred_seal_tx, "vout": 0},
+        "subject": {"mode": "name", "name_pin": {"name": "id/alice-v1", "owner_policy": rb_none["_b1_pol"], "registration": rb_none["_b1"]["registration"]}},
+        "type": "seallink-credential/1",
+    }
+    cred_b1_env = sl.sign_envelope(cred_b1_p, [cred_iss_k["sk"]])
+    ch_g1 = copy.deepcopy(rb_ass["chain"])
+    ch_g1["names"]["id/univ-g1"] = sv.make_name_history("id/univ-g1", cred_iss_reg, cred_iss_pol, {"link": {"cred": cred_iss_k["xonly"]}}, first_height=748000, update_height=748500)
+    ch_g1["txs"][cred_seal_tx] = {"confirmed_height": 749000, "outputs": {"0": {"script_pubkey_hex": _spk_hex(cred_seal_pol)}}}
+    ch_g1["txs"][cred_anc_tx] = {"confirmed_height": 749500, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(cred_b1_env)).hex(), "outputs": {}}
+    add(
+        "d12-mut-rebound-pin-superseded-b1-cred-refuse",
+        ["SL-ORIG-017", "SL-CONT-008"],
+        "credential",
+        {
+            "anchor_txid": cred_anc_tx, "chain": ch_g1, "credential": cred_b1_env,
+            "origin_bundle": rb_ass["origin_bundle"], "supported_kinds": ["org.seallink/degree-v1"],
+            "trusted_origin_issuer_pins": rb_ass["trusted_origin_issuer_pins"],
+        },
+        "REFUSE",
+        "ORIGIN_BINDING_INVALID",
+        "SL-ORIG-017: Revocable credential targeting superseded B_1 with origin_bundle MUST refuse ORIGIN_BINDING_INVALID.",
+    )
+
+    # G2. _collect_0x13_events malformed SLNK, automaton step cap, unknown-preimage stalled > 35000, final active truncated, post-Step-3 exact expiry
+    rb_bad_slnk_13 = _build_autonomous_origin_rebind_fixture("d12-g2-badslnk", recovery_mode="none", h_act=None)
+    rb_bad_slnk_13["chain"]["names"]["id/alice-v1"]["updates"][-1]["opreturn_hex"] = "6a05534c4e4b060100"
+    add(
+        "d12-mut-0x13-collect-malformed-slnk-frame-invalid",
+        ["SL-ORIG-017", "SL-LDGR-010"],
+        "origin_status",
+        {"chain": rb_bad_slnk_13["chain"], "origin_bundle": rb_bad_slnk_13["origin_bundle"], "trusted_origin_issuer_pins": rb_bad_slnk_13["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-ORIG-017: Malformed SLNK frame on active binding during 0x13 scan MUST refuse CHAIN_FRAME_INVALID.",
+    )
+    add(
+        "d12-mut-0x13-automaton-step-cap-incomplete",
+        ["SL-ORIG-017"],
+        "origin_status",
+        {"chain": rb_none["chain"], "max_automaton_steps": 1, "origin_bundle": rb_none["origin_bundle"], "trusted_origin_issuer_pins": rb_none["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "ORIGIN_STATUS_INCOMPLETE",
+        "SL-ORIG-017: Exceeding max_automaton_steps MUST fail closed ORIGIN_STATUS_INCOMPLETE.",
+    )
+    rb_stall = _build_autonomous_origin_rebind_fixture("d12-g2-stall", recovery_mode="none", h_act=None, tip_h=749600 + 35000 + 10)
+    rb_stall["origin_bundle"]["voluntary_rebind_bindings"] = []
+    add(
+        "d12-mut-0x13-unknown-preimage-past-35000-stalled-incomplete",
+        ["SL-ORIG-017"],
+        "origin_status",
+        {"chain": rb_stall["chain"], "origin_bundle": rb_stall["origin_bundle"], "trusted_origin_issuer_pins": rb_stall["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "ORIGIN_STATUS_INCOMPLETE",
+        "SL-ORIG-017: Unrescued unknown-preimage 0x13 past 35000-block rescue window stalls fail-closed ORIGIN_STATUS_INCOMPLETE.",
+    )
+    rb_act_trunc = copy.deepcopy(rb_none)
+    rb_act_trunc["chain"]["names"]["id/alice-v2"]["history_truncated"] = True
+    rb_act_trunc["chain"]["names"]["id/alice-v2"]["first_error_height"] = 749800  # exact eval_h
+    add(
+        "d12-mut-active-binding-truncated-history-incomplete",
+        ["SL-ORIG-017"],
+        "origin_status",
+        {"chain": rb_act_trunc["chain"], "origin_bundle": rb_act_trunc["origin_bundle"], "trusted_origin_issuer_pins": rb_act_trunc["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "ORIGIN_STATUS_INCOMPLETE",
+        "SL-ORIG-017: Final active binding with truncated history at eval_h MUST refuse ORIGIN_STATUS_INCOMPLETE.",
+    )
+    rb_exp_s3 = _build_autonomous_origin_rebind_fixture("d12-g2-exps3", recovery_mode="none", h_act=749744, tip_h=749744 + 36000)
+    add(
+        "d12-mut-b2-step3-post-activation-exact-expiry-refuse",
+        ["SL-ORIG-017"],
+        "origin_status",
+        {"chain": rb_exp_s3["chain"], "origin_bundle": rb_exp_s3["origin_bundle"], "trusted_origin_issuer_pins": rb_exp_s3["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "ORIGIN_BINDING_INVALID",
+        "SL-ORIG-017: Post-Step-3 B_2 at exact eval_h == h_act + 36000 expires -> ORIGIN_BINDING_INVALID.",
+    )
+    rb_exp_s3_ok = _build_autonomous_origin_rebind_fixture("d12-g2-exps3-ok", recovery_mode="none", h_act=749744, tip_h=749744 + 35999)
+    add(
+        "d12-mut-b2-step3-post-activation-exact-expiry-minus1-admit",
+        ["SL-ORIG-017"],
+        "origin_status",
+        {"chain": rb_exp_s3_ok["chain"], "expect_active_name": "id/alice-v2", "origin_bundle": rb_exp_s3_ok["origin_bundle"], "trusted_origin_issuer_pins": rb_exp_s3_ok["trusted_origin_issuer_pins"]},
+        "ADMIT_AUTONOMOUS",
+        None,
+        "SL-ORIG-017: Post-Step-3 B_2 at exact eval_h == h_act + 35999 remains live -> ADMIT_AUTONOMOUS.",
+    )
+
+    # G3. StateRecordInclusion negative tests & state_record 0x0b CRED_ISSUER_CLOSED propagation
+    rot_lctx_base = {
+        "batch_proof": rot_eco["b1_proof"], "checkpoint": rot_eco["cp1_env"], "checkpoint_txid": rot_eco["cp1_tx"],
+        "checkpoints_proof": sl.rfc9162_inclusion_proof(leaves_4_rot, 0),
+        "head_checkpoint": cp5_env, "head_checkpoint_txid": cp5_tx,
+        "smt_proof": sl.smt_prove(rot_eco["kv4"], rot_eco["denial_key"]),
+        "state_record": rot_eco["reinst2_env"],
+    }
+    bad_inc_bp = copy.deepcopy(reinst2_inc)
+    bad_inc_bp["batch_proof"]["root"] = _h32("bad-inc-root")
+    add(
+        "d12-mut-state-rec-inc-bad-batch-proof-refuse",
+        ["SL-CONT-012"],
+        "notary_act",
+        {"allow_reinstatement": True, "chain": rot_ch, "log_ctx": {**rot_lctx_base, "state_record_inclusion": bad_inc_bp}, "notary": rot_eco["item_env"]},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012 B8: Tampered state_record_inclusion batch_proof MUST refuse CHAIN_FRAME_INVALID.",
+    )
+    add(
+        "d12-mut-state-rec-inc-malformed-dict-refuse",
+        ["SL-CONT-012"],
+        "notary_act",
+        {"allow_reinstatement": True, "chain": rot_ch, "log_ctx": {**rot_lctx_base, "state_record_inclusion": {}}, "notary": rot_eco["item_env"]},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012 B8: Missing fields in state_record_inclusion dict MUST refuse CHAIN_FRAME_INVALID.",
+    )
+    # 0x0b break by same cold owner P1 after routine hot-key rotation K1->K2 compromises historical K1-signed state_record!
+    rot_ch_0b_k1 = copy.deepcopy(rot_eco["chain"])
+    rot_ch_0b_k1["txs"][rot_eco["cp4_tx"]]["opreturn_hex"] = sl.encode_opreturn(0x14, cp4_nt_ca).hex()
+    rot_ch_0b_k1["txs"][rot_eco["cp4_tx"]]["outputs"] = {"1": {"script_pubkey_hex": _spk_hex(rot_eco["seal_pol"]), "spent_by_txid": cp5_tx}}
+    nu_0b = rot_ch_0b_k1["names"][rot_eco["iss_name"]]["updates"]
+    prev_0b0 = nu_0b[-1]
+    u_rk2 = _h32("d12-rot-k2-only")
+    nu_0b.append({
+        "block_time": 1795219800, "confirmed_height": 750000, "op": "NAME_UPDATE",
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rot_eco["iss_pol"])), name=rot_eco["iss_name"].encode("utf-8"), value=sl.jcs_encode({"link": {"notary": rot_k2["xonly"]}})).hex(),
+        "owner_policy": rot_eco["iss_pol"],
+        "prev_input": {"sighash_bytes": [1], "txid": prev_0b0["txid"], "vout": prev_0b0["vout"], "witness_policy": rot_eco["iss_pol"]},
+        "txid": u_rk2, "vout": 0,
+    })
+    brk_rot_k1 = {
+        "compromised_policy": {"m": 1, "pks": [rot_eco["iss_role"]["xonly"]]},
+        "genesis": GENESIS_MAIN, "h_c": 749995,  # > h_cp1 (749200) so cp1 admits, <= h_cp4 (749998) so reinst2 inc_cp compromises!
+        "issuer": rot_eco["iss_pin"],
+        "name_input": {"txid": u_rk2, "vout": 0},
+        "role": "notary", "type": "seallink-credential-break/1",
+    }
+    nu_0b.append({
+        "block_time": 1795219960, "confirmed_height": 750006, "op": "NAME_UPDATE",
+        "opreturn_hex": sl.encode_opreturn(0x0B, sl.signing_digest(brk_rot_k1).hex(), h_c=749995).hex(),
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", bytes.fromhex(_spk_hex(rot_eco["iss_pol"])), name=rot_eco["iss_name"].encode("utf-8"), value=sl.jcs_encode({"link": {"notary": rot_k2["xonly"]}})).hex(),
+        "owner_policy": rot_eco["iss_pol"],
+        "prev_input": {"sighash_bytes": [1], "txid": u_rk2, "vout": 0, "witness_policy": rot_eco["iss_pol"]},
+        "txid": _h32("d12-rot-k1-0x0b"), "vout": 0,
+    })
+    cp5_p1_env = sl.sign_envelope({**cp5_p, "issuer": {**rot_eco["iss_pin"], "role_policy": {"m": 1, "pks": [rot_k2["xonly"]]}}}, [rot_k2["sk"]])
+    rot_ch_0b_k1["txs"][cp5_tx] = {"block_hash": _h32("d12rot-blk-cp5-p1"), "confirmed_height": 750005, "inputs": [sv.make_segwit_input(rot_eco["cp4_tx"], 1)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(cp5_p1_env)).hex(), "outputs": {}}
+    add(
+        "d12-mut-state-rec-0x0b-issuer-closed-propagated",
+        ["SL-CONT-012", "SL-CONT-009"],
+        "notary_act",
+        {"allow_reinstatement": True, "chain": rot_ch_0b_k1, "log_ctx": {**rot_lctx_base, "head_checkpoint": cp5_p1_env, "state_record_inclusion": reinst2_inc}, "notary": rot_eco["item_env"]},
+        "REFUSE",
+        "CRED_ISSUER_CLOSED",
+        "SL-CONT-012 B8: 0x0b break by cold owner P1 compromising historical K1-signed state_record MUST propagate CRED_ISSUER_CLOSED.",
+    )
+
+    # G4. verify_log_checkpoint exhaustive closure (seq==1 bad cr, unanchored handover pred, persisted closed pred, terminal advance/equivocation, seq==max_seq+1 mismatch, eclipsed rollback, missing block_hash)
+    cp1_bad_cr_g4 = sl.sign_envelope({**nlog["cp1_env"]["payload"], "checkpoints_root": _h32("g4-bad-cr")}, [nlog["iss_role"]["sk"]])
+    ch_g4_cr = copy.deepcopy(nlog["chain_at_cp1"])
+    ch_g4_cr["txs"][nlog["cp1_tx"]]["opreturn_hex"] = sl.encode_opreturn(0x14, sl.content_addr(cp1_bad_cr_g4)).hex()
+    add(
+        "d12-mut-cp-seq1-bad-checkpoints-root-refuse",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": ch_g4_cr, "checkpoint": cp1_bad_cr_g4, "checkpoint_txid": nlog["cp1_tx"]},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012: seq==1 checkpoint with non-empty checkpoints_root MUST refuse CHAIN_FRAME_INVALID.",
+    )
+    add(
+        "d12-mut-cp-handover-unanchored-pred-refuse",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": ch_ho, "checkpoint": ho_cp1_env, "checkpoint_txid": ho_cp1_tx, "predecessor_terminal_checkpoint": {"checkpoint": nlog["cp4_env"], "checkpoint_txid": _h32("g4-missing-pred")}},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012 B2: O(1) handover with unanchored predecessor_terminal_checkpoint MUST refuse CHAIN_FRAME_INVALID.",
+    )
+    j_term_cp4 = {
+        "journal_id": _h32("d12-j-term-cp4"),
+        "initial_entries": [{
+            "body": {
+                "block_hash": nlog["chain"]["txs"][nlog["cp4_tx"]]["block_hash"],
+                "checkpoint_id": nlog["cp4_ca"],
+                "checkpoint_object_id": sl.object_id(nlog["cp4_env"]["payload"]),
+                "checkpoint_txid": nlog["cp4_tx"],
+                "checkpoints_root": nlog["cp4_env"]["payload"]["checkpoints_root"],
+                "confirmed_height": 749998, "denials_root": nlog["cp4_env"]["payload"]["denials_root"],
+                "log_id": nlog["log_id"], "max_seq": 4, "role": "notary", "terminal": True,
+            },
+            "kind": "log-head",
+        }],
+    }
+    j_term_cp4_closed = copy.deepcopy(j_term_cp4)
+    j_term_cp4_closed["initial_entries"].append({
+        "body": {"cause": "NOTARY_LOG_COMPROMISED", "observed_at": 1795219999, "observed_height": 750000, "subject": {"log_id": nlog["log_id"], "role": "notary", "subject_kind": "log"}},
+        "kind": "closure",
+    })
+    add(
+        "d12-mut-cp-handover-persisted-pred-compromised",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": ch_ho, "checkpoint": ho_cp1_env, "checkpoint_txid": ho_cp1_tx, "journal": j_term_cp4_closed},
+        "REFUSE",
+        "NOTARY_LOG_COMPROMISED",
+        "SL-CONT-012 B2: O(1) handover relying on journal predecessor log_head that is fraud-closed refuses NOTARY_LOG_COMPROMISED.",
+    )
+    # Journal at terminal cp4 (seq=4, terminal=True): trying to advance to seq=5 refuses CHAIN_FRAME_INVALID!
+    cp5_after_term_tx = _h32("d12-cp5-after-term")
+    cp5_after_term_p = {
+        "batch_count": 0, "batch_root": sl.EMPTY_BATCH_ROOT,
+        "checkpoints_root": sl.rfc9162_mth(nlog["leaves_3"] + [sl.ckpt_leaf(4, nlog["cp4_ca"])]).hex(),
+        "cumulative_entries_count": 3, "denials_delta_root": sl.EMPTY_BATCH_ROOT,
+        "denials_root": nlog["cp4_env"]["payload"]["denials_root"], "genesis": GENESIS_MAIN,
+        "genesis_seal_outpoint": nlog["gen_op"], "issuer": nlog["iss_role_pin"], "log_id": nlog["log_id"],
+        "network": "main", "prev_checkpoint_id": nlog["cp4_ca"],
+        "prev_log_outpoint": {"txid": nlog["cp4_tx"], "vout": 0}, "role": "notary", "seq": 5, "terminal": True,
+        "type": "seallink-log-checkpoint/1",
+    }
+    cp5_after_term = sl.sign_envelope(cp5_after_term_p, [nlog["iss_role"]["sk"]])
+    ch_g4_t5 = copy.deepcopy(nlog["chain"])
+    ch_g4_t5["txs"][nlog["cp4_tx"]]["outputs"] = {"0": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"]), "spent_by_txid": cp5_after_term_tx}}
+    ch_g4_t5["txs"][cp5_after_term_tx] = {"block_hash": _h32("d12-g4-t5-blk"), "confirmed_height": 749999, "inputs": [sv.make_segwit_input(nlog["cp4_tx"], 0)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(cp5_after_term)).hex(), "outputs": {}}
+    add(
+        "d12-mut-cp-terminal-journal-advance-refuse",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": ch_g4_t5, "checkpoint": cp5_after_term, "checkpoint_txid": cp5_after_term_tx, "journal": j_term_cp4},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012: Advancing seq=5 past persisted terminal log-head (max_seq=4, terminal=True) MUST refuse CHAIN_FRAME_INVALID.",
+    )
+    cp4_equiv = sl.sign_envelope({**nlog["cp4_env"]["payload"], "denials_root": _h32("d12-cp4-equiv")}, [nlog["iss_role"]["sk"]])
+    ch_g4_eq4 = copy.deepcopy(nlog["chain"])
+    ch_g4_eq4["txs"][nlog["cp4_tx"]]["opreturn_hex"] = sl.encode_opreturn(0x14, sl.content_addr(cp4_equiv)).hex()
+    add(
+        "d12-mut-cp-terminal-journal-same-seq-equivocation",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": ch_g4_eq4, "checkpoint": cp4_equiv, "checkpoint_txid": nlog["cp4_tx"], "journal": j_term_cp4},
+        "REFUSE",
+        "NOTARY_LOG_COMPROMISED",
+        "SL-CONT-012 B1: Same-seq equivocation at terminal max_seq=4 MUST refuse NOTARY_LOG_COMPROMISED (not CHAIN_FRAME_INVALID).",
+    )
+    j_bad_next_cp2 = copy.deepcopy(j_idem_cp2)
+    j_bad_next_cp2["initial_entries"][0]["body"]["checkpoint_id"] = _h32("d12-wrong-prev-cid")
+    add(
+        "d12-mut-cp-seq-plus1-mismatched-ex-head-refuse",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": nlog["chain_at_cp3"], "checkpoint": nlog["cp3_env"], "checkpoint_txid": nlog["cp3_tx"], "journal": j_bad_next_cp2},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012: Advancing seq == max_seq + 1 with mismatched persisted ex_head.checkpoint_id MUST refuse CHAIN_FRAME_INVALID.",
+    )
+    add(
+        "d12-mut-cp-eclipsed-rollback-seq-lt-max-seq",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": nlog["chain_at_cp1"], "checkpoint": nlog["cp1_env"], "checkpoint_txid": nlog["cp1_tx"], "journal": j_idem_cp2},
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012 B2: Eclipsed chain presenting unspent cp1 (seq=1) when local journal is already at max_seq=2 refuses CHAIN_FRAME_INVALID.",
+    )
+    ch_no_bh = copy.deepcopy(nlog["chain_at_cp1"])
+    ch_no_bh["txs"][nlog["cp1_tx"]].pop("block_hash", None)
+    add(
+        "d12-mut-cp-missing-block-hash-chain-unhealthy",
+        ["SL-CONT-012"],
+        "log_checkpoint",
+        {"chain": ch_no_bh, "checkpoint": nlog["cp1_env"], "checkpoint_txid": nlog["cp1_tx"], "journal": {"journal_id": _h32("d12-no-bh-j")}},
+        "REFUSE",
+        "CHAIN_UNHEALTHY",
+        "SL-CONT-012: Persisting log-head without verified 64-hex block_hash MUST refuse CHAIN_UNHEALTHY.",
+    )
+
+    # G5. verify_log_fraud revocation_omission rec_b.state_seq == rev.state_seq NOT fraud (kills < -> <= boundary!)
+    ch_g5_eq = copy.deepcopy(nlog["chain"])
+    kv4_eq3 = {nlog["denial_key"]: nlog["rev3_ca"]}
+    cp4_eq3_env = sl.sign_envelope({**nlog["cp4_env"]["payload"], "batch_root": b4_rev3_root, "denials_delta_root": b4_rev3_root, "denials_root": sl.smt_root(kv4_eq3)}, [nlog["iss_role"]["sk"]])
+    ch_g5_eq["txs"][nlog["cp4_tx"]]["opreturn_hex"] = sl.encode_opreturn(0x14, sl.content_addr(cp4_eq3_env)).hex()
+    add(
+        "d12-mut-fraud-omission-rec-b-eq-seq-not-fraud",
+        ["SL-CONT-012"],
+        "log_fraud",
+        {
+            "chain": ch_g5_eq,
+            "fraud": {
+                "batch_proof": b4_rev3_pfs[e_rev3], "cp_a": cp4_eq3_env, "cp_a_txid": nlog["cp4_tx"],
+                "cp_b": cp4_eq3_env, "cp_b_txid": nlog["cp4_tx"],
+                "fraud_mode": "revocation_omission", "genesis": GENESIS_MAIN, "genesis_seal_outpoint": nlog["gen_op"],
+                "log_id": nlog["log_id"], "network": "main",
+                "rec_b": nlog["rev3_env"], "revocation": nlog["rev3_env"], "role": "notary",
+                "smt_proof": sl.smt_prove(kv4_eq3, nlog["denial_key"]),
+                "type": "seallink-log-fraud/1",
+            },
+        },
+        "REFUSE",
+        "CHAIN_FRAME_INVALID",
+        "SL-CONT-012 H4: revocation_omission where cp_b holds rec_b with state_seq == rev.state_seq is NOT fraud (boundary <).",
+    )
+
+    # G6. verify_artifact_ticket: notary wrong genesis -> CHAIN_MISMATCH, notary act credential closure -> ARTIFACT_POLICY_DENIED
+    tkt_na_badgen = copy.deepcopy(gk_ticket_2of3)
+    tkt_na_badgen["notarizations"][0]["notary_act"] = sl.sign_envelope({**gn1["entry"]["notary_act"]["payload"], "genesis": _h32("wrong-na-gen")}, [nlog["iss_role"]["sk"]])
+    add(
+        "d12-mut-ticket-notary-wrong-genesis-chain-mismatch",
+        ["SL-ARTF-003"],
+        "artifact_ticket",
+        {"chain": gk_chain, "policy": gk_pol_hardened, "ticket": tkt_na_badgen},
+        "REFUSE",
+        "CHAIN_MISMATCH",
+        "SL-ARTF-003: Trusted notarization with wrong genesis MUST refuse CHAIN_MISMATCH.",
+        module="artifact-notarization",
+    )
+    add(
+        "d12-mut-ticket-notary-act-journal-closed-denied",
+        ["SL-ARTF-003"],
+        "artifact_ticket",
+        {
+            "chain": gk_chain,
+            "journal": {
+                "journal_id": _h32("d12-j-act-cl"),
+                "initial_entries": [{
+                    "body": {"cause": "CRED_REVOKED_FOR_CAUSE", "observed_at": 1795219990, "observed_height": 750000, "subject": {"subject_id": gn1_act_id, "subject_kind": "credential"}},
+                    "kind": "closure",
+                }],
+            },
+            "policy": gk_pol_hardened,
+            "ticket": gk_ticket_2of3,
+        },
+        "REFUSE",
+        "ARTIFACT_POLICY_DENIED",
+        "SL-ARTF-003: Trusted notarization whose act_id has a durable credential closure in journal MUST refuse ARTIFACT_POLICY_DENIED.",
+        module="artifact-notarization",
+    )
+
+    # G7. verify_tier2_name_history_page exhaustive mutation & boundary closure
+    add(
+        "d12-mut-tier2-bad-header-schema-refuse",
+        ["SL-ARTF-006"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "headers": [{"header_hex": "abcd", "height": 1}], "page": page_reg_empty, "pinned_network": "regtest"},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-006: BlockHeaderProof failing schema validation refuses TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    add(
+        "d12-mut-tier2-missing-epoch-start-time-refuse",
+        ["SL-ARTF-006"],
+        "tier2_name_history",
+        {
+            "expected_owner_policy": spv_p2wpkh,
+            "headers": [
+                {"header_hex": prev_hdr_2015.hex(), "height": 2015},
+                {"auxpow": aux_proof_ok, "header_hex": hdr_2016.hex(), "height": 2016},
+            ],
+            "page": page_reg_empty, "pinned_network": "regtest",
+        },
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-006: Retarget height H % 2016 == 0 missing epoch_start_time (and ancestor header) refuses TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    proof_exp_eq, _ = _build_synthetic_spv_proof("exp-eq", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750010 + 36000, prev_raw_override=bytes.fromhex(proof_low["tx_hex"]))
+    proof_exp_m1, _ = _build_synthetic_spv_proof("exp-m1", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750010 + 35999, prev_raw_override=bytes.fromhex(proof_low["tx_hex"]))
+    add(
+        "d12-mut-tier2-exact-expiry-gap-refuse",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_exp_eq])},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-005: Chained Tier-2 update at exact prev_h + 36000 expires -> TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    add(
+        "d12-mut-tier2-exact-expiry-minus1-admit",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_exp_m1])},
+        "ADMIT",
+        None,
+        "SL-ARTF-005: Chained Tier-2 update at exact prev_h + 35999 remains live -> ADMIT.",
+        module="artifact-notarization",
+    )
+    proof_sameh_diffblk, _ = _build_synthetic_spv_proof("sameh-diffblk", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750010, prev_raw_override=bytes.fromhex(proof_low["tx_hex"]))
+    add(
+        "d12-mut-tier2-same-height-diff-block-refuse",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_sameh_diffblk])},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-005: Chained Tier-2 updates at equal block_height with different block_hash refuse TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    proof_bad_jcs, _ = _build_synthetic_spv_proof("bad-jcs", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "not-valid-json")
+    add(
+        "d12-mut-tier2-bad-jcs-value-refuse",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_bad_jcs])},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-005: Tier-2 update with non-JCS name value refuses TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    pl_0x15 = bytes([0x01]) + bytes.fromhex(_h32("d12-t2-0x15")) + bytes([0x00])
+    scr_0x15 = bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x15, len(pl_0x15)]) + pl_0x15
+    proof_0x15, _ = _build_synthetic_spv_proof("crit-0x15", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', opreturns=[scr_0x15])
+    add(
+        "d12-mut-tier2-future-critical-0x15-incomplete",
+        ["SL-ARTF-005", "SL-LDGR-010"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_0x15])},
+        "REFUSE",
+        "ORIGIN_STATUS_INCOMPLETE",
+        "SL-ARTF-005: Tier-2 update carrying unknown future critical 0x15 SLNK frame fails closed ORIGIN_STATUS_INCOMPLETE.",
+        module="artifact-notarization",
+    )
+    proof_0b_gt, _ = _build_synthetic_spv_proof("0b-gt", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750010, opreturns=[sl.encode_opreturn(0x0B, _h32("d12-t2-0b-gt"), h_c=750011)])
+    proof_0b_eq, _ = _build_synthetic_spv_proof("0b-eq", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750010, opreturns=[sl.encode_opreturn(0x0B, _h32("d12-t2-0b-eq"), h_c=750010)])
+    add(
+        "d12-mut-tier2-0x0b-hc-gt-uh-refuse",
+        ["SL-ARTF-005", "SL-LDGR-010"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_0b_gt])},
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-005: Tier-2 update with 0x0b h_c == uh + 1 (> block_height) refuses TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+    add(
+        "d12-mut-tier2-0x0b-hc-eq-uh-admit",
+        ["SL-ARTF-005", "SL-LDGR-010"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_0b_eq])},
+        "ADMIT",
+        None,
+        "SL-ARTF-005: Tier-2 update with 0x0b at exact h_c == block_height admits (boundary >).",
+        module="artifact-notarization",
+    )
+    spv_p2wpkh_2 = {"kind": "key", "pk": spv_k2["comp"]}
+    proof_rot_1, _ = _build_synthetic_spv_proof("t2-rot1", spv_p2wpkh, [spv_k1["sk"]], "id/spv-rot", '{"link":{}}', block_height=750010, new_owner_pol=spv_p2wpkh_2)
+    proof_rot_2, _ = _build_synthetic_spv_proof("t2-rot2", spv_p2wpkh_2, [spv_k2["sk"]], "id/spv-rot", '{"link":{}}', block_height=750011, prev_raw_override=bytes.fromhex(proof_rot_1["tx_hex"]))
+    add(
+        "d12-mut-tier2-cold-p2wpkh-rotation-admit",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-rot", [proof_rot_1, proof_rot_2])},
+        "ADMIT",
+        None,
+        "SL-ARTF-005: Tier-2 page evolves expected P2WPKH owner_policy across authorized cold owner rotation.",
+        module="artifact-notarization",
+    )
+    add(
+        "d12-mut-tier2-bad-next-cursor-refuse",
+        ["SL-ARTF-005"],
+        "tier2_name_history",
+        {
+            "expected_owner_policy": spv_p2wpkh,
+            "page": _mk_page("id/spv-notary", [proof_low], next_cursor={"height": 750010, "txid": _h32("wrong-nc-tx"), "vout": 0}, has_more=True),
+        },
+        "REFUSE",
+        "TICKET_PROOF_INVALID",
+        "SL-ARTF-005: Tier-2 page with mismatched next_cursor refuses TICKET_PROOF_INVALID.",
+        module="artifact-notarization",
+    )
+
+    # G8. verify_federation_disclosure exhaustive closure (journal seal closure, missing recent_block, role CRED_ISSUER_CLOSED & NAME_ROLE_CHANGED exact boundaries)
+    fx_g8 = rm._base_invocation_fixture()
+    g8_p = copy.deepcopy(fx_g8["bundle"]["grants"][0]["payload"])
+    g8_p.pop("executor_ref", None)
+    g8_p["executor"] = fx_g8["invocation"]["payload"]["executor"]
+    g8_p["capabilities"][0]["quotas"] = [{"kind": "seallink/count", "max": "10", "resource": "requests", "unit": "calls", "window": "term"}]
+    g_g8 = sl.sign_envelope(g8_p, [fx_g8["_keys"]["alice_gr"]["sk"]])
+    g8_itx = fx_g8["invocation"]["payload"]["proof_path"][0]["issuance_txid"]
+    fx_g8["chain"]["txs"][g8_itx]["opreturn_hex"] = sl.encode_opreturn(
+        0x01,
+        sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(g_g8), "grant_id": sl.object_id(g8_p), "type": "seallink-issuance/1"}).hex(),
+    ).hex()
+    g8_seal = g8_p["revocation"]["seal"]
+    g8_iss = g8_p["issuer"]
+    g8_pol_fed = {"federation_id": "fed.example/a", "peer_min_tier": 1, "pii_contour": "A", "trusted_peers": ["id/peer-a"]}
+    g8_ctx = {"phase": "screening", "peer_id": "id/peer-a", "peer_tier": 1, "issuance_txid": g8_itx}
+    add(
+        "d12-mut-fed-journal-seal-closure-refuse",
+        ["SL-SERV-004"],
+        "federation",
+        {
+            "chain": fx_g8["chain"], "grant": g_g8,
+            "journal": {
+                "journal_id": _h32("d12-g8-j-seal"),
+                "initial_entries": [{
+                    "body": {"cause": "SEAL_SPENT", "observed_at": 1795219900, "observed_height": 750000, "subject": {"outpoint": {"txid": g8_seal["txid"], "vout": g8_seal["vout"]}, "subject_kind": "seal"}},
+                    "kind": "closure",
+                }],
+            },
+            "peer_ctx": g8_ctx, "policy": g8_pol_fed,
+        },
+        "REFUSE",
+        "SEAL_SPENT",
+        "SL-SERV-004 H5: Federation screening MUST enforce durable journal seal closure -> SEAL_SPENT.",
+        module="federated-screening",
+    )
+    ch_g8_norb = copy.deepcopy(fx_g8["chain"])
+    ch_g8_norb["blocks"].pop(g_g8["payload"]["recent_block"], None)
+    add(
+        "d12-mut-fed-missing-recent-block-recency-invalid",
+        ["SL-SERV-004"],
+        "federation",
+        {"chain": ch_g8_norb, "grant": g_g8, "journal": {"journal_id": _h32("d12-g8-j-rb")}, "peer_ctx": g8_ctx, "policy": g8_pol_fed},
+        "REFUSE",
+        "CHAIN_RECENCY_INVALID",
+        "SL-SERV-004 H5: Federation screening with unknown recent_block refuses CHAIN_RECENCY_INVALID.",
+        module="federated-screening",
+    )
+    g8_rsubj_base = {"name": g8_iss["name"], "policy_sha256": sv._policy_sha256(g8_iss["role_policy"]), "registration": g8_iss["registration"], "role": "grant", "subject_kind": "role"}
+    # Exact tip_height (750010) == cutoff_height -> CRED_ISSUER_CLOSED; tip_height == cutoff_height - 1 (750011) -> ADMIT!
+    add(
+        "d12-mut-fed-role-cred-issuer-closed-exact-cutoff-refuse",
+        ["SL-SERV-004", "SL-CONT-009"],
+        "federation",
+        {
+            "chain": fx_g8["chain"], "grant": g_g8,
+            "journal": {
+                "journal_id": _h32("d12-g8-j-rc1"),
+                "initial_entries": [{
+                    "body": {"cause": "CRED_ISSUER_CLOSED", "observed_at": 1795219900, "observed_height": 750010, "subject": {**g8_rsubj_base, "cutoff_height": 750010}},
+                    "kind": "closure",
+                }],
+            },
+            "peer_ctx": g8_ctx, "policy": g8_pol_fed,
+        },
+        "REFUSE",
+        "CRED_ISSUER_CLOSED",
+        "SL-SERV-004 H5: Federation screening enforces durable journal CRED_ISSUER_CLOSED at exact tip_height == cutoff_height.",
+        module="federated-screening",
+    )
+    add(
+        "d12-mut-fed-role-cred-issuer-closed-above-tip-admit",
+        ["SL-SERV-004", "SL-CONT-009"],
+        "federation",
+        {
+            "chain": fx_g8["chain"], "grant": g_g8,
+            "journal": {
+                "journal_id": _h32("d12-g8-j-rc2"),
+                "initial_entries": [{
+                    "body": {"cause": "CRED_ISSUER_CLOSED", "observed_at": 1795219900, "observed_height": 750010, "subject": {**g8_rsubj_base, "cutoff_height": 750011}},
+                    "kind": "closure",
+                }],
+            },
+            "peer_ctx": g8_ctx, "policy": g8_pol_fed,
+        },
+        "ADMIT",
+        None,
+        "SL-SERV-004 H5: Federation screening admits when journal CRED_ISSUER_CLOSED cutoff_height == tip_height + 1 (boundary >=).",
+        module="federated-screening",
+    )
+    # Exact f_recent_h (749990) < retired_before_height (749991) -> NAME_ROLE_CHANGED; f_recent_h == retired_before_height (749990) -> ADMIT!
+    add(
+        "d12-mut-fed-role-changed-below-rbh-refuse",
+        ["SL-SERV-004", "SL-IDEN-004"],
+        "federation",
+        {
+            "chain": fx_g8["chain"], "grant": g_g8,
+            "journal": {
+                "journal_id": _h32("d12-g8-j-rr1"),
+                "initial_entries": [{
+                    "body": {"cause": "NAME_ROLE_CHANGED", "observed_at": 1795219900, "observed_height": 750000, "subject": {**g8_rsubj_base, "retired_before_height": 749991}},
+                    "kind": "closure",
+                }],
+            },
+            "peer_ctx": g8_ctx, "policy": g8_pol_fed,
+        },
+        "REFUSE",
+        "NAME_ROLE_CHANGED",
+        "SL-SERV-004 H5: Federation screening refuses NAME_ROLE_CHANGED when recent_block height (749990) < retired_before_height (749991).",
+        module="federated-screening",
+    )
+    add(
+        "d12-mut-fed-role-changed-exact-rbh-admit",
+        ["SL-SERV-004", "SL-IDEN-004"],
+        "federation",
+        {
+            "chain": fx_g8["chain"], "grant": g_g8,
+            "journal": {
+                "journal_id": _h32("d12-g8-j-rr2"),
+                "initial_entries": [{
+                    "body": {"cause": "NAME_ROLE_CHANGED", "observed_at": 1795219900, "observed_height": 750000, "subject": {**g8_rsubj_base, "retired_before_height": 749990}},
+                    "kind": "closure",
+                }],
+            },
+            "peer_ctx": g8_ctx, "policy": g8_pol_fed,
+        },
+        "ADMIT",
+        None,
+        "SL-SERV-004 H5: Federation screening admits new-epoch grant at exact recent_block height == retired_before_height (749990, boundary <).",
+        module="federated-screening",
     )

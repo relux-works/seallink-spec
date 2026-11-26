@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.11/schemas/manifest.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.12/schemas/manifest.schema.json",
   "title": "SealLink v1.0 Manifest, Sets & Statements",
   "type": "object",
   "additionalProperties": false,
@@ -90,7 +90,7 @@
           "minItems": 1,
           "maxItems": 64,
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-z0-9._-]+/$", "not": { "pattern": "\n" } }
+          "items": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-z0-9._-]+(/[a-z0-9._-]+)*/$", "not": { "pattern": "\n" } }
         },
         "release_log": { "$ref": "#/$defs/LogBindingSpec" },
         "mirror_endpoints": {
@@ -113,7 +113,13 @@
       "properties": {
         "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
         "genesis_seal": { "$ref": "common.schema.json#/$defs/Seal" },
-        "heartbeat_max_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" }
+        "heartbeat_max_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" },
+        "predecessor_logs": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": { "$ref": "common.schema.json#/$defs/Hex64" }
+        }
       }
     },
     "MirrorEndpoint": {

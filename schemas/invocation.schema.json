@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.11/schemas/invocation.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.12/schemas/invocation.schema.json",
   "title": "SealLink v1.0 Invocation, Receipt, Sessions, Auth, Owner Control, Journal & Migration",
   "$defs": {
     "Invocation": {
@@ -671,6 +671,7 @@
                   "maxItems": 2,
                   "items": { "$ref": "common.schema.json#/$defs/ProofPathEntry" }
                 },
+                "root_recent_height": { "$ref": "common.schema.json#/$defs/Uint53" },
                 "recorded_at": { "$ref": "common.schema.json#/$defs/Uint53" }
               },
               "allOf": [
@@ -797,22 +798,36 @@
               "type": "object",
               "additionalProperties": false,
               "required": [
-                "log_id", "role", "max_seq", "checkpoint_id", "checkpoint_txid",
+                "log_id", "role", "max_seq", "checkpoint_id", "checkpoint_object_id", "checkpoint_txid",
                 "block_hash", "confirmed_height", "denials_root", "checkpoints_root", "terminal"
               ],
-              "description": "Reorg-safe confirmed notary/release log head persisted strictly after confirmation depth >= required_depth.",
+              "description": "Reorg-safe confirmed notary/release log head persisted strictly after confirmation depth >= required_depth and full issuer/log_id authentication.",
               "properties": {
                 "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "role": { "type": "string", "enum": ["notary", "release"] },
                 "max_seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
                 "checkpoint_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "checkpoint_object_id": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "checkpoint_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "block_hash": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "confirmed_height": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
                 "denials_root": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "checkpoints_root": { "$ref": "common.schema.json#/$defs/Hex64" },
-                "terminal": { "type": "boolean" }
-              }
+                "terminal": { "type": "boolean" },
+                "next_log_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
+                "next_log_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }
+              },
+              "dependentRequired": {
+                "next_log_outpoint": ["next_log_policy"],
+                "next_log_policy": ["next_log_outpoint"]
+              },
+              "allOf": [
+                {
+                  "if": { "required": ["terminal"], "properties": { "terminal": { "const": false } } },
+                  "then": { "required": ["next_log_outpoint", "next_log_policy"] },
+                  "else": { "not": { "anyOf": [{ "required": ["next_log_outpoint"] }, { "required": ["next_log_policy"] }] } }
+                }
+              ]
             }
           }
         }

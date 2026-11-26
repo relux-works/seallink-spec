@@ -1,4 +1,129 @@
 {
+  "artifact_and_log_primitives": {
+    "artifact_target_ids": [
+      {
+        "artifact_identity": {
+          "digest": "2da324bd4d7848464b2564a90ad54643b1c7c2206b591dc78e2f692a21be9cfa",
+          "scheme": "sha256"
+        },
+        "id": "target-id-sha256",
+        "target_id": "1a255fc5a9dbf5da84efd9611bd6feb5ae602748caa5b11c7d483b42b6c7fb42"
+      },
+      {
+        "artifact_identity": {
+          "digest": "3d248ca542a24fc62d1c43b916eae5016878e2533c88238480b26128a1f1af95",
+          "params": {
+            "block_size": 4096,
+            "hash_alg": "sha256",
+            "salt_hex": "",
+            "version": 1
+          },
+          "scheme": "fsverity-sha256"
+        },
+        "id": "target-id-fsverity-empty",
+        "target_id": "d1b10750c984d2815d5e278e704410074cbf69a3cf6e662f273808b0d793c3ca"
+      }
+    ],
+    "fsverity_sha256_linux": [
+      {
+        "data_hex": "",
+        "data_len": 0,
+        "digest": "3d248ca542a24fc62d1c43b916eae5016878e2533c88238480b26128a1f1af95",
+        "id": "fsverity-empty"
+      },
+      {
+        "data_hex": "5365616c4c696e6b2076312e30",
+        "data_len": 13,
+        "digest": "babeaf40fe3db127062d35942601c440cae16231c09495841cbb8126426bec27",
+        "id": "fsverity-13b"
+      },
+      {
+        "data_len": 4196,
+        "digest": "4e2221e1db56ca4bae771f804438ce398b5262152b118ca490cc57369f9d6164",
+        "id": "fsverity-4196b-2blocks",
+        "pattern": "4096*0x41 || 100*0x42"
+      }
+    ],
+    "log_entry_digests": {
+      "entry_0x01": "41c7fe50e5c78106204dab1dcfcbe94dd2ce211c70a97f18dc6b9350b312d195",
+      "entry_0x02": "ef38bb0fddb29a4b243cf5f7b3728557c3d2cde877172027388f25ccd5d184be",
+      "entry_0x03": "9a66e5045babedc0654a8a5bdbd9d8dc544309a13aee81e296b8caf05179ad7b"
+    },
+    "log_id_golden": {
+      "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+      "genesis_seal_outpoint": {
+        "txid": "3c9c7e88fab44247cc683f2184100f8f8e3ab49425d7ef9056426d3fece20461",
+        "vout": 2
+      },
+      "log_id": "a3a5759d342ad4f0158230d9751764585719d0c1e91beecd93514ee9d271bb26",
+      "name": "id/notary-golden",
+      "network": "main",
+      "registration": {
+        "txid": "36744f0f6bf29ed053433475060718cf79d2fc517281688d74d9e0748cea9cbd",
+        "vout": 0
+      },
+      "role": "notary"
+    },
+    "rfc9162_checkpoints_tree": {
+      "checkpoint_content_addrs": [
+        "10f1018b342a58905eaa42a61e1f1630dd60711adb855a2213d615674408bc16",
+        "95286f3f19319afc444426dc91608aa6c66294208e7bdd3e66b54898b01eb422",
+        "1578cf05bd0b7afbdcf082b07e537463eb4b4c8dfb0c53ebc712a75e5ebe49d9",
+        "27bae17e6a8a4e768b2554a7c1bf3c30bd79aa82c9cc475ff097aae4b46b4265",
+        "18c8361da59e8ff82ebeff38943ceb40960c170b5f2ddd13e9d40c362f7a254e"
+      ],
+      "empty_root": "879764857a8da79fec30dd6ca78d608e114e090f6d844dc485e8a35a7944fb19",
+      "inclusion_idx2_in_5": {
+        "hashes": [
+          "1df013bacc5c4c8b54722f2a0bbbc968afdda115940d6db5247e001e6294ddf2",
+          "d5f381c1c950ecb2b2bf59df8b7b84a5de54950e1d49a7c19f2262c8521393ba",
+          "51a69ef2abb79c6da97e6fc2b7245106da1c409f47e7ac1940098ae4e4f8da22"
+        ],
+        "leaf_index": 2,
+        "tree_size": 5
+      },
+      "mth_3": "7dafa0d460d309668cf2b465a9be96620c502d28012e78f8bf5d15a4debad1b1",
+      "mth_4": "19d6a1d18ee5fdbdf9f051e23f2653f167f687d7b2a5135dc462a5ed84692055",
+      "mth_5": "61e42d75e661fb51d1828bf63fc4188d7e5e2f435d4faf3eeb1457638c3b0a56",
+      "peaks_3": [
+        "d5f381c1c950ecb2b2bf59df8b7b84a5de54950e1d49a7c19f2262c8521393ba",
+        "932a278d818e4b8455442ac39f19e7490a9d603ef8abcef8f2e66ee6cb987627"
+      ]
+    },
+    "rules": [
+      "SL-ARTF-002",
+      "SL-CONT-012"
+    ],
+    "smt256_fixed_depth": {
+      "D0": "6b26dc4fb4e9c68e1003ac32049cb6272da6e3d9f9196a114862fc6cf6ad6ca2",
+      "D1": "aea741fdf00b1c45eb13ea49e7953250a9e85a150e8c1ee8779c98fc3eb06516",
+      "D256_empty_root": "eb70f696a4410a79b11b5d39d4ed57f16bf79a5dda3a630a98afcfc3caccdd16",
+      "absence_proof": {
+        "bitmap_hex": "8000000000000000000000000000000000000000000000000000000000000000",
+        "key_str": "rel:14db042d56e83317f5e938e1be635f5a782eecc62d205d7ecccaa3121cafcf45|*",
+        "root": "9ccd1fddcb2186688c78d8e1e7177d0e2a6995e31bf498411dfb53e9281a6e64",
+        "siblings": [
+          "7d853ffcc5778ef885d875145dd03b991d31b0011b7251ef93a1e1e8b2270be3"
+        ],
+        "state": "absent"
+      },
+      "inclusion_proof": {
+        "bitmap_hex": "0800000000000000000000000000000000000000000000000000000000000000",
+        "key_str": "act:8e2da530cdc15a4a7fa9438c47e38e60367b56144e044e8126c35e7cec6b9594|*",
+        "root": "9ccd1fddcb2186688c78d8e1e7177d0e2a6995e31bf498411dfb53e9281a6e64",
+        "siblings": [
+          "0477daf7758227157aa15e461d9942ee456e7dd02f87b466a38b2e8fd2263e4c"
+        ],
+        "state": "included",
+        "value": "b8b71b6db8cbad9c7f7c7f43cbf3cbee281cf44bb93413969c0cc8ff7f6a77b4"
+      },
+      "kv": {
+        "act:8e2da530cdc15a4a7fa9438c47e38e60367b56144e044e8126c35e7cec6b9594|*": "b8b71b6db8cbad9c7f7c7f43cbf3cbee281cf44bb93413969c0cc8ff7f6a77b4",
+        "target:d1b10750c984d2815d5e278e704410074cbf69a3cf6e662f273808b0d793c3ca|*": "5f624658445e7724ddb7d1d588aa4ca9b970d55c037a23023dc1e8caa1e40480"
+      },
+      "root": "9ccd1fddcb2186688c78d8e1e7177d0e2a6995e31bf498411dfb53e9281a6e64"
+    }
+  },
   "clause_commitment": {
     "clause_jcs_hex": "7b2274657874223a22526f6f6d20696e7370656374696f6e227d",
     "clause_obj": {
@@ -8,7 +133,7 @@
     "rule": "SL-WIRE-014",
     "salt_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
   },
-  "description": "Restricted RFC 8785 JCS positive/negative vectors (incl. depth 16/17/1000 & leading-zero), 3 hashes, clause_commit, BIP-340 SignatureSet, and strict cofactorless Ed25519 + low-S NIST P-256 device-key signature checks.",
+  "description": "Restricted RFC 8785 JCS positive/negative vectors (incl. depth 16/17/1000 & leading-zero), 3 hashes, clause_commit, BIP-340 SignatureSet, strict cofactorless Ed25519 + low-S NIST P-256 device-key signature checks, and atomic Linux fsverity-sha256 / RFC 9162 / SMT256 golden vectors.",
   "device_signature_algorithms": {
     "owner_command_ed25519": {
       "canonical_jcs": "{\"payload\":{\"arguments\":{\"scope\":\"all\"},\"command\":\"keyholder-halt\",\"exp\":1795220300,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"level\":2,\"network\":\"main\",\"nonce\":\"13e0c7c552fadd06585ca03df1fd32b7b7fc1c7e31aa6cdac933df62a26577a0\",\"owner\":\"id/alice\",\"target_executor\":\"id/station-a\",\"type\":\"seallink-owner-command/1\"},\"signatures\":{\"policy\":{\"alg\":\"ed25519\",\"m\":1,\"pks\":[\"b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187\"]},\"sigs\":[{\"pk\":\"b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187\",\"sig\":\"2d792757fe20901d074810a2d0955e972bc8401fbddab38ad0b929843965d040685a6aaae5d69390df792e6c226452fa2c5b8a18d6680f31387cb831da6fe106\"}]}}",
@@ -1069,5 +1194,5 @@
     ],
     "rule": "SL-WIRE-011"
   },
-  "version": "1.0.0-draft.11"
+  "version": "1.0.0-draft.12"
 }

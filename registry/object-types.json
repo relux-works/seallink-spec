@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Canonical Object Type Registry. Authoritative SSOT for object types, byte limits, signing roles, and schema targets. Signing domain tag equals the exact type string under SPEC-01.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.11",
+  "version": "1.0.0-draft.12",
   "reserved_internal_domains": [
     "seallink-clause/1",
     "seallink-journal/1",

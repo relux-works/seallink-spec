@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.11/schemas/log.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.12/schemas/log.schema.json",
   "title": "SealLink v1.0 Release Records, Transparency/Denial Logs (0x14), Fixed-Depth-256 SMT & 4-Mode Fraud Proofs",
   "$defs": {
     "ArtifactIdentity": {
@@ -58,8 +58,8 @@
     },
     "DenialKeyStr": {
       "type": "string",
-      "pattern": "^(act:[0-9a-f]{64}\\|(\\*|cap:[a-z0-9._-]+(/[a-z0-9._-]+)+)|rel:[0-9a-f]{64}\\|\\*|target:[0-9a-f]{64}\\|(\\*|cap:[a-z0-9._-]+(/[a-z0-9._-]+)+))$",
-      "maxLength": 256,
+      "pattern": "^(act|rel|target):[0-9a-f]{64}\\|\\*$",
+      "maxLength": 80,
       "not": { "pattern": "\n" }
     },
     "LogRole": {
@@ -174,7 +174,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "type", "network", "genesis", "role", "issuer", "log_id", "seq",
+            "type", "network", "genesis", "role", "issuer", "log_id", "genesis_seal_outpoint", "seq",
             "prev_log_outpoint", "terminal", "batch_count", "cumulative_entries_count",
             "batch_root", "denials_delta_root", "denials_root", "checkpoints_root"
           ],
@@ -185,6 +185,7 @@
             "role": { "$ref": "#/$defs/LogRole" },
             "issuer": { "$ref": "common.schema.json#/$defs/RoleIssuerPin" },
             "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "genesis_seal_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
             "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
             "prev_checkpoint_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "predecessor_log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
@@ -290,18 +291,31 @@
         { "$ref": "#/$defs/LogReinstatement" }
       ]
     },
+    "StateRecordInclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoint", "checkpoint_txid", "batch_proof"],
+      "description": "Inclusion proof binding a historical LogStateRecord to its introduction checkpoint (h_intro), enabling deterministic signature checks across routine link.<role> key rotations.",
+      "properties": {
+        "checkpoint": { "$ref": "#/$defs/LogCheckpoint" },
+        "checkpoint_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "batch_proof": { "$ref": "#/$defs/BatchMerkleProof" },
+        "checkpoints_proof": { "$ref": "#/$defs/CheckpointsInclusionProof" }
+      }
+    },
     "LogFraudProof": {
       "oneOf": [
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type", "network", "genesis", "role", "log_id", "fraud_mode", "cp_a", "cp_b"],
+          "required": ["type", "network", "genesis", "role", "log_id", "genesis_seal_outpoint", "fraud_mode", "cp_a", "cp_b"],
           "properties": {
             "type": { "const": "seallink-log-fraud/1" },
             "network": { "$ref": "common.schema.json#/$defs/Network" },
             "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
             "role": { "$ref": "#/$defs/LogRole" },
             "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "genesis_seal_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
             "fraud_mode": { "const": "equivocation" },
             "cp_a": { "$ref": "#/$defs/LogCheckpoint" },
             "cp_b": { "$ref": "#/$defs/LogCheckpoint" },
@@ -312,13 +326,14 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type", "network", "genesis", "role", "log_id", "fraud_mode", "cp_a", "cp_a_txid", "cp_b", "cp_b_txid", "revocation", "batch_proof", "smt_proof"],
+          "required": ["type", "network", "genesis", "role", "log_id", "genesis_seal_outpoint", "fraud_mode", "cp_a", "cp_a_txid", "cp_b", "cp_b_txid", "revocation", "batch_proof", "smt_proof"],
           "properties": {
             "type": { "const": "seallink-log-fraud/1" },
             "network": { "$ref": "common.schema.json#/$defs/Network" },
             "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
             "role": { "$ref": "#/$defs/LogRole" },
             "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "genesis_seal_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
             "fraud_mode": { "const": "revocation_omission" },
             "cp_a": { "$ref": "#/$defs/LogCheckpoint" },
             "cp_a_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
@@ -327,19 +342,21 @@
             "revocation": { "$ref": "#/$defs/LogRevocation" },
             "batch_proof": { "$ref": "#/$defs/BatchMerkleProof" },
             "checkpoints_proof": { "$ref": "#/$defs/CheckpointsInclusionProof" },
-            "smt_proof": { "$ref": "#/$defs/SmtProof" }
+            "smt_proof": { "$ref": "#/$defs/SmtProof" },
+            "rec_b": { "$ref": "#/$defs/LogStateRecord" }
           }
         },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type", "network", "genesis", "role", "log_id", "fraud_mode", "cp_a", "cp_a_txid", "cp_b", "cp_b_txid", "checkpoints_proof", "rec_a", "smt_proof_a", "smt_proof_b"],
+          "required": ["type", "network", "genesis", "role", "log_id", "genesis_seal_outpoint", "fraud_mode", "cp_a", "cp_a_txid", "cp_b", "cp_b_txid", "checkpoints_proof", "rec_a", "smt_proof_a", "smt_proof_b"],
           "properties": {
             "type": { "const": "seallink-log-fraud/1" },
             "network": { "$ref": "common.schema.json#/$defs/Network" },
             "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
             "role": { "$ref": "#/$defs/LogRole" },
             "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "genesis_seal_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
             "fraud_mode": { "const": "illegal_reversion" },
             "cp_a": { "$ref": "#/$defs/LogCheckpoint" },
             "cp_a_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
@@ -349,19 +366,21 @@
             "rec_a": { "$ref": "#/$defs/LogStateRecord" },
             "smt_proof_a": { "$ref": "#/$defs/SmtProof" },
             "smt_proof_b": { "$ref": "#/$defs/SmtProof" },
-            "rec_b": { "$ref": "#/$defs/LogStateRecord" }
+            "rec_b": { "$ref": "#/$defs/LogStateRecord" },
+            "rec_b_inclusion": { "$ref": "#/$defs/StateRecordInclusion" }
           }
         },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type", "network", "genesis", "role", "log_id", "fraud_mode", "cp_next", "cp_next_txid"],
+          "required": ["type", "network", "genesis", "role", "log_id", "genesis_seal_outpoint", "fraud_mode", "cp_next", "cp_next_txid"],
           "properties": {
             "type": { "const": "seallink-log-fraud/1" },
             "network": { "$ref": "common.schema.json#/$defs/Network" },
             "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
             "role": { "$ref": "#/$defs/LogRole" },
             "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "genesis_seal_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
             "fraud_mode": { "const": "invalid_checkpoint_chain" },
             "cp_next": { "$ref": "#/$defs/LogCheckpoint" },
             "cp_next_txid": { "$ref": "common.schema.json#/$defs/Hex64" },

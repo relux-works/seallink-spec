@@ -475,7 +475,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
     rec_s1 = of_r1["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]
     unconf_rec_tx = _h32("d8-r2g01-unconf")
     of_r1["chain"]["txs"][rec_s1["txid"]]["outputs"]["0"]["spent_by_txid"] = unconf_rec_tx
-    of_r1["chain"]["txs"][unconf_rec_tx] = {"confirmed_height": None, "mempool": True, "outputs": {"0": {"script_pubkey_hex": "0014" + "aa" * 20}}}
+    of_r1["chain"]["txs"][unconf_rec_tx] = {"mempool": True, "outputs": {"0": {"script_pubkey_hex": "0014" + "aa" * 20}}}
     add(
         "d8-r2g01-unconfirmed-recovery-spend-incomplete-refuse",
         ["SL-ORIG-013"],

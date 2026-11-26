@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Canonical Artifact Identity Scheme Registry (SPEC-05, PROFILE-artifact-v1). target_id = target_sha256 = H_tag('seallink-artifact-id/1', JCS({'digest': digest, 'scheme': scheme})) strictly EXCLUDING params to prevent target_id splitting attacks.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.11",
+  "version": "1.0.0-draft.12",
   "target_id_domain": "seallink-artifact-id/1",
   "target_id_inputs": ["digest", "scheme"],
   "custom_scheme_regex": "^[a-z0-9-]+(\\.[a-z0-9-]+)+/[a-z0-9][a-z0-9._-]{0,63}$",
@@ -23,7 +23,7 @@
         "block_size": 4096,
         "salt_hex": ""
       },
-      "description": "Linux fs-verity SHA-256 Merkle root digest with canonical fixed parameters (version=1, block_size=4096, strictly empty salt_hex='') ensuring 1-to-1 file digest determinism across all hosts and kernels >= 6.3."
+      "description": "Linux kernel FS_IOC_MEASURE_VERITY file digest — SHA-256 of the canonical 256-byte little-endian fsverity_descriptor (version=1 [1B], hash_algorithm=1 [1B SHA-256], log_blocksize=12 [1B -> 4096], salt_size=0 [1B], __reserved_0x04=0 [4B LE], data_size [8B LE], root_hash [32B Merkle root over 4096-byte zero-padded blocks, or 00*32 for empty file], remaining 208 bytes zero; empty-file digest = 3d248ca542a24fc62d1c43b916eae5016878e2533c88238480b26128a1f1af95)."
     },
     {
       "scheme": "oci-digest-sha256",

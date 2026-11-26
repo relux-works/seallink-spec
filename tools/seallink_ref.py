@@ -1608,7 +1608,10 @@ def decode_opreturn(script: bytes) -> dict[str, Any]:
     allowed = ACTION_ALLOWED_LOCATORS.get(action)
     if allowed is None:
         raise ValueError("CHAIN_FRAME_INVALID")
-    payload, end = _read_push(script, 7)
+    try:
+        payload, end = _read_push(script, 7)
+    except ValueError as exc:
+        raise ValueError("CHAIN_FRAME_INVALID") from exc
     if end != len(script) or len(payload) < 34 or payload[0] != 0x01:
         raise ValueError("CHAIN_FRAME_INVALID")
     comm = payload[1:33].hex()
@@ -1643,8 +1646,8 @@ def decode_opreturn_with_criticality(script: bytes) -> dict[str, Any]:
 
     1. Outer envelope checked FIRST on every SLNK output: 8 <= len <= 83, `6a 05 SLNK <action>`,
        valid minimal Bitcoin Script data push reaching end-of-script with non-empty payload -> else CHAIN_FRAME_INVALID.
-    2. Known v1.0 actions (0x01..0x05, 0x07..0x12): strict `decode_opreturn` (malformed -> CHAIN_FRAME_INVALID).
-    3. Critical forward-only reserved range (0x13..0x1a): returns {'action': ..., 'critical_scope': 'forward_only'}.
+    2. Known v1.0 actions (0x01..0x05, 0x07..0x14): strict `decode_opreturn` (malformed -> CHAIN_FRAME_INVALID).
+    3. Critical forward-only reserved range (0x15..0x1a): returns {'action': ..., 'critical_scope': 'forward_only'}.
     4. Critical retroactive reserved range (0x1b..0x1f): returns {'action': ..., 'critical_scope': 'retroactive'}.
     5. Advisory ignorable range (0x20..0x2f): validates standard 42B/74B v1 framing (malformed -> CHAIN_FRAME_INVALID)
        and returns {'advisory': True, ...} so v1.0 readers safely ignore non-critical future extensions.
@@ -2106,15 +2109,42 @@ def derive_guardian_event_class(payload: dict[str, Any]) -> str:
 EMPTY_BATCH_ROOT = tagged_hash("seallink-batch-empty/1", b"").hex()
 EMPTY_CHECKPOINTS_ROOT = tagged_hash("seallink-log-ckpt-empty/1", b"").hex()
 NAMECOIN_POW_LIMIT_MAIN = 0x00000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+NAMECOIN_POW_LIMIT_TESTNET = 0x0000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 NAMECOIN_POW_LIMIT_REGTEST = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+NAMECOIN_AUXPOW_START_MAIN = 19200
+NAMECOIN_LEGACY_BEFORE_MAIN = 19200
 NAMECOIN_TARGET_TIMESPAN = 1209600  # 14 days
 NAMECOIN_MIN_TIMESPAN = 302400      # 1209600 // 4
 NAMECOIN_MAX_TIMESPAN = 4838400     # 1209600 * 4
 NAMECOIN_AUX_CHAIN_ID = 0x0001
 
 
+def _popcount(n: int) -> int:
+    """Python 3.9+ compatible popcount (avoids int.bit_count() added in 3.10)."""
+    return bin(n).count("1")
+
+
 def dsha256(data: bytes) -> bytes:
     return sha256(sha256(data))
+
+
+def fsverity_sha256_digest(data: bytes) -> str:
+    """Exact Linux kernel FS_IOC_MEASURE_VERITY (fsverity-sha256, 4096B blocks, salt_size=0)."""
+    block_size = 4096
+    if not data:
+        root_hash = b"\x00" * 32
+    else:
+        chunks = [data[i : i + block_size].ljust(block_size, b"\x00") for i in range(0, len(data), block_size)]
+        level = b"".join(sha256(c) for c in chunks)
+        while len(level) > 32:
+            p_chunks = [level[i : i + block_size].ljust(block_size, b"\x00") for i in range(0, len(level), block_size)]
+            level = b"".join(sha256(c) for c in p_chunks)
+        root_hash = level
+    # struct fsverity_descriptor (256B LE): version=1, hash_algorithm=1 (SHA-256), log_blocksize=12 (4096),
+    # salt_size=0, __reserved_0x04=0 (4B), data_size (8B LE), root_hash[64] (32B + 32B zero), salt[32], reserved[144]
+    descriptor = struct.pack("<BBBBIQ", 1, 1, 12, 0, 0, len(data)) + root_hash + (b"\x00" * 208)
+    assert len(descriptor) == 256
+    return sha256(descriptor).hex()
 
 
 def artifact_target_id(artifact_identity: dict[str, Any]) -> str:
@@ -2264,7 +2294,7 @@ def rfc9162_peaks(leaves: list[bytes]) -> list[str]:
 
 def rfc9162_root_from_peaks(peaks: list[str], tree_size: int) -> str | None:
     """Fold popcount(tree_size) peaks right-to-left into exact RFC 9162 MTH."""
-    if tree_size < 0 or len(peaks) != tree_size.bit_count():
+    if tree_size < 0 or len(peaks) != _popcount(tree_size):
         return None
     if tree_size == 0:
         return EMPTY_CHECKPOINTS_ROOT
@@ -2282,7 +2312,7 @@ def rfc9162_root_from_peaks(peaks: list[str], tree_size: int) -> str | None:
 
 def rfc9162_append_leaf_to_peaks(peaks: list[str], prev_tree_size: int, new_leaf: bytes) -> str | None:
     """Compute MTH(prev_tree_size + 1) by appending new_leaf onto popcount(prev_tree_size) peaks."""
-    if prev_tree_size < 0 or len(peaks) != prev_tree_size.bit_count():
+    if prev_tree_size < 0 or len(peaks) != _popcount(prev_tree_size):
         return None
     try:
         rem = [bytes.fromhex(p) for p in peaks]
@@ -2406,7 +2436,7 @@ def smt_verify_proof(proof: dict[str, Any]) -> bool:
         bitmap = bytes.fromhex(bitmap_hex)
     except ValueError:
         return False
-    popcnt = sum(b.bit_count() for b in bitmap)
+    popcnt = sum(_popcount(b) for b in bitmap)
     if len(siblings) != popcnt:
         return False
     k = sha256(key_str.encode("utf-8"))
@@ -2698,7 +2728,19 @@ def verify_segwit_name_update_proof(
     expected_owner_policy: dict[str, Any],
     expected_name: str,
 ) -> tuple[bool, dict[str, Any] | str]:
-    """Verify all 7 consensus-exact P0-CONS-1 checks on a Tier-2 SegWitNameUpdateProof."""
+    """Verify all 7 consensus-exact P0-CONS-1 checks on a Tier-2 SegWitNameUpdateProof (OP_NAME_FIRSTUPDATE & OP_NAME_UPDATE, key/multisig)."""
+    if not isinstance(expected_owner_policy, dict):
+        return False, "TICKET_PROOF_INVALID"
+    kind = expected_owner_policy.get("kind")
+    if kind == "branch":
+        return False, "CHAIN_SCRIPT_UNSUPPORTED"
+    if kind not in ("key", "multisig"):
+        return False, "TICKET_PROOF_INVALID"
+    try:
+        exp_spk, exp_ws = compile_script_policy(expected_owner_policy)
+    except (ValueError, KeyError, TypeError):
+        return False, "TICKET_PROOF_INVALID"
+
     try:
         hdr = bytes.fromhex(proof["block_header_hex"])
         if len(hdr) != 80:
@@ -2737,7 +2779,7 @@ def verify_segwit_name_update_proof(
     wtxid_branch = proof.get("wtxid_branch", [])
     wtxid_cb_branch = proof.get("wtxid_coinbase_branch", [])
     if (
-        not isinstance(tx_index, int) or tx_index < 1
+        not isinstance(tx_index, int) or isinstance(tx_index, bool) or tx_index < 1
         or len(txid_branch) != d_tree
         or len(wtxid_branch) != d_tree
         or len(wtxid_cb_branch) != d_tree
@@ -2761,6 +2803,8 @@ def verify_segwit_name_update_proof(
     cur_w = tx["wtxid_le"]
     idx_w = tx_index
     for h_be in wtxid_branch:
+        if not isinstance(h_be, str) or len(h_be) != 64:
+            return False, "TICKET_PROOF_INVALID"
         try:
             sib_le = bytes.fromhex(h_be)[::-1]
         except ValueError:
@@ -2780,13 +2824,32 @@ def verify_segwit_name_update_proof(
     if dsha256(wtxid_root_le + witness_reserved_value) != witness_commitment:
         return False, "TICKET_PROOF_INVALID"
 
-    # Step 6: Locate name input spending prev_tx, strip Namecoin prefix, match compiled expected_owner_policy, compute BIP-143 sighash
-    try:
-        exp_spk, exp_ws = compile_script_policy(expected_owner_policy)
-    except (ValueError, KeyError, TypeError):
+    # Step 6: Locate unique name output in tx (OP_NAME_FIRSTUPDATE or OP_NAME_UPDATE), locate matching name input
+    # spending prev_tx with empty scriptSig, strip Namecoin prefix, verify expected_owner_policy & compute BIP-143 sighash
+    parsed_new: dict[str, Any] | None = None
+    new_vout: int = -1
+    opreturns: list[dict[str, Any]] = []
+    name_out_count = 0
+    for vo in tx["vout"]:
+        spk = vo["script_pubkey"]
+        if spk[:1] == b"\x6a":
+            opreturns.append({"script_pubkey_hex": spk.hex(), "value_sat": vo["value_sat"]})
+            continue
+        if spk[:1] in (bytes([OP_NAME_NEW]), bytes([OP_NAME_FIRSTUPDATE]), bytes([OP_NAME_UPDATE])):
+            name_out_count += 1
+            try:
+                pn = parse_name_output(spk)
+            except ValueError:
+                return False, "TICKET_PROOF_INVALID"
+            if pn.get("name") == expected_name and pn.get("op") in ("NAME_FIRSTUPDATE", "NAME_UPDATE"):
+                parsed_new = pn
+                new_vout = int(vo["n"])
+    if parsed_new is None or name_out_count != 1:
         return False, "TICKET_PROOF_INVALID"
+
     name_in_idx: int | None = None
     prev_out: dict[str, Any] | None = None
+    prev_parsed: dict[str, Any] | None = None
     for i, vin in enumerate(tx["vin"]):
         if vin["prev_txid"] == prev_tx["txid"] and vin["prev_vout"] < len(prev_tx["vout"]):
             cand_out = prev_tx["vout"][vin["prev_vout"]]
@@ -2794,31 +2857,47 @@ def verify_segwit_name_update_proof(
                 p_prev = parse_name_output(cand_out["script_pubkey"])
             except ValueError:
                 continue
-            if p_prev.get("name") == expected_name and p_prev.get("op") in ("NAME_FIRSTUPDATE", "NAME_UPDATE"):
-                name_in_idx = i
-                prev_out = cand_out
-                if p_prev["trailing_script_pubkey"] != exp_spk.hex():
+            if parsed_new["op"] == "NAME_FIRSTUPDATE":
+                if p_prev.get("op") != "NAME_NEW":
+                    continue
+                if hash160(bytes.fromhex(parsed_new["rand"]) + expected_name.encode("utf-8")).hex() != p_prev.get("hash20"):
                     return False, "TICKET_PROOF_INVALID"
-                break
-    if name_in_idx is None or prev_out is None:
-        return False, "TICKET_PROOF_INVALID"
-    # Locate matching name output in tx
-    parsed_new: dict[str, Any] | None = None
-    for vo in tx["vout"]:
-        try:
-            pn = parse_name_output(vo["script_pubkey"])
-        except ValueError:
-            continue
-        if pn.get("name") == expected_name and pn.get("op") == "NAME_UPDATE":
-            parsed_new = pn
+                if vin["script_sig"] != b"" or parsed_new["trailing_script_pubkey"] != exp_spk.hex():
+                    return False, "TICKET_PROOF_INVALID"
+            else:
+                if p_prev.get("name") != expected_name or p_prev.get("op") not in ("NAME_FIRSTUPDATE", "NAME_UPDATE"):
+                    continue
+                if vin["script_sig"] != b"" or p_prev["trailing_script_pubkey"] != exp_spk.hex():
+                    return False, "TICKET_PROOF_INVALID"
+            name_in_idx = i
+            prev_out = cand_out
+            prev_parsed = p_prev
             break
-    if parsed_new is None:
+    if name_in_idx is None or prev_out is None or prev_parsed is None:
         return False, "TICKET_PROOF_INVALID"
 
     # Step 7: Strict consensus BIP-66 DER + SIGHASH_ALL (0x01), WITHOUT rejecting consensus-valid high-S!
+    # For registrar-funded OP_NAME_FIRSTUPDATE (NAME_NEW trailing script != expected_owner_policy), verify the native
+    # SegWit NAME_NEW witness directly and mark owner_authored=False (SL-LDGR-007 rule 3 requires a subsequent OP_NAME_UPDATE).
     wit = tx["vin"][name_in_idx]["witness"]
-    kind = expected_owner_policy.get("kind")
-    if kind == "key":
+    owner_authored = True
+    if parsed_new["op"] == "NAME_FIRSTUPDATE" and prev_parsed["trailing_script_pubkey"] != exp_spk.hex():
+        owner_authored = False
+        reg_spk = prev_parsed["trailing_script_pubkey"]
+        if len(reg_spk) == 44 and reg_spk.startswith("0014"):
+            if len(wit) != 2 or not is_valid_compressed_pubkey(wit[1].hex()) or hash160(wit[1]).hex() != reg_spk[4:]:
+                return False, "TICKET_PROOF_INVALID"
+            script_code = b"\x76\xa9\x14" + hash160(wit[1]) + b"\x88\xac"
+            sighash = compute_bip143_sighash(tx, name_in_idx, script_code, prev_out["value_sat"], 0x01)
+            ok_sig, sht = secp256k1_ecdsa_verify_bip66(sighash, wit[1].hex(), wit[0])
+            if not ok_sig or sht != 0x01:
+                return False, "TICKET_PROOF_INVALID"
+        elif len(reg_spk) == 68 and reg_spk.startswith("0020"):
+            if len(wit) < 2 or sha256(wit[-1]).hex() != reg_spk[4:]:
+                return False, "TICKET_PROOF_INVALID"
+        else:
+            return False, "TICKET_PROOF_INVALID"
+    elif kind == "key":
         if len(wit) != 2 or wit[1].hex() != expected_owner_policy["pk"]:
             return False, "TICKET_PROOF_INVALID"
         script_code = b"\x76\xa9\x14" + hash160(wit[1]) + b"\x88\xac"
@@ -2826,7 +2905,7 @@ def verify_segwit_name_update_proof(
         ok_sig, sht = secp256k1_ecdsa_verify_bip66(sighash, expected_owner_policy["pk"], wit[0])
         if not ok_sig or sht != 0x01:
             return False, "TICKET_PROOF_INVALID"
-    elif kind == "multisig":
+    else:  # multisig
         assert exp_ws is not None
         m = int(expected_owner_policy["m"])
         pks = list(expected_owner_policy["pks"])
@@ -2845,13 +2924,35 @@ def verify_segwit_name_update_proof(
                     break
             if not matched:
                 return False, "TICKET_PROOF_INVALID"
-    else:
-        return False, "TICKET_PROOF_INVALID"
 
-    return True, {"txid": tx["txid"], "parsed_update": parsed_new}
+    return True, {
+        "txid": tx["txid"],
+        "name_vout": new_vout,
+        "spent_prev_txid": tx["vin"][name_in_idx]["prev_txid"],
+        "spent_prev_vout": tx["vin"][name_in_idx]["prev_vout"],
+        "new_trailing_script_pubkey": parsed_new["trailing_script_pubkey"],
+        "opreturns": opreturns,
+        "owner_authored": owner_authored,
+        "parsed_update": parsed_new,
+    }
 
 
-# --- Namecoin Difficulty Retarget & CAuxPow::check (P0-CONS-1) ---
+# --- Namecoin Difficulty Retarget & CAuxPow::check (P0-CONS-1, nc28.0 exact) ---
+
+def _namecoin_pow_limit(network: str) -> int:
+    if network == "regtest":
+        return NAMECOIN_POW_LIMIT_REGTEST
+    if network == "testnet":
+        return NAMECOIN_POW_LIMIT_TESTNET
+    return NAMECOIN_POW_LIMIT_MAIN
+
+
+def namecoin_retarget_ancestor_height(height: int, *, network: str = "main") -> int:
+    """Exact Namecoin Core nc28.0 src/pow.cpp:47-55 retarget ancestor height (H - 2017 post-AuxPoW!)."""
+    auxpow_start = NAMECOIN_AUXPOW_START_MAIN if network == "main" else 0
+    n_blocks_back = 2016 if ((height - 1) >= auxpow_start and height > 2016) else 2015
+    return (height - 1) - n_blocks_back
+
 
 def bits_to_target(nbits: int) -> int:
     exp = (nbits >> 24) & 0xFF
@@ -2884,7 +2985,7 @@ def compute_namecoin_next_bits(
     *,
     network: str = "main",
 ) -> int:
-    """Exact Namecoin Core retarget (actual_timespan = block[H-1].nTime - block[H-2016].nTime clamped to [302400, 4838400], fPowNoRetargeting on regtest)."""
+    """Exact Namecoin Core nc28.0 retarget (actual_timespan = block[H-1].nTime - block[nHeightFirst].nTime clamped to [302400, 4838400], fPowNoRetargeting on regtest)."""
     if network == "regtest":
         return prev_bits
     actual = prev_block_time - epoch_start_time
@@ -2894,8 +2995,9 @@ def compute_namecoin_next_bits(
         actual = NAMECOIN_MAX_TIMESPAN
     old_t = bits_to_target(prev_bits)
     new_t = (old_t * actual) // NAMECOIN_TARGET_TIMESPAN
-    if new_t > NAMECOIN_POW_LIMIT_MAIN:
-        new_t = NAMECOIN_POW_LIMIT_MAIN
+    pow_limit = _namecoin_pow_limit(network)
+    if new_t > pow_limit:
+        new_t = pow_limit
     return target_to_bits(new_t)
 
 
@@ -2908,14 +3010,20 @@ def auxpow_expected_index(nonce: int, chain_id: int, merkle_size: int) -> int:
     return rand % merkle_size
 
 
-def verify_namecoin_header_pow(header_hex: str, *, network: str = "main") -> bool:
-    """Verify non-AuxPoW Namecoin block header PoW against network powLimit and compact nBits target."""
+def verify_namecoin_header_pow(header_hex: str, *, network: str = "main", height: int | None = None) -> bool:
+    """Verify non-AuxPoW Namecoin block header PoW & chain_id version rule against Namecoin Core nc28.0."""
     try:
         hdr = bytes.fromhex(header_hex)
         if len(hdr) != 80:
             return False
+        n_ver = struct.unpack("<I", hdr[0:4])[0]
+        if (n_ver & 0x00000100) != 0:
+            return False
+        legacy_before = NAMECOIN_LEGACY_BEFORE_MAIN if network == "main" else 0
+        if (height is None or height >= legacy_before) and (n_ver >> 16) != NAMECOIN_AUX_CHAIN_ID:
+            return False
         nbits = struct.unpack("<I", hdr[72:76])[0]
-        pow_limit = NAMECOIN_POW_LIMIT_REGTEST if network == "regtest" else NAMECOIN_POW_LIMIT_MAIN
+        pow_limit = _namecoin_pow_limit(network)
         target = bits_to_target(nbits)
         if target <= 0 or target > pow_limit:
             return False
@@ -2924,23 +3032,31 @@ def verify_namecoin_header_pow(header_hex: str, *, network: str = "main") -> boo
         return False
 
 
-def verify_namecoin_auxpow(header_hex: str, auxpow: dict[str, Any], *, network: str = "main") -> bool:
-    """Verify Namecoin Core CAuxPow::check (version AuxPoW flag, chain_id=1, parent PoW, coinbase branch, fabe6d6d, GetExpectedIndex)."""
+def verify_namecoin_auxpow(header_hex: str, auxpow: dict[str, Any], *, network: str = "main", height: int | None = None) -> bool:
+    """Verify Namecoin Core nc28.0 CAuxPow::check (AuxPoW start height, chain_id=1, !parent.IsAuxpow(), fStrictChainId, len(chain_branch)<=30, parent PoW, coinbase branch, fabe6d6d, GetExpectedIndex)."""
     try:
         hdr = bytes.fromhex(header_hex)
         if len(hdr) != 80:
+            return False
+        auxpow_start = NAMECOIN_AUXPOW_START_MAIN if network == "main" else 0
+        if height is not None and height < auxpow_start:
             return False
         n_ver = struct.unpack("<I", hdr[0:4])[0]
         n_bits = struct.unpack("<I", hdr[72:76])[0]
         if (n_ver & 0x00000100) == 0 or (n_ver >> 16) != NAMECOIN_AUX_CHAIN_ID:
             return False
-        pow_limit = NAMECOIN_POW_LIMIT_REGTEST if network == "regtest" else NAMECOIN_POW_LIMIT_MAIN
+        pow_limit = _namecoin_pow_limit(network)
         target = bits_to_target(n_bits)
         if target <= 0 or target > pow_limit:
             return False
         parent_hdr = bytes.fromhex(auxpow["parent_header_hex"])
         if len(parent_hdr) != 80:
             return False
+        parent_ver = struct.unpack("<I", parent_hdr[0:4])[0]
+        if (parent_ver & 0x00000100) != 0:
+            return False  # !parentBlock.IsAuxpow()
+        if network != "testnet" and (parent_ver >> 16) == NAMECOIN_AUX_CHAIN_ID:
+            return False  # fStrictChainId: parent block cannot have Namecoin's own chain_id
         parent_hash_int = int.from_bytes(dsha256(parent_hdr), "little")
         if parent_hash_int > target:
             return False
@@ -2953,13 +3069,15 @@ def verify_namecoin_auxpow(header_hex: str, auxpow: dict[str, Any], *, network: 
         merkle_size = int(auxpow["chain_merkle_size"])
         merkle_nonce = int(auxpow["chain_merkle_nonce"])
         chain_branch = auxpow["chain_branch"]
-        if merkle_size != (1 << len(chain_branch)):
+        if not isinstance(chain_branch, list) or len(chain_branch) > 30 or merkle_size != (1 << len(chain_branch)):
             return False
         exp_idx = auxpow_expected_index(merkle_nonce, NAMECOIN_AUX_CHAIN_ID, merkle_size)
         aux_block_hash_le = dsha256(hdr)
         cur = aux_block_hash_le
         idx = exp_idx
         for h_be in chain_branch:
+            if not isinstance(h_be, str) or len(h_be) != 64:
+                return False
             sib_le = bytes.fromhex(h_be)[::-1]
             cur = dsha256(sib_le + cur) if (idx & 1) else dsha256(cur + sib_le)
             idx >>= 1
@@ -3114,7 +3232,7 @@ def self_test() -> None:
         sub = c_leaves[:sz]
         r_mth = rfc9162_mth(sub).hex()
         pks = rfc9162_peaks(sub)
-        assert len(pks) == sz.bit_count() and rfc9162_root_from_peaks(pks, sz) == r_mth
+        assert len(pks) == _popcount(sz) and rfc9162_root_from_peaks(pks, sz) == r_mth
         if sz < 7:
             assert rfc9162_append_leaf_to_peaks(pks, sz, c_leaves[sz]) == rfc9162_mth(c_leaves[: sz + 1]).hex()
         for m_i in range(sz):
@@ -3159,23 +3277,43 @@ def self_test() -> None:
     assert ok_hs and sht_hs == 0x01, "Consensus BIP-66 verifier MUST accept valid high-S ECDSA signature"
     assert compute_namecoin_next_bits(0x1D00FFFF, 1000, 1000 + 100, network="main") == target_to_bits(bits_to_target(0x1D00FFFF) // 4)
     assert compute_namecoin_next_bits(0x207FFFFF, 1000, 1000 + 100, network="regtest") == 0x207FFFFF
-    # CAuxPow::check regtest parity: omitted fabe6d6d allowed iff root_offset <= 20, empty vout allowed in parent coinbase
+    # Real Namecoin Core nc28.0 mainnet archival retarget tuples (verified on synced mainnet node at height 853,134)
+    assert namecoin_retarget_ancestor_height(18144, network="main") == 16128
+    assert namecoin_retarget_ancestor_height(20160, network="main") == 18143
+    assert namecoin_retarget_ancestor_height(733824, network="main") == 731807
+    assert compute_namecoin_next_bits(0x1B00B269, 1318761208, 1319487998, network="main") == 0x1A6B32B1  # height 24192
+    assert compute_namecoin_next_bits(0x1A385BFC, 1321247518, 1322148153, network="main") == 0x1A29F6AE  # height 30240
+    assert compute_namecoin_next_bits(0x1705D999, 1723460218, 1724608760, network="main") == 0x17058E00  # height 733824
+    # Linux FS_IOC_MEASURE_VERITY fsverity-sha256 exact empty-file digest
+    assert fsverity_sha256_digest(b"") == "3d248ca542a24fc62d1c43b916eae5016878e2533c88238480b26128a1f1af95"
+    # CAuxPow::check regtest parity: omitted fabe6d6d allowed iff root_offset <= 20, empty vout allowed in parent coinbase,
+    # parent MUST NOT set IsAuxpow() and MUST NOT have chain_id == 1 under fStrictChainId
     _aux_hdr = struct.pack("<I", 0x00010104) + (b"\x00" * 32) + (b"\x11" * 32) + struct.pack("<III", 1700000000, 0x207FFFFF, 0)
     _aux_root_be = dsha256(_aux_hdr)[::-1]
     def _mk_cb_empty_vout(ss_b: bytes) -> bytes:
         return struct.pack("<I", 1) + b"\x01" + (b"\x00" * 32) + struct.pack("<I", 0xFFFFFFFF) + _encode_varint(len(ss_b)) + ss_b + struct.pack("<I", 0xFFFFFFFF) + b"\x00" + struct.pack("<I", 0)
     _cb_ok = _mk_cb_empty_vout(b"\x28" + _aux_root_be + struct.pack("<II", 1, 0))
     _cb_far = _mk_cb_empty_vout((b"\x00" * 21) + _aux_root_be + struct.pack("<II", 1, 0))
-    _ph_ok = struct.pack("<I", 1) + (b"\x00" * 32) + dsha256(_cb_ok) + struct.pack("<III", 0, 0, 0)
-    while int.from_bytes(dsha256(_ph_ok), "little") > bits_to_target(0x207FFFFF):
-        _ph_ok = _ph_ok[:-4] + struct.pack("<I", struct.unpack("<I", _ph_ok[-4:])[0] + 1)
-    _ph_far = struct.pack("<I", 1) + (b"\x00" * 32) + dsha256(_cb_far) + struct.pack("<III", 0, 0, 0)
-    while int.from_bytes(dsha256(_ph_far), "little") > bits_to_target(0x207FFFFF):
-        _ph_far = _ph_far[:-4] + struct.pack("<I", struct.unpack("<I", _ph_far[-4:])[0] + 1)
+    def _mine_hdr(ver: int, mr_le: bytes) -> bytes:
+        h = struct.pack("<I", ver) + (b"\x00" * 32) + mr_le + struct.pack("<III", 0, 0, 0)
+        while int.from_bytes(dsha256(h), "little") > bits_to_target(0x207FFFFF):
+            h = h[:-4] + struct.pack("<I", struct.unpack("<I", h[-4:])[0] + 1)
+        return h
+    _ph_ok = _mine_hdr(1, dsha256(_cb_ok))
+    _ph_far = _mine_hdr(1, dsha256(_cb_far))
+    _ph_aux = _mine_hdr(0x00000101, dsha256(_cb_ok))
+    _ph_same_cid = _mine_hdr(0x00010002, dsha256(_cb_ok))
     assert verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_ok.hex(), "parent_header_hex": _ph_ok.hex()}, network="regtest")
     assert not verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_far.hex(), "parent_header_hex": _ph_far.hex()}, network="regtest")
+    assert not verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_ok.hex(), "parent_header_hex": _ph_aux.hex()}, network="regtest")
+    assert not verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_ok.hex(), "parent_header_hex": _ph_same_cid.hex()}, network="regtest")
+    assert not verify_namecoin_header_pow(_ph_ok.hex(), network="regtest", height=10)  # missing chain_id=1 on non-legacy
+    _hdr_nonaux = struct.pack("<I", 0x00010002) + (b"\x00" * 32) + dsha256(_cb_ok) + struct.pack("<III", 1700000000, 0x207FFFFF, 0)
+    while int.from_bytes(dsha256(_hdr_nonaux), "little") > bits_to_target(0x207FFFFF):
+        _hdr_nonaux = _hdr_nonaux[:-4] + struct.pack("<I", struct.unpack("<I", _hdr_nonaux[-4:])[0] + 1)
+    assert verify_namecoin_header_pow(_hdr_nonaux.hex(), network="regtest", height=10)
 
-    print(f"seallink_ref self_test PASS (BIP-340 + RFC8032 Ed25519 + low-S P-256 + RIPEMD-160 + RFC9162 + SMT256 + BIP66 + CAuxPow) | clause_commit={c_hash}")
+    print(f"seallink_ref self_test PASS (BIP-340 + RFC8032 Ed25519 + low-S P-256 + RIPEMD-160 + RFC9162 + SMT256 + BIP66 + CAuxPow + fsverity) | clause_commit={c_hash}")
 
 
 if __name__ == "__main__":

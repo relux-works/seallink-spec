@@ -9,7 +9,7 @@
     "rule": "SL-LDGR-013",
     "truc_version": 3
   },
-  "description": "Namecoin prefix scripts (NAME_NEW/NAME_FIRSTUPDATE/NAME_UPDATE incl. OP_0 empty value), ScriptPolicy compilations (incl. BranchKeySpec native P2WSH m-of-n), TRUC/P2A CPFP, SLNK OP_RETURN frames (0x01-0x12) with per-action locator rules, and 5-leaf Merkle batch 0x02 proofs.",
+  "description": "Namecoin prefix scripts (NAME_NEW/NAME_FIRSTUPDATE/NAME_UPDATE incl. OP_0 empty value), ScriptPolicy compilations (incl. BranchKeySpec native P2WSH m-of-n), TRUC/P2A CPFP, SLNK OP_RETURN frames (0x01-0x14 + 0x15..0x2f criticality + minimal push), 5-leaf Merkle batch 0x02 proofs, and real Namecoin mainnet archival retarget tuples (H - 2017).",
   "merkle_batch_0x02": {
     "merkle_root": "7c391852d26b1821a9562565b0ca1f119ecb4d42640bbc0f9bb1d696b7f5b56d",
     "negative_tampered_proof": {
@@ -131,6 +131,35 @@
       "b0a92444c110facd2f60e3bbbfff3179052ee0e13be4f8ce34c231614a4b2fd4"
     ]
   },
+  "namecoin_consensus_retargets": {
+    "mainnet_archival": [
+      {
+        "ancestor_height": 22175,
+        "epoch_start_time": 1318761208,
+        "expected_next_bits_hex": "1a6b32b1",
+        "height": 24192,
+        "prev_bits_hex": "1b00b269",
+        "prev_block_time": 1319487998
+      },
+      {
+        "ancestor_height": 28223,
+        "epoch_start_time": 1321247518,
+        "expected_next_bits_hex": "1a29f6ae",
+        "height": 30240,
+        "prev_bits_hex": "1a385bfc",
+        "prev_block_time": 1322148153
+      },
+      {
+        "ancestor_height": 731807,
+        "epoch_start_time": 1723460218,
+        "expected_next_bits_hex": "17058e00",
+        "height": 733824,
+        "prev_bits_hex": "1705d999",
+        "prev_block_time": 1724608760
+      }
+    ],
+    "rule": "SL-ARTF-006"
+  },
   "namecoin_prefix_scripts": {
     "negative": [
       {
@@ -187,6 +216,35 @@
       }
     ]
   },
+  "opreturn_criticality": [
+    {
+      "decoded": {
+        "action": "0x15",
+        "critical_scope": "forward_only"
+      },
+      "id": "future-0x15-forward_only",
+      "script_hex": "6a05534c4e4b152201175e007a476175a9318574f3d8ded80e31c8fd482f300fb379691f1c9efd2d8200"
+    },
+    {
+      "decoded": {
+        "action": "0x1b",
+        "critical_scope": "retroactive"
+      },
+      "id": "future-0x1b-retroactive",
+      "script_hex": "6a05534c4e4b1b220119882bd3ba284d6056276faa285e5afe4fa8dc760309312e1a13be1f92cf98fb00"
+    },
+    {
+      "decoded": {
+        "action": "0x20",
+        "advisory": true,
+        "commitment": "0bd9ff9466ad64be3650ac9cb8c0217fc97ac863f37077360d6ddd0efe31f738",
+        "loc_type": "0x00",
+        "version": 1
+      },
+      "id": "future-0x20-advisory",
+      "script_hex": "6a05534c4e4b2022010bd9ff9466ad64be3650ac9cb8c0217fc97ac863f37077360d6ddd0efe31f73800"
+    }
+  ],
   "opreturn_frames": [
     {
       "action": "0x01",
@@ -357,6 +415,30 @@
       "id": "GUARDIAN_INITIAL_ACTIVATION",
       "script_bytes": 42,
       "script_hex": "6a05534c4e4b1222015dad8b900a116f5f1906365206b301fd9da28a95eb1b863ad7b0a97173b31cf900"
+    },
+    {
+      "action": "0x13",
+      "decoded": {
+        "action": "0x13",
+        "commitment": "0ac3a3006af42073e8a03fbe4ae200e02b42ef403adcf5d5d8d403e396b54257",
+        "loc_type": "0x00",
+        "version": 1
+      },
+      "id": "VOLUNTARY_REBIND",
+      "script_bytes": 42,
+      "script_hex": "6a05534c4e4b1322010ac3a3006af42073e8a03fbe4ae200e02b42ef403adcf5d5d8d403e396b5425700"
+    },
+    {
+      "action": "0x14",
+      "decoded": {
+        "action": "0x14",
+        "commitment": "3a04ec329c37710013dd29ecf577cc52914d72b7a6d398cf2ca2fa7988f4571f",
+        "loc_type": "0x00",
+        "version": 1
+      },
+      "id": "LOG_CHECKPOINT",
+      "script_bytes": 42,
+      "script_hex": "6a05534c4e4b1422013a04ec329c37710013dd29ecf577cc52914d72b7a6d398cf2ca2fa7988f4571f00"
     }
   ],
   "opreturn_negative": [
@@ -369,6 +451,11 @@
       "expected_refusal": "CHAIN_FRAME_INVALID",
       "id": "forbidden-locator-0x01-on-0x04",
       "script_hex": "6a47534c4e4b0442011277d6e132fbf9ebe46f92cac396b7cd7bfb77bed5f187d74688a036fe62df5b01b9ab9d532d83ded8b481abed63b4233363534220e1c8c463e09e743b65bb15d5"
+    },
+    {
+      "expected_refusal": "CHAIN_FRAME_INVALID",
+      "id": "non-minimal-op-pushdata1",
+      "script_hex": "6a05534c4e4b144c22014c24841bfa7cfbcccd704e42540b1d5108882b3d7a7a3d214b16878cee1365ca00"
     }
   ],
   "script_policies": [
@@ -572,5 +659,5 @@
     }
   ],
   "suite": "ledger-scripts-and-opreturn",
-  "version": "1.0.0-draft.11"
+  "version": "1.0.0-draft.12"
 }

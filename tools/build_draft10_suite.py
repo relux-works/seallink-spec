@@ -2759,7 +2759,8 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     ch_bsb_eq_rh = copy.deepcopy(fx_bs_b["chain"])
     ch_bsb_eq_rh["txs"][itx_bs_b]["confirmed_height"] = 749990  # a_h == r_h -> REFUSE
     ch_bsb_max_k = copy.deepcopy(fx_bs_b["chain"])
-    ch_bsb_max_k["blocks"][gp_bs_b["recent_block"]] = a_h_bsb - 432  # exact a_h == r_h + 432 -> ADMIT
+    ch_bsb_max_k["txs"][itx_bs_b]["confirmed_height"] = 749990 + 432  # exact a_h == r_h + 432 (consistent with root_recent_height=749990) -> ADMIT
+    rm.sync_chain_tip(ch_bsb_max_k, height=749990 + 432 + 5)
     ch_bsb_min_d = copy.deepcopy(fx_bs_b["chain"])
     rm.sync_chain_tip(ch_bsb_min_d, height=a_h_bsb + 2)  # exact (tip - a_h + 1) == 3 == min_depth -> ADMIT
     add(

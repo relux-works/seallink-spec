@@ -1007,7 +1007,6 @@
               "kind": "key",
               "pk": "0213b86cf475c9aa5c926358d51ac9b60161bd0726faf62de016da591da76bd0f2"
             },
-            "prev_input": null,
             "txid": "285be97a9064e873cf5bcde9e51cb48fd85ba24b8db77183c08995d9662f60ed",
             "vout": 0
           },
@@ -1128,7 +1127,6 @@
         }
       },
       "3be06158c89e034a609651d496ab202ca4c87af1ac5563769a81fcdd54f39508": {
-        "confirmed_height": null,
         "inputs": [
           {
             "prev_txid": "3b278d33edc40823e29765a2bb58e477a287e728de657a79ee45950edee661a8",
@@ -1208,7 +1206,6 @@
         }
       },
       "f686ffb8f3cd5781e5d8c78801a331d6e71e0be7f847c62788b295be3272a2bb": {
-        "confirmed_height": null,
         "inputs": [
           {
             "prev_txid": "05f147a75e3010a398dda4ee58621bd7b1e5227765b2c1ac0dd30e8946a91ad6",
@@ -2069,5 +2066,5 @@
   },
   "station_b_journal_id": "fa4c01896fbd3c1d2ccfab1bcc59ec91fb417320f260718ada19b6c2706185bc",
   "suite": "trace-03-delegation-pool-single-use",
-  "version": "1.0.0-draft.11"
+  "version": "1.0.0-draft.12"
 }

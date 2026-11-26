@@ -8,7 +8,7 @@ on:
   workflow_call:
     inputs:
       version:
-        description: "Immutable release tag to publish (e.g. v1.0.0-draft.11)"
+        description: "Immutable release tag to publish (e.g. v1.0.0-draft.12)"
         required: true
         type: string
   workflow_dispatch:

@@ -1,6 +1,6 @@
 # SealLink Conformance Requirements
 
-- **Version:** `1.0.0-draft.11`
+- **Version:** `1.0.0-draft.12`
 - **Status:** `draft`
 - **Normative Language:** [RFC2119], [RFC8174]
 
@@ -30,7 +30,7 @@ The following four subsystems are fully specified, schema-validated, and vector-
 | **Bearer Sessions** (`bearer-sessions`) | `SPEC-06 §5` (`SL-GRNT-013`) | `seallink-session-open/1` (`open`/`extend`/`close`), full `§4` backing-grant open, strict 64-lowercase-hex CSPRNG token, journal `session-state` & `session-use` debits across matched capability's `session`/`own`/`row`, mandatory live root issuer/`0x0b`/`grant_env`/`parent_grant_env`/stop-coin/contract/framework/`where` recheck on `use` | `SESSION_INVALID` |
 | **Service Migration & Exclusive Cut-Over** (`service-migration`) | `SPEC-07 §2` (`SL-SERV-002`, `SL-SERV-003`) | `seallink-migration/1`, closed `MigrationExportBundle` + canonical `MigrationInventory`, separated `stage` vs `activate` (4 mandatory proofs: `local_executor_pin` checked first, source-signed `migration-fence` statement + on-chain spend of `predecessor_grant_seals[]`, `holder_assent`, confirmed holder manifest, signed `migration-accept` statement), journal `migration-applied` | `SERVICE_MIGRATION_INVALID` |
 | **Federated Screening & Progressive PII Disclosure** (`federated-screening`) | `SPEC-07 §3` (`SL-SERV-004`) | Mandatory `ChainView` & `FencedJournal`, grant window & live seal in both phases, Phase 1 quota-bounded screening + Phase 2 L2 `approve-pii-disclosure` owner command (mandatory verified holder manifest + `sets.devices` preserving `DEVICE_UNAUTHORIZED` + strict single direct hop `len(hops) == 1` & `hops[0].actor == grant.recipient.name`) | `FEDERATION_POLICY_DENIED` |
-| **Artifact Notarization & Tier-2 SPV Gatekeeper** (`artifact-notarization`) | `PROFILE-artifact-v1.md` (`SL-ARTF-001`..`SL-ARTF-006`) | `seallink-ticket/1`, `seallink-tier2-name-history/1`, canonical `target_id` / `fsverity-sha256` (`salt_hex = ""`), Gatekeeper `m-of-n` quorum + `verdict = "inconclusive"` + absent-notary `target:` veto + `release_floor` + `hardened` bootstrap ban + provisional gossip deny-wins, consensus-exact 7-check `SegWitNameUpdateProof` (accepting high-S BIP-66 DER) & Namecoin AuxPoW / retarget | `TICKET_PROOF_INVALID`, `ARTIFACT_POLICY_DENIED` |
+| **Artifact Notarization & Tier-2 SPV Gatekeeper** (`artifact-notarization`) | `PROFILE-artifact-v1.md` (`SL-ARTF-001`..`SL-ARTF-006`) | `seallink-ticket/1`, `seallink-tier2-name-history/1`, canonical `target_id` / Linux `FS_IOC_MEASURE_VERITY` `fsverity-sha256` (`salt_hex = ""`), Gatekeeper `m-of-n` quorum + `verdict = "inconclusive"` + absent-notary `target:` veto + unspent `next_log_vout` head freshness + `release_floor` + `hardened` bootstrap ban + provisional gossip deny-wins (`act:`/`rel:`/`target:`), consensus-exact 7-check `SegWitNameUpdateProof` (`OP_NAME_FIRSTUPDATE` + `OP_NAME_UPDATE`, `key`/`multisig`, unbroken chain, accepting high-S BIP-66 DER) & exact Namecoin `nc28.0` `CAuxPow::check` / `H - 2017` retarget | `TICKET_PROOF_INVALID`, `ARTIFACT_POLICY_DENIED` |
 
 ---
 

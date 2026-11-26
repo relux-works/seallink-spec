@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.11/schemas/common.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.12/schemas/common.schema.json",
   "title": "SealLink v1.0 Shared Wire Primitives",
   "description": "Shared primitives with normative x-seallink-refusal class annotations (SPEC-01 §7 deterministic leaf-wins precedence: WIRE_TYPE -> WIRE_MEMBER -> WIRE_INTEGER -> WIRE_KEY -> WIRE_SIGNATURE -> WIRE_CONSTRAINT -> CHAIN_SCRIPT_UNSUPPORTED). Regular expressions follow portable RE2 / ECMA-262 / Rust regex semantics without lookaround.",
   "$defs": {
@@ -687,6 +687,143 @@
         }
       ]
     },
+    "ChainViewOpReturn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["script_pubkey_hex", "value_sat"],
+      "properties": {
+        "script_pubkey_hex": { "type": "string", "pattern": "^([0-9a-f]{2})*$", "maxLength": 20000, "not": { "pattern": "\n" } },
+        "value_sat": { "$ref": "#/$defs/Uint53" },
+        "vout": { "$ref": "#/$defs/Vout" }
+      }
+    },
+    "ChainViewOwnerPolicy": {
+      "oneOf": [
+        { "$ref": "#/$defs/ScriptPolicy" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "spk_hex"],
+          "properties": {
+            "kind": { "const": "unknown_unspent_spk" },
+            "spk_hex": { "type": "string", "pattern": "^([0-9a-f]{2})+$", "maxLength": 20000, "not": { "pattern": "\n" } }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": { "const": "unsupported_script" },
+            "spk_hex": { "type": "string", "pattern": "^([0-9a-f]{2})*$", "maxLength": 20000, "not": { "pattern": "\n" } }
+          }
+        }
+      ]
+    },
+    "ChainViewPrevInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["txid", "vout", "sighash_bytes", "witness_policy"],
+      "properties": {
+        "txid": { "$ref": "#/$defs/Hex64" },
+        "vout": { "$ref": "#/$defs/Vout" },
+        "sighash_bytes": {
+          "type": "array",
+          "maxItems": 32,
+          "items": { "type": "integer", "minimum": 0, "maximum": 255, "x-seallink-refusal": "WIRE_INTEGER" }
+        },
+        "witness_policy": { "$ref": "#/$defs/ChainViewOwnerPolicy" }
+      }
+    },
+    "ChainViewNameUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "txid", "vout", "output_script_hex", "owner_policy"],
+      "properties": {
+        "op": { "type": "string", "enum": ["NAME_FIRSTUPDATE", "NAME_UPDATE"] },
+        "txid": { "$ref": "#/$defs/Hex64" },
+        "vout": { "$ref": "#/$defs/Vout" },
+        "confirmed_height": { "$ref": "#/$defs/Uint53" },
+        "block_time": { "$ref": "#/$defs/Uint53" },
+        "version": { "type": "integer", "minimum": 0, "maximum": 4294967295, "x-seallink-refusal": "WIRE_INTEGER" },
+        "output_script_hex": { "type": "string", "pattern": "^([0-9a-f]{2})+$", "maxLength": 20000, "not": { "pattern": "\n" } },
+        "owner_policy": { "$ref": "#/$defs/ChainViewOwnerPolicy" },
+        "prev_input": { "$ref": "#/$defs/ChainViewPrevInput" },
+        "opreturn_hex": { "type": "string", "pattern": "^([0-9a-f]{2})*$", "maxLength": 20000, "not": { "pattern": "\n" } },
+        "opreturns": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/ChainViewOpReturn" } }
+      }
+    },
+    "ChainViewMempoolUpdate": {
+      "oneOf": [
+        { "$ref": "#/$defs/ChainViewNameUpdate" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["unparseable"],
+          "properties": {
+            "txid": { "$ref": "#/$defs/Hex64" },
+            "unparseable": { "const": true }
+          }
+        }
+      ]
+    },
+    "ChainViewLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registration", "updates"],
+      "properties": {
+        "registration": { "$ref": "#/$defs/Outpoint" },
+        "updates": { "type": "array", "items": { "$ref": "#/$defs/ChainViewNameUpdate" } },
+        "expired": { "type": "boolean" },
+        "expires_at_height": { "$ref": "#/$defs/Uint53" },
+        "history_truncated": { "type": "boolean" },
+        "first_error_height": { "$ref": "#/$defs/Uint53" },
+        "mempool_updates": { "type": "array", "items": { "$ref": "#/$defs/ChainViewMempoolUpdate" } }
+      }
+    },
+    "ChainViewInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prev_txid", "prev_vout"],
+      "properties": {
+        "prev_txid": { "$ref": "#/$defs/Hex64" },
+        "prev_vout": { "type": "integer", "minimum": 0, "maximum": 4294967295, "x-seallink-refusal": "WIRE_INTEGER" },
+        "script_sig_hex": { "type": "string", "pattern": "^([0-9a-f]{2})*$", "maxLength": 20000, "not": { "pattern": "\n" } },
+        "sequence": { "type": "integer", "minimum": 0, "maximum": 4294967295, "x-seallink-refusal": "WIRE_INTEGER" },
+        "witness": {
+          "type": "array",
+          "maxItems": 100,
+          "items": { "type": "string", "pattern": "^([0-9a-f]{2})*$", "maxLength": 20000, "not": { "pattern": "\n" } }
+        }
+      }
+    },
+    "ChainViewOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["script_pubkey_hex"],
+      "properties": {
+        "script_pubkey_hex": { "type": "string", "pattern": "^([0-9a-f]{2})*$", "maxLength": 20000, "not": { "pattern": "\n" } },
+        "value_sat": { "$ref": "#/$defs/Uint53" },
+        "spent_by_txid": { "$ref": "#/$defs/Hex64" },
+        "absent_from_utxo": { "type": "boolean" }
+      }
+    },
+    "ChainViewTx": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "confirmed_height": { "$ref": "#/$defs/Uint53" },
+        "in_mempool": { "type": "boolean" },
+        "mempool": { "type": "boolean" },
+        "block_hash": { "$ref": "#/$defs/Hex64" },
+        "block_time": { "$ref": "#/$defs/Uint53" },
+        "version": { "type": "integer", "minimum": 0, "maximum": 4294967295, "x-seallink-refusal": "WIRE_INTEGER" },
+        "inputs": { "type": "array", "items": { "$ref": "#/$defs/ChainViewInput" } },
+        "outputs": { "type": "object", "additionalProperties": { "$ref": "#/$defs/ChainViewOutput" } },
+        "opreturn_hex": { "type": "string", "pattern": "^([0-9a-f]{2})*$", "maxLength": 20000, "not": { "pattern": "\n" } },
+        "opreturns": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/ChainViewOpReturn" } }
+      }
+    },
     "ChainViewSnapshot": {
       "type": "object",
       "additionalProperties": false,
@@ -757,9 +894,21 @@
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/Uint53" }
         },
-        "txs": { "type": "object" },
-        "names": { "type": "object" },
-        "name_registrations": { "type": "object" },
+        "txs": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/ChainViewTx" }
+        },
+        "names": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/ChainViewLineage" }
+        },
+        "name_registrations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/ChainViewLineage" }
+          }
+        },
         "registered_bindings": {
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/Hex64" }
