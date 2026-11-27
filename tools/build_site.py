@@ -12,10 +12,12 @@ ready directory (`site/` by default) containing:
   - Exact single-file Markdown bundle + SHA-256 (`/releases/<tag>/seallink-spec-<tag>.md{,.sha256}`)
   - Exact live `$id` endpoints for all 14 Draft 2020-12 JSON Schemas:
       /releases/<tag>/schemas/<name>.schema.json (plus /schemas/<name>.schema.json)
-  - All 8 registries and 9 executable vector suites under /releases/<tag>/{registry,vectors}/
+  - All registries and executable vector suites under /releases/<tag>/{registry,vectors}/
+    (vector suites exceeding Cloudflare Pages' 25 MiB per-file limit are linked and
+    302-redirected to their immutable tagged GitHub raw URLs)
   - Optional SealLink Channel 2 /.well-known/ assets copied verbatim from well-known/ if present
   - Explicit `/404.html` (disables Cloudflare Pages SPA fallback so missing schema/artifact paths return HTTP 404)
-  - Cloudflare Pages `_headers` (CORS, application/schema+json, immutable caching)
+  - Cloudflare Pages `_headers` (CORS, application/schema+json, immutable caching) and `_redirects`
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import html
+import importlib.util
 import json
 import re
 import shutil
@@ -32,9 +35,20 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+CF_PAGES_HARD_MAX_FILE_BYTES = 25 * 1024 * 1024  # 25 MiB hard Cloudflare Pages per-file limit
+CF_PAGES_SAFE_MAX_FILE_BYTES = 24 * 1024 * 1024  # 24 MiB threshold for externalizing large vectors
+GITHUB_RAW_BASE = "https://raw.githubusercontent.com/relux-works/seallink-spec"
 
-import build_bundle as bb
+
+def _load_build_bundle(root: Path) -> Any:
+    """Load tools/build_bundle.py from the target repository root (immutable tag checkout)."""
+    mod_path = root / "tools" / "build_bundle.py"
+    spec = importlib.util.spec_from_file_location("seallink_build_bundle", mod_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load build_bundle.py from {mod_path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 # ============================================================================
@@ -561,7 +575,7 @@ def render_page(
 """
 
 
-def _discover_archive_tags(version: str, archive_tags: str) -> list[str]:
+def _discover_archive_tags(version: str, archive_tags: str, root: Path = ROOT) -> list[str]:
     """Return prior immutable release tags (oldest -> newest) whose schemas use /releases/<tag>/schemas/."""
     mode = (archive_tags or "auto").strip()
     if mode.lower() in ("none", ""):
@@ -571,7 +585,7 @@ def _discover_archive_tags(version: str, archive_tags: str) -> list[str]:
     try:
         res = subprocess.run(
             ["git", "tag", "--list", "v*", "--sort=v:refname"],
-            cwd=str(ROOT),
+            cwd=str(root),
             check=True,
             capture_output=True,
             text=True,
@@ -586,7 +600,7 @@ def _discover_archive_tags(version: str, archive_tags: str) -> list[str]:
         # Only archive tags that published versioned /releases/<tag>/schemas/ $ids
         chk = subprocess.run(
             ["git", "show", f"{tag}:schemas/common.schema.json"],
-            cwd=str(ROOT),
+            cwd=str(root),
             capture_output=True,
             text=True,
         )
@@ -595,14 +609,21 @@ def _discover_archive_tags(version: str, archive_tags: str) -> list[str]:
     return tags
 
 
-def _extract_archived_release(tag: str, out_dir: Path) -> list[str]:
-    """Extract immutable schemas/, registry/, and vectors/ from a historical git tag."""
+def _extract_archived_release(
+    tag: str, out_dir: Path, root: Path = ROOT
+) -> tuple[list[str], list[tuple[str, str]]]:
+    """Extract immutable schemas/, registry/, and <=24 MiB vectors/ from a historical git tag.
+
+    Returns `(extracted_schemas, external_vectors)` where `external_vectors` lists
+    `(filename, github_raw_url)` for any vector exceeding Cloudflare Pages' per-file limit.
+    """
     rel_dir = out_dir / "releases" / tag
     extracted_schemas: list[str] = []
+    external_vectors: list[tuple[str, str]] = []
     for sub in ("schemas", "registry", "vectors"):
         ls = subprocess.run(
             ["git", "ls-tree", "--name-only", tag, f"{sub}/"],
-            cwd=str(ROOT),
+            cwd=str(root),
             capture_output=True,
             text=True,
         )
@@ -613,20 +634,29 @@ def _extract_archived_release(tag: str, out_dir: Path) -> list[str]:
                 continue
             blob = subprocess.run(
                 ["git", "show", f"{tag}:{rel_path}"],
-                cwd=str(ROOT),
+                cwd=str(root),
                 capture_output=True,
             )
             if blob.returncode != 0:
                 raise RuntimeError(f"Failed to extract {tag}:{rel_path} from git")
+            if sub == "vectors" and len(blob.stdout) > CF_PAGES_SAFE_MAX_FILE_BYTES:
+                fname = Path(rel_path).name
+                external_vectors.append((fname, f"{GITHUB_RAW_BASE}/{tag}/vectors/{fname}"))
+                continue
             dest = rel_dir / rel_path
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(blob.stdout)
             if sub == "schemas" and rel_path.endswith(".schema.json"):
                 extracted_schemas.append(Path(rel_path).name)
-    return extracted_schemas
+    return extracted_schemas, external_vectors
 
 
-def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[str, Any]:
+def build_site(
+    version: str, out_dir: Path, archive_tags: str = "auto", root: Path = ROOT
+) -> dict[str, Any]:
+    root = root.resolve()
+    bb = _load_build_bundle(root)
+
     if out_dir.exists():
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -636,18 +666,18 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
     (out_dir / "assets" / "style.css").write_text(STYLE_CSS, encoding="utf-8")
 
     # 2. Collect repository artifacts
-    spec_files = sorted((ROOT / "spec").glob("SPEC-*.md"))
-    profile_files = sorted((ROOT / "profiles").glob("PROFILE-*.md"))
-    registry_files = sorted((ROOT / "registry").glob("*.json"))
-    schema_files = sorted((ROOT / "schemas").glob("*.schema.json"))
-    vector_files = sorted((ROOT / "vectors").glob("*.json"))
+    spec_files = sorted((root / "spec").glob("SPEC-*.md"))
+    profile_files = sorted((root / "profiles").glob("PROFILE-*.md"))
+    registry_files = sorted((root / "registry").glob("*.json"))
+    schema_files = sorted((root / "schemas").glob("*.schema.json"))
+    vector_files = sorted((root / "vectors").glob("*.json"))
     doc_files = [
-        (ROOT / "CONFORMANCE.md", "CONFORMANCE.html"),
-        (ROOT / "OPEN-QUESTIONS.md", "OPEN-QUESTIONS.html"),
-        (ROOT / "SLIP-TEMPLATE.md", "SLIP-TEMPLATE.html"),
-        (ROOT / "CHANGELOG.md", "CHANGELOG.html"),
-        (ROOT / "guides" / "GUIDE-01-custody-and-signers.md", "GUIDE-01-custody-and-signers.html"),
-        (ROOT / "archive" / "rule-inventory.md", "rule-inventory.html"),
+        (root / "CONFORMANCE.md", "CONFORMANCE.html"),
+        (root / "OPEN-QUESTIONS.md", "OPEN-QUESTIONS.html"),
+        (root / "SLIP-TEMPLATE.md", "SLIP-TEMPLATE.html"),
+        (root / "CHANGELOG.md", "CHANGELOG.html"),
+        (root / "guides" / "GUIDE-01-custody-and-signers.md", "GUIDE-01-custody-and-signers.html"),
+        (root / "archive" / "rule-inventory.md", "rule-inventory.html"),
     ]
 
     rel_base = out_dir / "releases" / version
@@ -660,7 +690,11 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
     (out_dir / "profiles").mkdir(parents=True, exist_ok=True)
     (out_dir / "docs").mkdir(parents=True, exist_ok=True)
 
-    # 3. Copy schemas, registries, and vectors verbatim to both /releases/<version>/... and latest aliases
+    # 3. Copy schemas, registries, and vectors verbatim to both /releases/<version>/... and latest aliases.
+    # Vector files exceeding Cloudflare Pages' per-file size limit are externalized to immutable tagged
+    # GitHub raw URLs with explicit 302 rules in _redirects so /releases/<tag>/vectors/<file> keeps working.
+    external_redirects: list[tuple[str, str]] = []
+    external_vector_urls: dict[str, str] = {}
     for sf in schema_files:
         shutil.copy2(sf, rel_base / "schemas" / sf.name)
         shutil.copy2(sf, out_dir / "schemas" / sf.name)
@@ -668,17 +702,24 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
         shutil.copy2(rf, rel_base / "registry" / rf.name)
         shutil.copy2(rf, out_dir / "registry" / rf.name)
     for vf in vector_files:
-        shutil.copy2(vf, rel_base / "vectors" / vf.name)
+        if vf.stat().st_size > CF_PAGES_SAFE_MAX_FILE_BYTES:
+            raw_url = f"{GITHUB_RAW_BASE}/{version}/vectors/{vf.name}"
+            external_vector_urls[vf.name] = raw_url
+            external_redirects.append((f"/releases/{version}/vectors/{vf.name}", raw_url))
+        else:
+            shutil.copy2(vf, rel_base / "vectors" / vf.name)
 
     # 3b. Preserve immutable historical /releases/<prev_tag>/{schemas,registry,vectors}/ endpoints
-    archived_releases: list[tuple[str, list[str]]] = []
-    for prev_tag in _discover_archive_tags(version, archive_tags):
-        prev_schemas = _extract_archived_release(prev_tag, out_dir)
+    archived_releases: list[tuple[str, list[str], list[tuple[str, str]]]] = []
+    for prev_tag in _discover_archive_tags(version, archive_tags, root=root):
+        prev_schemas, prev_ext_vectors = _extract_archived_release(prev_tag, out_dir, root=root)
         if prev_schemas:
-            archived_releases.append((prev_tag, prev_schemas))
+            archived_releases.append((prev_tag, prev_schemas, prev_ext_vectors))
+            for fname, raw_url in prev_ext_vectors:
+                external_redirects.append((f"/releases/{prev_tag}/vectors/{fname}", raw_url))
 
     # Copy optional SealLink Channel 2 /.well-known/ assets if present in repo
-    wk_src = ROOT / "well-known"
+    wk_src = root / "well-known"
     if wk_src.exists():
         shutil.copytree(wk_src, out_dir / ".well-known", dirs_exist_ok=True)
 
@@ -774,8 +815,8 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
     (rel_base / f"{html_name}.sha256").write_text(f"{full_html_sha}  {html_name}\n", encoding="utf-8")
 
     # 6. Build landing page `/index.html`
-    reg_obj = json.loads((ROOT / "registry" / "object-types.json").read_text(encoding="utf-8"))
-    reg_ref = json.loads((ROOT / "registry" / "refusal-codes.json").read_text(encoding="utf-8"))
+    reg_obj = json.loads((root / "registry" / "object-types.json").read_text(encoding="utf-8"))
+    reg_ref = json.loads((root / "registry" / "refusal-codes.json").read_text(encoding="utf-8"))
     spec_rows = []
     for sf in spec_files:
         txt = sf.read_text(encoding="utf-8")
@@ -812,8 +853,16 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
         raw = vf.read_bytes()
         meta = json.loads(raw.decode("utf-8"))
         sha = hashlib.sha256(raw).hexdigest()
+        if vf.name in external_vector_urls:
+            v_link = (
+                f'<a href="{html.escape(external_vector_urls[vf.name])}" target="_blank" rel="noopener">'
+                f'<code>{vf.name}</code></a> '
+                f'<span style="color:var(--fg-muted);font-size:0.84rem;">(GitHub raw)</span>'
+            )
+        else:
+            v_link = f'<a href="/releases/{html.escape(version)}/vectors/{vf.name}"><code>{vf.name}</code></a>'
         vector_rows.append(
-            f'<tr><td><a href="/releases/{html.escape(version)}/vectors/{vf.name}"><code>{vf.name}</code></a></td>'
+            f"<tr><td>{v_link}</td>"
             f"<td>{len(raw):,} B</td>"
             f"<td><code>{sha[:16]}…</code></td>"
             f'<td>{html.escape(meta.get("description", ""))}</td></tr>'
@@ -903,7 +952,7 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
             f'<td><a href="/releases/{html.escape(t)}/schemas/common.schema.json"><code>/releases/{html.escape(t)}/schemas/…</code></a> ({len(sfiles)} schemas)</td>'
             f'<td><a href="/releases/{html.escape(t)}/registry/object-types.json"><code>/releases/{html.escape(t)}/registry/…</code></a></td>'
             f'<td><a href="https://github.com/relux-works/seallink-spec/releases/tag/{html.escape(t)}" target="_blank" rel="noopener">GitHub Release</a></td></tr>'
-            for t, sfiles in reversed(archived_releases)
+            for t, sfiles, _ in reversed(archived_releases)
         )
         index_body += (
             '\n<h2 id="archived-releases">Archived Immutable Releases</h2>\n'
@@ -954,7 +1003,7 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
     (out_dir / "schemas" / "index.html").write_text(
         render_page(f"SealLink Schemas ({version})", version, schemas_idx_body), encoding="utf-8"
     )
-    for prev_tag, prev_schemas in archived_releases:
+    for prev_tag, prev_schemas, prev_ext_vectors in archived_releases:
         pdir = out_dir / "releases" / prev_tag
         ps_links = "".join(
             f'<li><a href="/releases/{html.escape(prev_tag)}/schemas/{html.escape(s)}"><code>{html.escape(s)}</code></a></li>'
@@ -981,10 +1030,22 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
             for f in pr_files
         )
         pv_files = sorted((pdir / "vectors").glob("*.json")) if (pdir / "vectors").is_dir() else []
-        pv_links = "".join(
-            f'<li><a href="/releases/{html.escape(prev_tag)}/vectors/{html.escape(f.name)}"><code>{html.escape(f.name)}</code></a></li>'
+        pv_items: list[tuple[str, str]] = [
+            (
+                f.name,
+                f'<li><a href="/releases/{html.escape(prev_tag)}/vectors/{html.escape(f.name)}"><code>{html.escape(f.name)}</code></a></li>',
+            )
             for f in pv_files
-        )
+        ] + [
+            (
+                fname,
+                f'<li><a href="{html.escape(raw_url)}" target="_blank" rel="noopener"><code>{html.escape(fname)}</code></a> '
+                f'<span style="color:var(--fg-muted);font-size:0.84rem;">(GitHub raw)</span></li>',
+            )
+            for fname, raw_url in prev_ext_vectors
+        ]
+        pv_items.sort(key=lambda pair: pair[0])
+        pv_links = "".join(item for _, item in pv_items)
         prev_body = (
             '<section class="hero">'
             f'<span class="badge">Archived Release {html.escape(prev_tag)}</span>'
@@ -996,7 +1057,7 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
             '</div></section>\n'
             f'<h2>Schemas ({len(prev_schemas)})</h2><ul>{ps_links}</ul>\n'
             f'<h2>Registries ({len(pr_files)})</h2><ul>{pr_links}</ul>\n'
-            f'<h2>Conformance Vectors ({len(pv_files)})</h2><ul>{pv_links}</ul>\n'
+            f'<h2>Conformance Vectors ({len(pv_items)})</h2><ul>{pv_links}</ul>\n'
         )
         (pdir / "index.html").write_text(
             render_page(f"SealLink {prev_tag}", version, prev_body), encoding="utf-8"
@@ -1009,7 +1070,7 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
         f'<tr><td><a href="/releases/{html.escape(t)}/"><code>{html.escape(t)}</code></a></td>'
         f'<td>{len(sfiles)} schemas</td>'
         f'<td><a href="https://github.com/relux-works/seallink-spec/releases/tag/{html.escape(t)}" target="_blank" rel="noopener">GitHub Release</a></td></tr>'
-        for t, sfiles in reversed(archived_releases)
+        for t, sfiles, _ in reversed(archived_releases)
     ]
     rel_idx_body = (
         '<section class="hero"><span class="badge">Releases</span>'
@@ -1048,7 +1109,7 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
             f"/schemas/{sf.name}\n  Content-Type: application/schema+json; charset=utf-8"
         )
     # Add exact application/schema+json rules for newest archived releases while staying <= 95 rules (< 100 CF limit)
-    for prev_tag, prev_schemas in reversed(archived_releases):
+    for prev_tag, prev_schemas, _ in reversed(archived_releases):
         if len(header_blocks) + len(prev_schemas) <= 95:
             for sname in prev_schemas:
                 header_blocks.append(
@@ -1060,7 +1121,7 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
     (out_dir / "_headers").write_text(headers_txt, encoding="utf-8")
 
     # 8. Also write explicit 404.html (prevents Cloudflare Pages SPA 200 fallback on missing paths),
-    # _redirects (canonicalize www -> apex), and robots.txt
+    # _redirects (canonicalize www -> apex + 302 redirects for >24 MiB vectors), and robots.txt
     not_found_body = (
         '<section class="hero">'
         '<span class="badge">HTTP 404</span>'
@@ -1075,24 +1136,48 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
     (out_dir / "404.html").write_text(
         render_page("404 Not Found", version, not_found_body), encoding="utf-8"
     )
-    (out_dir / "_redirects").write_text("https://www.seallink.org/* https://seallink.org/:splat 301\n", encoding="utf-8")
+    redirect_lines = ["https://www.seallink.org/* https://seallink.org/:splat 301"]
+    for site_path, raw_url in external_redirects:
+        redirect_lines.append(f"{site_path} {raw_url} 302")
+    (out_dir / "_redirects").write_text("\n".join(redirect_lines) + "\n", encoding="utf-8")
     (out_dir / "robots.txt").write_text("User-agent: *\nAllow: /\n", encoding="utf-8")
 
-    file_count = sum(1 for p in out_dir.rglob("*") if p.is_file())
+    # 9. Pre-flight check: enforce Cloudflare Pages hard 25 MiB per-file asset ceiling
+    file_count = 0
+    max_file_bytes = 0
+    max_file_rel = ""
+    for p in out_dir.rglob("*"):
+        if not p.is_file():
+            continue
+        file_count += 1
+        sz = p.stat().st_size
+        if sz > max_file_bytes:
+            max_file_bytes = sz
+            max_file_rel = str(p.relative_to(out_dir))
+        if sz >= CF_PAGES_HARD_MAX_FILE_BYTES:
+            raise RuntimeError(
+                f"Cloudflare Pages asset {p.relative_to(out_dir)} is {sz:,} bytes "
+                f"(>= {CF_PAGES_HARD_MAX_FILE_BYTES:,} byte 25 MiB limit)"
+            )
+
     return {
         "version": version,
         "out_dir": str(out_dir),
         "files": file_count,
         "bundle_sha256": bundle_sha,
-        "archived_releases": [t for t, _ in archived_releases],
+        "archived_releases": [t for t, _, _ in archived_releases],
         "header_rules": len(header_blocks),
+        "externalized_vectors": len(external_redirects),
+        "max_file_bytes": max_file_bytes,
+        "max_file_rel": max_file_rel,
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build static website & live schema host for seallink.org.")
     parser.add_argument("--version", default="v1.0.0-draft.13", help="Release version label (e.g. v1.0.0-draft.13)")
-    parser.add_argument("--out", default=str(ROOT / "site"), help="Output directory for generated static site")
+    parser.add_argument("--root", default=str(ROOT), help="Repository root containing spec/, schemas/, registry/, vectors/, tools/")
+    parser.add_argument("--out", default=None, help="Output directory for generated static site (default: <root>/site)")
     parser.add_argument(
         "--archive-tags",
         default="auto",
@@ -1100,10 +1185,14 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    info = build_site(args.version, Path(args.out), archive_tags=args.archive_tags)
+    repo_root = Path(args.root).resolve()
+    out_dir = Path(args.out) if args.out else (repo_root / "site")
+    info = build_site(args.version, out_dir, archive_tags=args.archive_tags, root=repo_root)
     print(
         f"Built seallink.org static site ({info['files']} files, version={info['version']}, "
         f"archived={len(info['archived_releases'])}, header_rules={info['header_rules']}, "
+        f"externalized_vectors={info['externalized_vectors']}, "
+        f"max_file={info['max_file_bytes']:,} B [{info['max_file_rel']}], "
         f"bundle_sha256={info['bundle_sha256']}) -> {info['out_dir']}"
     )
     return 0

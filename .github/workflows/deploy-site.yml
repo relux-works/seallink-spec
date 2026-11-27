@@ -32,6 +32,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Stage site publisher script from workflow ref
+        run: cp tools/build_site.py "${RUNNER_TEMP}/build_site.py"
+
       - name: Resolve and verify immutable release tag
         id: ver
         run: |
@@ -71,7 +74,7 @@ jobs:
         run: python3 tools/speclint.py --require-jsonschema
 
       - name: Build static site, archived releases & live schema endpoints
-        run: python3 tools/build_site.py --version "${{ steps.ver.outputs.version }}" --archive-tags auto --out site
+        run: python3 "${RUNNER_TEMP}/build_site.py" --root . --version "${{ steps.ver.outputs.version }}" --archive-tags auto --out site
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
