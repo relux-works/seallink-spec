@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.12/schemas/common.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.13/schemas/common.schema.json",
   "title": "SealLink v1.0 Shared Wire Primitives",
   "description": "Shared primitives with normative x-seallink-refusal class annotations (SPEC-01 §7 deterministic leaf-wins precedence: WIRE_DUPLICATE -> WIRE_STRING -> WIRE_TYPE -> WIRE_MEMBER -> WIRE_INTEGER -> WIRE_KEY -> WIRE_SIGNATURE -> WIRE_CONSTRAINT -> CHAIN_SCRIPT_UNSUPPORTED). Regular expressions follow portable RE2 / ECMA-262 / Rust regex semantics without lookaround.",
   "$defs": {
@@ -97,8 +97,16 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "pattern": "^(mail|agent-session|xmpp|blob|wallet|names|compute|rental|[a-z0-9-]+(\\.[a-z0-9-]+)+/[a-z0-9][a-z0-9._-]{0,63})$",
+      "pattern": "^(mail|agent-session|xmpp|blob|wallet|names|compute|rental|sso|[a-z0-9-]+(\\.[a-z0-9-]+)+/[a-z0-9][a-z0-9._-]{0,63})$",
       "not": { "pattern": "\n" }
+    },
+    "LocatorUri": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 512,
+      "pattern": "^((https|blossom|sftp)://[^/@ \\t\\r\\n]+(/[^ \\t\\r\\n]*)?|ipfs://[A-Za-z0-9][A-Za-z0-9._~-]*(/[^ \\t\\r\\n]*)?|magnet:\\?[^ \\t\\r\\n]+|nostr:(nevent1|naddr1|note1|npub1|nprofile1)[02-9ac-hj-np-z]+)$",
+      "not": { "pattern": "\n" },
+      "description": "Safe-by-design off-chain locator URI matching registry/locator-schemes.json (allowlists https, blossom, ipfs, magnet, nostr, sftp; forbids user:pass@ in authority, cleartext http/javascript/data/file/ftp, and control/whitespace chars)."
     },
     "QuotaKindStr": {
       "type": "string",
@@ -649,6 +657,29 @@
       "properties": {
         "seq": { "$ref": "#/$defs/PositiveUint53" },
         "sha256": { "$ref": "#/$defs/Hex64" }
+      }
+    },
+    "SetEntryMerkleProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["leaf_digest", "root", "steps"],
+      "description": "Selective-disclosure Merkle inclusion proof (<= 8 steps, up to 256 entries) under seallink-merkle-leaf/1 and seallink-merkle-node/1 for salted sets.auth and sets.devices.",
+      "properties": {
+        "leaf_digest": { "$ref": "#/$defs/Hex64" },
+        "root": { "$ref": "#/$defs/Hex64" },
+        "steps": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["side", "hash"],
+            "properties": {
+              "side": { "type": "string", "enum": ["L", "R"] },
+              "hash": { "$ref": "#/$defs/Hex64" }
+            }
+          }
+        }
       }
     },
     "ChainViewTipRef": {

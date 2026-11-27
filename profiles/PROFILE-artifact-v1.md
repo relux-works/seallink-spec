@@ -1,6 +1,6 @@
 # PROFILE-artifact-v1: Decentralized Artifact Notarization, Release Verification & Tier-2 SPV Gatekeeper
 
-- **Version:** `1.0.0-draft.12`
+- **Version:** `1.0.0-draft.13`
 - **Status:** `draft` (optional conformance module `artifact-notarization`, `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/security-conformance.json`, `vectors/refusal-coverage-matrix.json`, `conformance/traces-regtest/`)
 - **Optional Module Tag (`CONFORMANCE.md §1.1`):** `artifact-notarization`

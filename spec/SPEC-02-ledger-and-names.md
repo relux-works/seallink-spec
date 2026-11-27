@@ -1,6 +1,6 @@
 # SPEC-02: Ledger Interface, Namecoin Binding, ScriptPolicy, Merkle Batching, and UTXO Seals
 
-- **Version:** `1.0.0-draft.12`
+- **Version:** `1.0.0-draft.13`
 - **Status:** `draft` (normative rules `decided` except provisional freshness constants and Tier 2 profile marked `open` in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `vectors` (`vectors/ledger-scripts-and-opreturn.json`, `vectors/refusal-coverage-matrix.json`; two-node P2A regtest proof in `conformance/p2a-regtest/`)
 - **Registries:** `registry/opreturn-actions.json`, `registry/refusal-codes.json`
@@ -191,7 +191,7 @@ Every SealLink on-chain commitment uses **exactly one** zero-value (`value == 0`
 OP_RETURN (0x6a)  PUSH5 (0x05)  "SLNK" (53 4c 4e 4b)  <action:1B>  <PUSH_N>  <payload:N bytes>
 ```
 
-Standard payload (`N = 34` for `loc_type = 0x00`, total script **42 bytes**; `N = 66` for `loc_type = 0x01 | 0x02 | 0x05`, total script **74 bytes** — strictly below the 83-byte standard relay limit):
+Standard payload (`N = 34` for `loc_type = 0x00`, total script **42 bytes**; `N = 66` for `loc_type = 0x01 | 0x02 | 0x03 | 0x04 | 0x05`, total script **74 bytes** — strictly below the 83-byte standard relay limit):
 
 ```text
 <version:1B = 0x01> || <commitment:32B> || <loc_type:1B> || [pointer:0B|32B]
@@ -208,7 +208,9 @@ Example hex (`action = 0x01`, `loc_type = 0x00`, 42 bytes):
 6a 05 534c4e4b 01 22 01 <commitment:32B> 00
 ```
 
-All action codes (`0x01`–`0x14`, with `0x06` reserved) and locator types (`0x00`, `0x01`, `0x02`, `0x05`) are registered in `registry/opreturn-actions.json`. Locators are strictly non-exclusive hints: an unavailable locator NEVER invalidates a document whose exact bytes match `commitment` when supplied inline or via any other channel.
+All action codes (`0x01`–`0x14`, with `0x06` reserved) and locator types (`0x00` `none`, `0x01` `blossom_sha256`, `0x02` `nostr_event_id`, `0x03` `ipfs_cidv1_dag_pb` 32B SHA-256 multihash digest, `0x04` `bt_v2_private` 32B BEP 52 SHA-256 infohash, `0x05` `sha256_lookup`) are registered in `registry/opreturn-actions.json`. Locators are strictly non-exclusive hints: an unavailable locator NEVER invalidates a document whose exact bytes match `commitment` when supplied inline or via any other channel.
+- **`loc_type = 0x01` (`blossom_sha256`) lookup cascade:** When resolving a `0x01` pointer without inline bytes, a verifier checks in order: (1) local hash cache, (2) Blossom endpoints/mirrors advertised in the actor's manifest or entity card (subject to `registry/locator-schemes.json` SSRF guards), and (3) operator-configured Blossom servers (`GET /<pointer_hex>`).
+- **Reserved sibling `OP_RETURN` prefix `SLSC` (`534c5343`):** Prefix `SLSC` is officially reserved in `registry/opreturn-actions.json` for a sibling protocol namespace. Every `SLNK` parser **MUST ignore** `OP_RETURN` outputs carrying `SLSC` (neither counting them as a duplicate `SLNK` frame nor raising `CHAIN_FRAME_INVALID`).
 
 **Name-history `SLNK` criticality & deterministic decoding precedence (200-year forward-compatibility):** When walking confirmed name history (`resolve_name`, covering EVERY confirmed entry from `updates[0]` `OP_NAME_FIRSTUPDATE` through the tip), EVERY confirmed entry carrying an `SLNK` `OP_RETURN` output MUST be validated in strict outer-before-semantic precedence. All semantic `SLNK` effects on name history — including `0x0b`, `0x10`, `0x13`, and the future critical reserved ranges `0x15`–`0x1f` — require an owner-authored `SIGHASH_ALL` update (`SL-LDGR-007`): any well-formed `SLNK` frame placed inside a non-`SIGHASH_ALL` or non-owner-authored transaction is **completely inert** and MUST NOT trigger a compromise break, cancel, or `ORIGIN_STATUS_INCOMPLETE` (nor retroactively taint `at_height < h_frame` unless `0x1b`–`0x1f` is owner-authored):
 1. **Outer envelope check (always FIRST -> `CHAIN_FRAME_INVALID`):** At most ONE `SLNK` `OP_RETURN` output per transaction, strictly `value_sat == 0`, total script `8 <= len <= 83` bytes starting with `6a 05 534c4e4b <action:1B>`, followed by exactly one **direct length prefix** (`0x01..0x4b` for `1 <= N <= 75`, reaching end-of-script with non-empty payload; because the 7-byte header leaves at most `76` bytes inside the `83`-byte script cap, direct length-prefix encoding forbids `OP_PUSHDATA1` `0x4c`, `OP_PUSHDATA2`/`4`, `OP_0`, and `OP_1..16` — even for 1-byte payloads `0x01..0x10` — refusing **`CHAIN_FRAME_INVALID`**). Any violation refuses **`CHAIN_FRAME_INVALID`** before consulting action-range criticality.

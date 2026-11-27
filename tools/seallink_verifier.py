@@ -175,6 +175,7 @@ _SCALAR_ONEOF_DISCRIMINATORS: tuple[str, ...] = (
     "fraud_mode",
     "scheme",
     "key_alg",
+    "auth_alg",
     "healthy",
     "unparseable",
 )
@@ -434,7 +435,7 @@ _CURVE_VALIDATORS: dict[str, Any] = {
     "ed25519": sl.is_valid_ed25519_pubkey,
     "secp256k1_comp": sl.is_valid_compressed_pubkey,
 }
-_XONLY_KEY_FIELDS = frozenset({"auth_key", "auth_pubkey", "receipt_key", "transport_key", "moderator_key", "subject_initial_key"})
+_XONLY_KEY_FIELDS = frozenset({"receipt_key", "transport_key", "moderator_key", "subject_initial_key"})
 _COMP_KEY_FIELDS = frozenset({"child_seal_key", "guardian_seal_pk"})
 _BRANCH_KEY_FIELDS = frozenset({"disposer_pk", "arbiter_pk", "challenger_pk"})
 _BRANCH_POLICY_KEYS = frozenset({"a", "b", "arbiter", "disposer", "challenger"})
@@ -502,10 +503,14 @@ def _collect_curve_key_errors(
                 bad_sig = True
         return bad_key, bad_sig, False
 
-    # 3. DeviceList entry & transport-binding statement subject
-    if "alg" in obj and "key" in obj and "ceiling" in obj:
+    # 3. Salted AuthEntry/DeviceEntry, AuthChallenge/AuthUpgrade, & transport-binding statement subject
+    if "alg" in obj and "key" in obj and obj.get("type") in ("seallink-auth-entry/1", "seallink-device-entry/1"):
         fn = _CURVE_VALIDATORS.get(obj["alg"])
         if fn is not None and not fn(obj["key"]):
+            return True, False, False
+    if "auth_alg" in obj and "auth_pubkey" in obj:
+        fn = _CURVE_VALIDATORS.get(obj["auth_alg"])
+        if fn is not None and not fn(obj["auth_pubkey"]):
             return True, False, False
     if "key_alg" in obj and "key_hex" in obj:
         fn = _CURVE_VALIDATORS.get(obj["key_alg"])
@@ -2460,6 +2465,96 @@ class Tier1Verifier:
             return scode
         return None
 
+    @staticmethod
+    def _collect_role_key_sets(name_rec: dict[str, Any], man: dict[str, Any]) -> list[set[str]]:
+        """Collect BIP-340 x-only role key sets from name value link.*, manifest.role_policies, and nostr (SL-IDEN-003)."""
+        vobj = name_rec.get("_value_obj", {})
+        role_sets: list[set[str]] = []
+        link = vobj.get("link", {})
+        rp_map = man.get("role_policies", {})
+        for rname in ("grant", "cred", "notary", "release"):
+            rk = link.get(rname)
+            if isinstance(rk, str):
+                role_sets.append({rk})
+            elif isinstance(rk, dict) and "p" in rk and isinstance(rp_map, dict) and rname in rp_map:
+                if sl.sha256(sl.jcs_encode(rp_map[rname])).hex() == rk["p"]:
+                    role_sets.append(set(rp_map[rname].get("pks", [])))
+        nostr = vobj.get("nostr")
+        if isinstance(nostr, str):
+            role_sets.append({nostr})
+        elif isinstance(nostr, dict) and isinstance(nostr.get("names"), dict) and isinstance(nostr["names"].get("_"), str):
+            role_sets.append({nostr["names"]["_"]})
+        return role_sets
+
+    def _verify_salted_set_entry_proof(
+        self,
+        entry_proof: dict[str, Any] | None,
+        *,
+        set_key: str,
+        head_type: str,
+        entry_type: str,
+        owner_name: str,
+        expected_alg: str,
+        expected_key: str,
+        name_rec: dict[str, Any],
+        man: dict[str, Any],
+        chain: ChainView,
+        required_depth: int,
+        unpinned_err: str,
+        pin_mismatch_err: str,
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        """Verify selective-disclosure salted Merkle entry proof against confirmed manifest.sets.<set_key> (SPEC-03 §3.1/§5)."""
+        set_pin = man.get("sets", {}).get(set_key)
+        if not isinstance(set_pin, dict) or not isinstance(entry_proof, dict):
+            return None, unpinned_err
+        if set(entry_proof.keys()) != {"head", "entry", "proof"}:
+            return None, "WIRE_MEMBER"
+        ok_h, h_res = self._verify_object_wire(entry_proof["head"], expected_type=head_type)
+        if not ok_h:
+            return None, h_res
+        ok_e, e_res = self._verify_object_wire(entry_proof["entry"], expected_type=entry_type)
+        if not ok_e:
+            return None, e_res
+        if self.enforce_schemas:
+            perr = validate_against_schema(
+                "common.schema.json#/$defs/SetEntryMerkleProof",
+                entry_proof["proof"],
+                require_jsonschema=self.require_jsonschema,
+            )
+            if perr is not None:
+                return None, perr
+        if (
+            sl.content_addr(h_res) != set_pin["sha256"]
+            or h_res["seq"] != set_pin["seq"]
+            or h_res["network"] != chain.network
+            or h_res["owner"] != owner_name
+        ):
+            return None, pin_mismatch_err
+        if (
+            e_res["network"] != chain.network
+            or e_res["owner"] != owner_name
+            or e_res["alg"] != expected_alg
+            or e_res["key"] != expected_key
+        ):
+            return None, unpinned_err
+        proof = entry_proof["proof"]
+        leaf_digest = sl.signing_digest(e_res).hex()
+        if (
+            proof.get("leaf_digest") != leaf_digest
+            or proof.get("root") != h_res["merkle_root"]
+            or not sl.verify_merkle_proof(proof)
+        ):
+            return None, pin_mismatch_err
+        # SL-IDEN-003: Disclosed BIP-340 auth/device key MUST be disjoint from all link.* role keys and nostr
+        if e_res["alg"] == "bip340":
+            for rset in self._collect_role_key_sets(name_rec, man):
+                if e_res["key"] in rset:
+                    return None, "NAME_VALUE_INVALID"
+        _, serr, _ = self.evaluate_seal(e_res["seal"], chain, required_depth=required_depth)
+        if serr:
+            return None, serr
+        return e_res, None
+
     def resolve_manifest(
         self,
         name: str,
@@ -2485,27 +2580,9 @@ class Tier1Verifier:
             return None, "MANIFEST_MISMATCH"
         if man.get("owner") != name or man.get("network") != chain.network or man.get("seq") != target_s:
             return None, "MANIFEST_MISMATCH"
-        # Full role-key disjointness across link.*, manifest.role_policies, nostr, and manifest.auth_key (H-19)
-        vobj = name_rec.get("_value_obj", {})
-        role_sets: list[set[str]] = []
-        link = vobj.get("link", {})
-        rp_map = man.get("role_policies", {})
-        for rname in ("grant", "cred", "notary", "release"):
-            rk = link.get(rname)
-            if isinstance(rk, str):
-                role_sets.append({rk})
-            elif isinstance(rk, dict) and "p" in rk and isinstance(rp_map, dict) and rname in rp_map:
-                if sl.sha256(sl.jcs_encode(rp_map[rname])).hex() == rk["p"]:
-                    role_sets.append(set(rp_map[rname].get("pks", [])))
-        nostr = vobj.get("nostr")
-        if isinstance(nostr, str):
-            role_sets.append({nostr})
-        elif isinstance(nostr, dict) and isinstance(nostr.get("names"), dict) and isinstance(nostr["names"].get("_"), str):
-            role_sets.append({nostr["names"]["_"]})
-        if isinstance(man.get("auth_key"), str):
-            role_sets.append({man["auth_key"]})
+        # Full role-key disjointness across link.*, manifest.role_policies, and nostr (H-19 / SL-IDEN-003)
         seen_all: set[str] = set()
-        for rset in role_sets:
+        for rset in self._collect_role_key_sets(name_rec, man):
             if not seen_all.isdisjoint(rset):
                 return None, "NAME_VALUE_INVALID"
             seen_all |= rset
@@ -2541,21 +2618,27 @@ class Tier1Verifier:
         service_id: str,
         presented_manifests: dict[str, dict[str, Any]] | None = None,
         *,
+        auth_proof: dict[str, Any] | None = None,
+        expected_audience: str | None = None,
         origin_bundle: dict[str, Any] | None = None,
     ) -> VerifierResult:
         ok, res = self._verify_object_wire(challenge_env, expected_type="seallink-auth-challenge/1")
         if not ok:
             return VerifierResult("REFUSE", res)
         p = res["payload"]
+        if p["network"] != self.pinned_network or p["genesis"] != self.pinned_genesis:
+            return VerifierResult("REFUSE", "CHAIN_MISMATCH")
         nonce = p["nonce"]
         rec = journal.auth_nonces.get(nonce)
-        # Service-recorded service_id, issued_at, expires_at exact equality check (mandatory per H-26)
+        exp_aud = expected_audience if expected_audience is not None else (rec.get("audience") if rec is not None else None)
+        # Service-recorded service_id, issued_at, expires_at, and optional audience exact equality check (mandatory per H-26)
         if (
             p["service_id"] != service_id
             or rec is None
             or rec.get("used", False)
             or nonce in journal.nonces
             or rec.get("service_id") != service_id
+            or (exp_aud is not None and p.get("audience") != exp_aud)
             or "issued_at" not in rec
             or "expires_at" not in rec
             or p["issued_at"] != int(rec["issued_at"])
@@ -2571,7 +2654,7 @@ class Tier1Verifier:
         ok_sig, code_sig = sl.verify_signature_set(
             sl.signing_digest(p),
             challenge_env["signatures"],
-            expected_policy={"m": 1, "pks": [p["auth_pubkey"]]},
+            expected_policy={"alg": p["auth_alg"], "m": 1, "pks": [p["auth_pubkey"]]},
             obj_type="seallink-auth-challenge/1",
         )
         if not ok_sig:
@@ -2595,11 +2678,23 @@ class Tier1Verifier:
             if merr:
                 return VerifierResult("REFUSE", merr)
             assert man is not None
-            if man.get("auth_key") != p["auth_pubkey"] or "auth_seal" not in man:
-                return VerifierResult("REFUSE", "AUTH_KEY_UNPINNED")
-            _, serr, _ = self.evaluate_seal(man["auth_seal"], chain, required_depth=1)
-            if serr:
-                return VerifierResult("REFUSE", serr)
+            _, aerr = self._verify_salted_set_entry_proof(
+                auth_proof,
+                set_key="auth",
+                head_type="seallink-auth-set-head/1",
+                entry_type="seallink-auth-entry/1",
+                owner_name=p["name"],
+                expected_alg=p["auth_alg"],
+                expected_key=p["auth_pubkey"],
+                name_rec=nrec,
+                man=man,
+                chain=chain,
+                required_depth=1,
+                unpinned_err="AUTH_KEY_UNPINNED",
+                pin_mismatch_err="AUTH_KEY_UNPINNED",
+            )
+            if aerr:
+                return VerifierResult("REFUSE", aerr)
         rec["used"] = True
         journal.nonces[nonce] = sl.object_id(p)
         return VerifierResult("ADMIT", None, outcome="executed")
@@ -2613,6 +2708,9 @@ class Tier1Verifier:
         journal: FencedJournal,
         presented_manifests: dict[str, dict[str, Any]] | None = None,
         *,
+        expected_provisional_auth_alg: str = "bip340",
+        auth_proof: dict[str, Any] | None = None,
+        expected_audience: str | None = None,
         origin_bundle: dict[str, Any] | None = None,
     ) -> VerifierResult:
         """Verify atomic seallink-auth-upgrade/1 binding a confirmed registration to a provisional cell (SPEC-03 §5, H-24)."""
@@ -2620,21 +2718,24 @@ class Tier1Verifier:
         if not ok:
             return VerifierResult("REFUSE", res)
         p = res["payload"]
+        if p["network"] != self.pinned_network or p["genesis"] != self.pinned_genesis:
+            return VerifierResult("REFUSE", "CHAIN_MISMATCH")
         if (
             p["service_id"] != expected_service_id
+            or (expected_audience is not None and p.get("audience") != expected_audience)
             or p["expires_at"] <= p["issued_at"]
             or p["expires_at"] - p["issued_at"] > 120
             or p["nonce"] in journal.nonces
         ):
             return VerifierResult("REFUSE", "AUTH_CHALLENGE_INVALID")
-        if p["auth_pubkey"] != expected_provisional_auth_pubkey:
+        if p["auth_alg"] != expected_provisional_auth_alg or p["auth_pubkey"] != expected_provisional_auth_pubkey:
             return VerifierResult("REFUSE", "AUTH_KEY_UNPINNED")
         if chain.now < p["issued_at"] or chain.now >= p["expires_at"]:
             return VerifierResult("REFUSE", "AUTH_CHALLENGE_EXPIRED")
         ok_sig, code_sig = sl.verify_signature_set(
             sl.signing_digest(p),
             upgrade_env["signatures"],
-            expected_policy={"m": 1, "pks": [expected_provisional_auth_pubkey]},
+            expected_policy={"alg": expected_provisional_auth_alg, "m": 1, "pks": [expected_provisional_auth_pubkey]},
             obj_type="seallink-auth-upgrade/1",
         )
         if not ok_sig:
@@ -2669,11 +2770,23 @@ class Tier1Verifier:
         if merr:
             return VerifierResult("REFUSE", merr)
         assert man is not None
-        if man.get("auth_key") != expected_provisional_auth_pubkey or "auth_seal" not in man:
-            return VerifierResult("REFUSE", "AUTH_KEY_UNPINNED")
-        _, serr, _ = self.evaluate_seal(man["auth_seal"], chain, required_depth=self.operator_min_depth)
-        if serr:
-            return VerifierResult("REFUSE", serr)
+        _, aerr = self._verify_salted_set_entry_proof(
+            auth_proof,
+            set_key="auth",
+            head_type="seallink-auth-set-head/1",
+            entry_type="seallink-auth-entry/1",
+            owner_name=p["name"],
+            expected_alg=expected_provisional_auth_alg,
+            expected_key=expected_provisional_auth_pubkey,
+            name_rec=nrec,
+            man=man,
+            chain=chain,
+            required_depth=self.operator_min_depth,
+            unpinned_err="AUTH_KEY_UNPINNED",
+            pin_mismatch_err="AUTH_KEY_UNPINNED",
+        )
+        if aerr:
+            return VerifierResult("REFUSE", aerr)
         jw = journal.append(
             "nonce",
             {
@@ -2690,7 +2803,7 @@ class Tier1Verifier:
     def verify_owner_command(
         self,
         cmd_env: dict[str, Any],
-        device_list: dict[str, Any],
+        device_proof: dict[str, Any] | None,
         is_foreign_service: bool,
         chain: ChainView,
         *,
@@ -2702,9 +2815,6 @@ class Tier1Verifier:
         ok, res = self._verify_object_wire(cmd_env, expected_type="seallink-owner-command/1")
         if not ok:
             return VerifierResult("REFUSE", res)
-        ok_dl, dl_res = self._verify_object_wire(device_list, expected_type="seallink-device-list/1")
-        if not ok_dl:
-            return VerifierResult("REFUSE", dl_res)
         if is_foreign_service:
             return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
         p = res["payload"]
@@ -2715,10 +2825,14 @@ class Tier1Verifier:
             return VerifierResult("REFUSE", obs_err)
         if not (p["iat"] <= chain.now < p["exp"]):
             return VerifierResult("REFUSE", "INVOKE_TIME_INVALID")
-        if dl_res.get("owner") != p["owner"]:
+        sig_pol = cmd_env["signatures"]["policy"]
+        sig_pks = sig_pol["pks"]
+        sig_alg = sig_pol.get("alg", "bip340")
+        if len(sig_pks) != 1 or sig_pol["m"] != 1:
             return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
+        dev_pk = sig_pks[0]
         # H01 / H-6 / SL-ORIG-017: Resolve p["owner"] on-chain (including 0x13 origin_bundle check) and bind
-        # owner_manifest -> confirmed name value m.h -> sets.devices pin!
+        # owner_manifest -> confirmed name value m.h -> sets.devices salted Merkle entry proof!
         nrec, nerr = self.resolve_name(
             p["owner"],
             chain,
@@ -2746,31 +2860,30 @@ class Tier1Verifier:
         if merr:
             return VerifierResult("REFUSE", merr)
         assert man is not None
-        dev_set_pin = man.get("sets", {}).get("devices")
-        if not dev_set_pin or sl.content_addr(dl_res) != dev_set_pin.get("sha256") or dl_res.get("seq") != dev_set_pin.get("seq"):
-            return VerifierResult("REFUSE", "MANIFEST_MISMATCH")
-        sig_pol = cmd_env["signatures"]["policy"]
-        sig_pks = sig_pol["pks"]
-        sig_alg = sig_pol.get("alg", "bip340")
-        if len(sig_pks) != 1 or sig_pol["m"] != 1:
-            return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
-        dev_pk = sig_pks[0]
-        matched = None
-        for d in device_list.get("devices", []):
-            if d["key"] == dev_pk and d["alg"] == sig_alg:
-                matched = d
-                break
-        if matched is None:
-            return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
+        matched, derr = self._verify_salted_set_entry_proof(
+            device_proof,
+            set_key="devices",
+            head_type="seallink-device-set-head/1",
+            entry_type="seallink-device-entry/1",
+            owner_name=p["owner"],
+            expected_alg=sig_alg,
+            expected_key=dev_pk,
+            name_rec=nrec,
+            man=man,
+            chain=chain,
+            required_depth=1,
+            unpinned_err="DEVICE_UNAUTHORIZED",
+            pin_mismatch_err="MANIFEST_MISMATCH",
+        )
+        if derr:
+            return VerifierResult("REFUSE", derr)
+        assert matched is not None
         if p["level"] > matched["ceiling"]:
             return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
         if p["command"] in ("policy-apply", "keyholder-halt", "approve-pii-disclosure") and (
             matched["ceiling"] < 2 or not matched.get("presence", False)
         ):
             return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
-        _, serr, _ = self.evaluate_seal(matched["seal"], chain, required_depth=1)
-        if serr:
-            return VerifierResult("REFUSE", serr)
         return VerifierResult("ADMIT", None, outcome="executed", details={"device_alg": sig_alg, "device_label": matched["label"]})
 
     # ------------------------------------------------------------------
@@ -7101,13 +7214,14 @@ class Tier1Verifier:
         chain: ChainView,
         *,
         expected_policy: dict[str, Any] | None = None,
-        device_list: dict[str, Any] | None = None,
+        device_proof: dict[str, Any] | None = None,
         owner_manifest: dict[str, Any] | None = None,
         presented_manifests: dict[str, dict[str, Any]] | None = None,
         journal: FencedJournal | None = None,
         origin_bundle: dict[str, Any] | None = None,
+        origin_bundles_by_oid: dict[str, dict[str, Any]] | None = None,
     ) -> VerifierResult:
-        """Verify seallink-statement/1 against issuer's link.grant, pinned policy, or confirmed manifest-enrolled device key (SPEC-03 §3.1, H-6 / H01)."""
+        """Verify seallink-statement/1 against issuer's link.grant, pinned policy, guardian quorum, or salted sets.devices proof (SPEC-03 §3.1)."""
         ok_s, s_res = self._verify_object_wire(stmt_env, expected_type="seallink-statement/1")
         if not ok_s:
             return VerifierResult("REFUSE", s_res)
@@ -7119,68 +7233,107 @@ class Tier1Verifier:
             return VerifierResult("REFUSE", obs_err)
         if not (sp["not_before"] <= chain.now < sp["not_after"]):
             return VerifierResult("REFUSE", "INVOKE_TIME_INVALID")
-        sig_pol = stmt_env["signatures"]["policy"]
         if expected_policy is not None:
             ok_sig, scode = sl.verify_signature_set(
-                sl.signing_digest(sp), stmt_env["signatures"], expected_policy=expected_policy, obj_type="seallink-statement/1"
+                sl.signing_digest(sp), stmt_env.get("signatures", {}), expected_policy=expected_policy, obj_type="seallink-statement/1"
             )
             if not ok_sig:
                 return VerifierResult("REFUSE", scode)
-            return VerifierResult("ADMIT", None, outcome="executed", details={"statement_id": sl.object_id(sp), "kind": sp["statement_kind"]})
-        iss = sp["issuer"]
-        nrec, nerr = self.resolve_name(
-            iss["name"],
-            chain,
-            expected_owner_policy=iss["owner_policy"],
-            expected_registration=iss["registration"],
-            allow_unresolved_voluntary_rebind=(origin_bundle is not None),
-        )
-        if nerr:
-            return VerifierResult("REFUSE", nerr)
-        assert nrec is not None
-        if nrec.get("_voluntary_rebinds"):
-            rb_err = self._verify_rebound_pin(nrec, iss, origin_bundle, chain, journal)
-            if rb_err:
-                return VerifierResult("REFUSE", rb_err)
-        if device_list is not None and (sig_pol.get("alg") in ("p256", "ed25519") or sp["statement_kind"] == "config-section"):
-            ok_dl, dl_res = self._verify_object_wire(device_list, expected_type="seallink-device-list/1")
-            if not ok_dl or dl_res.get("owner") != iss["name"]:
-                return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
-            # H01 / H-6: Establish chain of trust from confirmed name m.h -> owner_manifest -> sets.devices!
-            pres_m: dict[str, dict[str, Any]] = (
-                {iss["name"]: owner_manifest} if owner_manifest is not None else dict(presented_manifests or {})
+        else:
+            iss = sp["issuer"]
+            has_ob = origin_bundle is not None or bool(origin_bundles_by_oid)
+            nrec, nerr = self.resolve_name(
+                iss["name"],
+                chain,
+                expected_owner_policy=iss["owner_policy"],
+                expected_registration=iss["registration"],
+                allow_unresolved_voluntary_rebind=has_ob,
             )
-            man, merr = self.resolve_manifest(iss["name"], nrec, pres_m, chain, journal)
-            if merr:
-                return VerifierResult("REFUSE", merr)
-            assert man is not None
-            dev_pin = man.get("sets", {}).get("devices")
-            if not dev_pin or sl.content_addr(dl_res) != dev_pin.get("sha256") or dl_res.get("seq") != dev_pin.get("seq"):
-                return VerifierResult("REFUSE", "MANIFEST_MISMATCH")
-            alg = sig_pol.get("alg", "bip340")
-            matched = (
-                next((d for d in dl_res["devices"] if d["alg"] == alg and d["key"] == sig_pol["pks"][0]), None)
-                if (sig_pol["m"] == 1 and len(sig_pol["pks"]) == 1)
-                else None
-            )
-            if matched is None:
-                return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
-            _, serr, _ = self.evaluate_seal(matched["seal"], chain, required_depth=1)
+            if nerr:
+                return VerifierResult("REFUSE", nerr)
+            assert nrec is not None
+            if nrec.get("_voluntary_rebinds"):
+                rb_err = self._verify_rebound_pin(
+                    nrec, iss, origin_bundle, chain, journal, origin_bundles_by_oid=origin_bundles_by_oid
+                )
+                if rb_err:
+                    return VerifierResult("REFUSE", rb_err)
+            if "guardian_approvals" in stmt_env:
+                gc = sp["guardian_context"]
+                ob = self._pick_origin_bundle_for_oid(gc["origin_id"], origin_bundle, origin_bundles_by_oid)
+                wstate, oerr = self.verify_origin_and_status(ob, chain, journal=journal)
+                if oerr:
+                    return VerifierResult("REFUSE", oerr)
+                assert wstate is not None
+                wb = wstate.get("effective_binding", wstate["binding"])
+                if wstate["capacity"] != "ward" or gc["ward_name"] != iss["name"] or not _name_pin_equal(wb, iss):
+                    return VerifierResult("REFUSE", "GUARDIAN_QUORUM_UNMET")
+                ok_g, gerr, _ = self.verify_ward_approvals(
+                    stmt_env, wstate, chain, journal=journal, origin_bundles_by_oid=origin_bundles_by_oid
+                )
+                if not ok_g:
+                    return VerifierResult("REFUSE", gerr)
+            else:
+                if sp["statement_kind"] == "identity-link":
+                    hist_oid = nrec.get("_historical_origin_id")
+                    if not hist_oid:
+                        reg_b = chain.raw.get("registered_bindings", {}).get(_outpoint_key(iss["registration"]))
+                        if isinstance(reg_b, str):
+                            hist_oid = reg_b
+                    if hist_oid:
+                        ob = self._pick_origin_bundle_for_oid(hist_oid, origin_bundle, origin_bundles_by_oid)
+                        wstate, oerr = self.verify_origin_and_status(ob, chain, journal=journal)
+                        if oerr:
+                            return VerifierResult("REFUSE", oerr)
+                        assert wstate is not None
+                        if wstate["capacity"] == "ward":
+                            return VerifierResult("REFUSE", "WARD_AUTONOMOUS_FORBIDDEN")
+                sig_pol = stmt_env["signatures"]["policy"]
+                if device_proof is not None and (sig_pol.get("alg") in ("p256", "ed25519") or sp["statement_kind"] == "config-section"):
+                    if len(sig_pol["pks"]) != 1 or sig_pol["m"] != 1:
+                        return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
+                    # H01 / H-6: Establish chain of trust from confirmed name m.h -> owner_manifest -> sets.devices salted Merkle proof!
+                    pres_m: dict[str, dict[str, Any]] = (
+                        {iss["name"]: owner_manifest} if owner_manifest is not None else dict(presented_manifests or {})
+                    )
+                    man, merr = self.resolve_manifest(iss["name"], nrec, pres_m, chain, journal)
+                    if merr:
+                        return VerifierResult("REFUSE", merr)
+                    assert man is not None
+                    _, derr = self._verify_salted_set_entry_proof(
+                        device_proof,
+                        set_key="devices",
+                        head_type="seallink-device-set-head/1",
+                        entry_type="seallink-device-entry/1",
+                        owner_name=iss["name"],
+                        expected_alg=sig_pol.get("alg", "bip340"),
+                        expected_key=sig_pol["pks"][0],
+                        name_rec=nrec,
+                        man=man,
+                        chain=chain,
+                        required_depth=1,
+                        unpinned_err="DEVICE_UNAUTHORIZED",
+                        pin_mismatch_err="MANIFEST_MISMATCH",
+                    )
+                    if derr:
+                        return VerifierResult("REFUSE", derr)
+                else:
+                    # Default: verify against issuer's live link.grant policy (+ 0x0b compromise cutoff)
+                    rpol, rerr = self.resolve_role_policy(nrec, "grant", sig_pol)
+                    if rerr:
+                        return VerifierResult("REFUSE", rerr)
+                    assert rpol is not None
+                    if self._is_policy_compromised_at(nrec, iss, "grant", rpol, chain.tip_height, chain):
+                        return VerifierResult("REFUSE", "CRED_ISSUER_CLOSED")
+                    ok_sig, scode = sl.verify_signature_set(
+                        sl.signing_digest(sp), stmt_env["signatures"], expected_policy=rpol, obj_type="seallink-statement/1"
+                    )
+                    if not ok_sig:
+                        return VerifierResult("REFUSE", scode)
+        if "seal" in sp:
+            _, serr, _ = self.evaluate_seal(sp["seal"], chain, required_depth=1)
             if serr:
                 return VerifierResult("REFUSE", serr)
-            return VerifierResult("ADMIT", None, outcome="executed", details={"statement_id": sl.object_id(sp), "kind": sp["statement_kind"]})
-        # Default: verify against issuer's live link.grant policy (+ 0x0b compromise cutoff)
-        rpol, rerr = self.resolve_role_policy(nrec, "grant", sig_pol)
-        if rerr:
-            return VerifierResult("REFUSE", rerr)
-        assert rpol is not None
-        if self._is_policy_compromised_at(nrec, iss, "grant", rpol, chain.tip_height, chain):
-            return VerifierResult("REFUSE", "CRED_ISSUER_CLOSED")
-        ok_sig, scode = sl.verify_signature_set(
-            sl.signing_digest(sp), stmt_env["signatures"], expected_policy=rpol, obj_type="seallink-statement/1"
-        )
-        if not ok_sig:
-            return VerifierResult("REFUSE", scode)
         return VerifierResult("ADMIT", None, outcome="executed", details={"statement_id": sl.object_id(sp), "kind": sp["statement_kind"]})
 
     # ------------------------------------------------------------------
@@ -9919,7 +10072,7 @@ class Tier1Verifier:
             # H-11: Strict single direct hop TO exact recipient_name (forbid screening_agent / hub / relay / wrong actor)!
             hops = peer_ctx.get("route_hops", [])
             approval_cmd = peer_ctx.get("approval_command")
-            dev_list = peer_ctx.get("device_list")
+            dev_proof = peer_ctx.get("device_proof")
             forbidden_roles = {"screening_agent", "hub", "relay"}
             if (
                 gp["recipient"].get("mode") != "name"
@@ -9937,12 +10090,10 @@ class Tier1Verifier:
             if o_merr:
                 return VerifierResult("REFUSE", o_merr)
             assert o_man is not None
-            # M-13: Missing sets.devices or missing device_list MUST return DEVICE_UNAUTHORIZED (not FEDERATION_POLICY_DENIED)!
-            if not isinstance(o_man.get("sets", {}).get("devices"), dict) or dev_list is None:
-                return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
+            # M-13: verify_owner_command -> _verify_salted_set_entry_proof enforces sets.devices & device_proof -> DEVICE_UNAUTHORIZED!
             cmd_res = self.verify_owner_command(
                 approval_cmd,
-                dev_list,
+                dev_proof,
                 is_foreign_service=False,
                 chain=chain,
                 owner_manifest=o_man,

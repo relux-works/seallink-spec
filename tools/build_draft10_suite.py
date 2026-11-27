@@ -638,7 +638,10 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     ds_pol = {"kind": "key", "pk": _kp("d10-h2-ds")["comp"]}
     ds_tx = _h32("d10-h2-ds-tx")
     fx_oc["chain"]["txs"][ds_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(ds_pol)}}}
-    dl_h2 = {"devices": [{"alg": "p256", "ceiling": 1, "key": p256_pk, "label": "l1", "presence": True, "seal": {"script_policy": ds_pol, "txid": ds_tx, "vout": 0}}], "network": "main", "owner": "id/alice", "seq": 1, "type": "seallink-device-list/1"}
+    _, dp_h2 = rm.make_salted_device_set(
+        "id/alice",
+        [{"alg": "p256", "ceiling": 1, "key": p256_pk, "label": "l1", "presence": True, "seal": {"script_policy": ds_pol, "txid": ds_tx, "vout": 0}}],
+    )
     oc_env = sl.sign_envelope(
         {"arguments": {"brief_sha256": _h32("d10-h2-brf"), "run_id": "run-h2"}, "command": "agent-dispatch", "exp": fx_oc["chain"]["now"] + 600, "genesis": GENESIS_MAIN, "iat": fx_oc["chain"]["now"] - 10, "level": 0, "network": "main", "nonce": _h32("d10-h2-n"), "owner": "id/alice", "target_executor": "id/mail-host-a", "type": "seallink-owner-command/1"},
         [p256_sk],
@@ -650,7 +653,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         "d10-h2-owner-command-node-unreachable-chain-unhealthy",
         ["SL-LDGR-001", "SL-IDTY-010"],
         "owner_command",
-        {"chain": ch_unreach, "command": oc_env, "device_list": dl_h2, "is_foreign_service": False},
+        {"chain": ch_unreach, "command": oc_env, "device_proof": dp_h2[0], "is_foreign_service": False},
         "REFUSE",
         "CHAIN_UNHEALTHY",
         "H-2: verify_owner_command on node_reachable=False MUST fail closed with CHAIN_UNHEALTHY.",
@@ -1762,15 +1765,18 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     ds_f10_pol = {"kind": "key", "pk": _kp("d10-fed-ds")["comp"]}
     ds_f10_tx = _h32("d10-fed-ds-tx")
     fx_f10["chain"]["txs"][ds_f10_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(ds_f10_pol)}}}
-    dl_f10 = {"devices": [{"alg": "p256", "ceiling": 2, "key": p256_f10_pk, "label": "l2-f10", "presence": True, "seal": {"script_policy": ds_f10_pol, "txid": ds_f10_tx, "vout": 0}}], "network": "main", "owner": "id/alice", "seq": 1, "type": "seallink-device-list/1"}
-    am_f10 = {**copy.deepcopy(fx_f10["_alice_man"]), "sets": {"devices": {"seq": 1, "sha256": sl.content_addr(dl_f10)}}}
+    dh_f10, dp_f10 = rm.make_salted_device_set(
+        "id/alice",
+        [{"alg": "p256", "ceiling": 2, "key": p256_f10_pk, "label": "l2-f10", "presence": True, "seal": {"script_policy": ds_f10_pol, "txid": ds_f10_tx, "vout": 0}}],
+    )
+    am_f10 = {**copy.deepcopy(fx_f10["_alice_man"]), "sets": {"devices": {"seq": 1, "sha256": sl.content_addr(dh_f10)}}}
     am_f10_h = sl.content_addr(am_f10)
     fx_f10["chain"]["names"]["id/alice"] = sv.make_name_history("id/alice", fx_f10["_alice_reg"], fx_f10["_alice_owner_pol"], {"link": {"grant": fx_f10["_keys"]["alice_gr"]["xonly"]}, "m": {"h": am_f10_h, "s": 1}}, first_height=748000, update_height=749000)
     gf_p = copy.deepcopy(fx_f10["bundle"]["grants"][0]["payload"])
     gf_p["recipient"] = {"mode": "name", "name": "id/peer-b", "owner_policy": {"kind": "key", "pk": _kp("d10-fed-pb")["comp"]}, "registration": {"txid": _h32("d10-fed-pbr"), "vout": 0}}
     gf_env = sl.sign_envelope(gf_p, [fx_f10["_keys"]["alice_gr"]["sk"]])
     cmd_f10 = sl.sign_envelope({"arguments": {"fields_sha256": _h32("d10-fed-f"), "grant_id": sl.object_id(gf_p), "recipient_name": "id/peer-b", "route_mode": "direct"}, "command": "approve-pii-disclosure", "exp": fx_f10["chain"]["now"] + 600, "genesis": GENESIS_MAIN, "iat": fx_f10["chain"]["now"] - 10, "level": 2, "network": "main", "nonce": _h32("d10-fed-n"), "owner": "id/alice", "target_executor": "id/station-a", "type": "seallink-owner-command/1"}, [p256_f10_sk], alg="p256")
-    base_fed_ctx = {"approval_command": cmd_f10, "device_list": dl_f10, "fields_sha256": _h32("d10-fed-f"), "manifests": {am_f10_h: am_f10}, "phase": "pii_disclosure", "route_hops": [{"actor": "id/peer-b", "role": "counterparty"}]}
+    base_fed_ctx = {"approval_command": cmd_f10, "device_proof": dp_f10[0], "fields_sha256": _h32("d10-fed-f"), "manifests": {am_f10_h: am_f10}, "phase": "pii_disclosure", "route_hops": [{"actor": "id/peer-b", "role": "counterparty"}]}
     base_fed_pol = {"require_contour_a": True, "trusted_peers": ["id/peer-b", "id/wrong-peer"]}
 
     add("d10-h11-federation-wrong-hop-actor-refuse", ["SL-SERV-004"], "federation", {"chain": fx_f10["chain"], "grant": gf_env, "journal": {"journal_id": _h32("d10-f-j1")}, "peer_ctx": {**base_fed_ctx, "route_hops": [{"actor": "id/wrong-peer", "role": "counterparty"}]}, "policy": base_fed_pol}, "REFUSE", "FEDERATION_POLICY_DENIED", "H-11: Contour A direct route hop actor MUST equal grant.recipient.name.", module="federated-screening")
@@ -1782,7 +1788,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     ch_f_sp["txs"][gs_tx]["outputs"]["0"]["spent_by_txid"] = _h32("d10-f-sp")
     ch_f_sp["txs"][_h32("d10-f-sp")] = {"confirmed_height": 750003, "inputs": [sv.make_segwit_input(gs_tx, 0)], "outputs": {}}
     add("d10-h12-federation-pii-spent-seal-refuse", ["SL-SERV-004"], "federation", {"chain": ch_f_sp, "grant": gf_env, "journal": {"journal_id": _h32("d10-f-j3")}, "peer_ctx": base_fed_ctx, "policy": base_fed_pol}, "REFUSE", "SEAL_SPENT", "H-12: Federation pii_disclosure MUST enforce live grant revocation seal (SEAL_SPENT).", module="federated-screening")
-    add("d10-m13-federation-pii-missing-device-list-device-unauthorized", ["SL-SERV-004", "SL-IDTY-010"], "federation", {"chain": fx_f10["chain"], "grant": gf_env, "journal": {"journal_id": _h32("d10-f-j4")}, "peer_ctx": {k: v for k, v in base_fed_ctx.items() if k != "device_list"}, "policy": base_fed_pol}, "REFUSE", "DEVICE_UNAUTHORIZED", "M-13: Federation pii_disclosure omitting device_list MUST preserve DEVICE_UNAUTHORIZED.", module="federated-screening")
+    add("d10-m13-federation-pii-missing-device-list-device-unauthorized", ["SL-SERV-004", "SL-IDTY-010"], "federation", {"chain": fx_f10["chain"], "grant": gf_env, "journal": {"journal_id": _h32("d10-f-j4")}, "peer_ctx": {k: v for k, v in base_fed_ctx.items() if k != "device_proof"}, "policy": base_fed_pol}, "REFUSE", "DEVICE_UNAUTHORIZED", "M-13: Federation pii_disclosure omitting device_proof MUST preserve DEVICE_UNAUTHORIZED.", module="federated-screening")
     add("d10-m15-federation-missing-journal-refuse", ["SL-SERV-004"], "federation", {"chain": fx_f10["chain"], "grant": gf_env, "peer_ctx": base_fed_ctx, "policy": base_fed_pol}, "REFUSE", "FEDERATION_POLICY_DENIED", "M-15: Federation verification omitting mandatory journal MUST fail closed.", module="federated-screening")
     add("d10-m15-federation-corrupt-journal-lost", ["SL-SERV-004"], "federation", {"chain": fx_f10["chain"], "grant": gf_env, "journal": {"journal_id": _h32("d10-f-j5"), "witness_readable": False}, "peer_ctx": base_fed_ctx, "policy": base_fed_pol}, "REFUSE", "JOURNAL_LOST", "M-15: Federation verification with corrupt journal continuity MUST refuse JOURNAL_LOST.", module="federated-screening")
     gf_wo_p = {**copy.deepcopy(gf_p), "not_after_height": fx_f10["chain"]["tip_height"] + 8, "not_before_height": fx_f10["chain"]["tip_height"] - 2, "revocation": {"mode": "window_only"}}
@@ -1836,7 +1842,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     # H-13 / M-11: Core-only uniform ACTION_UNSUPPORTED across wire bytes, owner_command, statement, & assent!
     add("d10-h13-core-only-wire-bytes-session-open-action-unsupported", ["SL-WIRE-007", "SL-GRNT-013"], "raw_wire", {"enabled_modules": ["core"], "raw_bytes_utf8": sl.jcs_encode(so_bs).decode("utf-8")}, "REFUSE", "ACTION_UNSUPPORTED", "H-13: Core-only verify_wire_bytes MUST refuse seallink-session-open/1 with ACTION_UNSUPPORTED.", module="core")
     add("d10-h13-core-only-wire-bytes-migration-action-unsupported", ["SL-WIRE-007", "SL-SERV-003"], "raw_wire", {"enabled_modules": ["core"], "raw_bytes_utf8": sl.jcs_encode(m_env).decode("utf-8")}, "REFUSE", "ACTION_UNSUPPORTED", "H-13: Core-only verify_wire_bytes MUST refuse seallink-migration/1 with ACTION_UNSUPPORTED.", module="core")
-    add("d10-h13-core-only-owner-command-pii-action-unsupported", ["SL-SERV-004"], "owner_command", {"chain": fx_f10["chain"], "command": cmd_f10, "device_list": dl_f10, "enabled_modules": ["core"], "is_foreign_service": False}, "REFUSE", "ACTION_UNSUPPORTED", "H-13: Core-only verify_owner_command MUST refuse approve-pii-disclosure with ACTION_UNSUPPORTED.", module="core")
+    add("d10-h13-core-only-owner-command-pii-action-unsupported", ["SL-SERV-004"], "owner_command", {"chain": fx_f10["chain"], "command": cmd_f10, "device_proof": dp_f10[0], "enabled_modules": ["core"], "is_foreign_service": False}, "REFUSE", "ACTION_UNSUPPORTED", "H-13: Core-only verify_owner_command MUST refuse approve-pii-disclosure with ACTION_UNSUPPORTED.", module="core")
     add("d10-h13-core-only-statement-migration-accept-action-unsupported", ["SL-SERV-003"], "statement", {"chain": fx_mig["chain"], "enabled_modules": ["core"], "statement": m_acc}, "REFUSE", "ACTION_UNSUPPORTED", "H-13: Core-only verify_statement MUST refuse migration-accept with ACTION_UNSUPPORTED.", module="core")
     add("d10-h13-core-only-statement-migration-fence-action-unsupported", ["SL-SERV-003"], "statement", {"chain": fx_mig["chain"], "enabled_modules": ["core"], "statement": m_fence}, "REFUSE", "ACTION_UNSUPPORTED", "H-13: Core-only verify_statement MUST refuse migration-fence with ACTION_UNSUPPORTED.", module="core")
     add("d10-h13-core-only-assent-migration-target-action-unsupported", ["SL-SERV-003"], "assent", {"assent": m_ha, "chain": fx_mig["chain"], "contract": of_b1["contract"], "enabled_modules": ["core"]}, "REFUSE", "ACTION_UNSUPPORTED", "H-13: Core-only verify_assent MUST refuse target_type='seallink-migration/1' with ACTION_UNSUPPORTED.", module="core")

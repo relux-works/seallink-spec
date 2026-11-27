@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.12.
+Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.13.
 
 Produces nine executable JSON vector suites under vectors/:
   1. wire-jcs-and-hashes.json
@@ -30,7 +30,7 @@ import build_security_suite as sec
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.12"
+VERSION = "1.0.0-draft.13"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 VECTORS_DIR = ROOT / "vectors"
 
@@ -538,6 +538,8 @@ def build_ledger_vectors() -> dict[str, Any]:
         (0x02, "BATCH_ANCHOR_merkle5", 0x00, None, None),
         (0x04, "NOTARY_ACT", 0x00, None, None),
         (0x04, "NOTARY_ACT_blossom", 0x01, h32("blossom-notary-ptr"), None),
+        (0x04, "NOTARY_ACT_ipfs_cidv1_dag_pb", 0x03, h32("ipfs-notary-ptr"), None),
+        (0x04, "NOTARY_ACT_bt_v2_private", 0x04, h32("btv2-notary-ptr"), None),
         (0x07, "CONTRACT_ANCHOR", 0x00, None, None),
         (0x09, "ORIGIN_OR_CRED_ANCHOR", 0x00, None, None),
         (0x0B, "KEY_COMPROMISE_BREAK", 0x00, None, 750050),
@@ -637,6 +639,13 @@ def build_ledger_vectors() -> dict[str, Any]:
         },
         "opreturn_frames": opreturn_frames,
         "opreturn_criticality": opreturn_criticality,
+        "opreturn_ignored": [
+            {
+                "id": "sibling-prefix-SLSC-ignored-by-SLNK-parser",
+                "script_hex": (bytes([0x6A, 0x05]) + b"SLSC" + bytes([0x01, 0x20]) + bytes.fromhex(h32("slsc-payload"))).hex(),
+                "note": "Reserved sibling OP_RETURN prefix SLSC (534c5343) MUST be ignored by SLNK parsers.",
+            },
+        ],
         "opreturn_negative": [
             {"id": "reserved-action-0x06", "script_hex": reserved_06_hex, "expected_refusal": "CHAIN_FRAME_INVALID"},
             {"id": "forbidden-locator-0x01-on-0x10", "script_hex": bad_loc_10_hex, "expected_refusal": "CHAIN_FRAME_INVALID"},

@@ -446,15 +446,15 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
          "chain": fx0["chain"]},
         "ADMIT", None, "Observing identical manifest (seq == prev.seq and sha256 == prev.sha256) MUST admit.")
 
-    # 3h. AuthChallenge exact boundaries (L1290: ttl == 120 ADMIT, exp == iat REFUSE, now == exp REFUSE) + L1318 or->and
+    # 3h. AuthChallenge exact boundaries (ttl == 120 ADMIT, exp == iat REFUSE, now == exp REFUSE) + named wrong key with valid auth_proof
     ac_k = _kp("bnd-ac-k")
-    ac_ttl120 = sl.sign_envelope({"auth_pubkey": ac_k["xonly"], "expires_at": 1795220120, "issued_at": 1795220000, "nonce": _h32("bnd-ac-120"), "service_id": "svc.example", "type": "seallink-auth-challenge/1"}, [ac_k["sk"]])
+    ac_ttl120 = sl.sign_envelope({"auth_alg": "bip340", "auth_pubkey": ac_k["xonly"], "expires_at": 1795220120, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main", "nonce": _h32("bnd-ac-120"), "service_id": "svc.example", "type": "seallink-auth-challenge/1"}, [ac_k["sk"]])
     ch_ac120 = copy.deepcopy(fx0["chain"])
     ch_ac120["now"] = 1795220050
     add("bnd-auth-challenge-ttl-exact-120-admit", ["SL-IDEN-010"], "auth_challenge",
         {"challenge": ac_ttl120, "service_id": "svc.example", "journal": {"journal_id": _h32("bnd-acj1"), "auth_nonces": {_h32("bnd-ac-120"): {"service_id": "svc.example", "used": False, "issued_at": 1795220000, "expires_at": 1795220120}}}, "chain": ch_ac120},
         "ADMIT", None, "AuthChallenge with exact 120s TTL MUST admit.")
-    ac_eq_iat = sl.sign_envelope({"auth_pubkey": ac_k["xonly"], "expires_at": 1795220060, "issued_at": 1795220060, "nonce": _h32("bnd-ac-eqiat"), "service_id": "svc.example", "type": "seallink-auth-challenge/1"}, [ac_k["sk"]])
+    ac_eq_iat = sl.sign_envelope({"auth_alg": "bip340", "auth_pubkey": ac_k["xonly"], "expires_at": 1795220060, "genesis": GENESIS_MAIN, "issued_at": 1795220060, "network": "main", "nonce": _h32("bnd-ac-eqiat"), "service_id": "svc.example", "type": "seallink-auth-challenge/1"}, [ac_k["sk"]])
     add("bnd-auth-challenge-exp-eq-iat-refuse", ["SL-IDEN-010"], "auth_challenge",
         {"challenge": ac_eq_iat, "service_id": "svc.example", "journal": {"journal_id": _h32("bnd-acj2"), "auth_nonces": {_h32("bnd-ac-eqiat"): {"service_id": "svc.example", "used": False, "issued_at": 1795220060, "expires_at": 1795220060}}}, "chain": ch_ac120},
         "REFUSE", "AUTH_CHALLENGE_EXPIRED", "AuthChallenge with expires_at == issued_at MUST refuse AUTH_CHALLENGE_EXPIRED.")
@@ -463,36 +463,43 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     add("bnd-auth-challenge-now-eq-exp-refuse", ["SL-IDEN-010"], "auth_challenge",
         {"challenge": ac_ttl120, "service_id": "svc.example", "journal": {"journal_id": _h32("bnd-acj3"), "auth_nonces": {_h32("bnd-ac-120"): {"service_id": "svc.example", "used": False, "issued_at": 1795220000, "expires_at": 1795220120}}}, "chain": ch_ac_exp},
         "REFUSE", "AUTH_CHALLENGE_EXPIRED", "AuthChallenge at exact now == expires_at MUST refuse AUTH_CHALLENGE_EXPIRED.")
-    # L1318 compound `or`: named auth challenge with valid auth_seal present in manifest, ONLY auth_key mismatched!
+    # Named auth challenge with valid sets.auth entry/seal present in manifest, ONLY entry key mismatched!
     ac_seal_pol = {"kind": "key", "pk": _kp("bnd-ac-seal")["comp"]}
     ac_seal_tx = _h32("bnd-ac-seal-tx")
-    man_ac_wrong = copy.deepcopy(fx0["_alice_man"])
-    man_ac_wrong["auth_key"] = _kp("bnd-other-auth")["xonly"]
-    man_ac_wrong["auth_seal"] = {"script_policy": ac_seal_pol, "txid": ac_seal_tx, "vout": 0}
+    ac_other_head, ac_other_proofs = rm.make_salted_auth_set(
+        "id/alice",
+        [{"alg": "bip340", "key": _kp("bnd-other-auth")["xonly"], "label": "other", "seal": {"script_policy": ac_seal_pol, "txid": ac_seal_tx, "vout": 0}}],
+    )
     ch_ac_named = copy.deepcopy(ch_ac120)
     ch_ac_named["txs"][ac_seal_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(ac_seal_pol)}}}
-    ch_ac_named["names"]["id/alice"] = sv.make_name_history("id/alice", fx0["_alice_reg"], fx0["_alice_owner_pol"], {"link": {"grant": fx0["_keys"]["alice_gr"]["xonly"]}, "m": {"h": sl.content_addr(man_ac_wrong), "s": 1}}, first_height=748000, update_height=749000)
-    ac_named = sl.sign_envelope({"auth_pubkey": ac_k["xonly"], "expires_at": 1795220120, "issued_at": 1795220000, "name": "id/alice", "nonce": _h32("bnd-ac-named"), "service_id": "svc.example", "type": "seallink-auth-challenge/1"}, [ac_k["sk"]])
+    man_ac_wrong = rm.bind_sets_manifest(
+        ch_ac_named, "id/alice", fx0["_alice_owner_pol"], fx0["_alice_reg"],
+        auth_head=ac_other_head, extra_link={"grant": fx0["_keys"]["alice_gr"]["xonly"]},
+    )
+    ac_named = sl.sign_envelope({"auth_alg": "bip340", "auth_pubkey": ac_k["xonly"], "expires_at": 1795220120, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "name": "id/alice", "network": "main", "nonce": _h32("bnd-ac-named"), "service_id": "svc.example", "type": "seallink-auth-challenge/1"}, [ac_k["sk"]])
     add("bnd-auth-named-wrong-key-with-valid-seal-refuse", ["SL-IDEN-010"], "auth_challenge",
-        {"challenge": ac_named, "service_id": "svc.example", "manifests": {sl.content_addr(man_ac_wrong): man_ac_wrong},
+        {"challenge": ac_named, "service_id": "svc.example", "manifests": {sl.content_addr(man_ac_wrong): man_ac_wrong}, "auth_proof": ac_other_proofs[0],
          "journal": {"journal_id": _h32("bnd-acj4"), "auth_nonces": {_h32("bnd-ac-named"): {"service_id": "svc.example", "used": False, "issued_at": 1795220000, "expires_at": 1795220120}}}, "chain": ch_ac_named},
-        "REFUSE", "AUTH_KEY_UNPINNED", "Named auth challenge with valid auth_seal present but mismatched auth_key MUST refuse AUTH_KEY_UNPINNED.")
+        "REFUSE", "AUTH_KEY_UNPINNED", "Named auth challenge with valid sets.auth proof for a different key MUST refuse AUTH_KEY_UNPINNED.")
 
-    # 3i. OwnerCommand exact iat == now (ADMIT) and exp == now (REFUSE) (kills L1344 both shifts!)
+    # 3i. OwnerCommand exact iat == now (ADMIT) and exp == now (REFUSE)
     oc_dev = _kp("bnd-oc-dev")
     oc_seal_pol = {"kind": "key", "pk": _kp("bnd-oc-seal")["comp"]}
     oc_seal_tx = _h32("bnd-oc-seal-tx")
     ch_oc_b = copy.deepcopy(fx0["chain"])
     ch_oc_b["txs"][oc_seal_tx] = {"confirmed_height": 749990, "outputs": {"0": {"script_pubkey_hex": _spk_hex(oc_seal_pol)}}}
-    dlist_b = {"devices": [{"alg": "bip340", "ceiling": 1, "key": oc_dev["xonly"], "label": "d1", "presence": False, "seal": {"script_policy": oc_seal_pol, "txid": oc_seal_tx, "vout": 0}}], "network": "main", "owner": "id/alice", "seq": 1, "type": "seallink-device-list/1"}
-    oc_man_bnd = rm.bind_device_list_manifest(ch_oc_b, "id/alice", ch_oc_b["names"]["id/alice"]["updates"][-1]["owner_policy"], ch_oc_b["names"]["id/alice"]["registration"], dlist_b)
+    dhead_b, dproofs_b = rm.make_salted_device_set(
+        "id/alice",
+        [{"alg": "bip340", "ceiling": 1, "key": oc_dev["xonly"], "label": "d1", "presence": False, "seal": {"script_policy": oc_seal_pol, "txid": oc_seal_tx, "vout": 0}}],
+    )
+    oc_man_bnd = rm.bind_sets_manifest(ch_oc_b, "id/alice", ch_oc_b["names"]["id/alice"]["updates"][-1]["owner_policy"], ch_oc_b["names"]["id/alice"]["registration"], device_head=dhead_b)
     oc_now_iat = sl.sign_envelope({"arguments": {"brief_sha256": _h32("b"), "run_id": "r1"}, "command": "agent-dispatch", "exp": ch_oc_b["now"] + 60, "genesis": GENESIS_MAIN, "iat": ch_oc_b["now"], "level": 1, "network": "main", "nonce": _h32("bnd-oc-iat"), "owner": "id/alice", "target_executor": "id/st", "type": "seallink-owner-command/1"}, [oc_dev["sk"]])
     add("bnd-owner-cmd-now-eq-iat-admit", ["SL-IDEN-011"], "owner_command",
-        {"command": oc_now_iat, "device_list": dlist_b, "owner_manifest": oc_man_bnd, "is_foreign_service": False, "chain": ch_oc_b}, "ADMIT", None,
+        {"command": oc_now_iat, "device_proof": dproofs_b[0], "owner_manifest": oc_man_bnd, "is_foreign_service": False, "chain": ch_oc_b}, "ADMIT", None,
         "Owner command at exact now == iat MUST admit.")
     oc_now_exp = sl.sign_envelope({"arguments": {"brief_sha256": _h32("b"), "run_id": "r2"}, "command": "agent-dispatch", "exp": ch_oc_b["now"], "genesis": GENESIS_MAIN, "iat": ch_oc_b["now"] - 60, "level": 1, "network": "main", "nonce": _h32("bnd-oc-exp"), "owner": "id/alice", "target_executor": "id/st", "type": "seallink-owner-command/1"}, [oc_dev["sk"]])
     add("bnd-owner-cmd-now-eq-exp-refuse", ["SL-IDEN-011"], "owner_command",
-        {"command": oc_now_exp, "device_list": dlist_b, "owner_manifest": oc_man_bnd, "is_foreign_service": False, "chain": ch_oc_b}, "REFUSE", "INVOKE_TIME_INVALID",
+        {"command": oc_now_exp, "device_proof": dproofs_b[0], "owner_manifest": oc_man_bnd, "is_foreign_service": False, "chain": ch_oc_b}, "REFUSE", "INVOKE_TIME_INVALID",
         "Owner command at exact now == exp MUST refuse INVOKE_TIME_INVALID.")
 
     # 3j. Assent exact TTL == 259200 (72h ADMIT), expires_at == issued_at (REFUSE), now == expires_at (REFUSE) (kills all 3 shifts on L2123!)

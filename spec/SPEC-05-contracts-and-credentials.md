@@ -1,6 +1,6 @@
 # SPEC-05: Contracts, Symmetric Assent, Verifiable Credentials, and General Notary Acts
 
-- **Version:** `1.0.0-draft.12`
+- **Version:** `1.0.0-draft.13`
 - **Status:** `draft` (normative rules `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/wire-jcs-and-hashes.json`, `vectors/trace-02-guardian-succession-assent.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/key-roles.json`, `registry/opreturn-actions.json`, `registry/refusal-codes.json`, `registry/artifact-schemes.json`

@@ -738,7 +738,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     # --- Group 6: Auth challenge & Owner commands ---
     auth_k = _kp("auth-br-k")
     chlg = sl.sign_envelope(
-        {"auth_pubkey": auth_k["xonly"], "expires_at": 1795220100, "issued_at": 1795220000, "nonce": _h32("ac-n"), "service_id": "mail.example", "type": "seallink-auth-challenge/1"},
+        {"auth_alg": "bip340", "auth_pubkey": auth_k["xonly"], "expires_at": 1795220100, "genesis": GENESIS_MAIN, "issued_at": 1795220000, "network": "main", "nonce": _h32("ac-n"), "service_id": "mail.example", "type": "seallink-auth-challenge/1"},
         [auth_k["sk"]],
     )
     add("branch-auth-challenge-wrong-service-id", ["SL-IDEN-010"], "auth_challenge",
@@ -751,16 +751,13 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     dseal_tx = _h32("oc-dseal-tx")
     ch_oc = copy.deepcopy(fx0["chain"])
     ch_oc["txs"][dseal_tx] = {"confirmed_height": 749990, "outputs": {"0": {"script_pubkey_hex": _spk_hex(dseal_pol)}}}
-    dev_list_br = {
-        "devices": [
+    dev_head_br, dev_proofs_br = rm.make_salted_device_set(
+        "id/alice",
+        [
             {"alg": "bip340", "ceiling": 1, "key": dev1["xonly"], "label": "dev1", "presence": False, "seal": {"script_policy": dseal_pol, "txid": dseal_tx, "vout": 0}},
             {"alg": "bip340", "ceiling": 2, "key": dev2["xonly"], "label": "dev2", "presence": False, "seal": {"script_policy": dseal_pol, "txid": dseal_tx, "vout": 0}},
         ],
-        "network": "main",
-        "owner": "id/alice",
-        "seq": 1,
-        "type": "seallink-device-list/1",
-    }
+    )
     oc_base = {
         "arguments": {"brief_sha256": _h32("oc-brf"), "run_id": "run-1"}, "command": "agent-dispatch", "exp": 1795220300, "genesis": GENESIS_MAIN,
         "iat": 1795220000, "level": 0, "network": "main", "nonce": _h32("oc-1"),
@@ -768,28 +765,28 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     }
     oc_alice_pol = ch_oc["names"]["id/alice"]["updates"][-1]["owner_policy"]
     oc_alice_reg = ch_oc["names"]["id/alice"]["registration"]
-    oc_man_br = rm.bind_device_list_manifest(ch_oc, "id/alice", oc_alice_pol, oc_alice_reg, dev_list_br)
+    oc_man_br = rm.bind_sets_manifest(ch_oc, "id/alice", oc_alice_pol, oc_alice_reg, device_head=dev_head_br)
     add("branch-oc-foreign-service-refused", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope(oc_base, [dev1["sk"]]), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": True, "chain": ch_oc},
+        {"command": sl.sign_envelope(oc_base, [dev1["sk"]]), "device_proof": dev_proofs_br[0], "owner_manifest": oc_man_br, "is_foreign_service": True, "chain": ch_oc},
         "REFUSE", "DEVICE_UNAUTHORIZED", "Valid L0 owner command presented to foreign service MUST refuse DEVICE_UNAUTHORIZED.")
     add("branch-oc-chain-mismatch", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope({**oc_base, "genesis": _h32("wrong-gen")}, [dev1["sk"]]), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
+        {"command": sl.sign_envelope({**oc_base, "genesis": _h32("wrong-gen")}, [dev1["sk"]]), "device_proof": dev_proofs_br[0], "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
         "REFUSE", "CHAIN_MISMATCH", "Owner command for wrong genesis MUST refuse CHAIN_MISMATCH.")
     add("branch-oc-expired", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope({**oc_base, "iat": 1795210000, "exp": 1795210100}, [dev1["sk"]]), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
+        {"command": sl.sign_envelope({**oc_base, "iat": 1795210000, "exp": 1795210100}, [dev1["sk"]]), "device_proof": dev_proofs_br[0], "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
         "REFUSE", "INVOKE_TIME_INVALID", "Expired owner command MUST refuse INVOKE_TIME_INVALID.")
     add("branch-oc-multisig-disallowed", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope(oc_base, [dev1["sk"], dev2["sk"]], m=2), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
+        {"command": sl.sign_envelope(oc_base, [dev1["sk"], dev2["sk"]], m=2), "device_proof": dev_proofs_br[0], "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
         "REFUSE", "DEVICE_UNAUTHORIZED", "Owner command signed by 2-of-2 instead of 1 enrolled device key MUST refuse DEVICE_UNAUTHORIZED.")
     add("branch-oc-unknown-device", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope(oc_base, [_kp("oc-stranger")["sk"]]), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
+        {"command": sl.sign_envelope(oc_base, [_kp("oc-stranger")["sk"]]), "device_proof": dev_proofs_br[0], "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
         "REFUSE", "DEVICE_UNAUTHORIZED", "Owner command from unenrolled device key MUST refuse DEVICE_UNAUTHORIZED.")
     add("branch-oc-level-exceeds-ceiling", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope({**oc_base, "level": 2}, [dev1["sk"]]), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
+        {"command": sl.sign_envelope({**oc_base, "level": 2}, [dev1["sk"]]), "device_proof": dev_proofs_br[0], "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
         "REFUSE", "DEVICE_UNAUTHORIZED", "Owner command level exceeding device ceiling MUST refuse DEVICE_UNAUTHORIZED.")
     oc_l2_nopres = {**oc_base, "command": "policy-apply", "level": 2, "arguments": {"config_sha256": _h32("c"), "statement_id": _h32("s")}}
     add("branch-oc-policy-apply-requires-presence", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope(oc_l2_nopres, [dev2["sk"]]), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
+        {"command": sl.sign_envelope(oc_l2_nopres, [dev2["sk"]]), "device_proof": dev_proofs_br[1], "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
         "REFUSE", "DEVICE_UNAUTHORIZED", "L2 policy-apply from device without user-presence verification MUST refuse DEVICE_UNAUTHORIZED.")
 
     # --- Group 7: Origin, Recovery, Status, Roster & Ward Approvals ---
@@ -1896,7 +1893,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     add("branch-fed-pii-missing-approval-cmd", ["SL-SERV-004"], "federation",
         {"policy": {"trusted_peers": ["id/peer-good"]}, "peer_ctx": {"phase": "pii_disclosure", "route_hops": [{"actor": "id/peer-good", "role": "counterparty"}]}, "grant": fx0["bundle"]["grants"][0], "chain": fx0["chain"]},
         "REFUSE", "FEDERATION_POLICY_DENIED", "Contour A PII disclosure without L2 approval_command MUST refuse FEDERATION_POLICY_DENIED.")
-    al_man_fed_br = {**copy.deepcopy(fx0["_alice_man"]), "sets": {"devices": {"seq": 1, "sha256": sl.content_addr(dev_list_br)}}}
+    al_man_fed_br = {**copy.deepcopy(fx0["_alice_man"]), "sets": {"devices": {"seq": 1, "sha256": sl.content_addr(dev_head_br)}}}
     al_man_fed_br_h = sl.content_addr(al_man_fed_br)
     ch_oc_fed = copy.deepcopy(ch_oc)
     ch_oc_fed["names"]["id/alice"] = sv.make_name_history(
@@ -1905,7 +1902,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         first_height=748000, update_height=749000,
     )
     add("branch-fed-pii-level1-approval-rejected", ["SL-SERV-004"], "federation",
-        {"policy": {"trusted_peers": ["id/peer-good"]}, "peer_ctx": {"phase": "pii_disclosure", "route_hops": [{"actor": "id/peer-good", "role": "counterparty"}], "approval_command": l1_cmd, "device_list": dev_list_br, "manifests": {al_man_fed_br_h: al_man_fed_br}}, "grant": fx0["bundle"]["grants"][0], "chain": ch_oc_fed},
+        {"policy": {"trusted_peers": ["id/peer-good"]}, "peer_ctx": {"phase": "pii_disclosure", "route_hops": [{"actor": "id/peer-good", "role": "counterparty"}], "approval_command": l1_cmd, "device_proof": dev_proofs_br[0], "manifests": {al_man_fed_br_h: al_man_fed_br}}, "grant": fx0["bundle"]["grants"][0], "chain": ch_oc_fed},
         "REFUSE", "FEDERATION_POLICY_DENIED", "Contour A PII disclosure with level=1 instead of level=2 owner command MUST refuse FEDERATION_POLICY_DENIED.")
     add("branch-fed-unknown-phase", ["SL-SERV-004"], "federation",
         {"policy": {"trusted_peers": ["id/peer-good"]}, "peer_ctx": {"phase": "unknown_phase"}, "grant": fx0["bundle"]["grants"][0], "chain": fx0["chain"]},

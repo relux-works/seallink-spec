@@ -1012,10 +1012,13 @@
         },
         "challenge": {
           "payload": {
+            "auth_alg": "bip340",
             "auth_pubkey": "712a10801937266f697a3a1272b0c8cbc53649fdc46a1a61c094ee32fa11710a",
             "expires_at": 1795220005,
+            "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "issued_at": 1795219950,
             "name": "id/alice",
+            "network": "main",
             "nonce": "0afbb81eb58f8b39e19b88515811be76e446db60ff6beec7c518e4a0cb535088",
             "service_id": "id/mail-host-a",
             "type": "seallink-auth-challenge/1"
@@ -1030,7 +1033,7 @@
             "sigs": [
               {
                 "pk": "712a10801937266f697a3a1272b0c8cbc53649fdc46a1a61c094ee32fa11710a",
-                "sig": "e0b83beb0865288e307223674e2e16ea276696fad182f932be922727488b5b932be6d2ba2701feba350e1bb3d3af2d16f71dcda776e131655a3308d57e7e5dd7"
+                "sig": "70aff7beaee49685801bf869c3e9f432c0c665eb94e6a37a28403dc475fdb5a7a5624cdb6d94a9dd812eaf3b70b73f3ede9bb421f06a0359d096c87f9e45339c"
               }
             ]
           }
@@ -1344,10 +1347,13 @@
         },
         "challenge": {
           "payload": {
+            "auth_alg": "bip340",
             "auth_pubkey": "712a10801937266f697a3a1272b0c8cbc53649fdc46a1a61c094ee32fa11710a",
             "expires_at": 1795220100,
+            "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "issued_at": 1795220000,
             "name": "id/alice",
+            "network": "main",
             "nonce": "0afbb81eb58f8b39e19b88515811be76e446db60ff6beec7c518e4a0cb535088",
             "service_id": "id/mail-host-a",
             "type": "seallink-auth-challenge/1"
@@ -1362,7 +1368,7 @@
             "sigs": [
               {
                 "pk": "712a10801937266f697a3a1272b0c8cbc53649fdc46a1a61c094ee32fa11710a",
-                "sig": "518bc346349cbdfc492c1d425a4e6eaa2029c3fb4951c5bc658254fbe7eeaa01bfa44a7060cd6354e633ab7a09bfabb4bf253ac1d9d0df118d6d8a9a4aa3eadb"
+                "sig": "1447259d6b5d830771ea783a0bf94bb5d0e2dcfc194b99dbab408825df95f3d59db2d46936d3cb153b4b158923e3b6fc3a19d17503dd20305ac4a0a2704627e7"
               }
             ]
           }
@@ -1676,10 +1682,13 @@
         },
         "challenge": {
           "payload": {
+            "auth_alg": "bip340",
             "auth_pubkey": "712a10801937266f697a3a1272b0c8cbc53649fdc46a1a61c094ee32fa11710a",
             "expires_at": 1795220100,
+            "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
             "issued_at": 1795220000,
             "name": "id/alice",
+            "network": "main",
             "nonce": "0afbb81eb58f8b39e19b88515811be76e446db60ff6beec7c518e4a0cb535088",
             "service_id": "id/mail-host-a",
             "type": "seallink-auth-challenge/1"
@@ -1694,7 +1703,7 @@
             "sigs": [
               {
                 "pk": "712a10801937266f697a3a1272b0c8cbc53649fdc46a1a61c094ee32fa11710a",
-                "sig": "518bc346349cbdfc492c1d425a4e6eaa2029c3fb4951c5bc658254fbe7eeaa01bfa44a7060cd6354e633ab7a09bfabb4bf253ac1d9d0df118d6d8a9a4aa3eadb"
+                "sig": "1447259d6b5d830771ea783a0bf94bb5d0e2dcfc194b99dbab408825df95f3d59db2d46936d3cb153b4b158923e3b6fc3a19d17503dd20305ac4a0a2704627e7"
               }
             ]
           }
@@ -10163,28 +10172,38 @@
             ]
           }
         },
-        "device_list": {
-          "devices": [
-            {
-              "alg": "bip340",
-              "ceiling": 1,
-              "key": "836873ca7ceb64ecb1106191413c075723cc942a56cbde965e47f8793929e265",
-              "label": "laptop",
-              "presence": false,
-              "seal": {
-                "script_policy": {
-                  "kind": "key",
-                  "pk": "035dc6d1a59000dc1fd7dc74d61531e9abbfce024e213cf9c71034a5d9ac58e950"
-                },
-                "txid": "58aca68a6ca61657718d9b13a08a5c4ab211197955b3d2b6d57ad06f146c7f64",
-                "vout": 0
-              }
-            }
-          ],
-          "network": "main",
-          "owner": "id/alice",
-          "seq": 1,
-          "type": "seallink-device-list/1"
+        "device_proof": {
+          "entry": {
+            "alg": "bip340",
+            "ceiling": 1,
+            "key": "836873ca7ceb64ecb1106191413c075723cc942a56cbde965e47f8793929e265",
+            "label": "laptop",
+            "network": "main",
+            "owner": "id/alice",
+            "presence": false,
+            "salt": "a3f8c2de4b8db5a3fa79bdf335cbf318186a5cf835d7c6b73f2419912d86f651",
+            "seal": {
+              "script_policy": {
+                "kind": "key",
+                "pk": "035dc6d1a59000dc1fd7dc74d61531e9abbfce024e213cf9c71034a5d9ac58e950"
+              },
+              "txid": "58aca68a6ca61657718d9b13a08a5c4ab211197955b3d2b6d57ad06f146c7f64",
+              "vout": 0
+            },
+            "type": "seallink-device-entry/1"
+          },
+          "head": {
+            "merkle_root": "2fd7ac71a51acb7b305c41ae004aadf6f54c4044838f6baae4f4dbb05e45bd49",
+            "network": "main",
+            "owner": "id/alice",
+            "seq": 1,
+            "type": "seallink-device-set-head/1"
+          },
+          "proof": {
+            "leaf_digest": "563a3cee65d2036fd88d7266e2fe651a4054db096592fb9403c028d6dbc44ae4",
+            "root": "2fd7ac71a51acb7b305c41ae004aadf6f54c4044838f6baae4f4dbb05e45bd49",
+            "steps": []
+          }
         },
         "is_foreign_service": true
       },
@@ -10561,28 +10580,38 @@
               ]
             }
           },
-          "device_list": {
-            "devices": [
-              {
-                "alg": "bip340",
-                "ceiling": 2,
-                "key": "dd65881451f1d6fdf6cd8e7e8386eed6b643f0d0102421d2a55185de2306b71f",
-                "label": "yubikey-l2",
-                "presence": true,
-                "seal": {
-                  "script_policy": {
-                    "kind": "key",
-                    "pk": "02aee14fa0ae346b19830018e9ed62e777c196c6979b124569dfaf21e636fbd788"
-                  },
-                  "txid": "be6b93a72c09b9e68482cc0bd702262ae320dcffd09fb6a950789068bf163d2b",
-                  "vout": 0
-                }
-              }
-            ],
-            "network": "main",
-            "owner": "id/alice",
-            "seq": 1,
-            "type": "seallink-device-list/1"
+          "device_proof": {
+            "entry": {
+              "alg": "bip340",
+              "ceiling": 2,
+              "key": "dd65881451f1d6fdf6cd8e7e8386eed6b643f0d0102421d2a55185de2306b71f",
+              "label": "yubikey-l2",
+              "network": "main",
+              "owner": "id/alice",
+              "presence": true,
+              "salt": "269ac298a6bd9d68794c497edeaab287821baccbd8a1d8f46eedc1ed53d55446",
+              "seal": {
+                "script_policy": {
+                  "kind": "key",
+                  "pk": "02aee14fa0ae346b19830018e9ed62e777c196c6979b124569dfaf21e636fbd788"
+                },
+                "txid": "be6b93a72c09b9e68482cc0bd702262ae320dcffd09fb6a950789068bf163d2b",
+                "vout": 0
+              },
+              "type": "seallink-device-entry/1"
+            },
+            "head": {
+              "merkle_root": "234617fd9fb51e615bd47405e2ec411153c783d3f3ce048d284d6d55a28ed82c",
+              "network": "main",
+              "owner": "id/alice",
+              "seq": 1,
+              "type": "seallink-device-set-head/1"
+            },
+            "proof": {
+              "leaf_digest": "dc4b161d234d641c5aa352ba60397cf12dac1fcbb3cb3a39fe204d358eef74ec",
+              "root": "234617fd9fb51e615bd47405e2ec411153c783d3f3ce048d284d6d55a28ed82c",
+              "steps": []
+            }
           },
           "fields_sha256": "567c04c6ad78f16dc442f4bea6f1b9e37480843b3471629ae63dcd502845cd69",
           "phase": "pii_disclosure",
@@ -34760,5 +34789,5 @@
   "suite": "refusal-coverage-matrix",
   "total_covered_codes": 89,
   "total_registered_codes": 89,
-  "version": "1.0.0-draft.12"
+  "version": "1.0.0-draft.13"
 }

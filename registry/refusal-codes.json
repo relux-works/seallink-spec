@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Authoritative Refusal Code Registry. No normative document may emit a refusal code absent from this file. Verifiers report the FIRST failing code in each pipeline's deterministic check order.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.12",
+  "version": "1.0.0-draft.13",
   "codes": [
     {"code": "WIRE_SIZE", "category": "wire", "owning_spec": "SPEC-01", "creates_closure": false, "retryable": false, "description": "Document exceeds type max_bytes or nesting depth > 16."},
     {"code": "WIRE_JSON", "category": "wire", "owning_spec": "SPEC-01", "creates_closure": false, "retryable": false, "description": "Invalid UTF-8, BOM present, trailing bytes, or malformed RFC 8259 JSON object."},
@@ -43,8 +43,8 @@
     {"code": "MANIFEST_ROLLBACK", "category": "identity", "owning_spec": "SPEC-03", "creates_closure": false, "retryable": false, "description": "Manifest or set seq decreased (or hash changed at equal seq) while journaled anchoring_txid remains on active chain."},
     {"code": "AUTH_CHALLENGE_EXPIRED", "category": "identity", "owning_spec": "SPEC-03", "creates_closure": false, "retryable": false, "description": "Auth challenge TTL > 120s or now >= expires_at."},
     {"code": "AUTH_CHALLENGE_INVALID", "category": "identity", "owning_spec": "SPEC-03", "creates_closure": false, "retryable": false, "description": "Wrong audience, reused/unknown nonce, provisional policy failure, or upgrade binding mismatch."},
-    {"code": "AUTH_KEY_UNPINNED", "category": "identity", "owning_spec": "SPEC-03", "creates_closure": false, "retryable": false, "description": "Manifest lacks paired auth_key/auth_seal or key mismatch."},
-    {"code": "DEVICE_UNAUTHORIZED", "category": "identity", "owning_spec": "SPEC-03", "creates_closure": false, "retryable": false, "description": "Device key not in pinned device list, level ceiling insufficient, or presented to a foreign verifier."},
+    {"code": "AUTH_KEY_UNPINNED", "category": "identity", "owning_spec": "SPEC-03", "creates_closure": false, "retryable": false, "description": "Manifest lacks sets.auth pin, auth-set head/Merkle proof fails verification, or disclosed auth entry mismatches alg/key."},
+    {"code": "DEVICE_UNAUTHORIZED", "category": "identity", "owning_spec": "SPEC-03", "creates_closure": false, "retryable": false, "description": "Device key not proven in manifest-pinned sets.devices salted Merkle tree, level ceiling/presence insufficient, or presented to a foreign verifier."},
 
     {"code": "ORIGIN_UNVERIFIED", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": false, "description": "Origin certificate missing, untrusted issuer policy, class mismatch, mismatched majority_commitment opening, or invalid anchor."},
     {"code": "ORIGIN_BINDING_INVALID", "category": "origin", "owning_spec": "SPEC-04", "creates_closure": false, "retryable": false, "description": "Single-use name binding seal missing, out of height order, or registration already bound."},

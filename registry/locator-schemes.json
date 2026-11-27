@@ -1,0 +1,70 @@
+{
+  "$comment": "SealLink v1.0 Safe-by-Design Off-Chain Locator URI Scheme Registry (SPEC-00 §5, SPEC-03 §4). Extensible via lightweight Registry Update without a breaking Core SLIP.",
+  "protocol": "SealLink",
+  "version": "1.0.0-draft.13",
+  "governance": "Registry Update (SPEC-00 §5)",
+  "syntax_invariants": {
+    "forbid_userinfo_at_authority": true,
+    "forbid_control_chars_and_whitespace": true,
+    "max_uri_length": 512,
+    "require_content_hash_verification": true
+  },
+  "ssrf_protection_rules": {
+    "block_loopback": ["127.0.0.0/8", "::1/128"],
+    "block_private_rfc1918": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+    "block_link_local": ["169.254.0.0/16", "fe80::/10"],
+    "block_cgnat": ["100.64.0.0/10"],
+    "block_ula_ipv6": ["fc00::/7"],
+    "block_unspecified": ["0.0.0.0/8", "::/128"],
+    "revalidate_after_dns_and_redirects": true,
+    "max_redirects": 3,
+    "notes": "Normative SSRF guard for any automatic off-chain fetch initiated from untrusted manifest, card, mirror, or profile-section locators. Verifiers MUST resolve DNS, reject prohibited IP ranges on every hop before connecting, enforce response byte ceilings, and verify SHA-256 content addressing before parsing."
+  },
+  "allowed_schemes": [
+    {
+      "scheme": "https",
+      "status": "active",
+      "authority_forbids_userinfo": true,
+      "description": "TLS-authenticated HTTPS fetch (optionally pinned with tls_spki_sha256); cleartext http:// is forbidden."
+    },
+    {
+      "scheme": "blossom",
+      "status": "active",
+      "authority_forbids_userinfo": true,
+      "description": "Content-addressed Blossom (BUD-01) blob server URI."
+    },
+    {
+      "scheme": "ipfs",
+      "status": "active",
+      "authority_forbids_userinfo": false,
+      "description": "IPFS CIDv1 content-addressed URI (ipfs://<cidv1>[/<path>])."
+    },
+    {
+      "scheme": "magnet",
+      "status": "active",
+      "authority_forbids_userinfo": false,
+      "description": "BitTorrent v2 (BEP 52) magnet URI carrying btih/btmh infohash parameters."
+    },
+    {
+      "scheme": "nostr",
+      "status": "active",
+      "authority_forbids_userinfo": false,
+      "description": "NIP-19 bech32 Nostr entity URI (nevent1, naddr1, note1, npub1, nprofile1)."
+    },
+    {
+      "scheme": "sftp",
+      "status": "active",
+      "authority_forbids_userinfo": true,
+      "description": "SSH File Transfer Protocol locator without embedded credentials (authentication is out-of-band)."
+    }
+  ],
+  "forbidden_schemes": [
+    "http",
+    "javascript",
+    "data",
+    "file",
+    "ftp",
+    "blob",
+    "vbscript"
+  ]
+}

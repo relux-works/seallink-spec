@@ -13,7 +13,7 @@ Validates:
   7. Every SPEC-*.md carries Status, Evidence / Maturity, References, and Security Considerations.
   8. Full cryptographic & structural re-verification of all vectors/*.json via seallink_ref.py.
   9. LIVE EXECUTION of trace-01, trace-02, trace-03, trace-04, negative semantic & SL-ORIG-016
-     fixtures, ALL 89/89 refusal codes in refusal-coverage-matrix.json, and ALL 37/37 registered
+     fixtures, ALL 89/89 refusal codes in refusal-coverage-matrix.json, and ALL 40/40 registered
      object types through tools/seallink_verifier.py — asserting computed verdicts, refusal codes,
      and journal hash-chain commitments match expected values.
  10. Full Draft 2020-12 metaschema + instance validation of all vectors, emitted JournalEntry
@@ -791,6 +791,10 @@ def verify_all_vectors(
             if dec_c != item["decoded"]:
                 errors.append(f"ledger opreturn_criticality '{item['id']}' mismatch")
             checked += 1
+        for item in v.get("opreturn_ignored", []):
+            if sl.is_slnk_opreturn(bytes.fromhex(item["script_hex"])):
+                errors.append(f"ledger opreturn_ignored '{item['id']}' unexpectedly matched SLNK")
+            checked += 1
         for item in v.get("namecoin_consensus_retargets", {}).get("mainnet_archival", []):
             h_rt = int(item["height"])
             if sl.namecoin_retarget_ancestor_height(h_rt, network="main") != int(item["ancestor_height"]):
@@ -1191,6 +1195,21 @@ def main() -> int:
                     errors.append(f"object-types.json type '{t}' schema '{sref}' has mismatched type consts: {sorted(consts)}")
 
     check_cross_registry_coherence(registries, errors)
+
+    # 3b. Validate locator-schemes.json and crypto-algorithms.json structure
+    if "locator-schemes.json" not in registries:
+        errors.append("Missing registry/locator-schemes.json")
+    else:
+        ls_reg = registries["locator-schemes.json"]
+        if not ls_reg.get("allowed_schemes") or not ls_reg.get("forbidden_schemes") or not ls_reg.get("ssrf_protection_rules"):
+            errors.append("registry/locator-schemes.json missing required allowed_schemes/forbidden_schemes/ssrf_protection_rules")
+    if "crypto-algorithms.json" not in registries:
+        errors.append("Missing registry/crypto-algorithms.json")
+    else:
+        ca_algs = registries["crypto-algorithms.json"].get("algorithms", [])
+        statuses = {a.get("status") for a in ca_algs if isinstance(a, dict)}
+        if "mti_v1" not in statuses or "reserved_optional_module" not in statuses:
+            errors.append("registry/crypto-algorithms.json missing required mti_v1 and reserved_optional_module algorithm entries")
 
     # 4. Load registered refusal codes
     registered_codes: set[str] = set()

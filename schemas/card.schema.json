@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.12/schemas/card.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.13/schemas/card.schema.json",
   "title": "SealLink v1.0 Public Entity Card",
   "type": "object",
   "additionalProperties": false,
@@ -13,6 +13,27 @@
     "kind": { "type": "string", "enum": ["person", "agent", "organization", "service"] },
     "display": { "type": "string", "maxLength": 256, "not": { "pattern": "\n" } },
     "operator": { "$ref": "common.schema.json#/$defs/NameStr" },
+    "avatar": { "$ref": "#/$defs/AvatarRef" },
+    "avatars": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 8,
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9._-]{0,31}$", "not": { "pattern": "\n" } },
+      "additionalProperties": { "$ref": "#/$defs/AvatarRef" }
+    },
+    "links": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "url"],
+        "properties": {
+          "label": { "type": "string", "minLength": 1, "maxLength": 64, "not": { "pattern": "\n" } },
+          "url": { "$ref": "common.schema.json#/$defs/LocatorUri" }
+        }
+      }
+    },
     "transports": {
       "type": "array",
       "maxItems": 32,
@@ -34,5 +55,25 @@
     "role": { "type": "string", "maxLength": 512, "x-seallink-allow-lf": true },
     "contact": { "type": "string", "maxLength": 256, "not": { "pattern": "\n" } },
     "replaces": { "$ref": "common.schema.json#/$defs/Uint53" }
+  },
+  "$defs": {
+    "AvatarRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "mime", "bytes", "locators"],
+      "description": "Content-addressed raster avatar reference (strictly excludes active formats like SVG to prevent script injection).",
+      "properties": {
+        "sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "mime": { "type": "string", "enum": ["image/png", "image/jpeg", "image/webp", "image/avif"] },
+        "bytes": { "type": "integer", "minimum": 1, "maximum": 10485760, "x-seallink-refusal": "WIRE_INTEGER" },
+        "locators": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "common.schema.json#/$defs/LocatorUri" }
+        }
+      }
+    }
   }
 }

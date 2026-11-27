@@ -344,6 +344,32 @@
       "script_hex": "6a05534c4e4b0442010b301052e13b9c5fe83a23958b41066a84127b11c15a8c5cb9ba01d831a19bdd0144aaf4e8342f209bc4860eac128a0adfa880c9c8370e48d7aa38d95a64565284"
     },
     {
+      "action": "0x04",
+      "decoded": {
+        "action": "0x04",
+        "commitment": "954855b1fe61c8c73a5ec67e3568dc79cc61a98185e13d4f9448cc4da82b08f0",
+        "loc_type": "0x03",
+        "pointer": "992322b42225debb705961ee6eff980c69e31b9175fb4299dfc65f4ebf4de54c",
+        "version": 1
+      },
+      "id": "NOTARY_ACT_ipfs_cidv1_dag_pb",
+      "script_bytes": 74,
+      "script_hex": "6a05534c4e4b044201954855b1fe61c8c73a5ec67e3568dc79cc61a98185e13d4f9448cc4da82b08f003992322b42225debb705961ee6eff980c69e31b9175fb4299dfc65f4ebf4de54c"
+    },
+    {
+      "action": "0x04",
+      "decoded": {
+        "action": "0x04",
+        "commitment": "b15ae917aa5240b9ce2efa1dd4d47b29292dbfa66eb25beb5cde816def81a532",
+        "loc_type": "0x04",
+        "pointer": "26cdd1a36371408daf75b104539182cdd490f5f776f52414b7e8db1433b24674",
+        "version": 1
+      },
+      "id": "NOTARY_ACT_bt_v2_private",
+      "script_bytes": 74,
+      "script_hex": "6a05534c4e4b044201b15ae917aa5240b9ce2efa1dd4d47b29292dbfa66eb25beb5cde816def81a5320426cdd1a36371408daf75b104539182cdd490f5f776f52414b7e8db1433b24674"
+    },
+    {
       "action": "0x07",
       "decoded": {
         "action": "0x07",
@@ -487,6 +513,13 @@
       "id": "LOG_CHECKPOINT",
       "script_bytes": 42,
       "script_hex": "6a05534c4e4b1422013a04ec329c37710013dd29ecf577cc52914d72b7a6d398cf2ca2fa7988f4571f00"
+    }
+  ],
+  "opreturn_ignored": [
+    {
+      "id": "sibling-prefix-SLSC-ignored-by-SLNK-parser",
+      "note": "Reserved sibling OP_RETURN prefix SLSC (534c5343) MUST be ignored by SLNK parsers.",
+      "script_hex": "6a05534c5343012027b91e7633a8bf29bf0a9bf181cd3fbed0028e092f26861f3a4bcc22bd010ffe"
     }
   ],
   "opreturn_negative": [
@@ -722,5 +755,5 @@
     }
   ],
   "suite": "ledger-scripts-and-opreturn",
-  "version": "1.0.0-draft.12"
+  "version": "1.0.0-draft.13"
 }

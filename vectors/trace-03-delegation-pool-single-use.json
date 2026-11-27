@@ -2094,5 +2094,5 @@
   },
   "station_b_journal_id": "fa4c01896fbd3c1d2ccfab1bcc59ec91fb417320f260718ada19b6c2706185bc",
   "suite": "trace-03-delegation-pool-single-use",
-  "version": "1.0.0-draft.12"
+  "version": "1.0.0-draft.13"
 }

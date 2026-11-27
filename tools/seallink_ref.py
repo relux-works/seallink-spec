@@ -708,6 +708,8 @@ def schnorr_verify(msg32: bytes, pubkey_hex: str, sig_hex: str) -> bool:
 DEVICE_ALG_ALLOWED_TYPES = frozenset({
     "seallink-owner-command/1",
     "seallink-statement/1",
+    "seallink-auth-challenge/1",
+    "seallink-auth-upgrade/1",
 })
 
 # --- RFC 8032 Ed25519 (Twisted Edwards: -x^2 + y^2 = 1 + d*x^2*y^2 mod p) ---
@@ -1213,7 +1215,9 @@ def verify_envelope_signatures(
     if "signatures" in env and "guardian_approvals" not in env:
         return verify_signature_set(digest, env["signatures"], expected_policy=expected_policy, obj_type=obj_type)
     if "guardian_approvals" in env and "signatures" not in env:
-        if obj_type not in ("seallink-grant/1", "seallink-assent/1", "seallink-termination/1"):
+        if obj_type not in ("seallink-grant/1", "seallink-assent/1", "seallink-termination/1") and not (
+            obj_type == "seallink-statement/1" and payload.get("statement_kind") == "identity-link"
+        ):
             return False, "WIRE_MEMBER"
         approvals = env["guardian_approvals"]
         if not isinstance(approvals, list) or not (1 <= len(approvals) <= 32):
@@ -1634,27 +1638,31 @@ def parse_name_output(script: bytes) -> dict[str, Any]:
 
 SLNK_MAGIC = b"SLNK"
 
-# Exact per-action allowed locators matching registry/opreturn-actions.json (H-23, R3 M2)
+# Exact per-action allowed locators matching registry/opreturn-actions.json (H-23, R3 M2, draft.13 0x03/0x04)
+_STD_LOCS = frozenset({0x00, 0x01, 0x03, 0x04, 0x05})
+_BATCH_LOCS = frozenset({0x00, 0x01, 0x02, 0x03, 0x04, 0x05})
+_ALL_32B_LOCS = frozenset({0x01, 0x02, 0x03, 0x04, 0x05})
+
 ACTION_ALLOWED_LOCATORS: dict[int, frozenset[int]] = {
-    0x01: frozenset({0x00, 0x01, 0x05}),
-    0x02: frozenset({0x00, 0x01, 0x02, 0x05}),
-    0x03: frozenset({0x00, 0x01, 0x05}),
-    0x04: frozenset({0x00, 0x01, 0x05}),
-    0x05: frozenset({0x00, 0x01, 0x05}),
-    0x07: frozenset({0x00, 0x01, 0x05}),
-    0x08: frozenset({0x00, 0x01, 0x05}),
-    0x09: frozenset({0x00, 0x01, 0x05}),
-    0x0A: frozenset({0x00, 0x01, 0x05}),
+    0x01: _STD_LOCS,
+    0x02: _BATCH_LOCS,
+    0x03: _STD_LOCS,
+    0x04: _STD_LOCS,
+    0x05: _STD_LOCS,
+    0x07: _STD_LOCS,
+    0x08: _STD_LOCS,
+    0x09: _STD_LOCS,
+    0x0A: _STD_LOCS,
     0x0B: frozenset({0x00}),
-    0x0C: frozenset({0x00, 0x01, 0x05}),
-    0x0D: frozenset({0x00, 0x01, 0x05}),
+    0x0C: _STD_LOCS,
+    0x0D: _STD_LOCS,
     0x0E: frozenset({0x00}),
-    0x0F: frozenset({0x00, 0x01, 0x05}),
+    0x0F: _STD_LOCS,
     0x10: frozenset({0x00}),
     0x11: frozenset({0x00}),
-    0x12: frozenset({0x00, 0x01, 0x05}),
-    0x13: frozenset({0x00, 0x01, 0x05}),
-    0x14: frozenset({0x00, 0x01, 0x05}),
+    0x12: _STD_LOCS,
+    0x13: _STD_LOCS,
+    0x14: _STD_LOCS,
 }
 
 
@@ -1680,7 +1688,7 @@ def encode_opreturn(
             if pointer_hex is not None:
                 raise ValueError("CHAIN_FRAME_INVALID")
             payload = bytes([0x01]) + comm + bytes([0x00])
-        elif loc_type in (0x01, 0x02, 0x05):
+        elif loc_type in _ALL_32B_LOCS:
             if pointer_hex is None:
                 raise ValueError("CHAIN_FRAME_INVALID")
             ptr = bytes.fromhex(pointer_hex)
@@ -1719,7 +1727,7 @@ def decode_opreturn(script: bytes) -> dict[str, Any]:
         raise ValueError("CHAIN_FRAME_INVALID")
     if loc == 0x00 and len(payload) == 34:
         return {"action": f"0x{action:02x}", "version": 1, "commitment": comm, "loc_type": "0x00"}
-    if loc in (0x01, 0x02, 0x05) and len(payload) == 66:
+    if loc in _ALL_32B_LOCS and len(payload) == 66:
         return {
             "action": f"0x{action:02x}",
             "version": 1,
@@ -1769,7 +1777,7 @@ def decode_opreturn_with_criticality(script: bytes) -> dict[str, Any]:
         loc = payload[33]
         if loc == 0x00 and len(payload) == 34:
             return {"action": f"0x{action:02x}", "advisory": True, "version": 1, "commitment": comm, "loc_type": "0x00"}
-        if loc in (0x01, 0x02, 0x05) and len(payload) == 66:
+        if loc in _ALL_32B_LOCS and len(payload) == 66:
             return {
                 "action": f"0x{action:02x}",
                 "advisory": True,
@@ -1852,6 +1860,20 @@ def verify_merkle_proof(proof: dict[str, Any]) -> bool:
     except ValueError:
         return False
     return cur.hex() == root
+
+
+def build_salted_set_merkle(entries: list[dict[str, Any]]) -> tuple[str, dict[str, dict[str, Any]]]:
+    """Build salted selective-disclosure Merkle tree for seallink-auth-entry/1 or seallink-device-entry/1 (<= 256 entries, <= 8 proof steps).
+
+    Each leaf digest is domain-separated by its entry type via signing_digest(entry) = SHA256(SHA256(entry['type']) || JCS(entry)).
+    Returns (merkle_root_hex, proofs_by_leaf_digest).
+    """
+    if not isinstance(entries, list) or not (1 <= len(entries) <= 256):
+        raise ValueError("salted set must have 1..256 entries")
+    digests = [signing_digest(e).hex() for e in entries]
+    if len(set(digests)) != len(digests):
+        raise ValueError("duplicate salted set entry digest")
+    return build_merkle_tree(digests)
 
 
 # ============================================================================
@@ -2174,6 +2196,8 @@ def derive_guardian_event_class(payload: dict[str, Any]) -> str:
             return "custody_change"
         return "contract_assent"
     if obj_type == "seallink-termination/1":
+        return "contract_assent"
+    if obj_type == "seallink-statement/1" and payload.get("statement_kind") == "identity-link":
         return "contract_assent"
     if obj_type == "seallink-grant/1":
         if "delegate" in payload:
@@ -3493,6 +3517,18 @@ def self_test() -> None:
     assert jcs_validate(('{"a":' + "9" * 5000 + '}').encode("utf-8")) == (False, "WIRE_NUMBER")
     assert jcs_validate(b'{"text":"line1\\nline2"}') == (False, "WIRE_STRING")
     assert jcs_validate(b'{"text":"line1\\nline2"}', allow_lf_paths=CLAUSE_LF_PATHS)[0] is True
+    # draft.13: loc_type 0x03 (ipfs_cidv1_dag_pb) & 0x04 (bt_v2_private) + SLSC ignored by SLNK + salted Merkle cross-set domain separation
+    _ptr32 = sha256(b"d13-ptr").hex()
+    _f03 = encode_opreturn(0x09, sha256(b"d13-c").hex(), 0x03, _ptr32)
+    _f04 = encode_opreturn(0x14, sha256(b"d13-c").hex(), 0x04, _ptr32)
+    assert len(_f03) == 74 and decode_opreturn(_f03)["loc_type"] == "0x03"
+    assert len(_f04) == 74 and decode_opreturn(_f04)["loc_type"] == "0x04"
+    assert not is_slnk_opreturn(b"\x6a\x05SLSC\x01\x01\x00"), "SLSC prefix MUST be ignored by SLNK verifiers"
+    _ae = {"alg": "bip340", "key": xonly_pubkey(sk0), "label": "k1", "network": "main", "owner": "id/a", "salt": _ptr32, "seal": {"script_policy": {"kind": "key", "pk": p1}, "txid": _ptr32, "vout": 0}, "type": "seallink-auth-entry/1"}
+    _de = {**_ae, "ceiling": 1, "presence": False, "type": "seallink-device-entry/1"}
+    _mr_a, _pr_a = build_salted_set_merkle([_ae])
+    _mr_d, _pr_d = build_salted_set_merkle([_de])
+    assert _mr_a != _mr_d and verify_merkle_proof(_pr_a[signing_digest(_ae).hex()]) and verify_merkle_proof(_pr_d[signing_digest(_de).hex()])
 
     print(f"seallink_ref self_test PASS (BIP-340 + RFC8032 Ed25519 + low-S P-256 + RIPEMD-160 + RFC9162 + SMT256 + BIP66 + CAuxPow + fsverity) | clause_commit={c_hash}")
 

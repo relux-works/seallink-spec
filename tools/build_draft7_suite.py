@@ -967,20 +967,18 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "WIRE_KEY",
         "PR #1 B-11 closed: off-curve secp256k1 recipient.key MUST refuse WIRE_KEY at wire layer.",
     )
-    # R3-B6: Small-order Ed25519 public key (identity point 0100..00) in DeviceList -> WIRE_KEY
+    # R3-B6: Small-order Ed25519 public key (identity point 0100..00) in DeviceEntry -> WIRE_KEY
     dl_small_ord = {
-        "devices": [{
-            "alg": "ed25519",
-            "ceiling": 1,
-            "key": "01" + ("00" * 31),
-            "label": "bad-small-order",
-            "presence": True,
-            "seal": {"script_policy": {"kind": "key", "pk": fx_b1_ctrl["_keys"]["alice_own"]["comp"]}, "txid": _h32("so-seal"), "vout": 0},
-        }],
+        "alg": "ed25519",
+        "ceiling": 1,
+        "key": "01" + ("00" * 31),
+        "label": "bad-small-order",
         "network": "main",
         "owner": "id/alice",
-        "seq": 1,
-        "type": "seallink-device-list/1",
+        "presence": True,
+        "salt": _h32("so-salt"),
+        "seal": {"script_policy": {"kind": "key", "pk": fx_b1_ctrl["_keys"]["alice_own"]["comp"]}, "txid": _h32("so-seal"), "vout": 0},
+        "type": "seallink-device-entry/1",
     }
     add(
         "d7-r3b6-ed25519-small-order-point-refuses-wire-key",
@@ -989,7 +987,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         {"object": dl_small_ord},
         "REFUSE",
         "WIRE_KEY",
-        "R3-B6 closed: Ed25519 identity/small-order public key in DeviceList MUST refuse WIRE_KEY.",
+        "R3-B6 closed: Ed25519 identity/small-order public key in DeviceEntry MUST refuse WIRE_KEY.",
     )
 
     # =========================================================================
@@ -1341,23 +1339,26 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
     au_seal_pol = {"kind": "key", "pk": _kp("d7-au-seal")["comp"]}
     au_seal_tx = _h32("d7-au-seal-tx")
     fx_au["chain"]["txs"][au_seal_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(au_seal_pol)}}}
-    au_man = copy.deepcopy(fx_au["_alice_man"])
-    au_man["auth_key"] = au_key["xonly"]
-    au_man["auth_seal"] = {"script_policy": au_seal_pol, "txid": au_seal_tx, "vout": 0}
-    au_man_h = sl.content_addr(au_man)
-    fx_au["chain"]["manifests"][au_man_h] = au_man
-    fx_au["chain"]["names"]["id/alice"] = sv.make_name_history(
-        "id/alice", fx_au["_alice_reg"], fx_au["_alice_owner_pol"],
-        {"link": {"grant": fx_au["_keys"]["alice_gr"]["xonly"]}, "m": {"h": au_man_h, "s": 1}},
+    au_head, au_proofs = rm.make_salted_auth_set(
+        "id/alice",
+        [{"alg": "bip340", "key": au_key["xonly"], "label": "prov-auth", "seal": {"script_policy": au_seal_pol, "txid": au_seal_tx, "vout": 0}}],
     )
+    au_man = rm.bind_sets_manifest(
+        fx_au["chain"], "id/alice", fx_au["_alice_owner_pol"], fx_au["_alice_reg"],
+        auth_head=au_head, extra_link={"grant": fx_au["_keys"]["alice_gr"]["xonly"]},
+    )
+    au_man_h = sl.content_addr(au_man)
     au_env = sl.sign_envelope(
         {
             "account_id": "prov-cell-42",
+            "auth_alg": "bip340",
             "auth_pubkey": au_key["xonly"],
             "expires_at": fx_au["chain"]["now"] + 60,
             "firstupdate_txid": fx_au["_alice_reg"]["txid"],
+            "genesis": GENESIS_MAIN,
             "issued_at": fx_au["chain"]["now"] - 10,
             "name": "id/alice",
+            "network": "main",
             "nonce": _h32("d7-au-n1"),
             "service_id": "mail.example.org",
             "type": "seallink-auth-upgrade/1",
@@ -1368,17 +1369,17 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "d7-obj-auth-upgrade-valid-admit",
         ["SL-IDEN-010"],
         "auth_upgrade",
-        {"upgrade": au_env, "expected_service_id": "mail.example.org", "expected_provisional_auth_pubkey": au_key["xonly"], "chain": fx_au["chain"], "manifests": {au_man_h: au_man}},
+        {"upgrade": au_env, "expected_service_id": "mail.example.org", "expected_provisional_auth_pubkey": au_key["xonly"], "auth_proof": au_proofs[0], "chain": fx_au["chain"], "manifests": {au_man_h: au_man}},
         "ADMIT",
         None,
-        "H-24: seallink-auth-upgrade/1 atomically upgrades provisional cell when firstupdate_txid, auth_key, and unspent auth_seal verify.",
+        "H-24: seallink-auth-upgrade/1 atomically upgrades provisional cell when firstupdate_txid, salted sets.auth proof, and unspent entry seal verify.",
     )
     au_bad_reg = sl.sign_envelope({**au_env["payload"], "firstupdate_txid": _h32("wrong-firstupd"), "nonce": _h32("d7-au-n2")}, [au_key["sk"]])
     add(
         "d7-obj-auth-upgrade-wrong-firstupdate-refuse",
         ["SL-IDEN-010"],
         "auth_upgrade",
-        {"upgrade": au_bad_reg, "expected_service_id": "mail.example.org", "expected_provisional_auth_pubkey": au_key["xonly"], "chain": fx_au["chain"], "manifests": {au_man_h: au_man}},
+        {"upgrade": au_bad_reg, "expected_service_id": "mail.example.org", "expected_provisional_auth_pubkey": au_key["xonly"], "auth_proof": au_proofs[0], "chain": fx_au["chain"], "manifests": {au_man_h: au_man}},
         "REFUSE",
         "NAME_OWNER_MISMATCH",
         "H-24 / M-7: seallink-auth-upgrade/1 with mismatched firstupdate_txid MUST refuse registered code NAME_OWNER_MISMATCH.",
@@ -2242,34 +2243,40 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "A-5: owner-authored mempool update with non-canonical JSON value MUST refuse NAME_VALUE_INVALID.",
     )
 
-    # 2c. Manifest auth_key colliding with link.grant (H-19) -> NAME_VALUE_INVALID
+    # 2c. Salted sets.auth BIP-340 key colliding with link.grant (SL-IDEN-003 / H-19) -> NAME_VALUE_INVALID
     fx_mk = rm._base_invocation_fixture()
     mk_seal_tx = _h32("d7-mk-seal")
     mk_seal_pol = {"kind": "key", "pk": _kp("d7-mk-s")["comp"]}
     fx_mk["chain"]["txs"][mk_seal_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(mk_seal_pol)}}}
-    bad_man = copy.deepcopy(fx_mk["_alice_man"])
-    bad_man["auth_key"] = fx_mk["_keys"]["alice_gr"]["xonly"]  # Collides with link.grant!
-    bad_man["auth_seal"] = {"script_policy": mk_seal_pol, "txid": mk_seal_tx, "vout": 0}
+    mk_ah, mk_aproofs = rm.make_salted_auth_set(
+        "id/alice",
+        [{"alg": "bip340", "key": fx_mk["_keys"]["alice_gr"]["xonly"], "label": "bad-reuse", "seal": {"script_policy": mk_seal_pol, "txid": mk_seal_tx, "vout": 0}}],
+    )
+    bad_man = rm.bind_sets_manifest(
+        fx_mk["chain"], "id/alice", fx_mk["_alice_owner_pol"], fx_mk["_alice_reg"],
+        auth_head=mk_ah, extra_link={"grant": fx_mk["_keys"]["alice_gr"]["xonly"]},
+    )
     bad_man_h = sl.content_addr(bad_man)
-    fx_mk["chain"]["names"]["id/alice"] = sv.make_name_history(
-        "id/alice", fx_mk["_alice_reg"], fx_mk["_alice_owner_pol"],
-        {"link": {"grant": fx_mk["_keys"]["alice_gr"]["xonly"]}, "m": {"h": bad_man_h, "s": 1}},
+    mk_now = fx_mk["chain"]["now"]
+    mk_ac = sl.sign_envelope(
+        {"auth_alg": "bip340", "auth_pubkey": fx_mk["_keys"]["alice_gr"]["xonly"], "expires_at": mk_now + 60, "genesis": GENESIS_MAIN, "issued_at": mk_now, "name": "id/alice", "network": "main", "nonce": _h32("d7-mk-acn"), "service_id": "mail.example.org", "type": "seallink-auth-challenge/1"},
+        [fx_mk["_keys"]["alice_gr"]["sk"]],
     )
     add(
         "d7-h19-manifest-auth-key-collides-with-grant-role-refuse",
         ["SL-IDEN-003", "SL-IDEN-005"],
-        "name_resolve",
-        {"chain": fx_mk["chain"], "check_manifest": True, "manifests": {bad_man_h: bad_man}, "name": "id/alice"},
+        "auth_challenge",
+        {"auth_proof": mk_aproofs[0], "chain": fx_mk["chain"], "challenge": mk_ac, "journal": {"auth_nonces": {_h32("d7-mk-acn"): {"expires_at": mk_now + 60, "issued_at": mk_now, "service_id": "mail.example.org", "used": False}}, "journal_id": _h32("d7-mk-j")}, "manifests": {bad_man_h: bad_man}, "service_id": "mail.example.org"},
         "REFUSE",
         "NAME_VALUE_INVALID",
-        "H-19: manifest auth_key reusing link.grant key MUST refuse NAME_VALUE_INVALID.",
+        "H-19 / SL-IDEN-003: disclosed sets.auth BIP-340 key reusing link.grant key MUST refuse NAME_VALUE_INVALID.",
     )
 
     # 2d. verify_auth_challenge exact boundaries (expires_at == issued_at -> EXPIRED; now == issued_at -> ADMIT)
     fx_ac = rm._base_invocation_fixture()
     ac_k = _kp("d7-ac-k")
     now_ac = fx_ac["chain"]["now"]
-    ac_eq_p = {"auth_pubkey": ac_k["xonly"], "expires_at": now_ac, "issued_at": now_ac, "nonce": _h32("d7-ac-n1"), "service_id": "mail.example.org", "type": "seallink-auth-challenge/1"}
+    ac_eq_p = {"auth_alg": "bip340", "auth_pubkey": ac_k["xonly"], "expires_at": now_ac, "genesis": GENESIS_MAIN, "issued_at": now_ac, "network": "main", "nonce": _h32("d7-ac-n1"), "service_id": "mail.example.org", "type": "seallink-auth-challenge/1"}
     add(
         "d7-bnd-auth-challenge-exp-eq-iat-refuse",
         ["SL-IDEN-010"],
@@ -2296,17 +2303,22 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     au2_spol = {"kind": "key", "pk": _kp("d7-au2-s")["comp"]}
     au2_stx = _h32("d7-au2-stx")
     fx_au2["chain"]["txs"][au2_stx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(au2_spol)}}}
-    au2_man = {**copy.deepcopy(fx_au2["_alice_man"]), "auth_key": au2_k["xonly"], "auth_seal": {"script_policy": au2_spol, "txid": au2_stx, "vout": 0}}
+    au2_head, au2_proofs = rm.make_salted_auth_set(
+        "id/alice",
+        [{"alg": "bip340", "key": au2_k["xonly"], "label": "au2", "seal": {"script_policy": au2_spol, "txid": au2_stx, "vout": 0}}],
+    )
+    au2_man = rm.bind_sets_manifest(
+        fx_au2["chain"], "id/alice", fx_au2["_alice_owner_pol"], fx_au2["_alice_reg"],
+        auth_head=au2_head, extra_link={"grant": fx_au2["_keys"]["alice_gr"]["xonly"]},
+    )
     au2_man_h = sl.content_addr(au2_man)
-    fx_au2["chain"]["manifests"][au2_man_h] = au2_man
-    fx_au2["chain"]["names"]["id/alice"] = sv.make_name_history("id/alice", fx_au2["_alice_reg"], fx_au2["_alice_owner_pol"], {"link": {"grant": fx_au2["_keys"]["alice_gr"]["xonly"]}, "m": {"h": au2_man_h, "s": 1}})
     now_au = fx_au2["chain"]["now"]
-    au2_base = {"account_id": "prov-2", "auth_pubkey": au2_k["xonly"], "expires_at": now_au + 120, "firstupdate_txid": fx_au2["_alice_reg"]["txid"], "issued_at": now_au, "name": "id/alice", "nonce": _h32("d7-au2-n1"), "service_id": "mail.example.org", "type": "seallink-auth-upgrade/1"}
+    au2_base = {"account_id": "prov-2", "auth_alg": "bip340", "auth_pubkey": au2_k["xonly"], "expires_at": now_au + 120, "firstupdate_txid": fx_au2["_alice_reg"]["txid"], "genesis": GENESIS_MAIN, "issued_at": now_au, "name": "id/alice", "network": "main", "nonce": _h32("d7-au2-n1"), "service_id": "mail.example.org", "type": "seallink-auth-upgrade/1"}
     add(
         "d7-bnd-auth-upgrade-exact-120s-now-eq-iat-admit",
         ["SL-IDEN-010"],
         "auth_upgrade",
-        {"chain": fx_au2["chain"], "expected_provisional_auth_pubkey": au2_k["xonly"], "expected_service_id": "mail.example.org", "manifests": {au2_man_h: au2_man}, "upgrade": sl.sign_envelope(au2_base, [au2_k["sk"]])},
+        {"auth_proof": au2_proofs[0], "chain": fx_au2["chain"], "expected_provisional_auth_pubkey": au2_k["xonly"], "expected_service_id": "mail.example.org", "manifests": {au2_man_h: au2_man}, "upgrade": sl.sign_envelope(au2_base, [au2_k["sk"]])},
         "ADMIT",
         None,
         "Exact boundary: auth-upgrade with expires_at - issued_at == 120 and now == issued_at admits (kills > 120 -> >= and now < iat -> <=).",
@@ -2315,7 +2327,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-auth-upgrade-exp-eq-iat-refuse",
         ["SL-IDEN-010"],
         "auth_upgrade",
-        {"chain": fx_au2["chain"], "expected_provisional_auth_pubkey": au2_k["xonly"], "expected_service_id": "mail.example.org", "manifests": {au2_man_h: au2_man}, "upgrade": sl.sign_envelope({**au2_base, "expires_at": now_au, "nonce": _h32("d7-au2-n2")}, [au2_k["sk"]])},
+        {"auth_proof": au2_proofs[0], "chain": fx_au2["chain"], "expected_provisional_auth_pubkey": au2_k["xonly"], "expected_service_id": "mail.example.org", "manifests": {au2_man_h: au2_man}, "upgrade": sl.sign_envelope({**au2_base, "expires_at": now_au, "nonce": _h32("d7-au2-n2")}, [au2_k["sk"]])},
         "REFUSE",
         "AUTH_CHALLENGE_INVALID",
         "Exact boundary: auth-upgrade with expires_at == issued_at refuses AUTH_CHALLENGE_INVALID (kills <= -> <).",
@@ -2324,7 +2336,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-bnd-auth-upgrade-now-eq-exp-refuse",
         ["SL-IDEN-010"],
         "auth_upgrade",
-        {"chain": fx_au2["chain"], "expected_provisional_auth_pubkey": au2_k["xonly"], "expected_service_id": "mail.example.org", "manifests": {au2_man_h: au2_man}, "upgrade": sl.sign_envelope({**au2_base, "expires_at": now_au, "issued_at": now_au - 60, "nonce": _h32("d7-au2-n3")}, [au2_k["sk"]])},
+        {"auth_proof": au2_proofs[0], "chain": fx_au2["chain"], "expected_provisional_auth_pubkey": au2_k["xonly"], "expected_service_id": "mail.example.org", "manifests": {au2_man_h: au2_man}, "upgrade": sl.sign_envelope({**au2_base, "expires_at": now_au, "issued_at": now_au - 60, "nonce": _h32("d7-au2-n3")}, [au2_k["sk"]])},
         "REFUSE",
         "AUTH_CHALLENGE_EXPIRED",
         "Exact boundary: auth-upgrade at now == expires_at refuses AUTH_CHALLENGE_EXPIRED (kills >= -> >).",
@@ -2334,7 +2346,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-obj-auth-upgrade-wrong-provisional-key-refuse",
         ["SL-IDEN-010"],
         "auth_upgrade",
-        {"chain": fx_au2["chain"], "expected_provisional_auth_pubkey": other_au_k["xonly"], "expected_service_id": "mail.example.org", "manifests": {au2_man_h: au2_man}, "upgrade": sl.sign_envelope({**au2_base, "nonce": _h32("d7-au2-n4")}, [au2_k["sk"]])},
+        {"auth_proof": au2_proofs[0], "chain": fx_au2["chain"], "expected_provisional_auth_pubkey": other_au_k["xonly"], "expected_service_id": "mail.example.org", "manifests": {au2_man_h: au2_man}, "upgrade": sl.sign_envelope({**au2_base, "nonce": _h32("d7-au2-n4")}, [au2_k["sk"]])},
         "REFUSE",
         "AUTH_KEY_UNPINNED",
         "auth-upgrade with auth_pubkey != expected_provisional_auth_pubkey refuses AUTH_KEY_UNPINNED.",
@@ -2348,34 +2360,46 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "d7-obj-auth-upgrade-manifest-unpinned-auth-key-refuse",
         ["SL-IDEN-010"],
         "auth_upgrade",
-        {"chain": ch_au_no, "expected_provisional_auth_pubkey": au2_k["xonly"], "expected_service_id": "mail.example.org", "manifests": {au2_man_nh: au2_man_noauth}, "upgrade": sl.sign_envelope({**au2_base, "nonce": _h32("d7-au2-n5")}, [au2_k["sk"]])},
+        {"auth_proof": au2_proofs[0], "chain": ch_au_no, "expected_provisional_auth_pubkey": au2_k["xonly"], "expected_service_id": "mail.example.org", "manifests": {au2_man_nh: au2_man_noauth}, "upgrade": sl.sign_envelope({**au2_base, "nonce": _h32("d7-au2-n5")}, [au2_k["sk"]])},
         "REFUSE",
         "AUTH_KEY_UNPINNED",
-        "auth-upgrade when confirmed manifest lacks matching auth_key/auth_seal refuses AUTH_KEY_UNPINNED.",
+        "auth-upgrade when confirmed manifest lacks sets.auth pin refuses AUTH_KEY_UNPINNED.",
     )
 
-    # 2f. verify_owner_command: wrong device_list.owner -> DEVICE_UNAUTHORIZED; unpinned owner_manifest -> MANIFEST_MISMATCH
+    # 2f. verify_owner_command: wrong entry.owner -> DEVICE_UNAUTHORIZED; unpinned owner_manifest -> MANIFEST_MISMATCH
     p256_s2 = sl.deterministic_p256_privkey("d7-oc-p256")
     p256_p2 = sl.p256_compressed_pubkey(p256_s2)
-    dl_ok = {"devices": [{"alg": "p256", "ceiling": 2, "key": p256_p2, "label": "enclave", "presence": True, "seal": {"script_policy": au2_spol, "txid": au2_stx, "vout": 0}}], "network": "main", "owner": "id/alice", "seq": 1, "type": "seallink-device-list/1"}
+    dh_ok, dp_ok = rm.make_salted_device_set(
+        "id/alice",
+        [{"alg": "p256", "ceiling": 2, "key": p256_p2, "label": "enclave", "presence": True, "seal": {"script_policy": au2_spol, "txid": au2_stx, "vout": 0}}],
+    )
+    dh_bob_ent, dp_bob_ent = rm.make_salted_device_set(
+        "id/alice",
+        [{"alg": "p256", "ceiling": 2, "key": p256_p2, "label": "enclave", "owner": "id/bob", "presence": True, "seal": {"script_policy": au2_spol, "txid": au2_stx, "vout": 0}}],
+    )
+    ch_oc_bob = copy.deepcopy(fx_au2["chain"])
+    man_oc_bob = rm.bind_sets_manifest(
+        ch_oc_bob, "id/alice", fx_au2["_alice_owner_pol"], fx_au2["_alice_reg"],
+        device_head=dh_bob_ent, extra_link={"grant": fx_au2["_keys"]["alice_gr"]["xonly"]},
+    )
     oc_env = sl.sign_envelope({"arguments": {"scope": "all"}, "command": "keyholder-halt", "exp": now_au + 300, "genesis": GENESIS_MAIN, "iat": now_au, "level": 2, "network": "main", "nonce": _h32("d7-oc-n1"), "owner": "id/alice", "target_executor": "id/station-a", "type": "seallink-owner-command/1"}, [p256_s2], alg="p256")
     add(
         "d7-oc-wrong-device-list-owner-refuse",
         ["SL-IDEN-011"],
         "owner_command",
-        {"chain": fx_au2["chain"], "command": oc_env, "device_list": {**dl_ok, "owner": "id/bob"}, "is_foreign_service": False},
+        {"chain": ch_oc_bob, "command": oc_env, "device_proof": dp_bob_ent[0], "is_foreign_service": False, "owner_manifest": man_oc_bob},
         "REFUSE",
         "DEVICE_UNAUTHORIZED",
-        "owner-command whose device_list.owner != command.owner refuses DEVICE_UNAUTHORIZED.",
+        "owner-command whose disclosed DeviceEntry.owner != command.owner refuses DEVICE_UNAUTHORIZED.",
     )
     add(
         "d7-oc-unpinned-owner-manifest-refuse",
         ["SL-IDEN-011"],
         "owner_command",
-        {"chain": fx_au2["chain"], "command": oc_env, "device_list": dl_ok, "is_foreign_service": False, "owner_manifest": fx_au2["_alice_man"]},
+        {"chain": fx_au2["chain"], "command": oc_env, "device_proof": dp_ok[0], "is_foreign_service": False, "owner_manifest": fx_au2["_alice_man"]},
         "REFUSE",
         "MANIFEST_MISMATCH",
-        "owner-command when owner_manifest lacks matching sets.devices pin refuses MANIFEST_MISMATCH.",
+        "owner-command when owner_manifest fails confirmed m.h pin refuses MANIFEST_MISMATCH.",
     )
 
     # --- Batch 3: Origin, operator_min_depth boundaries, Majority MTP, D-1/B-15/emancipation handover ---
@@ -2896,16 +2920,16 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     add("d7-bnd-stmt-not-after-eq-not-before-refuse", ["SL-IDEN-006"], "statement", {"chain": fx_au2["chain"], "statement": sl.sign_envelope({**st_p2, "not_after": now_au - 10, "not_before": now_au - 10}, [fx_au2["_keys"]["alice_gr"]["sk"]])}, "REFUSE", "INVOKE_TIME_INVALID", "Exact boundary: statement with not_after == not_before refuses INVOKE_TIME_INVALID (kills <= -> <).")
     stmt_dev_ok = sl.sign_envelope(st_p2, [p256_s2], alg="p256")
     ch_st_dl = copy.deepcopy(fx_au2["chain"])
-    man_st_dl = rm.bind_device_list_manifest(
+    man_st_dl = rm.bind_sets_manifest(
         ch_st_dl,
         "id/alice",
         fx_au2["_alice_owner_pol"],
         fx_au2["_alice_reg"],
-        dl_ok,
+        device_head=dh_ok,
         extra_link={"grant": fx_au2["_keys"]["alice_gr"]["xonly"]},
     )
-    add("d7-stmt-device-list-p256-admit", ["SL-IDEN-006", "SL-WIRE-012"], "statement", {"chain": ch_st_dl, "device_list": dl_ok, "owner_manifest": man_st_dl, "statement": stmt_dev_ok}, "ADMIT", None, "config-section statement signed by enrolled P-256 device (bound via confirmed manifest sets.devices) admits.")
-    add("d7-stmt-device-list-unregistered-refuse", ["SL-IDEN-006"], "statement", {"chain": ch_st_dl, "device_list": {**dl_ok, "owner": "id/bob"}, "owner_manifest": man_st_dl, "statement": stmt_dev_ok}, "REFUSE", "DEVICE_UNAUTHORIZED", "statement signed by device whose device_list owner mismatches refuses DEVICE_UNAUTHORIZED.")
+    add("d7-stmt-device-list-p256-admit", ["SL-IDEN-006", "SL-WIRE-012"], "statement", {"chain": ch_st_dl, "device_proof": dp_ok[0], "owner_manifest": man_st_dl, "statement": stmt_dev_ok}, "ADMIT", None, "config-section statement signed by enrolled P-256 device (bound via confirmed manifest sets.devices salted proof) admits.")
+    add("d7-stmt-device-list-unregistered-refuse", ["SL-IDEN-006"], "statement", {"chain": ch_oc_bob, "device_proof": dp_bob_ent[0], "owner_manifest": man_oc_bob, "statement": stmt_dev_ok}, "REFUSE", "DEVICE_UNAUTHORIZED", "statement signed by device whose DeviceEntry.owner mismatches refuses DEVICE_UNAUTHORIZED.")
 
     # --- Batch 5: Invocation (admit_and_reserve), commit_result, & Decision 6B Optional Modules ---
     # 5a. Invocation CHAIN_MISMATCH, iat == now ADMIT, grant CHAIN_MISMATCH, root_gp is child grant -> GRANT_NOT_DELEGABLE

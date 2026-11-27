@@ -1539,8 +1539,11 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
     dseal_fd_pol = {"kind": "key", "pk": _kp("d8-fed-dseal")["comp"]}
     dseal_fd_tx = _h32("d8-fed-dseal-tx")
     fx_fd["chain"]["txs"][dseal_fd_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(dseal_fd_pol)}}}
-    dev_list_fd = {"devices": [{"alg": "p256", "ceiling": 2, "key": p256_fd_pk, "label": "l2-enclave", "presence": True, "seal": {"script_policy": dseal_fd_pol, "txid": dseal_fd_tx, "vout": 0}}], "network": "main", "owner": "id/alice", "seq": 1, "type": "seallink-device-list/1"}
-    al_man_fd = {**copy.deepcopy(fx_fd["_alice_man"]), "sets": {"devices": {"seq": 1, "sha256": sl.content_addr(dev_list_fd)}}}
+    dev_head_fd, dev_proofs_fd = rm.make_salted_device_set(
+        "id/alice",
+        [{"alg": "p256", "ceiling": 2, "key": p256_fd_pk, "label": "l2-enclave", "presence": True, "seal": {"script_policy": dseal_fd_pol, "txid": dseal_fd_tx, "vout": 0}}],
+    )
+    al_man_fd = {**copy.deepcopy(fx_fd["_alice_man"]), "sets": {"devices": {"seq": 1, "sha256": sl.content_addr(dev_head_fd)}}}
     al_man_fd_h = sl.content_addr(al_man_fd)
     fx_fd["chain"]["names"]["id/alice"] = sv.make_name_history("id/alice", fx_fd["_alice_reg"], fx_fd["_alice_owner_pol"], {"link": {"grant": fx_fd["_keys"]["alice_gr"]["xonly"]}, "m": {"h": al_man_fd_h, "s": 1}}, first_height=748000, update_height=749000)
     l2_fd_cmd = sl.sign_envelope(
@@ -1570,7 +1573,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
             "journal": {"journal_id": _h32("d8-fed-j1")},
             "peer_ctx": {
                 "approval_command": l2_fd_cmd,
-                "device_list": dev_list_fd,
+                "device_proof": dev_proofs_fd[0],
                 "fields_sha256": _h32("d8-fed-f"),
                 "manifests": {},  # MISSING holder manifest!
                 "phase": "pii_disclosure",
@@ -1592,7 +1595,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
             "journal": {"journal_id": _h32("d8-fed-j2")},
             "peer_ctx": {
                 "approval_command": l2_fd_cmd,
-                "device_list": dev_list_fd,
+                "device_proof": dev_proofs_fd[0],
                 "fields_sha256": _h32("d8-fed-f"),
                 "manifests": {al_man_fd_h: al_man_fd},
                 "phase": "pii_disclosure",
@@ -1614,7 +1617,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
             "journal": {"journal_id": _h32("d8-fed-j3")},
             "peer_ctx": {
                 "approval_command": l2_fd_cmd,
-                "device_list": dev_list_fd,
+                "device_proof": dev_proofs_fd[0],
                 "fields_sha256": _h32("d8-fed-f"),
                 "manifests": {al_man_fd_h: al_man_fd},
                 "phase": "pii_disclosure",
@@ -1639,7 +1642,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
             "journal": {"journal_id": _h32("d8-fed-j4")},
             "peer_ctx": {
                 "approval_command": l2_fd_cmd,
-                "device_list": dev_list_fd,
+                "device_proof": dev_proofs_fd[0],
                 "fields_sha256": _h32("d8-fed-f"),
                 "manifests": {al_man_nod_h: fx_fd["_alice_man"]},
                 "phase": "pii_disclosure",

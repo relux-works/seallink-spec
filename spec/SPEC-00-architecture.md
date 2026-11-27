@@ -1,6 +1,6 @@
 # SPEC-00: SealLink Architecture, Ontology, and Governance
 
-- **Version:** `1.0.0-draft.12`
+- **Version:** `1.0.0-draft.13`
 - **Status:** `draft` (normative rules tagged `decided` or `open`; open items tracked in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `prose`
 - **Authors:** Ivan Oparin, Alexey Grigorev
@@ -83,9 +83,9 @@ The SealLink v1.0 specification is organized as eight orthogonal normative docum
 | Spec | Layer | Owns |
 | --- | --- | --- |
 | **`SPEC-00`** | Foundation | Principles, actor ontology, role glossary, threat model, governance. |
-| **`SPEC-01`** | Wire & Crypto | Restricted RFC 8785 JCS, dual integers, BIP-340 tagged hashes, 3 hashes, `SignatureSet` & `guardian_approvals`, universal policy binding, salted selective disclosure, 7-predicate Constraint Algebra, wire pipeline. |
-| **`SPEC-02`** | Ledger Binding | Abstract `ChainView`, Namecoin Binding v1 (`NAME_NEW` / `NAME_FIRSTUPDATE` / `NAME_UPDATE` grammars, CSV/SegWit), `ScriptPolicy`, `SIGHASH_ALL` writer check, multi-node freshness, Witness construction, `SLNK` `OP_RETURN`, Merkle batch `0x02`, UTXO seals & TRUC/P2A CPFP. |
-| **`SPEC-03`** | Identity & Custody | 520-byte name value (multi-role keys / on-chain role-policy pins + uniform `origin` pin + `m` head), key taxonomy & cold emergency reserve, `manifest/1` (sets, self-service, pinned labeled `providers[]`, `auth`), `card/1`, 4-channel cascade, provisional onboarding & name auth, owner control plane (`devices`, L0–L2). |
+| **`SPEC-01`** | Wire & Crypto | Restricted RFC 8785 JCS, dual integers, BIP-340 tagged hashes, 3 hashes, algorithmic neutrality (`registry/crypto-algorithms.json`) & PQC/hash transition model, `SignatureSet` & `guardian_approvals`, universal policy binding, salted selective disclosure, 7-predicate Constraint Algebra, wire pipeline. |
+| **`SPEC-02`** | Ledger Binding | Abstract `ChainView`, Namecoin Binding v1 (`NAME_NEW` / `NAME_FIRSTUPDATE` / `NAME_UPDATE` grammars, CSV/SegWit), `ScriptPolicy`, `SIGHASH_ALL` writer check, multi-node freshness, Witness construction, `SLNK` `OP_RETURN` (incl. `0x03`/`0x04` locators & reserved sibling prefix `SLSC`), Merkle batch `0x02`, UTXO seals & TRUC/P2A CPFP. |
+| **`SPEC-03`** | Identity & Custody | 520-byte name value (multi-role keys / on-chain role-policy pins + uniform `origin` pin + `m` head), key taxonomy & cold emergency reserve, `manifest/1` (symmetric salted-Merkle `sets.auth` & `sets.devices`, `card/1` avatars & links, `members-list/1` `roles[]`, `statement/1` `transport-binding`/`identity-link`/`profile-section`, self-service incl. `sso`, pinned labeled `providers[]`), safe-by-design `registry/locator-schemes.json` + SSRF filter, 4-channel cascade, provisional onboarding & name auth, owner control plane (`sets.devices`, L0–L2). |
 | **`SPEC-04`** | Origin & Guardianship | Eternal `origin/1` (salted privacy commitments, `status_seal`, `roster_seal`, explicit `disposer_pk`/`arbiter_pk`/`challenger_pk`), single-use `name-binding/1`, `N` equal guardian slots & 4-class verifier-derived quorums, ward non-autonomy, initial (`0x12`) & two-stage (`0x0d`/`0x0e`) activation, roster transitions (`0x0f`), consistency invariants, emancipation (`capacity/1`), `end/1`, dual-mode `name_recovery` (`0x10` cancel) & seal continuation tables. |
 | **`SPEC-05`** | Contracts & Credentials | N-party salted contracts (`ward_origin_id` for ward parties, `machine_clause_indices`), framework nesting, confirmed contract seal termination, symmetric `assent/1` (`guardian_approvals[]` for wards), on-chain assent, agreed config hash, verifiable credentials (`eternal`/`revocable`, `h_c`), general notary acts, violation verdicts & salted request attribution. |
 | **`SPEC-06`** | Grants & Delegation | Universal `grant/1` (unilateral base + optional contract + ward `guardian_approvals[]`), concrete `executor` vs stateless `executor_ref`, UTXO seal vs root-only `window_only`, acyclic single-use attribution (`0x11`), `invocation/1` & `receipt/1`, depth-2 re-delegation (R8.5 aggregate budget + R8.6 disjoint coin ranges), early-auth admission pipeline, crash-in-effect-window `uncertain` recovery, bearer sessions, anti-rollback fenced journals. |
@@ -105,7 +105,10 @@ The SealLink v1.0 specification is organized as eight orthogonal normative docum
    - `vectors` — deterministic positive/negative and end-to-end RFC 8448-style byte traces published and verified against schemas and reference cryptography;
    - `dual-impl` — verified byte-for-byte identical across at least two independent implementations with disjoint crypto stacks (target: Rust + Go);
    - `chain-tested` — end-to-end verified on Namecoin regtest and/or mainnet.
-5. **Post-Freeze Evolution:** Once v1.0 freezes, protocol additions, new standard `service_type` entries, and new canonical object types are proposed via numbered SealLink Improvement Proposals (`SLIP-TEMPLATE.md`).
+5. **Post-Freeze Evolution (`Registry Update` vs. Core SLIP):** Once v1.0 freezes, changes follow a two-tier governance process:
+   - **Lightweight `Registry Update`:** Additive, non-breaking entries in `registry/locator-schemes.json` (safe-by-design URI schemes passing SSRF and credential-leakage review), optional algorithm modules in `registry/crypto-algorithms.json` (national or post-quantum suites), and new artifact/service schemes MAY be published via a lightweight `Registry Update` PR + security review + conformance vectors without opening a breaking Core SLIP.
+   - **Core SLIP (`SLIP-TEMPLATE.md`):** Wire-format changes, MTI cryptographic suite changes, consensus/ledger rules, new refusal codes, and new canonical object types require a numbered SealLink Improvement Proposal (`SLIP-TEMPLATE.md`) with full normative prose, Draft 2020-12 schemas, and executable conformance vectors.
+6. **Algorithmic Neutrality:** SealLink v1.0 mandates a minimal, globally interoperable **Mandatory-To-Implement (`mti_v1`)** cryptographic core (`bip340`, `p256`, `ed25519`, `ecdsa-secp256k1-bip66`, `sha256`, `x25519`, `sha256-spki` in `registry/crypto-algorithms.json`) so any two implementations worldwide interoperate out of the box, while reserving equal-footing **optional module** slots (`reserved_optional_module`) for national and post-quantum suites (including `ml-dsa-65`, `bip340+ml-dsa-65`, `gost-r-34.10-2012-256`, `sm2`, and `brainpoolp256r1`) governed strictly as opt-in modules with identical architectural standing and fail-closed `ACTION_UNSUPPORTED` / `WIRE_KEY` isolation when disabled.
 
 ---
 

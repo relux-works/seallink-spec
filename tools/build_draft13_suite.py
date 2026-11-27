@@ -1703,8 +1703,9 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
     dev_seal_pol_h6 = {"kind": "key", "pk": dev_seal_k_h6["comp"]}
     dev_seal_tx_h6 = _h32("d13-h6-dseal-tx")
     fx_h6["chain"]["txs"][dev_seal_tx_h6] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(dev_seal_pol_h6)}}}
-    dl_h6 = {
-        "devices": [{
+    dh_h6, dp_h6 = rm.make_salted_device_set(
+        "id/alice",
+        [{
             "alg": "ed25519",
             "ceiling": 2,
             "key": ed_pk_h6,
@@ -1712,11 +1713,7 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
             "presence": True,
             "seal": {"script_policy": dev_seal_pol_h6, "txid": dev_seal_tx_h6, "vout": 0},
         }],
-        "network": "main",
-        "owner": "id/alice",
-        "seq": 1,
-        "type": "seallink-device-list/1",
-    }
+    )
     cmd_h6 = sl.sign_envelope(
         {
             "arguments": {"scope": "all"},
@@ -1738,10 +1735,10 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
         "d13-h6-owner-command-missing-owner-manifest-refuse",
         ["SL-IDEN-008"],
         "owner_command",
-        {"chain": fx_h6["chain"], "command": cmd_h6, "device_list": dl_h6, "is_foreign_service": False},
+        {"chain": fx_h6["chain"], "command": cmd_h6, "device_proof": dp_h6[0], "is_foreign_service": False},
         "REFUSE",
-        "MANIFEST_MISMATCH",
-        "SL-IDEN-008 H-6: verify_owner_command without manifest-bound owner_manifest MUST refuse MANIFEST_MISMATCH.",
+        "DEVICE_UNAUTHORIZED",
+        "SL-IDEN-008 H-6: verify_owner_command when confirmed owner manifest omits sets.devices MUST refuse DEVICE_UNAUTHORIZED.",
     )
 
     al_o_pol_h6 = {"kind": "key", "pk": fx_h6["_keys"]["alice_own"]["comp"]}
@@ -1767,14 +1764,14 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
         alg="ed25519",
     )
     ch_h6_man = copy.deepcopy(fx_h6["chain"])
-    man_h6_real = rm.bind_device_list_manifest(ch_h6_man, "id/alice", al_o_pol_h6, al_reg_h6, dl_h6)
+    man_h6_real = rm.bind_sets_manifest(ch_h6_man, "id/alice", al_o_pol_h6, al_reg_h6, device_head=dh_h6)
     man_h6_tampered = copy.deepcopy(man_h6_real)
     man_h6_tampered["seq"] = 99
     add(
         "d13-h6-statement-device-tampered-manifest-refuse",
         ["SL-IDEN-008"],
         "statement",
-        {"chain": ch_h6_man, "device_list": dl_h6, "owner_manifest": man_h6_tampered, "statement": st_h6},
+        {"chain": ch_h6_man, "device_proof": dp_h6[0], "owner_manifest": man_h6_tampered, "statement": st_h6},
         "REFUSE",
         "MANIFEST_MISMATCH",
         "SL-IDEN-008 H-6: Device-signed verify_statement with owner_manifest mismatching on-chain m.h MUST refuse MANIFEST_MISMATCH.",
@@ -2916,17 +2913,17 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
         "SL-CONT-007: Ward termination with missing/mismatched 0x08 spend_txid MUST refuse CHAIN_FRAME_INVALID.",
     )
 
-    # 13. verify_statement device-signed: device_list mismatch vs owner_manifest (MANIFEST_MISMATCH) & key absent from device_list (DEVICE_UNAUTHORIZED)
-    dl_h6_wrong = copy.deepcopy(dl_h6)
-    dl_h6_wrong["seq"] = 2
+    # 13. verify_statement device-signed: device_proof head mismatch vs owner_manifest (MANIFEST_MISMATCH) & key absent from entry (DEVICE_UNAUTHORIZED)
+    dp_h6_wrong = copy.deepcopy(dp_h6[0])
+    dp_h6_wrong["head"]["seq"] = 2
     add(
         "d13-mk-statement-device-list-manifest-mismatch-refuse",
         ["SL-IDEN-008"],
         "statement",
-        {"chain": ch_h6_man, "device_list": dl_h6_wrong, "owner_manifest": man_h6_real, "statement": st_h6},
+        {"chain": ch_h6_man, "device_proof": dp_h6_wrong, "owner_manifest": man_h6_real, "statement": st_h6},
         "REFUSE",
         "MANIFEST_MISMATCH",
-        "SL-IDEN-008: Device-signed statement with device_list mismatching owner_manifest.sets.devices MUST refuse MANIFEST_MISMATCH.",
+        "SL-IDEN-008: Device-signed statement with device_proof head mismatching owner_manifest.sets.devices MUST refuse MANIFEST_MISMATCH.",
     )
     ed_other_h6 = sl.deterministic_ed25519_seed("d13-mk-unlisted-ed")
     st_h6_unlisted = sl.sign_envelope(st_h6["payload"], [ed_other_h6], alg="ed25519")
@@ -2934,10 +2931,10 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
         "d13-mk-statement-device-key-unlisted-refuse",
         ["SL-IDEN-008"],
         "statement",
-        {"chain": ch_h6_man, "device_list": dl_h6, "owner_manifest": man_h6_real, "statement": st_h6_unlisted},
+        {"chain": ch_h6_man, "device_proof": dp_h6[0], "owner_manifest": man_h6_real, "statement": st_h6_unlisted},
         "REFUSE",
         "DEVICE_UNAUTHORIZED",
-        "SL-IDEN-008: Device-signed statement signed by a key absent from manifest-bound device_list MUST refuse DEVICE_UNAUTHORIZED.",
+        "SL-IDEN-008: Device-signed statement signed by a key absent from disclosed DeviceEntry MUST refuse DEVICE_UNAUTHORIZED.",
     )
 
     # 14. verify_session_open agent/session with contract lacking config_sha256 -> CONTRACT_CONFIG_MISMATCH
@@ -3064,4 +3061,637 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
         "REFUSE",
         "CRED_ISSUER_CLOSED",
         "SL-CONT-009 M-8: verify_federation_disclosure MUST check on-chain 0x0b compromise on presented role policy before role-rotation check and refuse CRED_ISSUER_CLOSED.",
+    )
+
+    _add_draft13_commit2_symmetry_cases(add, fx_h2)
+
+
+def _add_draft13_commit2_symmetry_cases(add: Callable[..., None], fx_ward_rev2: dict[str, Any]) -> None:
+    """Commit 2 pre-rc1 core symmetry & extensibility conformance + mutant-killing cases."""
+    # ========================================================================
+    # C2-1: Symmetric salted-Merkle sets.auth + sets.devices (selective disclosure,
+    #       multi-alg bip340/p256/ed25519, audience binding, cross-set isolation, SL-IDEN-003)
+    # ========================================================================
+    fx_c2 = rm._base_invocation_fixture()
+    now_c2 = fx_c2["chain"]["now"]
+    a_bip = _kp("c2-auth-bip340")
+    a_p256_sk = sl.deterministic_p256_privkey("c2-auth-p256")
+    a_p256_pk = sl.p256_compressed_pubkey(a_p256_sk)
+    a_ed_seed = sl.deterministic_ed25519_seed("c2-auth-ed25519")
+    a_ed_pk = sl.ed25519_pubkey(a_ed_seed)
+    a_decoy = _kp("c2-auth-decoy")
+
+    aseal_pol = {"kind": "key", "pk": _kp("c2-auth-seal")["comp"]}
+    aseal_tx = _h32("c2-auth-seal-tx")
+    aseal_sp_tx = _h32("c2-auth-seal-spent-tx")
+    fx_c2["chain"]["txs"][aseal_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(aseal_pol)}}}
+    fx_c2["chain"]["txs"][aseal_sp_tx] = {
+        "confirmed_height": 749900,
+        "outputs": {"0": {"script_pubkey_hex": _spk_hex(aseal_pol), "spent_by_txid": _h32("c2-auth-revoke")}},
+    }
+    fx_c2["chain"]["txs"][_h32("c2-auth-revoke")] = {"confirmed_height": 750002, "inputs": [sv.make_segwit_input(aseal_sp_tx, 0)], "outputs": {}}
+
+    auth_head_4, auth_proofs_4 = rm.make_salted_auth_set(
+        "id/alice",
+        [
+            {"alg": "bip340", "key": a_bip["xonly"], "label": "workstation-bip340", "seal": {"script_policy": aseal_pol, "txid": aseal_tx, "vout": 0}},
+            {"alg": "p256", "key": a_p256_pk, "label": "phone-enclave-p256", "seal": {"script_policy": aseal_pol, "txid": aseal_tx, "vout": 0}},
+            {"alg": "ed25519", "key": a_ed_pk, "label": "yubikey-ed25519", "seal": {"script_policy": aseal_pol, "txid": aseal_tx, "vout": 0}},
+            {"alg": "bip340", "key": a_decoy["xonly"], "label": "revoked-auth", "seal": {"script_policy": aseal_pol, "txid": aseal_sp_tx, "vout": 0}},
+        ],
+    )
+    d_bip = _kp("c2-dev-bip340")
+    d_p256_sk = sl.deterministic_p256_privkey("c2-dev-p256")
+    d_p256_pk = sl.p256_compressed_pubkey(d_p256_sk)
+    d_ed_seed = sl.deterministic_ed25519_seed("c2-dev-ed25519")
+    d_ed_pk = sl.ed25519_pubkey(d_ed_seed)
+    dev_head_3, dev_proofs_3 = rm.make_salted_device_set(
+        "id/alice",
+        [
+            {"alg": "bip340", "ceiling": 2, "key": d_bip["xonly"], "label": "dev-bip", "presence": True, "seal": {"script_policy": aseal_pol, "txid": aseal_tx, "vout": 0}},
+            {"alg": "p256", "ceiling": 2, "key": d_p256_pk, "label": "dev-p256", "presence": True, "seal": {"script_policy": aseal_pol, "txid": aseal_tx, "vout": 0}},
+            {"alg": "ed25519", "ceiling": 2, "key": d_ed_pk, "label": "dev-ed", "presence": True, "seal": {"script_policy": aseal_pol, "txid": aseal_tx, "vout": 0}},
+        ],
+    )
+    man_c2 = rm.bind_sets_manifest(
+        fx_c2["chain"],
+        "id/alice",
+        fx_c2["_alice_owner_pol"],
+        fx_c2["_alice_reg"],
+        auth_head=auth_head_4,
+        device_head=dev_head_3,
+        extra_link={"grant": fx_c2["_keys"]["alice_gr"]["xonly"]},
+    )
+    man_c2_h = sl.content_addr(man_c2)
+
+    def _ac_j(nonce_hex: str, *, aud: str | None = None) -> dict[str, Any]:
+        rec: dict[str, Any] = {"expires_at": now_c2 + 60, "issued_at": now_c2, "service_id": "sso.example.org", "used": False}
+        if aud is not None:
+            rec["audience"] = aud
+        return {"auth_nonces": {nonce_hex: rec}, "journal_id": _h32(f"c2-j-{nonce_hex[:12]}")}
+
+    # 1a. Named salted sets.auth ADMIT for bip340 (with audience), p256, and ed25519!
+    ac_bip_n = _h32("c2-ac-bip")
+    ac_bip_p = {
+        "audience": "https://app.example.org/oidc", "auth_alg": "bip340", "auth_pubkey": a_bip["xonly"],
+        "expires_at": now_c2 + 60, "genesis": GENESIS_MAIN, "issued_at": now_c2, "name": "id/alice",
+        "network": "main", "nonce": ac_bip_n, "service_id": "sso.example.org", "type": "seallink-auth-challenge/1",
+    }
+    ac_bip_env = sl.sign_envelope(ac_bip_p, [a_bip["sk"]])
+    add(
+        "d13-c2-auth-salted-bip340-audience-admit",
+        ["SL-IDEN-010"],
+        "auth_challenge",
+        {"auth_proof": auth_proofs_4[0], "chain": fx_c2["chain"], "challenge": ac_bip_env, "expected_audience": "https://app.example.org/oidc", "journal": _ac_j(ac_bip_n, aud="https://app.example.org/oidc"), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        "ADMIT",
+        None,
+        "Commit 2: Selective-disclosure 1-of-4 salted sets.auth BIP-340 challenge with matching audience admits.",
+    )
+    ac_p256_n = _h32("c2-ac-p256")
+    ac_p256_env = sl.sign_envelope({**ac_bip_p, "auth_alg": "p256", "auth_pubkey": a_p256_pk, "nonce": ac_p256_n}, [a_p256_sk], alg="p256")
+    add(
+        "d13-c2-auth-salted-p256-admit",
+        ["SL-IDEN-010", "SL-WIRE-013"],
+        "auth_challenge",
+        {"auth_proof": auth_proofs_4[1], "chain": fx_c2["chain"], "challenge": ac_p256_env, "journal": _ac_j(ac_p256_n, aud="https://app.example.org/oidc"), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        "ADMIT",
+        None,
+        "Commit 2: Selective-disclosure 1-of-4 salted sets.auth P-256 Secure Enclave challenge with journal-recorded audience admits.",
+    )
+    ac_ed_n = _h32("c2-ac-ed25519")
+    ac_ed_env = sl.sign_envelope({**ac_bip_p, "auth_alg": "ed25519", "auth_pubkey": a_ed_pk, "nonce": ac_ed_n}, [a_ed_seed], alg="ed25519")
+    add(
+        "d13-c2-auth-salted-ed25519-admit",
+        ["SL-IDEN-010", "SL-WIRE-013"],
+        "auth_challenge",
+        {"auth_proof": auth_proofs_4[2], "chain": fx_c2["chain"], "challenge": ac_ed_env, "journal": _ac_j(ac_ed_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        "ADMIT",
+        None,
+        "Commit 2: Selective-disclosure 1-of-4 salted sets.auth Ed25519 challenge admits.",
+    )
+
+    # 1b. AuthChallenge & AuthUpgrade negative checks (chain mismatch, audience mismatch, cross-set replay, tampered proof, spent seal, malformed proof container)
+    add(
+        "d13-c2-auth-challenge-chain-mismatch-refuse",
+        ["SL-IDEN-010"],
+        "auth_challenge",
+        {"auth_proof": auth_proofs_4[0], "chain": fx_c2["chain"], "challenge": sl.sign_envelope({**ac_bip_p, "genesis": _h32("bad-ac-g")}, [a_bip["sk"]]), "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        "REFUSE",
+        "CHAIN_MISMATCH",
+        "Commit 2: AuthChallenge with mismatched genesis MUST refuse CHAIN_MISMATCH.",
+    )
+    add(
+        "d13-c2-auth-challenge-audience-mismatch-refuse",
+        ["SL-IDEN-010"],
+        "auth_challenge",
+        {"auth_proof": auth_proofs_4[0], "chain": fx_c2["chain"], "challenge": ac_bip_env, "expected_audience": "https://other.example.org/oidc", "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        "REFUSE",
+        "AUTH_CHALLENGE_INVALID",
+        "Commit 2: AuthChallenge with mismatched expected_audience MUST refuse AUTH_CHALLENGE_INVALID.",
+    )
+    add(
+        "d13-c2-auth-challenge-missing-proof-refuse",
+        ["SL-IDEN-010"],
+        "auth_challenge",
+        {"chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        "REFUSE",
+        "AUTH_KEY_UNPINNED",
+        "Commit 2: Named AuthChallenge omitting auth_proof MUST refuse AUTH_KEY_UNPINNED.",
+    )
+    add(
+        "d13-c2-auth-proof-extra-key-refuse",
+        ["SL-IDEN-010", "SL-WIRE-010"],
+        "auth_challenge",
+        {"auth_proof": {**auth_proofs_4[0], "extra": 1}, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        "REFUSE",
+        "WIRE_MEMBER",
+        "Commit 2: AuthEntryProof with unknown top-level member MUST refuse WIRE_MEMBER.",
+    )
+    add(
+        "d13-c2-auth-proof-wrong-head-type-refuse",
+        ["SL-IDEN-010", "SL-WIRE-010"],
+        "auth_challenge",
+        {"auth_proof": {**auth_proofs_4[0], "head": dev_head_3}, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        "REFUSE",
+        "WIRE_TYPE",
+        "Commit 2: Cross-set replay presenting seallink-device-set-head/1 as auth_proof.head MUST refuse WIRE_TYPE.",
+    )
+    add(
+        "d13-c2-auth-proof-cross-set-device-entry-refuse",
+        ["SL-IDEN-010", "SL-WIRE-010"],
+        "auth_challenge",
+        {"auth_proof": {**auth_proofs_4[0], "entry": dev_proofs_3[0]["entry"]}, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        "REFUSE",
+        "WIRE_TYPE",
+        "Commit 2: Cross-set replay presenting seallink-device-entry/1 as auth_proof.entry MUST refuse WIRE_TYPE.",
+    )
+    bad_merkle_schema_pf = {**copy.deepcopy(auth_proofs_4[0]), "proof": {**auth_proofs_4[0]["proof"], "steps": [{"hash": _h32(f"s{i}"), "side": "L"} for i in range(9)]}}
+    add(
+        "d13-c2-auth-proof-steps-over-8-refuse",
+        ["SL-IDEN-010", "SL-WIRE-010"],
+        "auth_challenge",
+        {"auth_proof": bad_merkle_schema_pf, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        "REFUSE",
+        "WIRE_MEMBER",
+        "Commit 2: SetEntryMerkleProof exceeding maxItems=8 steps MUST refuse WIRE_MEMBER.",
+    )
+    tampered_sib_pf = copy.deepcopy(auth_proofs_4[0])
+    tampered_sib_pf["proof"]["steps"][0]["hash"] = _h32("tampered-auth-sib")
+    add(
+        "d13-c2-auth-proof-tampered-sibling-refuse",
+        ["SL-IDEN-010"],
+        "auth_challenge",
+        {"auth_proof": tampered_sib_pf, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        "REFUSE",
+        "AUTH_KEY_UNPINNED",
+        "Commit 2: AuthEntryProof with tampered Merkle sibling hash MUST refuse AUTH_KEY_UNPINNED.",
+    )
+    ac_rev_n = _h32("c2-ac-rev")
+    ac_rev_env = sl.sign_envelope({**ac_bip_p, "auth_pubkey": a_decoy["xonly"], "nonce": ac_rev_n}, [a_decoy["sk"]])
+    add(
+        "d13-c2-auth-proof-spent-seal-refuse",
+        ["SL-IDEN-010", "SL-LDGR-011"],
+        "auth_challenge",
+        {"auth_proof": auth_proofs_4[3], "chain": fx_c2["chain"], "challenge": ac_rev_env, "journal": _ac_j(ac_rev_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        "REFUSE",
+        "SEAL_SPENT",
+        "Commit 2: AuthEntry whose individual revocation seal is spent on-chain MUST refuse SEAL_SPENT.",
+    )
+    # Invalid curve point in AuthChallenge (p256) & AuthEntry (ed25519 small-order)
+    ac_bad_p256_pk = next(f"02{i:064x}" for i in range(1, 200) if not sl.is_valid_p256_compressed_pubkey(f"02{i:064x}"))
+    ac_bad_p256 = {
+        "payload": {**ac_bip_p, "auth_alg": "p256", "auth_pubkey": ac_bad_p256_pk},
+        "signatures": copy.deepcopy(ac_p256_env["signatures"]),
+    }
+    add(
+        "d13-c2-auth-challenge-invalid-p256-curve-point-refuse",
+        ["SL-WIRE-012"],
+        "raw_wire",
+        {"object": ac_bad_p256},
+        "REFUSE",
+        "WIRE_KEY",
+        "Commit 2: AuthChallenge with off-curve P-256 auth_pubkey MUST refuse WIRE_KEY.",
+    )
+    add(
+        "d13-c2-auth-entry-small-order-ed25519-refuse",
+        ["SL-WIRE-012"],
+        "raw_wire",
+        {"object": {**auth_proofs_4[2]["entry"], "key": "01" + ("00" * 31)}},
+        "REFUSE",
+        "WIRE_KEY",
+        "Commit 2: AuthEntry with small-order Ed25519 pubkey MUST refuse WIRE_KEY.",
+    )
+    # AuthUpgrade with P-256 + audience ADMIT, wrong genesis -> CHAIN_MISMATCH, wrong audience -> AUTH_CHALLENGE_INVALID, wrong alg -> AUTH_KEY_UNPINNED
+    au_p256_p = {
+        "account_id": "prov-p256-1", "audience": "https://app.example.org/oidc", "auth_alg": "p256", "auth_pubkey": a_p256_pk,
+        "expires_at": now_c2 + 60, "firstupdate_txid": fx_c2["_alice_reg"]["txid"], "genesis": GENESIS_MAIN,
+        "issued_at": now_c2, "name": "id/alice", "network": "main", "nonce": _h32("c2-au-p256"),
+        "service_id": "sso.example.org", "type": "seallink-auth-upgrade/1",
+    }
+    au_p256_env = sl.sign_envelope(au_p256_p, [a_p256_sk], alg="p256")
+    add(
+        "d13-c2-auth-upgrade-p256-audience-admit",
+        ["SL-IDEN-010", "SL-WIRE-013"],
+        "auth_upgrade",
+        {"auth_proof": auth_proofs_4[1], "chain": fx_c2["chain"], "expected_audience": "https://app.example.org/oidc", "expected_provisional_auth_alg": "p256", "expected_provisional_auth_pubkey": a_p256_pk, "expected_service_id": "sso.example.org", "manifests": {man_c2_h: man_c2}, "upgrade": au_p256_env},
+        "ADMIT",
+        None,
+        "Commit 2: seallink-auth-upgrade/1 using P-256 Secure Enclave key + audience + salted sets.auth proof admits.",
+    )
+    add(
+        "d13-c2-auth-upgrade-chain-mismatch-refuse",
+        ["SL-IDEN-010"],
+        "auth_upgrade",
+        {"auth_proof": auth_proofs_4[1], "chain": fx_c2["chain"], "expected_provisional_auth_alg": "p256", "expected_provisional_auth_pubkey": a_p256_pk, "expected_service_id": "sso.example.org", "manifests": {man_c2_h: man_c2}, "upgrade": sl.sign_envelope({**au_p256_p, "genesis": _h32("bad-aug")}, [a_p256_sk], alg="p256")},
+        "REFUSE",
+        "CHAIN_MISMATCH",
+        "Commit 2: seallink-auth-upgrade/1 with mismatched genesis MUST refuse CHAIN_MISMATCH.",
+    )
+    add(
+        "d13-c2-auth-upgrade-audience-mismatch-refuse",
+        ["SL-IDEN-010"],
+        "auth_upgrade",
+        {"auth_proof": auth_proofs_4[1], "chain": fx_c2["chain"], "expected_audience": "https://wrong.example.org", "expected_provisional_auth_alg": "p256", "expected_provisional_auth_pubkey": a_p256_pk, "expected_service_id": "sso.example.org", "manifests": {man_c2_h: man_c2}, "upgrade": au_p256_env},
+        "REFUSE",
+        "AUTH_CHALLENGE_INVALID",
+        "Commit 2: seallink-auth-upgrade/1 with mismatched audience MUST refuse AUTH_CHALLENGE_INVALID.",
+    )
+    # DeviceEntryProof cross-set replay (auth-entry in device_proof), device BIP-340 key colliding with link.grant, and multisig device statement
+    oc_c2_bip = sl.sign_envelope(
+        {"arguments": {"scope": "all"}, "command": "keyholder-halt", "exp": now_c2 + 300, "genesis": GENESIS_MAIN, "iat": now_c2, "level": 2, "network": "main", "nonce": _h32("c2-oc-1"), "owner": "id/alice", "target_executor": "id/station-a", "type": "seallink-owner-command/1"},
+        [d_bip["sk"]],
+    )
+    add(
+        "d13-c2-device-proof-cross-set-auth-entry-refuse",
+        ["SL-IDEN-011", "SL-WIRE-010"],
+        "owner_command",
+        {"chain": fx_c2["chain"], "command": oc_c2_bip, "device_proof": {**dev_proofs_3[0], "entry": auth_proofs_4[0]["entry"]}, "is_foreign_service": False, "owner_manifest": man_c2},
+        "REFUSE",
+        "WIRE_TYPE",
+        "Commit 2: Cross-set replay presenting seallink-auth-entry/1 as device_proof.entry MUST refuse WIRE_TYPE.",
+    )
+    st_cfg_c2 = {
+        "body_sha256": _h32("c2-cfg"), "genesis": GENESIS_MAIN,
+        "issuer": {"name": "id/alice", "owner_policy": fx_c2["_alice_owner_pol"], "registration": fx_c2["_alice_reg"]},
+        "network": "main", "not_after": now_c2 + 600, "not_before": now_c2, "seq": 1,
+        "statement_kind": "config-section", "subject": {"host_id": "id/station-a", "section": "net"},
+        "type": "seallink-statement/1",
+    }
+    add(
+        "d13-c2-statement-device-multisig-refuse",
+        ["SL-IDEN-011"],
+        "statement",
+        {"chain": fx_c2["chain"], "device_proof": dev_proofs_3[0], "owner_manifest": man_c2, "statement": sl.sign_envelope(st_cfg_c2, [d_bip["sk"], a_bip["sk"]], m=2)},
+        "REFUSE",
+        "DEVICE_UNAUTHORIZED",
+        "Commit 2: Device-signed config-section statement with 2-of-2 policy MUST refuse DEVICE_UNAUTHORIZED.",
+    )
+    # Device head with wrong owner/network pinned by manifest (kills head owner/network checks in _verify_salted_set_entry_proof!)
+    dh_bad_owner, dp_bad_owner = rm.make_salted_device_set(
+        "id/bob",
+        [{"alg": "bip340", "ceiling": 2, "key": d_bip["xonly"], "label": "d", "owner": "id/alice", "presence": True, "seal": {"script_policy": aseal_pol, "txid": aseal_tx, "vout": 0}}],
+    )
+    ch_bad_dh = copy.deepcopy(fx_c2["chain"])
+    man_bad_dh = rm.bind_sets_manifest(ch_bad_dh, "id/alice", fx_c2["_alice_owner_pol"], fx_c2["_alice_reg"], device_head=dh_bad_owner, extra_link={"grant": fx_c2["_keys"]["alice_gr"]["xonly"]})
+    add(
+        "d13-c2-device-head-owner-mismatch-refuse",
+        ["SL-IDEN-011"],
+        "owner_command",
+        {"chain": ch_bad_dh, "command": oc_c2_bip, "device_proof": dp_bad_owner[0], "is_foreign_service": False, "owner_manifest": man_bad_dh},
+        "REFUSE",
+        "MANIFEST_MISMATCH",
+        "Commit 2: DeviceSetHead whose owner disagrees with command.owner (even if pinned in manifest) MUST refuse MANIFEST_MISMATCH.",
+    )
+
+    # ========================================================================
+    # C2-2: MembersList roles[], Card avatar/avatars/links[], Manifest service_type='sso' & MirrorEndpoint userinfo ban
+    # ========================================================================
+    peer_k = _kp("c2-peer-own")
+    peer_pol = {"kind": "key", "pk": peer_k["comp"]}
+    peer_pin = {"name": "id/org-acme", "owner_policy": peer_pol, "registration": {"txid": _h32("c2-acme-reg"), "vout": 0}}
+    ml_ok = {
+        "entries": [{
+            "name": "id/alice", "owner_policy": fx_c2["_alice_owner_pol"], "registration": fx_c2["_alice_reg"],
+            "roles": ["director", "signer.finance"],
+            "seal": {"script_policy": aseal_pol, "txid": aseal_tx, "vout": 0},
+        }],
+        "network": "main", "owner": "id/org-acme", "seq": 1, "type": "seallink-members-list/1",
+    }
+    add("d13-c2-members-list-roles-admit", ["SL-IDEN-006"], "raw_wire", {"object": ml_ok}, "ADMIT", None, "Commit 2: seallink-members-list/1 with valid RoleTag array roles[] admits.")
+    ml_bad_role = copy.deepcopy(ml_ok)
+    ml_bad_role["entries"][0]["roles"] = ["UPPERCASE"]
+    add("d13-c2-members-list-invalid-role-tag-refuse", ["SL-WIRE-010"], "raw_wire", {"object": ml_bad_role}, "REFUSE", "WIRE_MEMBER", "Commit 2: seallink-members-list/1 with uppercase RoleTag MUST refuse WIRE_MEMBER.")
+
+    card_ok = {
+        "avatar": {"bytes": 16384, "locators": ["https://cdn.example.org/alice.webp", "blossom://cdn.example.org/" + _h32("av1"), "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"], "mime": "image/webp", "sha256": _h32("av1")},
+        "avatars": {"work": {"bytes": 8192, "locators": ["https://cdn.example.org/work.png"], "mime": "image/png", "sha256": _h32("av2")}},
+        "contact": "alice@example.org", "display": "Alice Example", "kind": "person",
+        "links": [{"label": "Website", "url": "https://alice.example.org"}, {"label": "Nostr", "url": "nostr:npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq5z0q4k"}],
+        "name": "id/alice", "network": "main", "relays": ["wss://relay.example.org"], "replaces": 0, "role": "engineer", "seq": 1, "transports": [], "type": "seallink-card/1",
+    }
+    add("d13-c2-card-avatar-and-links-admit", ["SL-IDEN-006"], "raw_wire", {"object": card_ok}, "ADMIT", None, "Commit 2: seallink-card/1 with raster avatar, avatars map, and allowlisted LocatorUri links[] admits.")
+    card_svg = copy.deepcopy(card_ok)
+    card_svg["avatar"]["mime"] = "image/svg+xml"
+    add("d13-c2-card-avatar-svg-forbidden-refuse", ["SL-WIRE-010"], "raw_wire", {"object": card_svg}, "REFUSE", "WIRE_MEMBER", "Commit 2: seallink-card/1 avatar forbidding image/svg+xml MUST refuse WIRE_MEMBER.")
+    card_js = copy.deepcopy(card_ok)
+    card_js["links"][0]["url"] = "javascript:alert(1)"
+    add("d13-c2-card-link-javascript-forbidden-refuse", ["SL-WIRE-010"], "raw_wire", {"object": card_js}, "REFUSE", "WIRE_MEMBER", "Commit 2: seallink-card/1 links[] with forbidden javascript: scheme MUST refuse WIRE_MEMBER.")
+    card_uinfo = copy.deepcopy(card_ok)
+    card_uinfo["avatar"]["locators"] = ["https://user:pass@evil.example/a.png"]
+    add("d13-c2-card-locator-userinfo-forbidden-refuse", ["SL-WIRE-010"], "raw_wire", {"object": card_uinfo}, "REFUSE", "WIRE_MEMBER", "Commit 2: LocatorUri embedding user:pass@ authority credentials MUST refuse WIRE_MEMBER.")
+
+    man_sso = {
+        "network": "main", "owner": "id/sso-hub", "seq": 1,
+        "service": {"actions": ["mail/read"], "endpoint": "https://sso.example.org/seallink", "receipt_key": _kp("c2-sso-rcpt")["xonly"], "service_type": "sso"},
+        "type": "seallink-manifest/1",
+    }
+    add("d13-c2-manifest-service-type-sso-admit", ["SL-IDEN-006"], "raw_wire", {"object": man_sso}, "ADMIT", None, "Commit 2: seallink-manifest/1 with service.service_type='sso' admits.")
+
+    # SL-IDEN-003 in resolve_manifest: link.grant hash-pin preimage in manifest.role_policies colliding with link.release -> NAME_VALUE_INVALID!
+    shared_rpk = _kp("c2-shared-rp")["xonly"]
+    pol_gr_coll = {"m": 1, "pks": [shared_rpk]}
+    pol_gr_hash = sl.sha256(sl.jcs_encode(pol_gr_coll)).hex()
+    man_rp_coll = {
+        "network": "main", "owner": "id/alice", "role_policies": {"grant": pol_gr_coll}, "seq": 1, "type": "seallink-manifest/1",
+    }
+    man_rp_coll_h = sl.content_addr(man_rp_coll)
+    ch_rp_coll = copy.deepcopy(fx_c2["chain"])
+    ch_rp_coll["names"]["id/alice"] = sv.make_name_history(
+        "id/alice", fx_c2["_alice_reg"], fx_c2["_alice_owner_pol"],
+        {"link": {"grant": {"p": pol_gr_hash}, "release": shared_rpk}, "m": {"h": man_rp_coll_h, "s": 1}},
+        first_height=748000, update_height=749000,
+    )
+    add(
+        "d13-c2-manifest-role-policy-preimage-collides-with-release-refuse",
+        ["SL-IDEN-003", "SL-IDEN-006"],
+        "name_resolve",
+        {"chain": ch_rp_coll, "check_manifest": True, "manifests": {man_rp_coll_h: man_rp_coll}, "name": "id/alice"},
+        "REFUSE",
+        "NAME_VALUE_INVALID",
+        "Commit 2 / SL-IDEN-003: resolve_manifest MUST detect when a role_policies preimage for link.grant.p shares a key with link.release (NAME_VALUE_INVALID).",
+    )
+
+    # ========================================================================
+    # C2-3: seallink-statement/1 extensions: transport-binding (signal/x25519/seal),
+    #       identity-link (same-controller, member-of+roles, contact, ward guardian_approvals,
+    #       ward autonomous ban), profile-section (public + private P2P + seal)
+    # ========================================================================
+    alice_pin_c2 = {"name": "id/alice", "owner_policy": fx_c2["_alice_owner_pol"], "registration": fx_c2["_alice_reg"]}
+    al_gr_sk = fx_c2["_keys"]["alice_gr"]["sk"]
+    active_seal = {"script_policy": aseal_pol, "txid": aseal_tx, "vout": 0}
+    spent_seal = {"script_policy": aseal_pol, "txid": aseal_sp_tx, "vout": 0}
+
+    st_tb_sig = sl.sign_envelope(
+        {
+            "genesis": GENESIS_MAIN, "issuer": alice_pin_c2, "network": "main", "not_after": now_c2 + 600, "not_before": now_c2,
+            "seal": active_seal, "seq": 1, "statement_kind": "transport-binding",
+            "subject": {"endpoint": "signal:alice.42", "key_alg": "x25519", "key_hex": _h32("c2-x25519-pub"), "transport": "signal"},
+            "type": "seallink-statement/1",
+        },
+        [al_gr_sk],
+    )
+    add("d13-c2-stmt-transport-binding-signal-x25519-seal-admit", ["SL-IDEN-006"], "statement", {"chain": fx_c2["chain"], "statement": st_tb_sig}, "ADMIT", None, "Commit 2: transport-binding with signal + x25519 + active optional seal admits.")
+    st_tb_spent = sl.sign_envelope({**st_tb_sig["payload"], "seal": spent_seal}, [al_gr_sk])
+    add("d13-c2-stmt-optional-seal-spent-refuse", ["SL-IDEN-006", "SL-LDGR-011"], "statement", {"chain": fx_c2["chain"], "statement": st_tb_spent}, "REFUSE", "SEAL_SPENT", "Commit 2: seallink-statement/1 whose optional seal is spent on-chain MUST refuse SEAL_SPENT.")
+
+    st_il_mem = sl.sign_envelope(
+        {
+            "genesis": GENESIS_MAIN, "issuer": alice_pin_c2, "network": "main", "not_after": now_c2 + 600, "not_before": now_c2,
+            "seal": active_seal, "seq": 1, "statement_kind": "identity-link",
+            "subject": {"peer": peer_pin, "relation": "member-of", "roles": ["core-maintainer", "treasurer"]},
+            "type": "seallink-statement/1",
+        },
+        [al_gr_sk],
+    )
+    add("d13-c2-stmt-identity-link-member-of-roles-admit", ["SL-IDEN-006"], "statement", {"chain": fx_c2["chain"], "statement": st_il_mem}, "ADMIT", None, "Commit 2: Autonomous identity-link (member-of + roles[] + active seal) admits.")
+    st_il_bad_roles = sl.sign_envelope(
+        {**st_il_mem["payload"], "subject": {"peer": peer_pin, "relation": "same-controller", "roles": ["invalid-here"]}},
+        [al_gr_sk],
+    )
+    add("d13-c2-stmt-identity-link-roles-on-same-controller-refuse", ["SL-WIRE-010"], "raw_wire", {"object": st_il_bad_roles}, "REFUSE", "WIRE_MEMBER", "Commit 2: identity-link carrying roles[] when relation != 'member-of' MUST refuse WIRE_MEMBER.")
+
+    # profile-section: public (with locators + seal) AND private (no locators, encrypted P2P) + bad locator
+    st_ps_pub = sl.sign_envelope(
+        {
+            "body_sha256": _h32("c2-payments-json"), "genesis": GENESIS_MAIN, "issuer": alice_pin_c2,
+            "locators": ["https://alice.example.org/seallink/payments.json", "blossom://relay.example.org/" + _h32("c2-payments-json")],
+            "network": "main", "not_after": now_c2 + 600, "not_before": now_c2, "seal": active_seal, "seq": 1,
+            "statement_kind": "profile-section", "subject": {"section_kind": "org.seallink/payments-v1", "visibility": "public"},
+            "type": "seallink-statement/1",
+        },
+        [al_gr_sk],
+    )
+    add("d13-c2-stmt-profile-section-public-admit", ["SL-IDEN-006"], "statement", {"chain": fx_c2["chain"], "statement": st_ps_pub}, "ADMIT", None, "Commit 2: Public profile-section statement with LocatorUri[] and active seal admits.")
+    st_ps_priv = sl.sign_envelope(
+        {
+            "body_sha256": _h32("c2-private-iban"), "genesis": GENESIS_MAIN, "issuer": alice_pin_c2,
+            "network": "main", "not_after": now_c2 + 600, "not_before": now_c2, "seq": 1,
+            "statement_kind": "profile-section", "subject": {"section_kind": "org.seallink/payments-v1", "visibility": "private"},
+            "type": "seallink-statement/1",
+        },
+        [al_gr_sk],
+    )
+    add("d13-c2-stmt-profile-section-private-no-locators-admit", ["SL-IDEN-006"], "statement", {"chain": fx_c2["chain"], "statement": st_ps_priv}, "ADMIT", None, "Commit 2: Private profile-section statement omitting locators (for encrypted P2P exchange) admits.")
+    st_ps_http = sl.sign_envelope({**st_ps_pub["payload"], "locators": ["http://insecure.example.org/pay.json"]}, [al_gr_sk])
+    add("d13-c2-stmt-profile-section-http-locator-refuse", ["SL-WIRE-010"], "raw_wire", {"object": st_ps_http}, "REFUSE", "WIRE_MEMBER", "Commit 2: profile-section with forbidden plaintext http:// locator MUST refuse WIRE_MEMBER.")
+
+    # Ward identity-link with guardian_approvals[] ADMIT, ward autonomous REFUSE WARD_AUTONOMOUS_FORBIDDEN,
+    # ward missing origin_bundle REFUSE ORIGIN_UNVERIFIED, wrong ward_name -> GUARDIAN_QUORUM_UNMET,
+    # autonomous origin adult -> ADMIT (autonomous) and GUARDIAN_QUORUM_UNMET (if using guardian_approvals)!
+    of_w = copy.deepcopy(fx_ward_rev2)
+    w_now = of_w["chain"]["now"]
+    w_nb = of_w["origin_bundle"]["name_binding"]
+    w_pin = {"name": w_nb["name"], "owner_policy": w_nb["owner_policy"], "registration": w_nb["registration"]}
+    w_oid = sl.object_id(of_w["origin_bundle"]["origin"]["payload"])
+    # Give ward a link.grant key on-chain too so we can test the autonomous ward ban & post-majority autonomy!
+    w_gr_k = _kp("c2-ward-grant")
+    of_w["chain"]["names"][w_nb["name"]] = sv.make_name_history(
+        w_nb["name"], w_nb["registration"], w_nb["owner_policy"],
+        {"link": {"grant": w_gr_k["xonly"], "origin": w_oid}},
+        first_height=749005, update_height=749015,
+    )
+    g1_sk = of_w["_keys"]["g1_gr"]["sk"]
+    w_il_p = {
+        "genesis": GENESIS_MAIN,
+        "guardian_context": {"event_class": "contract_assent", "origin_id": w_oid, "revision": 2, "ward_name": w_nb["name"]},
+        "issuer": w_pin, "network": "main", "not_after": w_now + 600, "not_before": w_now, "seq": 1,
+        "statement_kind": "identity-link",
+        "subject": {"peer": peer_pin, "relation": "member-of", "roles": ["student"]},
+        "type": "seallink-statement/1",
+    }
+    w_il_env = sl.sign_guardian_envelope(
+        w_il_p,
+        [{"guardian_name": "id/parent-a", "revision": 2, "signers": [g1_sk], "slot": 2}],
+    )
+    add(
+        "d13-c2-stmt-ward-identity-link-guardian-quorum-admit",
+        ["SL-IDEN-006", "SL-ORIG-008"],
+        "statement",
+        {"chain": of_w["chain"], "origin_bundle": of_w["origin_bundle"], "statement": w_il_env, "trusted_origin_issuer_pins": of_w["trusted_origin_issuer_pins"]},
+        "ADMIT",
+        None,
+        "Commit 2: Ward identity-link (member-of) authorized by guardian_approvals[] quorum (event_class=contract_assent) admits.",
+    )
+    # Insufficient guardian quorum (base origin fixture requires min=2 for contract_assent, only slot 1 supplied) -> GUARDIAN_QUORUM_UNMET
+    of_w1 = rm._base_origin_fixture()
+    w1_nb = of_w1["origin_bundle"]["name_binding"]
+    w1_pin = {"name": w1_nb["name"], "owner_policy": w1_nb["owner_policy"], "registration": w1_nb["registration"]}
+    w1_oid = sl.object_id(of_w1["origin_bundle"]["origin"]["payload"])
+    w1_now = of_w1["chain"]["now"]
+    w1_il_p = {
+        "genesis": GENESIS_MAIN,
+        "guardian_context": {"event_class": "contract_assent", "origin_id": w1_oid, "revision": 1, "ward_name": w1_nb["name"]},
+        "issuer": w1_pin, "network": "main", "not_after": w1_now + 600, "not_before": w1_now, "seq": 1,
+        "statement_kind": "identity-link",
+        "subject": {"peer": peer_pin, "relation": "member-of", "roles": ["student"]},
+        "type": "seallink-statement/1",
+    }
+    w1_il_env = sl.sign_guardian_envelope(
+        w1_il_p,
+        [{"guardian_name": "id/parent-a", "revision": 1, "signers": [of_w1["_keys"]["g1_gr"]["sk"]], "slot": 1}],
+    )
+    add(
+        "d13-c2-stmt-ward-identity-link-quorum-unmet-refuse",
+        ["SL-ORIG-008"],
+        "statement",
+        {"chain": of_w1["chain"], "origin_bundle": of_w1["origin_bundle"], "statement": w1_il_env, "trusted_origin_issuer_pins": of_w1["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "GUARDIAN_QUORUM_UNMET",
+        "Commit 2: Ward identity-link with 1-of-2 guardian approval MUST refuse GUARDIAN_QUORUM_UNMET.",
+    )
+    # Wrong ward_name in guardian_context -> GUARDIAN_QUORUM_UNMET
+    w_il_bad_wn_p = {**w_il_p, "guardian_context": {**w_il_p["guardian_context"], "ward_name": "id/other-ward"}}
+    w_il_bad_wn_env = sl.sign_guardian_envelope(
+        w_il_bad_wn_p,
+        [{"guardian_name": "id/parent-a", "revision": 2, "signers": [g1_sk], "slot": 2}],
+    )
+    add(
+        "d13-c2-stmt-ward-identity-link-wrong-ward-name-refuse",
+        ["SL-ORIG-008"],
+        "statement",
+        {"chain": of_w["chain"], "origin_bundle": of_w["origin_bundle"], "statement": w_il_bad_wn_env, "trusted_origin_issuer_pins": of_w["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "GUARDIAN_QUORUM_UNMET",
+        "Commit 2: Ward identity-link whose guardian_context.ward_name != issuer.name MUST refuse GUARDIAN_QUORUM_UNMET.",
+    )
+    # Missing origin_bundle on guardian_approvals -> ORIGIN_UNVERIFIED
+    add(
+        "d13-c2-stmt-ward-identity-link-missing-origin-refuse",
+        ["SL-ORIG-002"],
+        "statement",
+        {"chain": of_w["chain"], "statement": w_il_env, "trusted_origin_issuer_pins": of_w["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "ORIGIN_UNVERIFIED",
+        "Commit 2: Ward identity-link omitting origin_bundle MUST refuse ORIGIN_UNVERIFIED.",
+    )
+    # Ward attempting autonomous identity-link (signatures instead of guardian_approvals) -> WARD_AUTONOMOUS_FORBIDDEN!
+    w_il_auto = sl.sign_envelope(
+        {k: v for k, v in w_il_p.items() if k != "guardian_context"},
+        [w_gr_k["sk"]],
+    )
+    add(
+        "d13-c2-stmt-ward-autonomous-identity-link-forbidden",
+        ["SL-ORIG-008"],
+        "statement",
+        {"chain": of_w["chain"], "origin_bundle": of_w["origin_bundle"], "statement": w_il_auto, "trusted_origin_issuer_pins": of_w["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "WARD_AUTONOMOUS_FORBIDDEN",
+        "Commit 2: Active ward signing identity-link autonomously without guardian_approvals MUST refuse WARD_AUTONOMOUS_FORBIDDEN.",
+    )
+    # Ward hiding origin_bundle on autonomous identity-link (detected via registered_bindings fallback too!) -> ORIGIN_UNVERIFIED
+    ch_w_regb = copy.deepcopy(of_w["chain"])
+    ch_w_regb["names"][w_nb["name"]] = sv.make_name_history(
+        w_nb["name"], w_nb["registration"], w_nb["owner_policy"],
+        {"link": {"grant": w_gr_k["xonly"]}},
+        first_height=749005, update_height=749015,
+    )
+    ch_w_regb.setdefault("registered_bindings", {})[f"{w_nb['registration']['txid']}:{w_nb['registration']['vout']}"] = w_oid
+    add(
+        "d13-c2-stmt-ward-autonomous-hidden-origin-refuse",
+        ["SL-ORIG-002"],
+        "statement",
+        {"chain": ch_w_regb, "statement": w_il_auto, "trusted_origin_issuer_pins": of_w["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "ORIGIN_UNVERIFIED",
+        "Commit 2: Origin-bound ward omitting origin_bundle on autonomous identity-link MUST refuse ORIGIN_UNVERIFIED.",
+    )
+    # Emancipated/autonomous origin adult (after capacity/1 + handover) signing identity-link autonomously -> ADMIT; with guardian_approvals -> GUARDIAN_QUORUM_UNMET!
+    of_adult = rm._base_origin_fixture()
+    ad_nb = of_adult["origin_bundle"]["name_binding"]
+    ad_oid = sl.object_id(of_adult["origin_bundle"]["origin"]["payload"])
+    subj_new_pol = {"kind": "key", "pk": _kp("c2-adult-new-own")["comp"]}
+    stat_pol_ad = of_adult["origin_bundle"]["origin"]["payload"]["status_seal"]["script_policy"]
+    cap_ad_p = {
+        "basis_sha256": _h32("c2-cap-basis"),
+        "genesis": GENESIS_MAIN,
+        "issued_at": 1795220000,
+        "issuer": of_adult["origin_bundle"]["origin"]["payload"]["issuer"],
+        "network": "main",
+        "next_status_policy": stat_pol_ad,
+        "next_status_vout": 0,
+        "origin_id": ad_oid,
+        "status_prev_outpoint": {"txid": rm._h32("ostat-tx"), "vout": 0},
+        "subject_new_owner_policy": subj_new_pol,
+        "type": "seallink-capacity/1",
+    }
+    cap_ad = sl.sign_envelope(cap_ad_p, [of_adult["_keys"]["reg_cred"]["sk"]])
+    cap_ad_tx = _h32("c2-cap-ad-tx")
+    of_adult["chain"]["txs"][rm._h32("ostat-tx")]["outputs"]["0"]["spent_by_txid"] = cap_ad_tx
+    of_adult["chain"]["txs"][cap_ad_tx] = {
+        "confirmed_height": 750050,
+        "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(cap_ad)).hex(),
+        "outputs": {"0": {"script_pubkey_hex": _spk_hex(stat_pol_ad)}},
+    }
+    of_adult["origin_bundle"]["capacity_record"] = cap_ad
+    ad_upds = of_adult["chain"]["names"][ad_nb["name"]]["updates"]
+    prev_ad = ad_upds[-1]
+    ad_spk, _ = sl.compile_script_policy(subj_new_pol)
+    ad_val = sl.jcs_encode({"link": {"grant": w_gr_k["xonly"], "origin": ad_oid}})
+    ad_xfer_tx = _h32("c2-ad-xfer-tx")
+    ad_upds.append({
+        "confirmed_height": 750060, "op": "NAME_UPDATE",
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", ad_spk, name=ad_nb["name"].encode("utf-8"), value=ad_val).hex(),
+        "owner_policy": subj_new_pol,
+        "prev_input": {"sighash_bytes": [0x01], "txid": prev_ad["txid"], "vout": prev_ad["vout"], "witness_policy": prev_ad["owner_policy"]},
+        "txid": ad_xfer_tx, "vout": 0,
+    })
+    ad_upds.append({
+        "confirmed_height": 750070, "op": "NAME_UPDATE",
+        "output_script_hex": sl.encode_name_output("NAME_UPDATE", ad_spk, name=ad_nb["name"].encode("utf-8"), value=ad_val).hex(),
+        "owner_policy": subj_new_pol,
+        "prev_input": {"sighash_bytes": [0x01], "txid": ad_xfer_tx, "vout": 0, "witness_policy": subj_new_pol},
+        "txid": _h32("c2-ad-self-tx"), "vout": 0,
+    })
+    rm.sync_chain_tip(of_adult["chain"], height=750080, tip_hash=_h32("c2-ad-tip-750080"))
+    ad_pin = {"name": ad_nb["name"], "owner_policy": subj_new_pol, "registration": ad_nb["registration"]}
+    w_il_adult_auto = sl.sign_envelope(
+        {**{k: v for k, v in w_il_p.items() if k != "guardian_context"}, "issuer": ad_pin, "not_after": of_adult["chain"]["now"] + 600, "not_before": of_adult["chain"]["now"]},
+        [w_gr_k["sk"]],
+    )
+    add(
+        "d13-c2-stmt-adult-origin-autonomous-identity-link-admit",
+        ["SL-IDEN-006", "SL-ORIG-009"],
+        "statement",
+        {"chain": of_adult["chain"], "origin_bundle": of_adult["origin_bundle"], "statement": w_il_adult_auto, "trusted_origin_issuer_pins": of_adult["trusted_origin_issuer_pins"]},
+        "ADMIT",
+        None,
+        "Commit 2: Emancipated autonomous origin actor signing identity-link autonomously admits.",
+    )
+    w_il_adult_ga_p = {
+        **w_il_p,
+        "guardian_context": {"event_class": "contract_assent", "origin_id": ad_oid, "revision": 1, "ward_name": ad_nb["name"]},
+        "issuer": ad_pin, "not_after": of_adult["chain"]["now"] + 600, "not_before": of_adult["chain"]["now"],
+    }
+    w_il_adult_ga_env = sl.sign_guardian_envelope(
+        w_il_adult_ga_p,
+        [{"guardian_name": "id/parent-a", "revision": 1, "signers": [of_adult["_keys"]["g1_gr"]["sk"]], "slot": 1}],
+    )
+    add(
+        "d13-c2-stmt-adult-origin-guardian-approvals-refuse",
+        ["SL-ORIG-009"],
+        "statement",
+        {"chain": of_adult["chain"], "origin_bundle": of_adult["origin_bundle"], "statement": w_il_adult_ga_env, "trusted_origin_issuer_pins": of_adult["trusted_origin_issuer_pins"]},
+        "REFUSE",
+        "GUARDIAN_QUORUM_UNMET",
+        "Commit 2: Emancipated autonomous origin actor cannot be bound by guardian_approvals[] on identity-link (GUARDIAN_QUORUM_UNMET).",
     )

@@ -1,6 +1,6 @@
 # SealLink Conformance Requirements
 
-- **Version:** `1.0.0-draft.12`
+- **Version:** `1.0.0-draft.13`
 - **Status:** `draft`
 - **Normative Language:** [RFC2119], [RFC8174]
 

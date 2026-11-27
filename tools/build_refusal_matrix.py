@@ -20,7 +20,7 @@ import seallink_ref as sl
 import seallink_verifier as sv
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = "1.0.0-draft.12"
+VERSION = "1.0.0-draft.13"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 
 
@@ -75,31 +75,116 @@ def _spk_hex(policy: dict[str, Any]) -> str:
     return sl.compile_script_policy(policy)[0].hex()
 
 
-def bind_device_list_manifest(
+def make_salted_auth_set(
+    owner_name: str,
+    entries_spec: list[dict[str, Any]],
+    *,
+    network: str = "main",
+    seq: int = 1,
+    salt_prefix: str = "auth-salt",
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Build a salted selective-disclosure sets.auth Merkle tree (seallink-auth-set-head/1 + AuthEntryProof list)."""
+    entries: list[dict[str, Any]] = []
+    for idx, spec in enumerate(entries_spec):
+        e: dict[str, Any] = {
+            "alg": spec["alg"],
+            "key": spec["key"],
+            "label": spec.get("label", f"auth-{idx + 1}"),
+            "network": spec.get("network", network),
+            "owner": spec.get("owner", owner_name),
+            "salt": spec.get("salt", _h32(f"{salt_prefix}:{owner_name}:{seq}:{idx}:{spec['label'] if 'label' in spec else idx}")),
+            "seal": spec["seal"],
+            "type": "seallink-auth-entry/1",
+        }
+        entries.append(e)
+    root, proofs_by_dig = sl.build_salted_set_merkle(entries)
+    head: dict[str, Any] = {
+        "merkle_root": root,
+        "network": network,
+        "owner": owner_name,
+        "seq": seq,
+        "type": "seallink-auth-set-head/1",
+    }
+    entry_proofs = [
+        {"entry": e, "head": head, "proof": proofs_by_dig[sl.signing_digest(e).hex()]}
+        for e in entries
+    ]
+    return head, entry_proofs
+
+
+def make_salted_device_set(
+    owner_name: str,
+    entries_spec: list[dict[str, Any]],
+    *,
+    network: str = "main",
+    seq: int = 1,
+    salt_prefix: str = "dev-salt",
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Build a salted selective-disclosure sets.devices Merkle tree (seallink-device-set-head/1 + DeviceEntryProof list)."""
+    entries: list[dict[str, Any]] = []
+    for idx, spec in enumerate(entries_spec):
+        e: dict[str, Any] = {
+            "alg": spec["alg"],
+            "ceiling": int(spec["ceiling"]),
+            "key": spec["key"],
+            "label": spec.get("label", f"dev-{idx + 1}"),
+            "network": spec.get("network", network),
+            "owner": spec.get("owner", owner_name),
+            "presence": bool(spec.get("presence", False)),
+            "salt": spec.get("salt", _h32(f"{salt_prefix}:{owner_name}:{seq}:{idx}:{spec['label'] if 'label' in spec else idx}")),
+            "seal": spec["seal"],
+            "type": "seallink-device-entry/1",
+        }
+        entries.append(e)
+    root, proofs_by_dig = sl.build_salted_set_merkle(entries)
+    head: dict[str, Any] = {
+        "merkle_root": root,
+        "network": network,
+        "owner": owner_name,
+        "seq": seq,
+        "type": "seallink-device-set-head/1",
+    }
+    entry_proofs = [
+        {"entry": e, "head": head, "proof": proofs_by_dig[sl.signing_digest(e).hex()]}
+        for e in entries
+    ]
+    return head, entry_proofs
+
+
+def bind_sets_manifest(
     chain: dict[str, Any],
     owner_name: str,
     owner_pol: dict[str, Any],
     owner_reg: dict[str, Any],
-    dev_list: dict[str, Any],
     *,
+    auth_head: dict[str, Any] | None = None,
+    device_head: dict[str, Any] | None = None,
     extra_link: dict[str, Any] | None = None,
+    extra_sets: dict[str, Any] | None = None,
+    seq: int = 1,
 ) -> dict[str, Any]:
-    """Bind a seallink-device-list/1 to owner_name via a confirmed seallink-manifest/1 and on-chain m.h pin (H-6 / H01)."""
+    """Bind salted sets.auth / sets.devices heads to owner_name via a confirmed seallink-manifest/1 and on-chain m.h pin."""
+    sets_map: dict[str, Any] = dict(extra_sets or {})
+    if auth_head is not None:
+        sets_map["auth"] = {"seq": int(auth_head["seq"]), "sha256": sl.content_addr(auth_head)}
+    if device_head is not None:
+        sets_map["devices"] = {"seq": int(device_head["seq"]), "sha256": sl.content_addr(device_head)}
     man: dict[str, Any] = {
         "network": chain.get("network", "main"),
         "owner": owner_name,
-        "seq": int(dev_list.get("seq", 1)),
-        "sets": {
-            "devices": {"seq": int(dev_list.get("seq", 1)), "sha256": sl.content_addr(dev_list)},
-        },
+        "seq": seq,
         "type": "seallink-manifest/1",
     }
-    nval: dict[str, Any] = {"m": {"h": sl.content_addr(man), "s": man["seq"]}}
+    if sets_map:
+        man["sets"] = sets_map
+    man_h = sl.content_addr(man)
+    nval: dict[str, Any] = {"m": {"h": man_h, "s": man["seq"]}}
     if extra_link:
         nval["link"] = extra_link
     chain.setdefault("names", {})[owner_name] = sv.make_name_history(
         owner_name, owner_reg, owner_pol, nval, first_height=748000, update_height=749000
     )
+    chain.setdefault("manifests", {})[man_h] = man
     return man
 
 
@@ -815,13 +900,22 @@ def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = True
     if runner == "auth_challenge":
         chain = sv.ChainView(inp["chain"])
         journal = sv.FencedJournal.from_dict(inp["journal"])
-        res = v.verify_auth_challenge(inp["challenge"], chain, journal, inp["service_id"], inp.get("manifests"))
+        res = v.verify_auth_challenge(
+            inp["challenge"],
+            chain,
+            journal,
+            inp["service_id"],
+            inp.get("manifests"),
+            auth_proof=inp.get("auth_proof"),
+            expected_audience=inp.get("expected_audience"),
+            origin_bundle=inp.get("origin_bundle"),
+        )
         return res.refusal_code
     if runner == "owner_command":
         chain = sv.ChainView(inp["chain"])
         res = v.verify_owner_command(
             inp["command"],
-            inp["device_list"],
+            inp.get("device_proof"),
             inp["is_foreign_service"],
             chain,
             owner_manifest=inp.get("owner_manifest"),
@@ -1116,14 +1210,17 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     }]
     add("MANIFEST_ROLLBACK", "SL-IDEN-008", "invocation", fx)
 
-    # AUTH_* (3 codes — strictly Draft 2020-12 schema-valid AuthChallenge: NO network/genesis!)
+    # AUTH_* (3 codes — Draft 2020-12 schema-valid AuthChallenge with network/genesis/auth_alg!)
     auth_k = _kp("auth-key")
     auth_seal_k = _kp("auth-seal")
     auth_chal_p = {
+        "auth_alg": "bip340",
         "auth_pubkey": auth_k["xonly"],
         "expires_at": 1795220005,
+        "genesis": GENESIS_MAIN,
         "issued_at": 1795219950,
         "name": "id/alice",
+        "network": "main",
         "nonce": _h32("auth-n1"),
         "service_id": "id/mail-host-a",
         "type": "seallink-auth-challenge/1",
@@ -1156,7 +1253,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "manifests": fx_a["bundle"]["manifests"],
     })
 
-    # DEVICE_UNAUTHORIZED (strictly Draft 2020-12 schema-valid OwnerCommand!)
+    # DEVICE_UNAUTHORIZED (strictly Draft 2020-12 schema-valid OwnerCommand + DeviceEntryProof!)
     dev_k = _kp("dev-l1")
     cmd_p = {
         "arguments": {"scope": "all"},
@@ -1172,8 +1269,9 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "type": "seallink-owner-command/1",
     }
     cmd_env = sl.sign_envelope(cmd_p, [dev_k["sk"]])
-    dev_list = {
-        "devices": [{
+    _, dev_proofs = make_salted_device_set(
+        "id/alice",
+        [{
             "alg": "bip340",
             "ceiling": 1,
             "key": dev_k["xonly"],
@@ -1181,14 +1279,10 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             "presence": False,
             "seal": {"script_policy": {"kind": "key", "pk": auth_seal_k["comp"]}, "txid": _h32("dseal"), "vout": 0},
         }],
-        "network": "main",
-        "owner": "id/alice",
-        "seq": 1,
-        "type": "seallink-device-list/1",
-    }
+    )
     add("DEVICE_UNAUTHORIZED", "SL-IDEN-011", "owner_command", {
         "command": cmd_env,
-        "device_list": dev_list,
+        "device_proof": dev_proofs[0],
         "is_foreign_service": True,
         "chain": fx_a["chain"],
     })
@@ -1936,8 +2030,9 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         },
         [l2_dev["sk"]],
     )
-    l2_dev_list = {
-        "devices": [{
+    _, l2_dev_proofs = make_salted_device_set(
+        "id/alice",
+        [{
             "alg": "bip340",
             "ceiling": 2,
             "key": l2_dev["xonly"],
@@ -1945,11 +2040,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             "presence": True,
             "seal": {"script_policy": l2_seal_pol, "txid": _h32("fed-l2-seal-tx"), "vout": 0},
         }],
-        "network": "main",
-        "owner": "id/alice",
-        "seq": 1,
-        "type": "seallink-device-list/1",
-    }
+    )
     add("FEDERATION_POLICY_DENIED", "SL-SERV-004", "federation", {
         "policy": {"require_contour_a": True, "trusted_peers": ["id/peer-b"]},
         "peer_ctx": {
@@ -1960,7 +2051,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
                 {"actor": "id/peer-b", "role": "counterparty"},
             ],
             "approval_command": l2_cmd,
-            "device_list": l2_dev_list,
+            "device_proof": l2_dev_proofs[0],
         },
         "grant": fx_fed["bundle"]["grants"][0],
         "chain": fx_fed["chain"],

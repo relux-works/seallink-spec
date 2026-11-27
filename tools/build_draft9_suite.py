@@ -1162,8 +1162,11 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
     ds_f9_pol = {"kind": "key", "pk": _kp("d9-m9-ds")["comp"]}
     ds_f9_tx = _h32("d9-m9-ds-tx")
     fx_f9["chain"]["txs"][ds_f9_tx] = {"confirmed_height": 749900, "outputs": {"0": {"script_pubkey_hex": _spk_hex(ds_f9_pol)}}}
-    dl_f9 = {"devices": [{"alg": "p256", "ceiling": 2, "key": p256_f9_pk, "label": "l2-f9", "presence": True, "seal": {"script_policy": ds_f9_pol, "txid": ds_f9_tx, "vout": 0}}], "network": "main", "owner": "id/alice", "seq": 1, "type": "seallink-device-list/1"}
-    am_f9 = {**copy.deepcopy(fx_f9["_alice_man"]), "sets": {"devices": {"seq": 1, "sha256": sl.content_addr(dl_f9)}}}
+    dh_f9, dp_f9 = rm.make_salted_device_set(
+        "id/alice",
+        [{"alg": "p256", "ceiling": 2, "key": p256_f9_pk, "label": "l2-f9", "presence": True, "seal": {"script_policy": ds_f9_pol, "txid": ds_f9_tx, "vout": 0}}],
+    )
+    am_f9 = {**copy.deepcopy(fx_f9["_alice_man"]), "sets": {"devices": {"seq": 1, "sha256": sl.content_addr(dh_f9)}}}
     am_f9_h = sl.content_addr(am_f9)
     fx_f9["chain"]["names"]["id/alice"] = sv.make_name_history("id/alice", fx_f9["_alice_reg"], fx_f9["_alice_owner_pol"], {"link": {"grant": fx_f9["_keys"]["alice_gr"]["xonly"]}, "m": {"h": am_f9_h, "s": 1}}, first_height=748000, update_height=749000)
 
@@ -1189,7 +1192,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
             "journal": {"journal_id": _h32("d9-m9-j1")},
             "peer_ctx": {
                 "approval_command": cmd_bare,
-                "device_list": dl_f9,
+                "device_proof": dp_f9[0],
                 "fields_sha256": _h32("d9-m9-f"),
                 "manifests": {am_f9_h: am_f9},
                 "phase": "pii_disclosure",
@@ -1227,7 +1230,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
             "journal": {"journal_id": _h32("d9-m9-j2")},
             "peer_ctx": {
                 "approval_command": cmd_named,
-                "device_list": dl_f9,
+                "device_proof": dp_f9[0],
                 "manifests": {am_f9_h: am_f9},
                 "phase": "pii_disclosure",
                 "route_hops": [{"actor": "id/peer-b", "role": "counterparty"}],
@@ -1258,7 +1261,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
             "journal": {"journal_id": _h32("d9-m9-j3")},
             "peer_ctx": {
                 "approval_command": cmd_wrong_rcpt,
-                "device_list": dl_f9,
+                "device_proof": dp_f9[0],
                 "fields_sha256": _h32("d9-m9-f"),
                 "manifests": {am_f9_h: am_f9},
                 "phase": "pii_disclosure",

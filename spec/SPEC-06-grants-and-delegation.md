@@ -1,6 +1,6 @@
 # SPEC-06: Universal Grants, Invocations, Re-Delegation, Sessions, and Anti-Rollback Journals
 
-- **Version:** `1.0.0-draft.12`
+- **Version:** `1.0.0-draft.13`
 - **Status:** `draft` (normative rules `decided`; external CAS witness transport protocol tracked `open` in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-01-mail-offline-revoke.json`, `vectors/trace-03-delegation-pool-single-use.json`, `vectors/trace-04-agent-guardian-intake.json`, `vectors/refusal-coverage-matrix.json`)
 - **Registries:** `registry/object-types.json`, `registry/constraints.json`, `registry/opreturn-actions.json`, `registry/refusal-codes.json`

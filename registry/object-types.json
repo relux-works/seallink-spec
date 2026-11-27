@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Canonical Object Type Registry. Authoritative SSOT for object types, byte limits, signing roles, and schema targets. Signing domain tag equals the exact type string under SPEC-01.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.12",
+  "version": "1.0.0-draft.13",
   "reserved_internal_domains": [
     "seallink-clause/1",
     "seallink-journal/1",
@@ -26,7 +26,7 @@
       "max_bytes": 65536,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json",
-      "description": "Name-pinned operational manifest: off-chain set heads, self-service declaration, pinned labeled providers, optional role-policy preimages (verified against on-chain link.<role> hashes), and foreign-service auth key/seal."
+      "description": "Name-pinned operational manifest: off-chain set heads (card, certs, salted Merkle auth & devices, members), self-service declaration, pinned labeled providers, optional role-policy preimages (verified against on-chain link.<role> hashes), and notary/release log bindings."
     },
     {
       "type": "seallink-card/1",
@@ -35,16 +35,43 @@
       "max_bytes": 16384,
       "owning_spec": "SPEC-03",
       "schema": "schemas/card.schema.json",
-      "description": "Public unsigned entity metadata card (person, agent, organization, service) authenticated solely via name -> manifest -> card SHA-256 chain."
+      "description": "Public unsigned entity metadata card (person, agent, organization, service) with optional content-addressed avatar/avatars and safe-scheme links[], authenticated solely via name -> manifest -> card SHA-256 chain."
     },
     {
-      "type": "seallink-device-list/1",
+      "type": "seallink-auth-set-head/1",
       "signed": false,
       "auth_mechanism": "manifest_sha256_pin",
-      "max_bytes": 16384,
+      "max_bytes": 4096,
       "owning_spec": "SPEC-03",
-      "schema": "schemas/manifest.schema.json#/$defs/DeviceList",
-      "description": "Owner-control plane device list (L0-L2 ceilings, algorithm, presence claim, disposable fast-revocation seal)."
+      "schema": "schemas/manifest.schema.json#/$defs/AuthSetHead",
+      "description": "Manifest-pinned salted Merkle root head committing to an actor's foreign-service authentication keys (sets.auth) with size-hiding selective disclosure."
+    },
+    {
+      "type": "seallink-auth-entry/1",
+      "signed": false,
+      "auth_mechanism": "merkle_inclusion_in_manifest_set",
+      "max_bytes": 4096,
+      "owning_spec": "SPEC-03",
+      "schema": "schemas/manifest.schema.json#/$defs/AuthEntry",
+      "description": "Salted leaf entry inside sets.auth (domain-separated leaf digest, alg in {bip340, p256, ed25519}, individual disposable fast-revocation seal)."
+    },
+    {
+      "type": "seallink-device-set-head/1",
+      "signed": false,
+      "auth_mechanism": "manifest_sha256_pin",
+      "max_bytes": 4096,
+      "owning_spec": "SPEC-03",
+      "schema": "schemas/manifest.schema.json#/$defs/DeviceSetHead",
+      "description": "Manifest-pinned salted Merkle root head committing to an actor's owner control-plane devices (sets.devices) with size-hiding selective disclosure."
+    },
+    {
+      "type": "seallink-device-entry/1",
+      "signed": false,
+      "auth_mechanism": "merkle_inclusion_in_manifest_set",
+      "max_bytes": 4096,
+      "owning_spec": "SPEC-03",
+      "schema": "schemas/manifest.schema.json#/$defs/DeviceEntry",
+      "description": "Salted leaf entry inside sets.devices (domain-separated leaf digest, alg in {bip340, p256, ed25519}, presence claim, L0-L2 ceiling, individual disposable fast-revocation seal)."
     },
     {
       "type": "seallink-members-list/1",
@@ -53,7 +80,7 @@
       "max_bytes": 1048576,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/MembersList",
-      "description": "Manifest-pinned list of managed/member names with owner policy pins and per-entry revocation seals."
+      "description": "Manifest-pinned list of managed/member names with owner policy pins, optional free role tags, and per-entry revocation seals."
     },
     {
       "type": "seallink-certset-head/1",
@@ -62,16 +89,16 @@
       "max_bytes": 4096,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/CertSetHead",
-      "description": "Manifest-pinned head committing to an actor's complete set of self-issued key-binding and configuration statements."
+      "description": "Manifest-pinned head committing to an actor's complete set of self-issued key-binding, identity-link, profile-section, and configuration statements."
     },
     {
       "type": "seallink-statement/1",
       "signed": true,
-      "signer_roles": ["grant", "device", "receipt"],
+      "signer_roles": ["grant", "device", "receipt", "guardian_quorum"],
       "max_bytes": 16384,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/Statement",
-      "description": "Typed actor- or service-signed statement for external transport key bindings, host configuration sections, trust-root rotation/cancellation, or destination-provider migration acceptance."
+      "description": "Typed actor-, guardian-quorum-, device-, or service-signed statement for external transport key bindings, bilateral identity links, extensible profile sections, host configuration sections, trust-root rotation/cancellation, or migration acceptance/fencing."
     },
     {
       "type": "seallink-owner-command/1",
@@ -80,7 +107,7 @@
       "max_bytes": 16384,
       "owning_spec": "SPEC-03",
       "schema": "schemas/invocation.schema.json#/$defs/OwnerCommand",
-      "description": "L0/L1/L2 owner control-plane command for an actor's own executors and managed agent key holders; never valid at foreign verifiers."
+      "description": "L0/L1/L2 owner control-plane command for an actor's own executors and managed agent key holders; verified via salted Merkle inclusion in sets.devices; never valid at foreign verifiers."
     },
     {
       "type": "seallink-auth-challenge/1",
@@ -89,7 +116,7 @@
       "max_bytes": 4096,
       "owning_spec": "SPEC-03",
       "schema": "schemas/invocation.schema.json#/$defs/AuthChallenge",
-      "description": "Single-use foreign-service login challenge (provisional key-only or named mode), TTL <= 120s."
+      "description": "Single-use foreign-service login challenge (provisional key-only or named mode via salted Merkle sets.auth; bip340/p256/ed25519; network/genesis/optional audience), TTL <= 120s."
     },
     {
       "type": "seallink-auth-upgrade/1",
@@ -98,7 +125,7 @@
       "max_bytes": 4096,
       "owning_spec": "SPEC-03",
       "schema": "schemas/invocation.schema.json#/$defs/AuthUpgrade",
-      "description": "Atomic promotion of a provisional key-only service cell to a confirmed named SealLink identity under the same auth key."
+      "description": "Atomic promotion of a provisional key-only service cell to a confirmed named SealLink identity under the same auth algorithm/key verified via salted Merkle sets.auth."
     },
     {
       "type": "seallink-origin/1",

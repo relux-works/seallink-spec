@@ -1,0 +1,111 @@
+{
+  "$comment": "SealLink v1.0 Cryptographic Algorithm Registry (SPEC-00 §5, SPEC-01 §4). Embodies algorithmic neutrality: minimal MTI core for global interoperability plus equal-footing optional modules for national and post-quantum suites.",
+  "protocol": "SealLink",
+  "version": "1.0.0-draft.13",
+  "governance": "Registry Update for optional modules; Core SLIP for MTI changes (SPEC-00 §5)",
+  "algorithms": [
+    {
+      "id": "bip340",
+      "family": "signature",
+      "status": "mti_v1",
+      "standard": "BIP-340 (Schnorr over secp256k1)",
+      "pubkey_bytes": 32,
+      "sig_bytes": 64,
+      "wire_encoding": "Lowercase hex; omitted as default in SignatureSet.policy for canonical single encoding (SL-WIRE-013).",
+      "usage": ["name_role_keys", "grants", "contracts", "credentials", "notary", "release", "logs", "auth", "devices"]
+    },
+    {
+      "id": "p256",
+      "family": "signature",
+      "status": "mti_v1",
+      "standard": "SEC 1 / FIPS 186-5 ECDSA over NIST P-256 (strict low-S raw r||s)",
+      "pubkey_bytes": 33,
+      "sig_bytes": 64,
+      "wire_encoding": "Compressed 33-byte SEC 1 public key; 64-byte raw low-S signature.",
+      "usage": ["auth", "devices", "owner_command", "statement", "transport_binding"]
+    },
+    {
+      "id": "ed25519",
+      "family": "signature",
+      "status": "mti_v1",
+      "standard": "RFC 8032 Ed25519 (strict canonical R/S, cofactored non-small-order rejection)",
+      "pubkey_bytes": 32,
+      "sig_bytes": 64,
+      "wire_encoding": "32-byte compressed Edwards public key; 64-byte signature.",
+      "usage": ["auth", "devices", "owner_command", "statement", "transport_binding"]
+    },
+    {
+      "id": "ecdsa-secp256k1-bip66",
+      "family": "l1_consensus_signature",
+      "status": "mti_v1",
+      "standard": "BIP-66 strict DER ECDSA over secp256k1 (accepting high-S per Namecoin Core nc28.0 consensus)",
+      "pubkey_bytes": 33,
+      "sig_bytes": null,
+      "wire_encoding": "Namecoin native SegWit v0 witness stack (P2WPKH / P2WSH).",
+      "usage": ["l1_name_updates", "l1_seals", "tier2_spv"]
+    },
+    {
+      "id": "sha256",
+      "family": "hash",
+      "status": "mti_v1",
+      "standard": "FIPS 180-4 SHA-256",
+      "digest_bytes": 32,
+      "wire_encoding": "64 lowercase hex characters.",
+      "usage": ["content_addr", "signing_digest", "merkle_trees", "smt256", "rfc9162", "fsverity_sha256"]
+    },
+    {
+      "id": "x25519",
+      "family": "key_agreement",
+      "status": "mti_v1",
+      "standard": "RFC 7748 X25519 Curve25519 Diffie-Hellman",
+      "pubkey_bytes": 32,
+      "sig_bytes": null,
+      "wire_encoding": "64 lowercase hex characters in transport-binding statements.",
+      "usage": ["transport_binding"]
+    },
+    {
+      "id": "sha256-spki",
+      "family": "pin",
+      "status": "mti_v1",
+      "standard": "RFC 7469 SHA-256 of DER SubjectPublicKeyInfo",
+      "digest_bytes": 32,
+      "wire_encoding": "64 lowercase hex characters in manifest.service, mirror_endpoints, and transport-binding.",
+      "usage": ["tls_pinning", "transport_binding"]
+    },
+    {
+      "id": "ml-dsa-65",
+      "family": "signature",
+      "status": "reserved_optional_module",
+      "standard": "FIPS 204 ML-DSA-65 (post-quantum lattice signature)",
+      "usage": ["future_pqc_module"]
+    },
+    {
+      "id": "bip340+ml-dsa-65",
+      "family": "signature",
+      "status": "reserved_optional_module",
+      "standard": "Hybrid BIP-340 + FIPS 204 ML-DSA-65 composite signature",
+      "usage": ["future_pqc_module"]
+    },
+    {
+      "id": "gost-r-34.10-2012-256",
+      "family": "signature",
+      "status": "reserved_optional_module",
+      "standard": "GOST R 34.10-2012 (256-bit) / RFC 7091",
+      "usage": ["future_national_module"]
+    },
+    {
+      "id": "sm2",
+      "family": "signature",
+      "status": "reserved_optional_module",
+      "standard": "GB/T 32918 / ISO/IEC 14888-3 SM2",
+      "usage": ["future_national_module"]
+    },
+    {
+      "id": "brainpoolp256r1",
+      "family": "signature",
+      "status": "reserved_optional_module",
+      "standard": "RFC 5639 / BSI TR-03111 brainpoolP256r1",
+      "usage": ["future_national_module"]
+    }
+  ]
+}

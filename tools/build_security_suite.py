@@ -19,7 +19,7 @@ import build_refusal_matrix as rm
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.12"
+VERSION = "1.0.0-draft.13"
 GENESIS_MAIN = rm.GENESIS_MAIN
 
 
@@ -179,7 +179,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         chain = sv.ChainView(inp["chain"])
         res = v.verify_owner_command(
             inp["command"],
-            inp["device_list"],
+            inp.get("device_proof"),
             inp["is_foreign_service"],
             chain,
             owner_manifest=inp.get("owner_manifest"),
@@ -341,6 +341,8 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             journal,
             inp["service_id"],
             inp.get("manifests", {}),
+            auth_proof=inp.get("auth_proof"),
+            expected_audience=inp.get("expected_audience"),
             origin_bundle=inp.get("origin_bundle"),
         )
         return res.verdict, res.refusal_code
@@ -478,6 +480,9 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             ch,
             j,
             inp.get("manifests", {}),
+            expected_provisional_auth_alg=inp.get("expected_provisional_auth_alg", "bip340"),
+            auth_proof=inp.get("auth_proof"),
+            expected_audience=inp.get("expected_audience"),
             origin_bundle=inp.get("origin_bundle"),
         )
         return res.verdict, res.refusal_code
@@ -629,10 +634,11 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             inp["statement"],
             ch,
             expected_policy=inp.get("expected_policy"),
-            device_list=inp.get("device_list"),
+            device_proof=inp.get("device_proof"),
             owner_manifest=inp.get("owner_manifest"),
             presented_manifests=inp.get("manifests"),
             origin_bundle=inp.get("origin_bundle"),
+            origin_bundles_by_oid=inp.get("origin_bundles_by_oid"),
         )
         return res.verdict, res.refusal_code
     if runner == "session_lifecycle":
@@ -1568,16 +1574,13 @@ def build_security_conformance_suite() -> dict[str, Any]:
     dseal_pol = {"kind": "key", "pk": dseal_k["comp"]}
     dseal_tx = _h32("sec-dseal-tx")
     fx_dev["chain"]["txs"][dseal_tx] = {"confirmed_height": 749990, "outputs": {"0": {"script_pubkey_hex": _spk_hex(dseal_pol)}}}
-    dev_list = {
-        "devices": [
+    dev_head, dev_proofs = rm.make_salted_device_set(
+        "id/alice",
+        [
             {"alg": "ed25519", "ceiling": 2, "key": ed_pk, "label": "security-key-ed", "presence": True, "seal": {"script_policy": dseal_pol, "txid": dseal_tx, "vout": 0}},
             {"alg": "p256", "ceiling": 2, "key": p256_pk, "label": "secure-enclave-p256", "presence": True, "seal": {"script_policy": dseal_pol, "txid": dseal_tx, "vout": 0}},
         ],
-        "network": "main",
-        "owner": "id/alice",
-        "seq": 1,
-        "type": "seallink-device-list/1",
-    }
+    )
     cmd_base = {
         "arguments": {"scope": "all"},
         "command": "keyholder-halt",
@@ -1592,22 +1595,22 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "type": "seallink-owner-command/1",
     }
     cmd_ed = sl.sign_envelope(cmd_base, [ed_seed], alg="ed25519")
-    alice_dev_man = rm.bind_device_list_manifest(
+    alice_dev_man = rm.bind_sets_manifest(
         fx_dev["chain"],
         "id/alice",
         fx_dev["_alice_owner_pol"],
         fx_dev["_alice_reg"],
-        dev_list,
+        device_head=dev_head,
         extra_link={"grant": fx_dev["_keys"]["alice_gr"]["xonly"]},
     )
     add(
         "owner-command-ed25519-admit",
         ["SL-WIRE-012", "SL-WIRE-013", "SL-IDEN-011"],
         "owner_command",
-        {"command": cmd_ed, "device_list": dev_list, "owner_manifest": alice_dev_man, "is_foreign_service": False, "chain": fx_dev["chain"]},
+        {"command": cmd_ed, "device_proof": dev_proofs[0], "owner_manifest": alice_dev_man, "is_foreign_service": False, "chain": fx_dev["chain"]},
         "ADMIT",
         None,
-        "Enrolled L2 Ed25519 hardware key signing seallink-owner-command/1 MUST be admitted.",
+        "Enrolled L2 Ed25519 hardware key signing seallink-owner-command/1 with selective-disclosure salted Merkle proof MUST be admitted.",
     )
 
     cmd_p256 = sl.sign_envelope({**cmd_base, "nonce": _h32("sec-dev-cmd-2")}, [p256_sk], alg="p256")
@@ -1615,10 +1618,10 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "owner-command-p256-low-s-admit",
         ["SL-WIRE-012", "SL-WIRE-013", "SL-IDEN-011"],
         "owner_command",
-        {"command": cmd_p256, "device_list": dev_list, "owner_manifest": alice_dev_man, "is_foreign_service": False, "chain": fx_dev["chain"]},
+        {"command": cmd_p256, "device_proof": dev_proofs[1], "owner_manifest": alice_dev_man, "is_foreign_service": False, "chain": fx_dev["chain"]},
         "ADMIT",
         None,
-        "Enrolled L2 NIST P-256 Secure Enclave key with strict low-S signature MUST be admitted.",
+        "Enrolled L2 NIST P-256 Secure Enclave key with strict low-S signature and salted Merkle proof MUST be admitted.",
     )
 
     cmd_p256_high = copy.deepcopy(cmd_p256)
@@ -1630,7 +1633,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "owner-command-p256-high-s-refused",
         ["SL-WIRE-012", "SL-WIRE-013"],
         "owner_command",
-        {"command": cmd_p256_high, "device_list": dev_list, "is_foreign_service": False, "chain": fx_dev["chain"]},
+        {"command": cmd_p256_high, "device_proof": dev_proofs[1], "is_foreign_service": False, "chain": fx_dev["chain"]},
         "REFUSE",
         "WIRE_SIGNATURE",
         "NIST P-256 high-S (s > n/2) signature MUST be strictly refused with WIRE_SIGNATURE.",
@@ -1649,7 +1652,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
     fed_grant_env = sl.sign_envelope(fed_gp, [fx_fed_pos["_keys"]["alice_gr"]["sk"]])
     al_man_fed = copy.deepcopy(fx_fed_pos["_alice_man"])
     al_man_fed["seq"] = 2
-    al_man_fed["sets"] = {"devices": {"seq": 1, "sha256": sl.content_addr(dev_list)}}
+    al_man_fed["sets"] = {"devices": {"seq": 1, "sha256": sl.content_addr(dev_head)}}
     al_man_fed_h = sl.content_addr(al_man_fed)
     fx_fed_pos["chain"]["manifests"][al_man_fed_h] = al_man_fed
     fx_fed_pos["chain"]["names"]["id/alice"] = sv.make_name_history(
@@ -1690,7 +1693,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
                 "phase": "pii_disclosure",
                 "route_hops": [{"actor": "id/peer-b", "role": "counterparty"}],
                 "approval_command": l2_fed_cmd,
-                "device_list": dev_list,
+                "device_proof": dev_proofs[1],
                 "fields_sha256": _h32("contour-a-pii-fields"),
                 "manifests": {al_man_fed_h: al_man_fed},
             },

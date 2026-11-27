@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.12.
+Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.13.
 
 Executes seven end-to-end SealLink protocol traces on two fresh loopback-only
 Namecoin Core 28 regtest nodes under strict standard policy (`-acceptnonstdtxn=0`,
@@ -3785,7 +3785,7 @@ def main() -> int:
         elapsed = round(time.monotonic() - t0, 2)
         report = {
             "suite": "seallink-nc28-live-traces-regtest",
-            "spec_version": "1.0.0-draft.12",
+            "spec_version": "1.0.0-draft.13",
             "chain": "regtest",
             "policy": "standard (-acceptnonstdtxn=0 -txindex=1 -namehistory=1), two loopback-only nodes (node A writer outbound -> node B read-only cold observer with -disablewallet=1 and -rpcwhitelistdefault=0)",
             "node_b_rpcwhitelist": cl.obs_whitelist.split(","),

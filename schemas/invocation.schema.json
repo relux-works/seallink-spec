@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.12/schemas/invocation.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.13/schemas/invocation.schema.json",
   "title": "SealLink v1.0 Invocation, Receipt, Sessions, Auth, Owner Control, Journal & Migration",
   "$defs": {
     "Invocation": {
@@ -165,20 +165,64 @@
       "required": ["payload", "signatures"],
       "properties": {
         "payload": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["type", "service_id", "nonce", "issued_at", "expires_at", "auth_pubkey"],
-          "properties": {
-            "type": { "const": "seallink-auth-challenge/1" },
-            "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
-            "name": { "$ref": "common.schema.json#/$defs/NameStr" },
-            "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
-            "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
-            "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
-            "auth_pubkey": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" }
-          }
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "service_id", "nonce", "issued_at", "expires_at", "auth_alg", "auth_pubkey"],
+              "properties": {
+                "type": { "const": "seallink-auth-challenge/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "auth_alg": { "const": "bip340" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "service_id", "nonce", "issued_at", "expires_at", "auth_alg", "auth_pubkey"],
+              "properties": {
+                "type": { "const": "seallink-auth-challenge/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "auth_alg": { "const": "p256" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "service_id", "nonce", "issued_at", "expires_at", "auth_alg", "auth_pubkey"],
+              "properties": {
+                "type": { "const": "seallink-auth-challenge/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "auth_alg": { "const": "ed25519" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" }
+              }
+            }
+          ]
         },
-        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+        "signatures": { "$ref": "common.schema.json#/$defs/DeviceSignatureSet" }
       }
     },
     "AuthUpgrade": {
@@ -187,22 +231,70 @@
       "required": ["payload", "signatures"],
       "properties": {
         "payload": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["type", "service_id", "account_id", "name", "auth_pubkey", "firstupdate_txid", "nonce", "issued_at", "expires_at"],
-          "properties": {
-            "type": { "const": "seallink-auth-upgrade/1" },
-            "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
-            "account_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
-            "name": { "$ref": "common.schema.json#/$defs/NameStr" },
-            "auth_pubkey": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" },
-            "firstupdate_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
-            "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
-            "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
-            "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" }
-          }
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "service_id", "account_id", "name", "auth_alg", "auth_pubkey", "firstupdate_txid", "nonce", "issued_at", "expires_at"],
+              "properties": {
+                "type": { "const": "seallink-auth-upgrade/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "account_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "auth_alg": { "const": "bip340" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" },
+                "firstupdate_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "service_id", "account_id", "name", "auth_alg", "auth_pubkey", "firstupdate_txid", "nonce", "issued_at", "expires_at"],
+              "properties": {
+                "type": { "const": "seallink-auth-upgrade/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "account_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "auth_alg": { "const": "p256" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" },
+                "firstupdate_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "service_id", "account_id", "name", "auth_alg", "auth_pubkey", "firstupdate_txid", "nonce", "issued_at", "expires_at"],
+              "properties": {
+                "type": { "const": "seallink-auth-upgrade/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "account_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "auth_alg": { "const": "ed25519" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" },
+                "firstupdate_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            }
+          ]
         },
-        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+        "signatures": { "$ref": "common.schema.json#/$defs/DeviceSignatureSet" }
       }
     },
     "OwnerCommand": {

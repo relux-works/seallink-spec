@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Key Role & Custody Registry (SPEC-03). Coherent with registry/object-types.json (verified by tools/speclint.py).",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.12",
+  "version": "1.0.0-draft.13",
   "namecoin_coin_type": 7,
   "roles": [
     {
@@ -45,7 +45,7 @@
       "custody_tier": "isolated_signer_with_presence",
       "derivation_recommendation": "Each guardian signs its own SignatureSet with its link.grant role policy inside guardian_approvals[] matching guardian_context.revision",
       "published_in": "Each active guardian's Name value link.grant",
-      "allowed_operations": ["seallink-grant/1", "seallink-assent/1", "seallink-termination/1"],
+      "allowed_operations": ["seallink-grant/1", "seallink-assent/1", "seallink-termination/1", "seallink-statement/1"],
       "forbidden_operations": ["chain_transactions", "seallink-origin/1", "seallink-credential/1"]
     },
     {
@@ -83,12 +83,12 @@
     },
     {
       "role": "auth",
-      "curve": "secp256k1",
-      "scheme": "BIP-340 Schnorr",
-      "pubkey_encoding": "xonly_64hex",
-      "custody_tier": "isolated_signer",
-      "derivation_recommendation": "Hot signer seed m/84'/7'/2'/0/i (isolated from funding 0' and dynamic pool 10+)",
-      "published_in": "seallink-manifest/1 auth_key (paired with auth_seal)",
+      "curve": "P-256 | Ed25519 | secp256k1",
+      "scheme": "ECDSA-P256 (low-S) | Ed25519 | BIP-340",
+      "pubkey_encoding": "alg_tagged_hex",
+      "custody_tier": "hardware_device_or_isolated_signer",
+      "derivation_recommendation": "Hardware passkey / Secure Enclave / StrongBox / TPM key or isolated hot signer seed m/84'/7'/2'/0/i (isolated from funding 0' and dynamic pool 10+)",
+      "published_in": "seallink-auth-entry/1 (salted Merkle inclusion in manifest sets.auth -> seallink-auth-set-head/1)",
       "allowed_operations": ["seallink-auth-challenge/1", "seallink-auth-upgrade/1"],
       "forbidden_operations": ["seallink-grant/1", "seallink-assent/1", "seallink-owner-command/1", "chain_transactions"]
     },
@@ -209,7 +209,7 @@
       "pubkey_encoding": "compressed_66hex",
       "custody_tier": "ephemeral_csprng_destroyed_after_presign",
       "derivation_recommendation": "CSPRNG ONLY — NEVER BIP-39 derived; destroy private key immediately after recording pre-signed tx_revoke",
-      "published_in": "manifest auth_seal, device-list seal, members-list entry seal",
+      "published_in": "seallink-auth-entry/1 seal, seallink-device-entry/1 seal, seallink-members-list/1 entry seal, optional seallink-statement/1 seal",
       "allowed_operations": ["One pre-signed fast-revocation transaction with P2A CPFP anchor output"],
       "forbidden_operations": ["seed_derivation", "key_retention_after_presign"]
     },
@@ -220,7 +220,7 @@
       "pubkey_encoding": "alg_tagged_hex",
       "custody_tier": "hardware_device",
       "derivation_recommendation": "Generated inside hardware enclave or device keystore (non-exportable for L2)",
-      "published_in": "seallink-device-list/1 (pinned in manifest)",
+      "published_in": "seallink-device-entry/1 (salted Merkle inclusion in manifest sets.devices -> seallink-device-set-head/1)",
       "allowed_operations": ["seallink-owner-command/1", "seallink-statement/1"],
       "forbidden_operations": ["seallink-auth-challenge/1", "seallink-grant/1", "seallink-assent/1", "chain_transactions"]
     },
