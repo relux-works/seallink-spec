@@ -175,11 +175,11 @@
     {
       "type": "seallink-termination/1",
       "signed": true,
-      "signer_roles": ["grant"],
+      "signer_roles": ["grant", "guardian_quorum", "arbiter"],
       "max_bytes": 16384,
       "owning_spec": "SPEC-05",
       "schema": "schemas/contract.schema.json#/$defs/TerminationStatement",
-      "description": "Signed termination evidence committed inside a contract-seal spend (action 0x08); signed by a contract party's grant key (the seal spend alone terminates regardless of 0x08 validity)."
+      "description": "Signed termination evidence committed inside a contract-seal spend (action 0x08); signed by a contract party's grant key, ward guardian quorum, or contract arbiter (the seal spend alone terminates regardless of 0x08 validity)."
     },
     {
       "type": "seallink-verdict/1",
@@ -265,11 +265,11 @@
     {
       "type": "seallink-session-open/1",
       "signed": true,
-      "signer_roles": ["recipient", "messaging_or_request"],
+      "signer_roles": ["recipient", "messaging_or_request", "grant"],
       "max_bytes": 16384,
       "owning_spec": "SPEC-06",
       "schema": "schemas/invocation.schema.json#/$defs/SessionOpen",
-      "description": "Signed invocation establishing, extending, or closing a short-lived (<= 3600s) bearer session for non-signing clients."
+      "description": "Signed invocation establishing, extending, or closing a short-lived (<= 3600s) bearer session for non-signing clients (root issuer link.grant MAY sign op='close')."
     },
     {
       "type": "seallink-journal-entry/1",

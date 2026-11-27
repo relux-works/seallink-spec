@@ -75,6 +75,48 @@ def _spk_hex(policy: dict[str, Any]) -> str:
     return sl.compile_script_policy(policy)[0].hex()
 
 
+def bind_device_list_manifest(
+    chain: dict[str, Any],
+    owner_name: str,
+    owner_pol: dict[str, Any],
+    owner_reg: dict[str, Any],
+    dev_list: dict[str, Any],
+    *,
+    extra_link: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Bind a seallink-device-list/1 to owner_name via a confirmed seallink-manifest/1 and on-chain m.h pin (H-6 / H01)."""
+    man: dict[str, Any] = {
+        "network": chain.get("network", "main"),
+        "owner": owner_name,
+        "seq": int(dev_list.get("seq", 1)),
+        "sets": {
+            "devices": {"seq": int(dev_list.get("seq", 1)), "sha256": sl.content_addr(dev_list)},
+        },
+        "type": "seallink-manifest/1",
+    }
+    nval: dict[str, Any] = {"m": {"h": sl.content_addr(man), "s": man["seq"]}}
+    if extra_link:
+        nval["link"] = extra_link
+    chain.setdefault("names", {})[owner_name] = sv.make_name_history(
+        owner_name, owner_reg, owner_pol, nval, first_height=748000, update_height=749000
+    )
+    return man
+
+
+def sync_ward_origin_link(of: dict[str, Any], new_oid: str) -> None:
+    """Keep ward OP_NAME_FIRSTUPDATE link.origin in sync with re-signed origin_id (BLK-7)."""
+    nb = of["origin_bundle"]["name_binding"]
+    wname = nb["name"]
+    wreg = nb["registration"]
+    wpol = nb["owner_policy"]
+    cur = of["chain"].get("names", {}).get(wname)
+    first_h = cur["updates"][0]["confirmed_height"] if isinstance(cur, dict) and cur.get("updates") else 749005
+    upd_h = cur["updates"][-1]["confirmed_height"] if isinstance(cur, dict) and cur.get("updates") else 749015
+    of["chain"]["names"][wname] = sv.make_name_history(
+        wname, wreg, wpol, {"link": {"origin": new_oid}}, first_height=first_h, update_height=upd_h
+    )
+
+
 _CACHED_INV_FX: dict[str, Any] | None = None
 _CACHED_ORIG_FX: dict[str, Any] | None = None
 
@@ -672,6 +714,14 @@ def _delegation_fx(notary_mode: str = "none", with_stop: bool = False) -> dict[s
         "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(child_env), "grant_id": cid, "type": "seallink-issuance/1"}).hex()).hex(),
         "outputs": {},
     }
+    row_spk_hex = _spk_hex({"kind": "key", "pk": row_k["comp"]})
+    f["chain"]["txs"][_h32("row-tx")] = {
+        "confirmed_height": 749985,
+        "outputs": {
+            "0": {"script_pubkey_hex": row_spk_hex, "spent_by_txid": c_itx},
+            "1": {"script_pubkey_hex": row_spk_hex},
+        },
+    }
     f["chain"]["txs"][_h32("child-seal-tx")] = {
         "confirmed_height": 749995,
         "inputs": [sv.make_segwit_input(_h32("cseal-fund"), 0)],
@@ -705,6 +755,12 @@ def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = True
     """
     runner = case["runner"]
     inp = case["inputs"]
+    if "enabled_modules" in inp:
+        eff_mods = inp["enabled_modules"]
+    elif case.get("module") in sv.ALL_OPTIONAL_MODULES:
+        eff_mods = ["core", case["module"]]
+    else:
+        eff_mods = None
     v = sv.Tier1Verifier(
         pinned_network=inp.get("pinned_network", "main"),
         pinned_genesis=inp.get("pinned_genesis", GENESIS_MAIN),
@@ -713,7 +769,7 @@ def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = True
         trusted_origin_issuer_pins=inp.get("trusted_origin_issuer_pins"),
         enforce_schemas=True,
         require_jsonschema=require_jsonschema,
-        enabled_modules=inp.get("enabled_modules"),
+        enabled_modules=eff_mods,
     )
 
     if runner == "wire_raw":
@@ -763,7 +819,15 @@ def execute_matrix_case(case: dict[str, Any], *, require_jsonschema: bool = True
         return res.refusal_code
     if runner == "owner_command":
         chain = sv.ChainView(inp["chain"])
-        res = v.verify_owner_command(inp["command"], inp["device_list"], inp["is_foreign_service"], chain)
+        res = v.verify_owner_command(
+            inp["command"],
+            inp["device_list"],
+            inp["is_foreign_service"],
+            chain,
+            owner_manifest=inp.get("owner_manifest"),
+            presented_manifests=inp.get("manifests"),
+            origin_bundle=inp.get("origin_bundle"),
+        )
         return res.refusal_code
     if runner == "bearer_session":
         chain = sv.ChainView(inp["chain"])
@@ -1452,7 +1516,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
                 "compromised_policy": {"m": 1, "pks": [iss_cr["xonly"]]},
                 "genesis": GENESIS_MAIN,
                 "h_c": break_h_c,
-                "issuer": {"name": "id/issuer-a", "owner_policy": iss_owner_pol, "registration": iss_reg},
+                "issuer": {"name": "id/issuer-a", "registration": iss_reg},
                 "name_input": {"txid": prev_u["txid"], "vout": prev_u["vout"]},
                 "role": "cred",
                 "type": "seallink-credential-break/1",
@@ -1585,6 +1649,14 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
             "inputs": [sv.make_segwit_input(_h32("row-tx"), 0), sv.make_segwit_input(_h32("child-seal-tx"), 1)],
             "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(child_env), "grant_id": cid, "type": "seallink-issuance/1"}).hex()).hex(),
             "outputs": {},
+        }
+        row_spk_hex = _spk_hex({"kind": "key", "pk": row_k["comp"]})
+        f["chain"]["txs"][_h32("row-tx")] = {
+            "confirmed_height": 749985,
+            "outputs": {
+                "0": {"script_pubkey_hex": row_spk_hex, "spent_by_txid": c_itx},
+                "1": {"script_pubkey_hex": row_spk_hex},
+            },
         }
         f["chain"]["txs"][_h32("child-seal-tx")] = {
             "confirmed_height": 749995,

@@ -1,0 +1,4 @@
+# Authorized SSH signing keys for SealLink specification releases and commits.
+# Verify tags locally with:
+#   git -c gpg.ssh.allowedSignersFile=./ALLOWED_SIGNERS tag -v <tag>
+ivan@relux.works namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGPqhhNRTlMjtZDQ8rIM8ur0VMh9qnIY9qFkVSvtQr5f

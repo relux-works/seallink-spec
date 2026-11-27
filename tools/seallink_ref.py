@@ -136,7 +136,7 @@ def clause_commit(salt_hex: str, clause_obj: dict[str, Any]) -> str:
     salt_bytes = bytes.fromhex(salt_hex)
     if len(salt_bytes) != 32:
         raise ValueError("salt must be 32 bytes")
-    return tagged_hash("seallink-clause/1", salt_bytes + jcs_encode(clause_obj)).hex()
+    return tagged_hash("seallink-clause/1", salt_bytes + jcs_encode(clause_obj, allow_lf_paths=CLAUSE_LF_PATHS)).hex()
 
 
 def journal_commit_init(journal_id_hex: str) -> str:
@@ -156,13 +156,14 @@ def journal_commit_step(prev_commit_hex: str, entry_obj: dict[str, Any]) -> str:
 # ============================================================================
 
 # Exact schema paths annotated with "x-seallink-allow-lf": true (SPEC-01 §1 SL-WIRE-005)
-ALLOW_LF_BY_TYPE: dict[str | None, frozenset[tuple[str, ...]]] = {
+ALLOW_LF_BY_TYPE: dict[str, frozenset[tuple[str, ...]]] = {
     "seallink-grant/1": frozenset({("payload", "terms_text"), ("terms_text",)}),
     "seallink-termination/1": frozenset({("reason",), ("payload", "reason")}),
     "seallink-card/1": frozenset({("role",)}),
-    None: frozenset({("text",), ("terms_text",)}),  # Standalone ClauseObject / untyped JCS snippet
 }
+CLAUSE_LF_PATHS: frozenset[tuple[str, ...]] = frozenset({("text",)})
 MAX_UINT53 = 9007199254740991
+MAX_UINT53_STR = "9007199254740991"
 MAX_UINT64 = 18446744073709551615
 UINT64_STR_RE = re.compile(r"\A(0|[1-9][0-9]{0,19})\Z")
 HEX64_RE = re.compile(r"\A[0-9a-f]{64}\Z")
@@ -180,7 +181,15 @@ def _extract_root_type(obj: Any) -> str | None:
     return None
 
 
-def _path_allows_lf(root_type: str | None, path: tuple[str, ...]) -> bool:
+def _path_allows_lf(
+    root_type: str | None,
+    path: tuple[str, ...],
+    extra_allow_lf: frozenset[tuple[str, ...]] | None = None,
+) -> bool:
+    if extra_allow_lf is not None and path in extra_allow_lf:
+        return True
+    if root_type is None:
+        return False
     allowed = ALLOW_LF_BY_TYPE.get(root_type)
     return bool(allowed and path in allowed)
 
@@ -223,6 +232,7 @@ def _jcs_serialize(
     root_type: str | None = None,
     path: tuple[str, ...] = (),
     depth: int = 0,
+    allow_lf_paths: frozenset[tuple[str, ...]] | None = None,
 ) -> str:
     if val is None:
         raise ValueError("WIRE_VALUE")
@@ -235,7 +245,7 @@ def _jcs_serialize(
     if isinstance(val, float):
         raise ValueError("WIRE_NUMBER")
     if isinstance(val, str):
-        allow_lf = _path_allows_lf(root_type, path)
+        allow_lf = _path_allows_lf(root_type, path, allow_lf_paths)
         if not _validate_string(val, allow_lf):
             raise ValueError("WIRE_STRING")
         return _encode_jcs_str(val)
@@ -243,7 +253,7 @@ def _jcs_serialize(
         next_depth = depth + 1
         if next_depth > 16:
             raise ValueError("WIRE_SIZE")
-        return "[" + ",".join(_jcs_serialize(x, root_type, path + ("[]",), next_depth) for x in val) + "]"
+        return "[" + ",".join(_jcs_serialize(x, root_type, path + ("[]",), next_depth, allow_lf_paths) for x in val) + "]"
     if isinstance(val, dict):
         next_depth = depth + 1
         if next_depth > 16:
@@ -253,15 +263,15 @@ def _jcs_serialize(
         for k, v in items:
             if not isinstance(k, str) or not _validate_string(k, False):
                 raise ValueError("WIRE_STRING")
-            parts.append(f"{_encode_jcs_str(k)}:{_jcs_serialize(v, root_type, path + (k,), next_depth)}")
+            parts.append(f"{_encode_jcs_str(k)}:{_jcs_serialize(v, root_type, path + (k,), next_depth, allow_lf_paths)}")
         return "{" + ",".join(parts) + "}"
     raise ValueError("WIRE_VALUE")
 
 
-def jcs_encode(obj: dict[str, Any]) -> bytes:
+def jcs_encode(obj: dict[str, Any], *, allow_lf_paths: frozenset[tuple[str, ...]] | None = None) -> bytes:
     if not isinstance(obj, dict):
         raise ValueError("WIRE_JSON")
-    return _jcs_serialize(obj, _extract_root_type(obj), (), 0).encode("utf-8")
+    return _jcs_serialize(obj, _extract_root_type(obj), (), 0, allow_lf_paths).encode("utf-8")
 
 
 def _collect_depth_and_value_errors(
@@ -270,6 +280,7 @@ def _collect_depth_and_value_errors(
     path: tuple[str, ...],
     depth: int,
     errs: set[str],
+    allow_lf_paths: frozenset[tuple[str, ...]] | None = None,
 ) -> None:
     if val is None:
         errs.add("WIRE_VALUE")
@@ -284,7 +295,7 @@ def _collect_depth_and_value_errors(
             errs.add("WIRE_NUMBER")
         return
     if isinstance(val, str):
-        if not _validate_string(val, _path_allows_lf(root_type, path)):
+        if not _validate_string(val, _path_allows_lf(root_type, path, allow_lf_paths)):
             errs.add("WIRE_STRING")
         return
     if isinstance(val, list):
@@ -293,7 +304,7 @@ def _collect_depth_and_value_errors(
             errs.add("WIRE_SIZE")
             return
         for item in val:
-            _collect_depth_and_value_errors(item, root_type, path + ("[]",), next_depth, errs)
+            _collect_depth_and_value_errors(item, root_type, path + ("[]",), next_depth, errs, allow_lf_paths)
         return
     if isinstance(val, dict):
         next_depth = depth + 1
@@ -303,7 +314,7 @@ def _collect_depth_and_value_errors(
         for k, v in val.items():
             if not _validate_string(k, False):
                 errs.add("WIRE_STRING")
-            _collect_depth_and_value_errors(v, root_type, path + (k,), next_depth, errs)
+            _collect_depth_and_value_errors(v, root_type, path + (k,), next_depth, errs, allow_lf_paths)
         return
     errs.add("WIRE_VALUE")
 
@@ -336,29 +347,58 @@ def _scan_container_depth(text: str) -> tuple[int, bool]:
     return best, (not in_str and cur == 0)
 
 
+_ASCII_DIGITS = frozenset("0123456789")
+_VALUE_DELIMS = frozenset(("", ":", ",", "[", "{", " ", "\t", "\r", "\n"))
+_END_DELIMS = frozenset((",", "}", "]", " ", "\t", "\r", "\n"))
+
+
+class _JsonConstantError(ValueError):
+    """Raised on non-RFC-8259 Python JSON extensions (NaN, Infinity, -Infinity) so they always map to WIRE_JSON."""
+
+
+def _reject_json_constant(_tok: str) -> Any:
+    raise _JsonConstantError("non-RFC8259 JSON constant")
+
+
 def _is_malformed_number_error(text: str, pos: int) -> bool:
-    """Detect malformed numeric tokens (`01`, `+1`, `.5`, `1.`) so they map deterministically to WIRE_NUMBER (W-7)."""
+    """Detect malformed ASCII numeric tokens (`01`, `-01`, `+1`, `.5`, `-.5`, `1.`, `1e`) so they map deterministically to WIRE_NUMBER (SPEC-01 §7, M-2)."""
     if pos < 0 or pos >= len(text):
         return False
     prev = text[pos - 1] if pos >= 1 else ""
     prev2 = text[pos - 2] if pos >= 2 else ""
     ch = text[pos]
-    # Leading zero like 01, 00, -01
-    if prev == "0" and ch.isdigit() and prev2 in ("", ":", ",", "[", "{", " ", "\t", "\r", "\n", "-"):
+    nxt = text[pos + 1] if pos + 1 < len(text) else ""
+    nxt2 = text[pos + 2] if pos + 2 < len(text) else ""
+    # Leading zero like 01, 00, -01 (strictly ASCII digits)
+    if prev == "0" and ch in _ASCII_DIGITS and (prev2 in _VALUE_DELIMS or prev2 == "-"):
         return True
     # Explicit plus sign like +1
-    if ch == "+" and pos + 1 < len(text) and text[pos + 1].isdigit():
+    if ch == "+" and nxt in _ASCII_DIGITS and prev in _VALUE_DELIMS:
         return True
-    # Leading decimal point like .5
-    if ch == "." and pos + 1 < len(text) and text[pos + 1].isdigit() and prev in ("", ":", ",", "[", "{", " ", "\t", "\r", "\n", "-"):
+    # Leading decimal point like .5 or -.5
+    if ch == "." and nxt in _ASCII_DIGITS and (prev in _VALUE_DELIMS or prev == "-"):
         return True
-    # Trailing decimal point like 1.
-    if prev == "." and pos >= 2 and text[pos - 2].isdigit() and ch in (",", "}", "]", " ", "\t", "\r", "\n"):
+    if ch == "-" and nxt == "." and nxt2 in _ASCII_DIGITS and prev in _VALUE_DELIMS:
+        return True
+    # Trailing decimal point like 1. (JSONDecodeError may point at '.' OR at the delimiter after '.')
+    if ch == "." and prev in _ASCII_DIGITS and (nxt == "" or nxt in _END_DELIMS):
+        return True
+    if prev == "." and prev2 in _ASCII_DIGITS and ch in _END_DELIMS:
+        return True
+    # Incomplete exponent like 1e, 1E, 1e+, 1e-
+    if ch in ("e", "E") and prev in _ASCII_DIGITS and (nxt == "" or nxt in _END_DELIMS or (nxt in ("+", "-") and (nxt2 == "" or nxt2 in _END_DELIMS))):
+        return True
+    if prev in ("e", "E") and prev2 in _ASCII_DIGITS and ch in _END_DELIMS:
         return True
     return False
 
 
-def jcs_validate(raw: bytes, max_bytes: int = 1048576) -> tuple[bool, Any]:
+def jcs_validate(
+    raw: bytes,
+    max_bytes: int = 1048576,
+    *,
+    allow_lf_paths: frozenset[tuple[str, ...]] | None = None,
+) -> tuple[bool, Any]:
     """Validate raw bytes against SPEC-01 §1-2 pipeline steps 1..6 (whole-tree precedence: WIRE_SIZE -> WIRE_JSON -> WIRE_DUPLICATE -> WIRE_VALUE -> WIRE_NUMBER -> WIRE_STRING -> WIRE_NOT_CANONICAL)."""
     if len(raw) > max_bytes:
         return False, "WIRE_SIZE"
@@ -373,10 +413,10 @@ def jcs_validate(raw: bytes, max_bytes: int = 1048576) -> tuple[bool, Any]:
     if not text or text[0] in " \t\r\n" or text[-1] in " \t\r\n":
         return False, "WIRE_JSON"
 
-    # Iterative depth guard prevents RecursionError on deeply nested hostile JSON (H-20)
-    lex_depth, lex_balanced = _scan_container_depth(text)
-    if lex_depth > 64:
-        return False, ("WIRE_SIZE" if lex_balanced else "WIRE_JSON")
+    # Iterative depth guard enforcing SPEC-01 §7 Step 2 (lexical depth > 16 -> immediate WIRE_SIZE; H-20, F-19)
+    lex_depth, _lex_balanced = _scan_container_depth(text)
+    if lex_depth > 16:
+        return False, "WIRE_SIZE"
 
     dup_found = False
     bad_num = False
@@ -400,6 +440,10 @@ def jcs_validate(raw: bytes, max_bytes: int = 1048576) -> tuple[bool, Any]:
         if s.startswith("-") or (len(s) > 1 and s.startswith("0")):
             bad_num = True
             return 0
+        # Bounds check BEFORE int(s) so huge integers (>4300 digits on CPython >=3.11) deterministically return WIRE_NUMBER (M03 / R12-M6)!
+        if len(s) > 16 or not all(c in _ASCII_DIGITS for c in s) or (len(s) == 16 and s > MAX_UINT53_STR):
+            bad_num = True
+            return 0
         v = int(s)
         if v > MAX_UINT53:
             bad_num = True
@@ -412,7 +456,10 @@ def jcs_validate(raw: bytes, max_bytes: int = 1048576) -> tuple[bool, Any]:
             object_pairs_hook=pairs_hook,
             parse_float=parse_float,
             parse_int=parse_int,
+            parse_constant=_reject_json_constant,
         )
+    except _JsonConstantError:
+        return False, "WIRE_JSON"
     except json.JSONDecodeError as exc:
         if _is_malformed_number_error(text, exc.pos):
             return False, "WIRE_NUMBER"
@@ -441,7 +488,7 @@ def jcs_validate(raw: bytes, max_bytes: int = 1048576) -> tuple[bool, Any]:
         return False, "WIRE_DUPLICATE"
     root_type = _extract_root_type(obj)
     val_errs: set[str] = set()
-    _collect_depth_and_value_errors(obj, root_type, (), 0, val_errs)
+    _collect_depth_and_value_errors(obj, root_type, (), 0, val_errs, allow_lf_paths)
     if bad_num:
         val_errs.add("WIRE_NUMBER")
     # Strict whole-tree precedence (SPEC-01 §7, R3 Blocker #5): WIRE_VALUE before WIRE_NUMBER before WIRE_STRING!
@@ -450,7 +497,7 @@ def jcs_validate(raw: bytes, max_bytes: int = 1048576) -> tuple[bool, Any]:
             return False, code
 
     try:
-        reencoded = jcs_encode(obj)
+        reencoded = jcs_encode(obj, allow_lf_paths=allow_lf_paths)
     except ValueError as exc:
         return False, str(exc)
 
@@ -1166,7 +1213,7 @@ def verify_envelope_signatures(
     if "signatures" in env and "guardian_approvals" not in env:
         return verify_signature_set(digest, env["signatures"], expected_policy=expected_policy, obj_type=obj_type)
     if "guardian_approvals" in env and "signatures" not in env:
-        if obj_type not in ("seallink-grant/1", "seallink-assent/1"):
+        if obj_type not in ("seallink-grant/1", "seallink-assent/1", "seallink-termination/1"):
             return False, "WIRE_MEMBER"
         approvals = env["guardian_approvals"]
         if not isinstance(approvals, list) or not (1 <= len(approvals) <= 32):
@@ -1306,6 +1353,53 @@ def _encode_script_num(n: int) -> bytes:
     elif neg:
         res[-1] |= 0x80
     return _push_data(bytes(res))
+
+
+def is_witness_program_script(spk: bytes) -> bool:
+    """Recognize BIP-141/BIP-341/P2A standard witness programs (v0..v16, incl. P2A 51024e73) so 0x51..0x60 is never misclassified as a Namecoin name op (H-4 / F-06)."""
+    if len(spk) < 4 or len(spk) > 42:
+        return False
+    op0 = spk[0]
+    if op0 != 0x00 and not (0x51 <= op0 <= 0x60):
+        return False
+    plen = spk[1]
+    return 2 <= plen <= 40 and len(spk) == 2 + plen
+
+
+def parse_p2wsh_multisig_script(ws: bytes) -> dict[str, Any] | None:
+    """Decode canonical SealLink P2WSH m-of-n OP_CHECKMULTISIG witnessScript (1 <= m <= n <= 15, sorted unique compressed pubkeys) -> ScriptPolicy or None (BLK-8 / M-6)."""
+    if len(ws) < 37 or ws[-1] != 0xAE:  # OP_CHECKMULTISIG
+        return None
+    m_op = ws[0]
+    n_op = ws[-2]
+    if not (0x51 <= m_op <= 0x5F) or not (0x51 <= n_op <= 0x5F):
+        return None
+    m = m_op - 0x50
+    n = n_op - 0x50
+    if not (1 <= m <= n <= 15):
+        return None
+    if len(ws) != 1 + n * 34 + 2:
+        return None
+    pks: list[str] = []
+    pos = 1
+    for _ in range(n):
+        if ws[pos] != 33:
+            return None
+        pk_hex = ws[pos + 1 : pos + 34].hex()
+        if not is_valid_compressed_pubkey(pk_hex):
+            return None
+        pks.append(pk_hex)
+        pos += 34
+    if pks != sorted(set(pks)):
+        return None
+    pol = {"kind": "multisig", "m": m, "pks": pks}
+    try:
+        _, check_ws = compile_script_policy(pol)
+        if check_ws != ws:
+            return None
+    except ValueError:
+        return None
+    return pol
 
 
 def compile_script_policy(policy: dict[str, Any]) -> tuple[bytes, bytes | None]:
@@ -2079,6 +2173,8 @@ def derive_guardian_event_class(payload: dict[str, Any]) -> str:
         if target_type in ("seallink-migration/1", "seallink-guardian/1"):
             return "custody_change"
         return "contract_assent"
+    if obj_type == "seallink-termination/1":
+        return "contract_assent"
     if obj_type == "seallink-grant/1":
         if "delegate" in payload:
             return "custody_change"
@@ -2113,6 +2209,11 @@ NAMECOIN_POW_LIMIT_TESTNET = 0x0000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 NAMECOIN_POW_LIMIT_REGTEST = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 NAMECOIN_AUXPOW_START_MAIN = 19200
 NAMECOIN_LEGACY_BEFORE_MAIN = 19200
+NAMECOIN_LEGACY_BEFORE_TESTNET = -1
+NAMECOIN_LEGACY_BEFORE_REGTEST = 0
+NAMECOIN_BIP34_MAIN = 250000
+NAMECOIN_BIP66_MAIN = 250000
+NAMECOIN_BIP65_MAIN = 335000
 NAMECOIN_TARGET_TIMESPAN = 1209600  # 14 days
 NAMECOIN_MIN_TIMESPAN = 302400      # 1209600 // 4
 NAMECOIN_MAX_TIMESPAN = 4838400     # 1209600 * 4
@@ -2162,19 +2263,20 @@ def compute_log_id(
     issuer_name: str,
     issuer_registration: dict[str, Any],
     genesis_seal_outpoint: dict[str, Any],
+    predecessor_log_id: str | None = None,
 ) -> str:
-    """Immutable log_id bound to (name, registration, genesis_seal_outpoint) WITHOUT owner_policy (survives cold rotation, M-b)."""
-    return tagged_hash(
-        "seallink-log-id/1",
-        jcs_encode({
-            "genesis": genesis,
-            "genesis_seal_outpoint": {"txid": genesis_seal_outpoint["txid"], "vout": genesis_seal_outpoint["vout"]},
-            "issuer_name": issuer_name,
-            "issuer_registration": {"txid": issuer_registration["txid"], "vout": issuer_registration["vout"]},
-            "network": network,
-            "role": role,
-        }),
-    ).hex()
+    """Immutable log_id bound to (name, registration, genesis_seal_outpoint[, predecessor_log_id]) WITHOUT owner_policy (survives cold rotation, M-b, BLK-5)."""
+    obj: dict[str, Any] = {
+        "genesis": genesis,
+        "genesis_seal_outpoint": {"txid": genesis_seal_outpoint["txid"], "vout": genesis_seal_outpoint["vout"]},
+        "issuer_name": issuer_name,
+        "issuer_registration": {"txid": issuer_registration["txid"], "vout": issuer_registration["vout"]},
+        "network": network,
+        "role": role,
+    }
+    if predecessor_log_id is not None:
+        obj["predecessor_log_id"] = predecessor_log_id
+    return tagged_hash("seallink-log-id/1", jcs_encode(obj)).hex()
 
 
 def log_entry_digest(kind_byte: int, content_addr_hex: str) -> str:
@@ -2835,6 +2937,8 @@ def verify_segwit_name_update_proof(
         if spk[:1] == b"\x6a":
             opreturns.append({"script_pubkey_hex": spk.hex(), "value_sat": vo["value_sat"]})
             continue
+        if is_witness_program_script(spk):
+            continue
         if spk[:1] in (bytes([OP_NAME_NEW]), bytes([OP_NAME_FIRSTUPDATE]), bytes([OP_NAME_UPDATE])):
             name_out_count += 1
             try:
@@ -2925,6 +3029,11 @@ def verify_segwit_name_update_proof(
             if not matched:
                 return False, "TICKET_PROOF_INVALID"
 
+    # For OP_NAME_UPDATE ownership transfer (new_trailing_script_pubkey != exp_spk), the departing previous owner
+    # signed the spend — NOT the new owner — so owner_authored MUST be False (SL-LDGR-007, H-1a / H05).
+    if parsed_new["op"] == "NAME_UPDATE" and parsed_new["trailing_script_pubkey"] != exp_spk.hex():
+        owner_authored = False
+
     return True, {
         "txid": tx["txid"],
         "name_vout": new_vout,
@@ -3010,17 +3119,64 @@ def auxpow_expected_index(nonce: int, chain_id: int, merkle_size: int) -> int:
     return rand % merkle_size
 
 
+def _check_namecoin_version_rules(n_ver: int, *, network: str, height: int | None, is_auxpow: bool) -> bool:
+    """Exact Namecoin Core nc28.0 pureheader + ContextualCheckBlockHeader version & chain_id rules (R12-H2, M04, F-09d, D12-L1)."""
+    if is_auxpow:
+        if (n_ver & 0x00000100) == 0:
+            return False
+    else:
+        if (n_ver & 0x00000100) != 0:
+            return False
+    # Genesis block (height == 0) always has nVersion == 1 across main, testnet, and regtest
+    if height == 0:
+        return (not is_auxpow) and n_ver == 1
+
+    # IsLegacy() == (nVersion == 1), allowed below nLegacyBlocksBefore (-1 on testnet means legacy allowed at all heights)
+    legacy_before = (
+        NAMECOIN_LEGACY_BEFORE_MAIN
+        if network == "main"
+        else (NAMECOIN_LEGACY_BEFORE_TESTNET if network == "testnet" else NAMECOIN_LEGACY_BEFORE_REGTEST)
+    )
+    is_legacy = (n_ver == 1)
+    if is_legacy:
+        if is_auxpow:
+            return False
+        if legacy_before != -1 and (height is None or height >= legacy_before):
+            return False
+    else:
+        # fStrictChainId is True on main & regtest, False on testnet (unless AuxPoW which always binds chain_id=1)
+        strict_chain_id = (network != "testnet") or is_auxpow
+        if strict_chain_id and (n_ver >> 16) != NAMECOIN_AUX_CHAIN_ID:
+            return False
+
+    # Base version activation thresholds (nc28.0 src/validation.cpp ContextualCheckBlockHeader)
+    # Namecoin pureheader: bits 0..7 are base version (bit 8 = AuxPoW, bits 16..31 = chain_id).
+    base_ver = n_ver & 0xFF
+    if height is not None:
+        if network == "main":
+            if height >= NAMECOIN_BIP65_MAIN and base_ver < 4:
+                return False
+            if height >= NAMECOIN_BIP66_MAIN and base_ver < 3:
+                return False
+            if height >= NAMECOIN_BIP34_MAIN and base_ver < 2:
+                return False
+        elif network == "regtest":
+            if height >= 1 and base_ver < 4:
+                return False
+        elif network == "testnet":
+            if height >= 1 and not is_legacy and base_ver < 1:
+                return False
+    return True
+
+
 def verify_namecoin_header_pow(header_hex: str, *, network: str = "main", height: int | None = None) -> bool:
-    """Verify non-AuxPoW Namecoin block header PoW & chain_id version rule against Namecoin Core nc28.0."""
+    """Verify non-AuxPoW Namecoin block header PoW & exact nc28.0 version/chain_id rules."""
     try:
         hdr = bytes.fromhex(header_hex)
         if len(hdr) != 80:
             return False
         n_ver = struct.unpack("<I", hdr[0:4])[0]
-        if (n_ver & 0x00000100) != 0:
-            return False
-        legacy_before = NAMECOIN_LEGACY_BEFORE_MAIN if network == "main" else 0
-        if (height is None or height >= legacy_before) and (n_ver >> 16) != NAMECOIN_AUX_CHAIN_ID:
+        if not _check_namecoin_version_rules(n_ver, network=network, height=height, is_auxpow=False):
             return False
         nbits = struct.unpack("<I", hdr[72:76])[0]
         pow_limit = _namecoin_pow_limit(network)
@@ -3033,7 +3189,7 @@ def verify_namecoin_header_pow(header_hex: str, *, network: str = "main", height
 
 
 def verify_namecoin_auxpow(header_hex: str, auxpow: dict[str, Any], *, network: str = "main", height: int | None = None) -> bool:
-    """Verify Namecoin Core nc28.0 CAuxPow::check (AuxPoW start height, chain_id=1, !parent.IsAuxpow(), fStrictChainId, len(chain_branch)<=30, parent PoW, coinbase branch, fabe6d6d, GetExpectedIndex)."""
+    """Verify Namecoin Core nc28.0 CAuxPow::check (AuxPoW start height, chain_id=1, !parent.IsAuxpow(), fStrictChainId, len(chain_branch)<=30, parent PoW, !parent_coinbase.vin.empty(), coinbase branch, fabe6d6d, GetExpectedIndex)."""
     try:
         hdr = bytes.fromhex(header_hex)
         if len(hdr) != 80:
@@ -3043,7 +3199,7 @@ def verify_namecoin_auxpow(header_hex: str, auxpow: dict[str, Any], *, network: 
             return False
         n_ver = struct.unpack("<I", hdr[0:4])[0]
         n_bits = struct.unpack("<I", hdr[72:76])[0]
-        if (n_ver & 0x00000100) == 0 or (n_ver >> 16) != NAMECOIN_AUX_CHAIN_ID:
+        if not _check_namecoin_version_rules(n_ver, network=network, height=height, is_auxpow=True):
             return False
         pow_limit = _namecoin_pow_limit(network)
         target = bits_to_target(n_bits)
@@ -3062,7 +3218,8 @@ def verify_namecoin_auxpow(header_hex: str, auxpow: dict[str, Any], *, network: 
             return False
         parent_merkle_le = parent_hdr[36:68]
         cb_tx = parse_raw_tx(bytes.fromhex(auxpow["parent_coinbase_hex"]), allow_empty_vout=True)
-        if len(cb_tx["vin"]) != 1 or cb_tx["vin"][0]["prev_txid_le"] != (b"\x00" * 32) or cb_tx["vin"][0]["prev_vout"] != 0xFFFFFFFF:
+        # Exact nc28.0 src/auxpow.cpp CAuxPow::check: only requires !coinbaseTx->vin.empty() (R12-L4, M04)
+        if not cb_tx["vin"]:
             return False
         if not verify_btc_merkle_branch(cb_tx["txid_le"], 0, auxpow["coinbase_branch"], parent_merkle_le):
             return False
@@ -3308,10 +3465,34 @@ def self_test() -> None:
     assert not verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_ok.hex(), "parent_header_hex": _ph_aux.hex()}, network="regtest")
     assert not verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_ok.hex(), "parent_header_hex": _ph_same_cid.hex()}, network="regtest")
     assert not verify_namecoin_header_pow(_ph_ok.hex(), network="regtest", height=10)  # missing chain_id=1 on non-legacy
-    _hdr_nonaux = struct.pack("<I", 0x00010002) + (b"\x00" * 32) + dsha256(_cb_ok) + struct.pack("<III", 1700000000, 0x207FFFFF, 0)
+    _hdr_badv2 = struct.pack("<I", 0x00010002) + (b"\x00" * 32) + dsha256(_cb_ok) + struct.pack("<III", 1700000000, 0x207FFFFF, 0)
+    while int.from_bytes(dsha256(_hdr_badv2), "little") > bits_to_target(0x207FFFFF):
+        _hdr_badv2 = _hdr_badv2[:-4] + struct.pack("<I", struct.unpack("<I", _hdr_badv2[-4:])[0] + 1)
+    assert not verify_namecoin_header_pow(_hdr_badv2.hex(), network="regtest", height=10), "nc28.0 regtest rejects base version 2 (bad-version)"
+    _hdr_nonaux = struct.pack("<I", 0x00010004) + (b"\x00" * 32) + dsha256(_cb_ok) + struct.pack("<III", 1700000000, 0x207FFFFF, 0)
     while int.from_bytes(dsha256(_hdr_nonaux), "little") > bits_to_target(0x207FFFFF):
         _hdr_nonaux = _hdr_nonaux[:-4] + struct.pack("<I", struct.unpack("<I", _hdr_nonaux[-4:])[0] + 1)
     assert verify_namecoin_header_pow(_hdr_nonaux.hex(), network="regtest", height=10)
+    # Genesis block (height=0, nVersion=1) MUST be accepted
+    _hdr_gen = struct.pack("<I", 1) + (b"\x00" * 32) + dsha256(_cb_ok) + struct.pack("<III", 1296688602, 0x207FFFFF, 0)
+    while int.from_bytes(dsha256(_hdr_gen), "little") > bits_to_target(0x207FFFFF):
+        _hdr_gen = _hdr_gen[:-4] + struct.pack("<I", struct.unpack("<I", _hdr_gen[-4:])[0] + 1)
+    assert verify_namecoin_header_pow(_hdr_gen.hex(), network="regtest", height=0)
+    # P2A & witness v1 recognition + P2WSH multisig decoder + JCS edge cases
+    assert is_witness_program_script(bytes.fromhex("51024e73"))
+    assert is_witness_program_script(bytes.fromhex("5120" + "11" * 32))
+    _ms_pol = {"kind": "multisig", "m": 2, "pks": sorted([p1, p2, p3])}
+    _, _ms_ws = compile_script_policy(_ms_pol)
+    assert _ms_ws is not None and parse_p2wsh_multisig_script(_ms_ws) == _ms_pol
+    assert jcs_validate(b'{"a":1.}') == (False, "WIRE_NUMBER")
+    assert jcs_validate(b'{"a":.5}') == (False, "WIRE_NUMBER")
+    assert jcs_validate(b'{"a":-.5}') == (False, "WIRE_NUMBER")
+    assert jcs_validate(b'{"a":NaN}') == (False, "WIRE_JSON")
+    assert jcs_validate(b'{"a":Infinity}') == (False, "WIRE_JSON")
+    assert jcs_validate(('{"a":0\u0661}').encode("utf-8")) == (False, "WIRE_JSON")
+    assert jcs_validate(('{"a":' + "9" * 5000 + '}').encode("utf-8")) == (False, "WIRE_NUMBER")
+    assert jcs_validate(b'{"text":"line1\\nline2"}') == (False, "WIRE_STRING")
+    assert jcs_validate(b'{"text":"line1\\nline2"}', allow_lf_paths=CLAUSE_LF_PATHS)[0] is True
 
     print(f"seallink_ref self_test PASS (BIP-340 + RFC8032 Ed25519 + low-S P-256 + RIPEMD-160 + RFC9162 + SMT256 + BIP66 + CAuxPow + fsverity) | clause_commit={c_hash}")
 

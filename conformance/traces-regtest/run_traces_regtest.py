@@ -1198,9 +1198,9 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     cl.broadcast_and_wait_peer(anc09_raw)
     cl.mine(1)
 
-    # Register id/t2-child-leo (P2WSH 2-of-3 multisig!) strictly AFTER 0x09 origin anchor (R3-B3)!
+    # Register id/t2-child-leo (P2WSH 2-of-3 multisig!) strictly AFTER 0x09 origin anchor (R3-B3 & BLK-7 link.origin on FIRSTUPDATE)!
     names_ward = cl.register_names_batch([
-        {"name": "id/t2-child-leo", "owner_policy": ward_ms_pol, "value_obj": {"link": {"grant": ward_gr["xonly"]}}, "rand_label": "t2-ward"},
+        {"name": "id/t2-child-leo", "owner_policy": ward_ms_pol, "value_obj": {"link": {"grant": ward_gr["xonly"], "origin": origin_id}}, "rand_label": "t2-ward"},
     ])
     names = {**names_pre, **names_ward}
     # Renew pre-registered names once so none approach regtest's 30-block TTL during the trace!
@@ -3221,9 +3221,10 @@ def run_trace_06(cl: RegtestCluster) -> dict[str, Any]:
 
 
 # ============================================================================
-# Trace 07: Live 0x14 LOG_CHECKPOINT (non-default next_log_vout=2) +
+# Trace 07: Live 0x14 LOG_CHECKPOINT (canonical vout 1 + terminal len(vout)==1) +
 #           seallink-release/1 + log_tracked seallink-notary/1 + SMT revocation +
-#           PROFILE-artifact-v1 Gatekeeper + REAL MINED SegWitNameUpdateProof
+#           PROFILE-artifact-v1 Gatekeeper + REAL MINED P2WPKH->P2WSH 2-of-2
+#           2-page Tier-2 SPV Proof (BLK-2 / BLK-8 / M-14)
 # ============================================================================
 
 def _btc_merkle_branches_from_hashes_le(hashes_le: list[bytes]) -> tuple[bytes, list[list[str]]]:
@@ -3241,14 +3242,15 @@ def _btc_merkle_branches_from_hashes_le(hashes_le: list[bytes]) -> tuple[bytes, 
     return level[0], branches
 
 
-def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
+def run_trace_07(cl: RegtestCluster, *, spv_fixture_out: Path | None = None) -> dict[str, Any]:
     rel_own, rel_role, rel_seal = kp("t7-rel-own"), kp("t7-rel-role"), kp("t7-rel-seal")
     not_own, not_role, not_seal = kp("t7-not-own"), kp("t7-not-role"), kp("t7-not-seal")
-    not_own2, not_role2 = kp("t7-not-own2"), kp("t7-not-role2")
+    not_ms1, not_ms2, not_role2 = kp("t7-not-ms1"), kp("t7-not-ms2"), kp("t7-not-role2")
 
     rel_pol = {"kind": "key", "pk": rel_own["comp"]}
     not_pol = {"kind": "key", "pk": not_own["comp"]}
-    not_pol2 = {"kind": "key", "pk": not_own2["comp"]}
+    not_ms_pks = sorted([not_ms1["comp"], not_ms2["comp"]])
+    not_pol2 = {"kind": "multisig", "m": 2, "pks": not_ms_pks}
     rel_seal_pol = {"kind": "key", "pk": rel_seal["comp"]}
     not_seal_pol = {"kind": "key", "pk": not_seal["comp"]}
 
@@ -3307,7 +3309,7 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
     not_env = sl.sign_envelope(not_p, [not_role["sk"]])
     not_id = sl.object_id(not_p)
 
-    # 4. Anchor 0x14 cp1 (seq=1, non-default next_log_vout=2!) and cp2 (seq=2, next_log_vout=2) for BOTH logs!
+    # 4. Anchor 0x14 cp1 (seq=1) and cp2 (seq=2) using canonical BLK-2 layout: vout 0=OP_RETURN, vout 1=next_log_outpoint, vout 2=change!
     rel_e1 = sl.log_entry_digest(0x01, sl.content_addr(rel_env))
     rel_b1_root, rel_b1_pfs = sl.build_log_batch_root([rel_e1])
     rel_cp1 = sl.sign_envelope({
@@ -3315,7 +3317,7 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
         "cumulative_entries_count": 1, "denials_delta_root": sl.EMPTY_BATCH_ROOT, "denials_root": sl.SMT_EMPTY_ROOT,
         "genesis": cl.genesis_hash, "genesis_seal_outpoint": rel_gen_op,
         "issuer": rel_role_pin, "log_id": rel_log_id, "network": "regtest",
-        "next_log_policy": rel_seal_pol, "next_log_vout": 2, "prev_log_outpoint": rel_gen_op,
+        "next_log_policy": rel_seal_pol, "next_log_vout": 1, "prev_log_outpoint": rel_gen_op,
         "role": "release", "seq": 1, "terminal": False, "type": "seallink-log-checkpoint/1",
     }, [rel_role["sk"]])
     rel_cp1_ca = sl.content_addr(rel_cp1)
@@ -3323,8 +3325,8 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
         [{"txid": gen_txid, "vout": 0, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": rel_seal}, f[1]],
         [
             (0, op_return_spk(0x14, rel_cp1_ca)),
+            (SEAL_SAT, rel_seal["p2wpkh_spk"]),  # canonical BLK-2 next_log_vout = 1!
             (f[1]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
-            (SEAL_SAT, rel_seal["p2wpkh_spk"]),  # non-default next_log_vout = 2!
         ],
     )
     cl.broadcast_and_wait_peer(rel_cp1_raw)
@@ -3336,7 +3338,7 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
         "cumulative_entries_count": 1, "denials_delta_root": sl.EMPTY_BATCH_ROOT, "denials_root": sl.SMT_EMPTY_ROOT,
         "genesis": cl.genesis_hash, "genesis_seal_outpoint": not_gen_op,
         "issuer": not_role_pin, "log_id": not_log_id, "network": "regtest",
-        "next_log_policy": not_seal_pol, "next_log_vout": 2, "prev_log_outpoint": not_gen_op,
+        "next_log_policy": not_seal_pol, "next_log_vout": 1, "prev_log_outpoint": not_gen_op,
         "role": "notary", "seq": 1, "terminal": False, "type": "seallink-log-checkpoint/1",
     }, [not_role["sk"]])
     not_cp1_ca = sl.content_addr(not_cp1)
@@ -3344,31 +3346,31 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
         [{"txid": gen_txid, "vout": 1, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": not_seal}, f[2]],
         [
             (0, op_return_spk(0x14, not_cp1_ca)),
+            (SEAL_SAT, not_seal["p2wpkh_spk"]),  # canonical BLK-2 next_log_vout = 1!
             (f[2]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
-            (SEAL_SAT, not_seal["p2wpkh_spk"]),  # non-default next_log_vout = 2!
         ],
     )
     cl.broadcast_and_wait_peer(not_cp1_raw)
     cl.mine(1)
 
-    # cp2 (seq=2) spending cp1:2 for BOTH logs!
+    # cp2 (seq=2) spending cp1:1 for BOTH logs!
     rel_l1 = [sl.ckpt_leaf(1, rel_cp1_ca)]
     rel_cp2 = sl.sign_envelope({
         "batch_count": 0, "batch_root": sl.EMPTY_BATCH_ROOT, "checkpoints_root": sl.rfc9162_mth(rel_l1).hex(),
         "cumulative_entries_count": 1, "denials_delta_root": sl.EMPTY_BATCH_ROOT, "denials_root": sl.SMT_EMPTY_ROOT,
         "genesis": cl.genesis_hash, "genesis_seal_outpoint": rel_gen_op,
         "issuer": rel_role_pin, "log_id": rel_log_id, "network": "regtest",
-        "next_log_policy": rel_seal_pol, "next_log_vout": 2, "prev_checkpoint_id": rel_cp1_ca,
-        "prev_log_outpoint": {"txid": rel_cp1_tx, "vout": 2}, "role": "release", "seq": 2, "terminal": False,
+        "next_log_policy": rel_seal_pol, "next_log_vout": 1, "prev_checkpoint_id": rel_cp1_ca,
+        "prev_log_outpoint": {"txid": rel_cp1_tx, "vout": 1}, "role": "release", "seq": 2, "terminal": False,
         "type": "seallink-log-checkpoint/1",
     }, [rel_role["sk"]])
     rel_cp2_ca = sl.content_addr(rel_cp2)
     rel_cp2_tx, rel_cp2_raw = build_signed_tx(
-        [{"txid": rel_cp1_tx, "vout": 2, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": rel_seal}, f[3]],
+        [{"txid": rel_cp1_tx, "vout": 1, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": rel_seal}, f[3]],
         [
             (0, op_return_spk(0x14, rel_cp2_ca)),
-            (f[3]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
             (SEAL_SAT, rel_seal["p2wpkh_spk"]),
+            (f[3]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
         ],
     )
     cl.broadcast_and_wait_peer(rel_cp2_raw)
@@ -3379,17 +3381,17 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
         "cumulative_entries_count": 1, "denials_delta_root": sl.EMPTY_BATCH_ROOT, "denials_root": sl.SMT_EMPTY_ROOT,
         "genesis": cl.genesis_hash, "genesis_seal_outpoint": not_gen_op,
         "issuer": not_role_pin, "log_id": not_log_id, "network": "regtest",
-        "next_log_policy": not_seal_pol, "next_log_vout": 2, "prev_checkpoint_id": not_cp1_ca,
-        "prev_log_outpoint": {"txid": not_cp1_tx, "vout": 2}, "role": "notary", "seq": 2, "terminal": False,
+        "next_log_policy": not_seal_pol, "next_log_vout": 1, "prev_checkpoint_id": not_cp1_ca,
+        "prev_log_outpoint": {"txid": not_cp1_tx, "vout": 1}, "role": "notary", "seq": 2, "terminal": False,
         "type": "seallink-log-checkpoint/1",
     }, [not_role["sk"]])
     not_cp2_ca = sl.content_addr(not_cp2)
     not_cp2_tx, not_cp2_raw = build_signed_tx(
-        [{"txid": not_cp1_tx, "vout": 2, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": not_seal}, f[4]],
+        [{"txid": not_cp1_tx, "vout": 1, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": not_seal}, f[4]],
         [
             (0, op_return_spk(0x14, not_cp2_ca)),
-            (f[4]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
             (SEAL_SAT, not_seal["p2wpkh_spk"]),
+            (f[4]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
         ],
     )
     cl.broadcast_and_wait_peer(not_cp2_raw)
@@ -3432,10 +3434,11 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
         enabled_modules=["core"],
     )
 
-    ch1 = sv.ChainView(cl.new_cold_observer().build_chain_view(wire_objects=[tkt_ok, rel_cp1, not_cp1]))
+    # BLK-2 / M-14: Cold observer walks 0x14 backwards along canonical vout=1 automatically — ZERO manual cp1..3 hints!
+    ch1 = sv.ChainView(cl.new_cold_observer().build_chain_view(wire_objects=[tkt_ok]))
     j_log = sv.FencedJournal(sl.sha256(b"t7-log-journal").hex())
 
-    # Verdict 1: verify_log_checkpoint cp2 (chained to cp1 via non-default next_log_vout=2) + FencedJournal log-head restart replay!
+    # Verdict 1: verify_log_checkpoint cp2 (chained to cp1 via canonical vout=1) + FencedJournal log-head restart replay!
     r_cp2 = v_art.verify_log_checkpoint(rel_cp2, rel_cp2_tx, ch1, prev_cp_env=rel_cp1, prev_cp_txid=rel_cp1_tx, journal=j_log)
     assert r_cp2.verdict == "ADMIT", f"Trace 07 cp2 verification failed: {r_cp2}"
     j_log_rep = sv.FencedJournal.replay_persisted_entries(
@@ -3461,7 +3464,7 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
     r_tkt_ok = v_art.verify_artifact_ticket(tkt_ok, gk_pol, ch1, journal=j_log_rep)
     assert r_tkt_ok.verdict == "ADMIT", f"Trace 07 Gatekeeper ADMIT failed: {r_tkt_ok}"
 
-    # 5. Emit SMT target:<tid>|* revocation in non-terminal cp3 (seq=3, next_log_vout=2) on notary log!
+    # 5. Emit SMT target:<tid>|* revocation in non-terminal cp3 (seq=3, canonical vout=1) on notary log!
     rev_t = sl.sign_envelope({
         "denial_key": f"target:{fsv_tid}|*", "genesis": cl.genesis_hash, "issued_at": tip_t0 + 60,
         "issuer": not_role_pin, "log_id": not_log_id, "network": "regtest",
@@ -3477,17 +3480,17 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
         "cumulative_entries_count": 2, "denials_delta_root": not_b3_root, "denials_root": sl.smt_root(kv_rev),
         "genesis": cl.genesis_hash, "genesis_seal_outpoint": not_gen_op,
         "issuer": not_role_pin, "log_id": not_log_id, "network": "regtest",
-        "next_log_policy": not_seal_pol, "next_log_vout": 2,
-        "prev_checkpoint_id": not_cp2_ca, "prev_log_outpoint": {"txid": not_cp2_tx, "vout": 2},
+        "next_log_policy": not_seal_pol, "next_log_vout": 1,
+        "prev_checkpoint_id": not_cp2_ca, "prev_log_outpoint": {"txid": not_cp2_tx, "vout": 1},
         "role": "notary", "seq": 3, "terminal": False, "type": "seallink-log-checkpoint/1",
     }, [not_role["sk"]])
     not_cp3_ca = sl.content_addr(not_cp3)
     not_cp3_tx, not_cp3_raw = build_signed_tx(
-        [{"txid": not_cp2_tx, "vout": 2, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": not_seal}, f[5]],
+        [{"txid": not_cp2_tx, "vout": 1, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": not_seal}, f[5]],
         [
             (0, op_return_spk(0x14, not_cp3_ca)),
-            (f[5]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
             (SEAL_SAT, not_seal["p2wpkh_spk"]),
+            (f[5]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"]),
         ],
     )
     cl.broadcast_and_wait_peer(not_cp3_raw)
@@ -3501,22 +3504,24 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
         "target_smt_proof": sl.smt_prove(kv_rev, f"target:{fsv_tid}|*"),
         "target_state_record": rev_t,
     })
-    ch2 = sv.ChainView(cl.new_cold_observer().build_chain_view(wire_objects=[tkt_rev, not_cp1, not_cp2, rel_cp1]))
+    # Zero manual not_cp2 passed — cold observer discovers not_cp2 purely via backward 0x14 vout=1 chain!
+    ch2 = sv.ChainView(cl.new_cold_observer().build_chain_view(wire_objects=[tkt_rev]))
     # Verdict 4: Revoked target in cp3 SMT -> REFUSE ARTIFACT_POLICY_DENIED!
     r_tkt_rev = v_art.verify_artifact_ticket(tkt_rev, gk_pol, ch2)
     assert (r_tkt_rev.verdict, r_tkt_rev.refusal_code) == ("REFUSE", "ARTIFACT_POLICY_DENIED"), (
         f"Trace 07 revoked ticket expected ARTIFACT_POLICY_DENIED, got {r_tkt_rev}"
     )
 
-    # Verdict 5 (B2): Fresh stateless verifier MUST reject old tkt_ok (superseded head=not_cp2 whose next_log_vout=2 was spent by not_cp3)!
+    # Verdict 5 (B2): Fresh stateless verifier MUST reject old tkt_ok (superseded head=not_cp2 whose vout=1 was spent by not_cp3)!
     r_stale_fresh = v_art.verify_artifact_ticket(tkt_ok, gk_pol, ch2, journal=None)
     assert (r_stale_fresh.verdict, r_stale_fresh.refusal_code) == ("REFUSE", "TICKET_PROOF_INVALID"), (
         f"Trace 07 B2 fresh stale head expected TICKET_PROOF_INVALID, got {r_stale_fresh}"
     )
 
-    # 5b (B8): Live routine link.notary K1->K2 + cold owner_policy P1->P2 rotation on nc28.0 + terminal cp4 signed by K2!
+    # 5b (B8 / BLK-2 / BLK-8 / M-14): Live link.notary K1->K2 + P2WPKH -> P2WSH 2-of-2 cold rotation + canonical terminal len(vout)==1 cp4!
     rot_tx1, _ = cl.update_name_p2wpkh(not_rec, "id/t7-notary-1", not_own, {"link": {"notary": not_role2["xonly"]}}, new_owner_policy=not_pol2)
-    rot_tx2, _ = cl.update_name_p2wpkh(not_rec, "id/t7-notary-1", not_own2, {"link": {"notary": not_role2["xonly"]}})
+    rot2_proof = cl.update_name_p2wsh_multisig_via_namepsbt(not_rec, "id/t7-notary-1", [not_ms1, not_ms2], {"link": {"notary": not_role2["xonly"]}})
+    rot_tx2 = rot2_proof["txid"]
     not_role_pin_v2 = {"name": "id/t7-notary-1", "owner_policy": not_pol2, "registration": not_rec["registration"], "role_policy": {"m": 1, "pks": [not_role2["xonly"]]}}
     not_l3 = not_l2 + [sl.ckpt_leaf(3, not_cp3_ca)]
     not_cp4 = sl.sign_envelope({
@@ -3524,13 +3529,14 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
         "cumulative_entries_count": 2, "denials_delta_root": sl.EMPTY_BATCH_ROOT, "denials_root": sl.smt_root(kv_rev),
         "genesis": cl.genesis_hash, "genesis_seal_outpoint": not_gen_op,
         "issuer": not_role_pin_v2, "log_id": not_log_id, "network": "regtest",
-        "prev_checkpoint_id": not_cp3_ca, "prev_log_outpoint": {"txid": not_cp3_tx, "vout": 2},
+        "prev_checkpoint_id": not_cp3_ca, "prev_log_outpoint": {"txid": not_cp3_tx, "vout": 1},
         "role": "notary", "seq": 4, "terminal": True, "type": "seallink-log-checkpoint/1",
     }, [not_role2["sk"]])
     not_cp4_ca = sl.content_addr(not_cp4)
+    # BLK-2: Terminal 0x14 checkpoint has strictly len(vout) == 1 (only vout 0 OP_RETURN; entire SEAL_SAT paid as fee, NO vout 1)!
     not_cp4_tx, not_cp4_raw = build_signed_tx(
-        [{"txid": not_cp3_tx, "vout": 2, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": not_seal}, f[6]],
-        [(0, op_return_spk(0x14, not_cp4_ca)), (f[6]["value_sat"] + SEAL_SAT - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+        [{"txid": not_cp3_tx, "vout": 1, "value_sat": SEAL_SAT, "kind": "p2wpkh", "signer": not_seal}],
+        [(0, op_return_spk(0x14, not_cp4_ca))],
     )
     cl.broadcast_and_wait_peer(not_cp4_raw)
     cl.mine(1)
@@ -3547,16 +3553,17 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
             "checkpoints_proof": sl.rfc9162_inclusion_proof(not_l3, 2),
         },
     })
-    ch3_dict = cl.new_cold_observer().build_chain_view(wire_objects=[tkt_rev_rot, not_cp1, not_cp2, not_cp3, rel_cp1])
+    # Zero manual not_cp1..3 / rel_cp1 passed — cold observer walks entire 0x14 chain & verifies P2WSH 2-of-2 from live witness!
+    ch3_dict = cl.new_cold_observer().build_chain_view(wire_objects=[tkt_rev_rot])
     ch3_err = sv.validate_against_schema("schemas/common.schema.json#/$defs/ChainViewSnapshot", ch3_dict, require_jsonschema=True)
     assert ch3_err is None, f"Trace 07 ColdNamecoinObserver snapshot failed closed ChainViewSnapshot schema: {ch3_err}"
     ch3 = sv.ChainView(ch3_dict)
-    # Verdict 6 (B8): K1-signed revocation carried into K2-signed cp4 verifies via StateRecordInclusion -> ARTIFACT_POLICY_DENIED!
+    # Verdict 6 (B8): K1-signed revocation carried into K2-signed terminal cp4 verifies via StateRecordInclusion -> ARTIFACT_POLICY_DENIED!
     r_rot_rev = v_art.verify_artifact_ticket(tkt_rev_rot, gk_pol, ch3)
     assert (r_rot_rev.verdict, r_rot_rev.refusal_code) == ("REFUSE", "ARTIFACT_POLICY_DENIED"), (
         f"Trace 07 B8 post-rotation revocation expected ARTIFACT_POLICY_DENIED, got {r_rot_rev}"
     )
-    # Verdict 7 (B8): Unchanged K1-signed rev_t across K1->K2 + P1->P2 rotation MUST NOT trigger false illegal_reversion fraud!
+    # Verdict 7 (B8): Unchanged K1-signed rev_t across K1->K2 + P2WPKH->P2WSH rotation MUST NOT trigger false illegal_reversion fraud!
     fraud_no_fp = {
         "checkpoints_proof": sl.rfc9162_inclusion_proof(not_l3, 2),
         "cp_a": not_cp3, "cp_a_txid": not_cp3_tx, "cp_b": not_cp4, "cp_b_txid": not_cp4_tx,
@@ -3571,7 +3578,7 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
         f"Trace 07 B8 unchanged rec_b==rec_a after rotation must NOT be fraud, got {r_no_fp}"
     )
 
-    # 6. Extract a REAL MINED 2-STEP CHAINED Tier-2 SPV page (OP_NAME_FIRSTUPDATE -> OP_NAME_UPDATE + contiguous AuxPoW headers) from Node B's 9-method rpcwhitelist!
+    # 6. Extract a REAL MINED 4-STEP CHAINED Tier-2 SPV page (OP_NAME_FIRSTUPDATE -> OP_NAME_UPDATE -> P2WPKH->P2WSH 2-of-2 rotation -> P2WSH self-update + wire headers[] + 2-page cursor pagination) from Node B's 9-method rpcwhitelist!
     obs_rpc = nca.make_cli_rpc(cl.bin_dir, cl.dirs[1], cl.ports[1], regtest=True, rpcuser=cl.obs_user, rpcpassword=cl.obs_password)
 
     def _extract_header_proof(h_num: int) -> dict[str, Any]:
@@ -3654,30 +3661,73 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
     h_lo, h_hi = fu_spv["block_height"], rot2_spv["block_height"]
     contiguous_headers = [_extract_header_proof(h_n) for h_n in range(h_lo, h_hi + 1)]
     tier2_page = {
-        "genesis": cl.genesis_hash, "has_more": False, "limit": 10,
-        "name": "id/t7-notary-1", "network": "regtest",
+        "genesis": cl.genesis_hash, "has_more": False, "headers": contiguous_headers,
+        "limit": 10, "name": "id/t7-notary-1", "network": "regtest",
         "registration": not_rec["registration"],
         "type": "seallink-tier2-name-history/1",
         "updates": [fu_spv, upd_spv, rot1_spv, rot2_spv],
     }
 
-    # Verdict 8 (B4): REAL mined 4-step chained nc28.0 Tier-2 page (OP_NAME_FIRSTUPDATE -> OP_NAME_UPDATE -> P1->P2 cold rotation -> P2 self-update + contiguous AuxPoW headers) -> ADMIT!
-    r_spv_ok = v_art.verify_tier2_name_history_page(tier2_page, not_pol, headers=contiguous_headers)
+    # Verdict 8 (BLK-8): REAL mined 4-step chained nc28.0 Tier-2 page with wire headers[] (P2WPKH -> P2WSH 2-of-2 cold rotation!) -> ADMIT!
+    r_spv_ok = v_art.verify_tier2_name_history_page(tier2_page, not_pol)
     assert r_spv_ok.verdict == "ADMIT", f"Trace 07 REAL mined 4-step nc28.0 Tier-2 SPV page failed: {r_spv_ok}"
     v_upds = r_spv_ok.details["verified_updates"]
-    assert len(v_upds) == 4 and v_upds[0]["owner_authored"] is False and all(u["owner_authored"] is True for u in v_upds[1:]), (
-        f"Trace 07 owner_authored flags mismatch: {v_upds}"
-    )
+    oa_flags = [u["owner_authored"] for u in v_upds]
+    assert oa_flags == [False, True, False, True], f"Trace 07 BLK-8 owner_authored flags expected [False, True, False, True], got {oa_flags}"
+    assert r_spv_ok.details["final_owner_policy"] == not_pol2, f"Trace 07 final_owner_policy mismatch: {r_spv_ok.details}"
 
-    # Verdict 9: Core-only verifier refuses Tier-2 module page with ACTION_UNSUPPORTED!
+    # Verdict 9 (BLK-8 / M-14): 2-page Tier-2 pagination across P2WPKH -> P2WSH 2-of-2 rotation carrying next_cursor.owner_policy -> cursor_owner_policy!
+    p1_headers = [h for h in contiguous_headers if h["height"] <= rot1_spv["block_height"]]
+    p2_headers = [h for h in contiguous_headers if h["height"] >= rot1_spv["block_height"]]
+    tier2_page_1 = {
+        "genesis": cl.genesis_hash, "has_more": True, "headers": p1_headers,
+        "limit": 3, "name": "id/t7-notary-1", "network": "regtest",
+        "next_cursor": {"height": rot1_spv["block_height"], "owner_policy": not_pol2, "txid": rot_tx1, "vout": 0},
+        "registration": not_rec["registration"],
+        "type": "seallink-tier2-name-history/1",
+        "updates": [fu_spv, upd_spv, rot1_spv],
+    }
+    tier2_page_2 = {
+        "cursor_height": rot1_spv["block_height"], "cursor_owner_policy": not_pol2,
+        "cursor_txid": rot_tx1, "cursor_vout": 0,
+        "genesis": cl.genesis_hash, "has_more": False, "headers": p2_headers,
+        "limit": 3, "name": "id/t7-notary-1", "network": "regtest",
+        "registration": not_rec["registration"],
+        "type": "seallink-tier2-name-history/1",
+        "updates": [rot2_spv],
+    }
+    r_spv_p1 = v_art.verify_tier2_name_history_page(tier2_page_1, not_pol)
+    assert r_spv_p1.verdict == "ADMIT", f"Trace 07 Tier-2 page 1 failed: {r_spv_p1}"
+    assert r_spv_p1.details["final_owner_policy"] == not_pol2
+    r_spv_p2 = v_art.verify_tier2_name_history_page(tier2_page_2, not_pol2)
+    assert r_spv_p2.verdict == "ADMIT", f"Trace 07 Tier-2 page 2 (P2WSH 2-of-2 resume) failed: {r_spv_p2}"
+    assert [u["owner_authored"] for u in r_spv_p2.details["verified_updates"]] == [True]
+
+    # Verdict 10: Core-only verifier refuses Tier-2 module page with ACTION_UNSUPPORTED!
     r_spv_core = v_core.verify_tier2_name_history_page(tier2_page, not_pol)
     assert (r_spv_core.verdict, r_spv_core.refusal_code) == ("REFUSE", "ACTION_UNSUPPORTED"), (
         f"Trace 07 core-only expected ACTION_UNSUPPORTED, got {r_spv_core}"
     )
 
+    if spv_fixture_out is not None:
+        spv_fixture = {
+            "description": "Real mined Namecoin Core nc28.0 regtest 4-step Tier-2 SPV fixture (OP_NAME_FIRSTUPDATE -> OP_NAME_UPDATE -> P2WPKH->P2WSH 2-of-2 cold rotation -> P2WSH 2-of-2 self-update) with contiguous AuxPoW headers and 2-page cursor split for offline Go/Rust verification.",
+            "expected_final_owner_policy": not_pol2,
+            "expected_initial_owner_policy": not_pol,
+            "expected_owner_authored": [False, True, False, True],
+            "full_page": tier2_page,
+            "genesis": cl.genesis_hash,
+            "network": "regtest",
+            "page_1": tier2_page_1,
+            "page_2": tier2_page_2,
+        }
+        spv_fixture_out.parent.mkdir(parents=True, exist_ok=True)
+        spv_fixture_out.write_text(json.dumps(spv_fixture, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
     return {
         "cold_observer_adapter": "tools/nc_rpc_adapter.py:ColdNamecoinObserver",
         "cold_observer_snapshot_schema_valid": True,
+        "cold_observer_zero_manual_checkpoint_hints": True,
         "release_log_id": rel_log_id,
         "notary_log_id": not_log_id,
         "artifact_target_sha256": fsv_tid,
@@ -3686,10 +3736,12 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
         "notary_cp1_0x14_txid": not_cp1_tx,
         "notary_cp2_0x14_txid": not_cp2_tx,
         "notary_cp3_revocation_0x14_txid": not_cp3_tx,
-        "notary_cp4_post_rotation_0x14_txid": not_cp4_tx,
-        "notary_cold_rotation_txids": [rot_tx1, rot_tx2],
-        "non_default_next_log_vout": 2,
+        "notary_cp4_terminal_0x14_txid": not_cp4_tx,
+        "notary_cp4_terminal_vout_count": 1,
+        "notary_cold_rotation_p2wsh_2of2_txids": [rot_tx1, rot_tx2],
+        "canonical_next_log_vout": 1,
         "real_mined_spv_chained_steps": 4,
+        "real_mined_spv_owner_authored": oa_flags,
         "real_mined_spv_firstupdate_txid": not_rec["first_txid"],
         "real_mined_spv_txid": not_rec["update_txid"],
         "real_mined_spv_block_range": [h_lo, h_hi],
@@ -3701,9 +3753,10 @@ def run_trace_07(cl: RegtestCluster) -> dict[str, Any]:
             "artifact_gatekeeper_hardened_admit": {"verdict": r_tkt_ok.verdict, "outcome": r_tkt_ok.outcome},
             "artifact_gatekeeper_post_cp3_smt_revocation": {"verdict": r_tkt_rev.verdict, "refusal_code": r_tkt_rev.refusal_code},
             "fresh_verifier_stale_cp2_head_rejected": {"verdict": r_stale_fresh.verdict, "refusal_code": r_stale_fresh.refusal_code},
-            "post_rotation_k1_to_k2_p1_to_p2_state_inclusion_revocation": {"verdict": r_rot_rev.verdict, "refusal_code": r_rot_rev.refusal_code},
+            "post_rotation_k1_to_k2_p2wsh_state_inclusion_revocation": {"verdict": r_rot_rev.verdict, "refusal_code": r_rot_rev.refusal_code},
             "post_rotation_unchanged_rec_no_false_fraud": {"verdict": r_no_fp.verdict, "refusal_code": r_no_fp.refusal_code},
-            "real_mined_nc28_4step_chained_tier2_spv_page": {"verdict": r_spv_ok.verdict, "outcome": r_spv_ok.outcome},
+            "real_mined_nc28_4step_p2wsh_tier2_spv_page": {"verdict": r_spv_ok.verdict, "outcome": r_spv_ok.outcome},
+            "real_mined_nc28_2page_p2wsh_tier2_pagination": {"page1": r_spv_p1.verdict, "page2": r_spv_p2.verdict},
             "tier2_module_core_only_gating": {"verdict": r_spv_core.verdict, "refusal_code": r_spv_core.refusal_code},
         },
     }
@@ -3713,6 +3766,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Execute all 7 SealLink traces live on two Namecoin Core nc28.0 regtest nodes via ColdNamecoinObserver.")
     ap.add_argument("--bin-dir", required=True, type=Path, help="Directory containing nc28.0 namecoind and namecoin-cli")
     ap.add_argument("--output-json", required=True, type=Path, help="Output JSON file path for observed-traces.json")
+    ap.add_argument("--spv-fixture-out", type=Path, default=None, help="Optional path to export offline Trace 07 real mined Tier-2 SPV fixture JSON")
     args = ap.parse_args()
 
     work_dir = Path(tempfile.mkdtemp(prefix="seallink-traces-regtest-")).resolve()
@@ -3726,7 +3780,8 @@ def main() -> int:
         t4 = run_trace_04(cl)
         t5 = run_trace_05(cl)
         t6 = run_trace_06(cl)
-        t7 = run_trace_07(cl)
+        spv_out = args.spv_fixture_out or (args.output_json.parent / "trace-07-tier2-spv-fixture.json")
+        t7 = run_trace_07(cl, spv_fixture_out=spv_out)
         elapsed = round(time.monotonic() - t0, 2)
         report = {
             "suite": "seallink-nc28-live-traces-regtest",

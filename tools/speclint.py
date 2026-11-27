@@ -643,7 +643,7 @@ def verify_all_vectors(
         verify_envelope_record(th["envelope_2of3_subset_ac"], "wire/2of3_ac", errors)
         if th["envelope_2of3_subset_ab"]["object_id"] != th["envelope_2of3_subset_ac"]["object_id"]:
             errors.append("wire/2of3 object_id invariance failed")
-        t1v_w = sv.Tier1Verifier(require_jsonschema=require_jsonschema)
+        t1v_w = sv.Tier1Verifier(require_jsonschema=require_jsonschema, enabled_modules=sv.ALL_OPTIONAL_MODULES)
         for neg in th["negative_signaturesets"]:
             ok, code = sl.verify_envelope_signatures(neg["object"])
             if ok or code != neg["expected_refusal"]:
@@ -657,10 +657,34 @@ def verify_all_vectors(
             verify_envelope_record(dsa["owner_command_ed25519"], "wire/ed25519", errors)
             verify_envelope_record(dsa["owner_command_p256_low_s"], "wire/p256_low_s", errors)
             checked += 2
+        if "ed25519_speccheck" in v:
+            for ec in v["ed25519_speccheck"]:
+                got_ok = sl.ed25519_verify(bytes.fromhex(ec["msg_hex"]), ec["pubkey_hex"], ec["sig_hex"])
+                if got_ok is not bool(ec["expected_valid"]):
+                    errors.append(f"wire ed25519_speccheck '{ec['id']}' expected {ec['expected_valid']}, got {got_ok}")
+                checked += 1
+        if "journal_commit_vectors" in v:
+            jcv = v["journal_commit_vectors"]
+            c0 = sl.journal_commit_init(jcv["journal_id"])
+            if c0 != jcv["c0"]:
+                errors.append(f"wire journal_commit_init mismatch: {c0} != {jcv['c0']}")
+            cur_c = c0
+            for st in jcv["steps"]:
+                cur_c = sl.journal_commit_step(cur_c, st["entry"])
+                if cur_c != st["c_after"]:
+                    errors.append(f"wire journal_commit_step '{st['id']}' mismatch: {cur_c} != {st['c_after']}")
+                checked += 1
+            checked += 1
         if "artifact_and_log_primitives" in v:
             alp = v["artifact_and_log_primitives"]
             for fv in alp["fsverity_sha256_linux"]:
-                raw_b = bytes.fromhex(fv["data_hex"]) if "data_hex" in fv else ((b"A" * 4096) + (b"B" * 100))
+                if "data_hex" in fv:
+                    raw_b = bytes.fromhex(fv["data_hex"])
+                elif "data_pattern" in fv:
+                    dp = fv["data_pattern"]
+                    raw_b = bytes([int(dp["byte"])]) * int(dp["length"])
+                else:
+                    raw_b = (b"A" * 4096) + (b"B" * 100)
                 if sl.fsverity_sha256_digest(raw_b) != fv["digest"]:
                     errors.append(f"wire fsverity '{fv['id']}' digest mismatch")
                 checked += 1
@@ -672,6 +696,28 @@ def verify_all_vectors(
             if sl.compute_log_id(lg["network"], lg["genesis"], lg["role"], lg["name"], lg["registration"], lg["genesis_seal_outpoint"]) != lg["log_id"]:
                 errors.append("wire log_id_golden mismatch")
             checked += 1
+            if "log_id_with_predecessor" in alp:
+                lgp = alp["log_id_with_predecessor"]
+                if sl.compute_log_id(
+                    lgp["network"],
+                    lgp["genesis"],
+                    lgp["role"],
+                    lgp["name"],
+                    lgp["registration"],
+                    lgp["genesis_seal_outpoint"],
+                    predecessor_log_id=lgp["predecessor_log_id"],
+                ) != lgp["log_id"]:
+                    errors.append("wire log_id_with_predecessor mismatch")
+                checked += 1
+            led = alp.get("log_entry_digests")
+            if isinstance(led, dict) and isinstance(led.get("input_content_addr"), str):
+                ica = led["input_content_addr"]
+                for k_le, b_le in (("entry_0x01", 0x01), ("entry_0x02", 0x02), ("entry_0x03", 0x03), ("entry_0x04", 0x04)):
+                    if k_le in led:
+                        got_le = sl.log_entry_digest(b_le, ica)
+                        if got_le != led[k_le]:
+                            errors.append(f"wire log_entry_digests.{k_le} mismatch: {got_le} != {led[k_le]}")
+                        checked += 1
             rt = alp["rfc9162_checkpoints_tree"]
             ck_leaves = [sl.ckpt_leaf(i + 1, ca) for i, ca in enumerate(rt["checkpoint_content_addrs"])]
             if (
@@ -696,6 +742,15 @@ def verify_all_vectors(
             ):
                 errors.append("wire smt256_fixed_depth mismatch")
             checked += 4
+            if "smt256_multi_leaf" in alp:
+                sm2 = alp["smt256_multi_leaf"]
+                if sl.smt_root(sm2["kv"]) != sm2["root"]:
+                    errors.append("wire smt256_multi_leaf root mismatch")
+                for pf_m in sm2["proofs"]:
+                    if not sl.smt_verify_proof(pf_m) or pf_m["root"] != sm2["root"]:
+                        errors.append(f"wire smt256_multi_leaf proof failed for key {pf_m.get('key')}")
+                    checked += 1
+                checked += 1
 
     # 2. ledger-scripts-and-opreturn.json
     if "ledger-scripts-and-opreturn.json" in vectors:
@@ -744,6 +799,16 @@ def verify_all_vectors(
             if f"{got_nb:08x}" != item["expected_next_bits_hex"]:
                 errors.append(f"ledger retarget {h_rt} next bits mismatch: {got_nb:08x} != {item['expected_next_bits_hex']}")
             checked += 2
+        for item in v.get("mainnet_auxpow_archival", []):
+            ok_ap = sl.verify_namecoin_auxpow(
+                item["header_hex"],
+                item["auxpow_hex"],
+                network=item.get("network", "main"),
+                height=int(item["height"]),
+            )
+            if ok_ap is not bool(item["expected_valid"]):
+                errors.append(f"ledger mainnet_auxpow_archival '{item['id']}' expected {item['expected_valid']}, got {ok_ap}")
+            checked += 1
         mb = v["merkle_batch_0x02"]
         root, _ = sl.build_merkle_tree(mb["unsorted_input_digests"])
         if root != mb["merkle_root"]:
@@ -767,7 +832,7 @@ def verify_all_vectors(
             if sl.narrows_predicate(c["child"], c["parent"]) is not c["expected"]:
                 errors.append(f"constraint narrowing '{c['id']}' failed")
             checked += 1
-        t1v = sv.Tier1Verifier()
+        t1v = sv.Tier1Verifier(enabled_modules=sv.ALL_OPTIONAL_MODULES)
         for neg in v.get("negative_semantic_fixtures", []):
             ok_w, code_w = t1v.verify_wire_bytes(sl.jcs_encode(neg["object"]))
             if neg["expected_refusal"] == "GRANT_TEXT_FORBIDDEN":
@@ -908,7 +973,7 @@ def verify_jsonschema(
     validated = 0
     reg_types = sv.registered_types()
     covered_types: set[str] = set()
-    t1v_neg = sv.Tier1Verifier(require_jsonschema=require)
+    t1v_neg = sv.Tier1Verifier(require_jsonschema=require, enabled_modules=sv.ALL_OPTIONAL_MODULES)
 
     def _record_type(inst: Any) -> None:
         if isinstance(inst, dict):
@@ -992,11 +1057,17 @@ def verify_jsonschema(
                             if errs_cv:
                                 errors.append(f"Security conformance positive step '{case['id']}[{st.get('label', st_i)}]' chain FAILED ChainViewSnapshot schema: {errs_cv[0].message}")
                             validated += 1
-                    if case.get("kind") == "tier2_name_history" and isinstance(inp_c.get("headers"), list):
-                        for h_i, h_ent in enumerate(inp_c["headers"]):
-                            errs_bh = list(val_bhp.iter_errors(h_ent))
-                            if errs_bh:
-                                errors.append(f"Security conformance positive case '{case['id']}' headers[{h_i}] FAILED BlockHeaderProof schema: {errs_bh[0].message}")
+                    if case.get("runner") == "tier2_name_history" and isinstance(inp_c.get("page"), dict):
+                        val_t2p = get_validator("schemas/profile-artifact.schema.json#/$defs/Tier2NameHistoryPage")
+                        errs_t2p = list(val_t2p.iter_errors(inp_c["page"]))
+                        if errs_t2p:
+                            errors.append(f"Security conformance positive case '{case['id']}' page FAILED Tier2NameHistoryPage schema: {errs_t2p[0].message}")
+                        validated += 1
+                        if isinstance(inp_c.get("trusted_checkpoint"), dict):
+                            val_tc = get_validator("schemas/profile-artifact.schema.json#/$defs/TrustedHeaderCheckpoint")
+                            errs_tc = list(val_tc.iter_errors(inp_c["trusted_checkpoint"]))
+                            if errs_tc:
+                                errors.append(f"Security conformance positive case '{case['id']}' trusted_checkpoint FAILED TrustedHeaderCheckpoint schema: {errs_tc[0].message}")
                             validated += 1
                 if exp_r.startswith("WIRE_") and exp_r not in ("WIRE_SIGNATURE", "WIRE_KEY"):
                     continue
@@ -1210,6 +1281,27 @@ def main() -> int:
             if c not in registered_codes:
                 errors.append(f"archive/rule-inventory.md: unregistered refusal code '{c}'")
 
+    # 5c. M-7 / F-12a: Scan Python verifier/reference refusal literals AND all vectors/*.json refusal codes against registry/refusal-codes.json!
+    py_non_refusal = set(non_refusal_ids) | {
+        "OK", "ADMIT", "REFUSE", "UNCERTAIN", "ADMIT_WARD", "ADMIT_AUTONOMOUS",
+        "NAME_NEW", "NAME_FIRSTUPDATE", "NAME_UPDATE", "SINGLE_USE_CONSUMED",
+        "ALL_OPTIONAL_MODULES", "ACTION_PROFILES", "EMPTY_BATCH_ROOT", "EMPTY_CHECKPOINTS_ROOT",
+        "SMT_EMPTY_ROOT", "P2A_SCRIPTPUBKEY", "CLAUSE_LF_PATHS", "ALLOW_LF_BY_TYPE",
+    }
+    py_ref_re = re.compile(
+        r'(?:VerifierResult\(\s*"REFUSE"\s*,\s*|return\s+(?:False|None|\"revoked\"|\"spent\"|\"burned\"|\"unconfirmed\")\s*,\s*|raise\s+ValueError\(\s*)"([A-Z][A-Z0-9_]{3,})"'
+    )
+    for py_path in (ROOT / "tools" / "seallink_verifier.py", ROOT / "tools" / "seallink_ref.py"):
+        if py_path.exists():
+            py_txt = py_path.read_text(encoding="utf-8")
+            for ln_no, line in enumerate(py_txt.splitlines(), 1):
+                for m_pr in py_ref_re.finditer(line):
+                    cand_c = m_pr.group(1)
+                    if cand_c in py_non_refusal or cand_c.endswith("_"):
+                        continue
+                    if cand_c not in registered_codes:
+                        errors.append(f"{py_path.relative_to(ROOT)}:{ln_no}: unregistered refusal code '{cand_c}'")
+
     # 6. Check all registry files share the same protocol version string AND zero stale prior draft versions remain in normative docs/schemas
     reg_versions = {name: data.get("version") for name, data in registries.items() if "version" in data}
     if len(set(reg_versions.values())) > 1:
@@ -1238,6 +1330,24 @@ def main() -> int:
             vectors[p.name] = data
     if not vectors:
         errors.append("No conformance vector files found under vectors/")
+    # 7b. M-7 / F-12a: Verify every expected_refusal / want_refusal / code field in vectors/*.json is registered!
+    def _audit_vector_refusals(node: Any, ctx: str) -> None:
+        if isinstance(node, dict):
+            for rk in ("expected_refusal", "want_refusal", "first_observation_refusal", "subsequent_request_refusal"):
+                rv = node.get(rk)
+                if isinstance(rv, str) and rv not in registered_codes:
+                    errors.append(f"{ctx}.{rk}: unregistered refusal code '{rv}'")
+            if ctx.startswith("refusal-coverage-matrix.json") and isinstance(node.get("code"), str):
+                if node["code"] not in registered_codes:
+                    errors.append(f"{ctx}.code: unregistered refusal code '{node['code']}'")
+            for k_v, v_v in node.items():
+                _audit_vector_refusals(v_v, f"{ctx}.{k_v}")
+        elif isinstance(node, list):
+            for i_v, it_v in enumerate(node):
+                _audit_vector_refusals(it_v, f"{ctx}[{i_v}]")
+
+    for vname_r, vdoc_r in vectors.items():
+        _audit_vector_refusals(vdoc_r, vname_r)
     vector_checks, exec_checks, covered_cnt, mutations_killed = verify_all_vectors(
         vectors, registered_codes, args.require_jsonschema, errors, fail_fast=args.fail_fast
     )

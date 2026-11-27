@@ -134,8 +134,10 @@ def _build_synthetic_spv_proof(
     prev_vout: int = 0,
     new_owner_pol: dict[str, Any] | None = None,
     opreturns: list[bytes] | None = None,
-    header_version: int = (0x0001 << 16) | 2,
+    header_version: int = (0x0001 << 16) | 4,
     script_sig_override: bytes = b"",
+    prev_block_hash_le: bytes = b"\x00" * 32,
+    block_time: int = 1795220000,
 ) -> tuple[dict[str, Any], bytes]:
     """Build a consensus-exact synthetic SegWitNameUpdateProof (OP_NAME_FIRSTUPDATE or OP_NAME_UPDATE) + 80B Namecoin block header."""
     exp_spk, exp_ws = sl.compile_script_policy(owner_pol)
@@ -210,11 +212,11 @@ def _build_synthetic_spv_proof(
     txids_le = [cb_parsed["txid_le"], tx_parsed["txid_le"]] + [d["txid_le"] for d in dummies]
     merkle_root_le, t_branches = _btc_merkle_root_and_branches(txids_le)
 
-    # Regtest-style easy nBits (0x207fffff) mined to real valid regtest PoW with Namecoin chain_id=1!
+    # Regtest-style easy nBits (0x207fffff) mined to real valid regtest PoW with Namecoin chain_id=1 & base_ver>=4!
     tgt = sl.bits_to_target(0x207FFFFF)
     hdr = b""
     for nonce in range(100000):
-        cand = struct.pack("<I", header_version) + (b"\x00" * 32) + merkle_root_le + struct.pack("<III", 1795220000, 0x207FFFFF, nonce)
+        cand = struct.pack("<I", header_version) + prev_block_hash_le + merkle_root_le + struct.pack("<III", block_time, 0x207FFFFF, nonce)
         if int.from_bytes(sl.dsha256(cand), "little") <= tgt:
             hdr = cand
             break
@@ -246,7 +248,7 @@ def _build_same_block_chained_spv_pair(
     *,
     block_height: int = 750010,
     high_s_second: bool = True,
-    header_version: int = (0x0001 << 16) | 2,
+    header_version: int = (0x0001 << 16) | 4,
 ) -> tuple[list[dict[str, Any]], bytes, dict[str, Any]]:
     """Build two chained SegWitNameUpdateProofs (OP_NAME_FIRSTUPDATE at tx_index=1, OP_NAME_UPDATE at tx_index=2) in ONE block."""
     exp_spk, _ = sl.compile_script_policy(owner_pol)
@@ -1527,18 +1529,21 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-CONT-012: Terminal 0x14 checkpoint (terminal=True, no next_log_vout) admits cleanly.",
     )
 
-    # B2. O(1) log handover on seq == 1 (authenticated against predecessor_terminal_checkpoint!)
+    # B2. O(1) log handover on seq == 1 (authenticated against predecessor_terminal_checkpoint, BLK-2 vout=1 + BLK-5 log_id binding!)
     ho_gen_tx = _h32("d11-ho-gen")
     ho_cp1_tx = _h32("d11-ho-cp1")
     ho_gen_op = {"txid": ho_gen_tx, "vout": 0}
-    ho_lid = sl.compute_log_id("main", GENESIS_MAIN, "notary", nlog["iss_name"], nlog["iss_reg"], ho_gen_op)
+    ho_lid = sl.compute_log_id(
+        "main", GENESIS_MAIN, "notary", nlog["iss_name"], nlog["iss_reg"], ho_gen_op,
+        predecessor_log_id=nlog["log_id"],
+    )
     ho_cp1_p = {
         "batch_count": 0, "batch_root": sl.EMPTY_BATCH_ROOT, "checkpoints_root": sl.EMPTY_CHECKPOINTS_ROOT,
         "cumulative_entries_count": 0, "denials_delta_root": sl.EMPTY_BATCH_ROOT,
         "denials_root": nlog["cp4_env"]["payload"]["denials_root"], "genesis": GENESIS_MAIN,
         "genesis_seal_outpoint": ho_gen_op,
         "issuer": nlog["iss_role_pin"], "log_id": ho_lid, "network": "main",
-        "next_log_policy": nlog["seal_pol"], "next_log_vout": 0,
+        "next_log_policy": nlog["seal_pol"], "next_log_vout": 1,
         "predecessor_log_id": nlog["log_id"], "predecessor_terminal_denials_root": nlog["cp4_env"]["payload"]["denials_root"],
         "prev_log_outpoint": ho_gen_op, "role": "notary", "seq": 1, "terminal": False,
         "type": "seallink-log-checkpoint/1",
@@ -1546,7 +1551,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     ho_cp1_env = sl.sign_envelope(ho_cp1_p, [nlog["iss_role"]["sk"]])
     ch_ho = copy.deepcopy(nlog["chain"])
     ch_ho["txs"][ho_gen_tx] = {"confirmed_height": 749995, "outputs": {"0": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"]), "spent_by_txid": ho_cp1_tx}}}
-    ch_ho["txs"][ho_cp1_tx] = {"block_hash": _h32("d11-ho-blk"), "confirmed_height": 749999, "inputs": [sv.make_segwit_input(ho_gen_tx, 0)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(ho_cp1_env)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"])}}}
+    ch_ho["txs"][ho_cp1_tx] = {"block_hash": _h32("d11-ho-blk"), "confirmed_height": 749999, "inputs": [sv.make_segwit_input(ho_gen_tx, 0)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(ho_cp1_env)).hex(), "outputs": {"1": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"])}}}
     ho_pred_term = {"checkpoint": nlog["cp4_env"], "checkpoint_txid": nlog["cp4_tx"]}
     add(
         "d11-0x14-o1-handover-seq1-admit",
@@ -1902,7 +1907,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     brk_rel = {
         "compromised_policy": {"m": 1, "pks": [rlog["iss_role"]["xonly"]]},
         "genesis": GENESIS_MAIN, "h_c": 749500,
-        "issuer": rlog["iss_pin"], "name_input": {"txid": prev_ru["txid"], "vout": prev_ru["vout"]},
+        "issuer": {"name": rlog["iss_name"], "registration": rlog["iss_reg"]}, "name_input": {"txid": prev_ru["txid"], "vout": prev_ru["vout"]},
         "role": "release", "type": "seallink-credential-break/1",
     }
     ch_rel_0b["names"][rlog["iss_name"]]["updates"].append({
@@ -2314,11 +2319,11 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     spv_p2wsh_sks = [spv_k1["sk"], spv_k2["sk"]] if spv_k1["comp"] < spv_k2["comp"] else [spv_k2["sk"], spv_k1["sk"]]
     spv_p2wsh = {"kind": "multisig", "m": 2, "pks": spv_p2wsh_pks}
 
-    proof_low, hdr_low = _build_synthetic_spv_proof("lows", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', high_s=False)
-    proof_high, _ = _build_synthetic_spv_proof("highs", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', high_s=True)
-    proof_ms, _ = _build_synthetic_spv_proof("p2wsh", spv_p2wsh, spv_p2wsh_sks, "id/spv-ms", '{"link":{}}', high_s=False)
-    proof_bad_ver, _ = _build_synthetic_spv_proof("badver", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', tx_version=2)
-    proof_bad_sh, _ = _build_synthetic_spv_proof("badsh", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', sighash_byte=0x81)
+    proof_low, hdr_low = _build_synthetic_spv_proof("lows", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}", high_s=False)
+    proof_high, _ = _build_synthetic_spv_proof("highs", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}", high_s=True)
+    proof_ms, _ = _build_synthetic_spv_proof("p2wsh", spv_p2wsh, spv_p2wsh_sks, "id/spv-ms", "{}", high_s=False)
+    proof_bad_ver, _ = _build_synthetic_spv_proof("badver", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}", tx_version=2)
+    proof_bad_sh, _ = _build_synthetic_spv_proof("badsh", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}", sighash_byte=0x81)
 
     def _mk_page(
         nm: str,
@@ -2326,9 +2331,12 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         *,
         limit: int = 10,
         registration: dict[str, Any] | None = None,
+        headers: list[dict[str, Any]] | None = None,
+        network: str = "regtest",
         cursor_height: int | None = None,
         cursor_txid: str | None = None,
         cursor_vout: int | None = None,
+        cursor_owner_policy: dict[str, Any] | None = None,
         next_cursor: dict[str, Any] | None = None,
         has_more: bool = False,
     ) -> dict[str, Any]:
@@ -2349,9 +2357,14 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
                 reg = {"txid": t0["txid"] if n_op == "NAME_FIRSTUPDATE" else p0["txid"], "vout": 0}
             else:
                 reg = {"txid": _h32(f"spv-reg-{nm}"), "vout": 0}
+        if headers is None:
+            hdrs_by_h: dict[int, str] = {}
+            for u_it in upds:
+                hdrs_by_h.setdefault(int(u_it["block_height"]), u_it["block_header_hex"])
+            headers = [{"header_hex": hdrs_by_h[h_k], "height": h_k} for h_k in sorted(hdrs_by_h)]
         pg: dict[str, Any] = {
-            "genesis": GENESIS_MAIN, "has_more": has_more, "limit": limit, "name": nm,
-            "network": "main", "registration": reg,
+            "genesis": GENESIS_MAIN, "has_more": has_more, "headers": headers, "limit": limit, "name": nm,
+            "network": network, "registration": reg,
             "type": "seallink-tier2-name-history/1", "updates": upds,
         }
         if cursor_height is not None:
@@ -2360,6 +2373,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
             pg["cursor_txid"] = cursor_txid
         if cursor_vout is not None:
             pg["cursor_vout"] = cursor_vout
+        if cursor_owner_policy is not None:
+            pg["cursor_owner_policy"] = cursor_owner_policy
         if next_cursor is not None:
             pg["next_cursor"] = next_cursor
         return pg
@@ -2369,7 +2384,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-tier2-core-only-action-unsupported",
         ["SL-ARTF-001"],
         "tier2_name_history",
-        {"enabled_modules": ["core"], "expected_owner_policy": spv_p2wpkh, "page": page_low},
+        {"enabled_modules": ["core"], "expected_owner_policy": spv_p2wpkh, "page": page_low, "pinned_network": "regtest"},
         "REFUSE",
         "ACTION_UNSUPPORTED",
         "SL-ARTF-001: Core-only verifier MUST refuse seallink-tier2-name-history/1 with ACTION_UNSUPPORTED.",
@@ -2379,17 +2394,17 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-tier2-spv-p2wpkh-low-s-admit",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "headers": [{"header_hex": hdr_low.hex(), "height": 750010}], "page": {**page_low, "network": "regtest"}, "pinned_network": "regtest"},
+        {"expected_owner_policy": spv_p2wpkh, "page": page_low, "pinned_network": "regtest"},
         "ADMIT",
         None,
-        "SL-ARTF-005: Consensus-exact Tier-2 P2WPKH SegWitNameUpdateProof (low-S BIP-66 DER + SIGHASH_ALL + valid header PoW) admits.",
+        "SL-ARTF-005: Consensus-exact Tier-2 P2WPKH SegWitNameUpdateProof (low-S BIP-66 DER + SIGHASH_ALL + wire header PoW) admits.",
         module="artifact-notarization",
     )
     add(
         "d11-tier2-spv-p2wpkh-consensus-high-s-admit",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_high])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_high]), "pinned_network": "regtest"},
         "ADMIT",
         None,
         "SL-ARTF-005 P0-CONS-1: Consensus-valid high-S (S > N/2) BIP-66 DER signature mined on chain MUST be accepted by Tier-2 verifier.",
@@ -2399,7 +2414,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-tier2-spv-p2wsh-multisig-admit",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wsh, "page": _mk_page("id/spv-ms", [proof_ms])},
+        {"expected_owner_policy": spv_p2wsh, "page": _mk_page("id/spv-ms", [proof_ms]), "pinned_network": "regtest"},
         "ADMIT",
         None,
         "SL-ARTF-005: Consensus-exact Tier-2 P2WSH 2-of-2 multisig SegWitNameUpdateProof admits.",
@@ -2409,7 +2424,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-tier2-spv-bad-nversion-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_bad_ver])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_bad_ver]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-005: SegWitNameUpdateProof with nVersion != 0x7100 MUST refuse TICKET_PROOF_INVALID.",
@@ -2419,7 +2434,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-tier2-spv-non-sighash-all-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_bad_sh])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_bad_sh]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-005: SegWitNameUpdateProof with non-SIGHASH_ALL (0x81) MUST refuse TICKET_PROOF_INVALID.",
@@ -2433,7 +2448,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-tier2-spv-depth-mismatch-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_shallow])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_shallow]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-005: Mismatched Merkle depth (anti-64B forgery defense) MUST refuse TICKET_PROOF_INVALID.",
@@ -2449,8 +2464,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
                 return cand
         raise AssertionError("regtest header mine failed")
 
-    aux_ver = (0x0001 << 16) | 0x00000100 | 2
-    nmc_nonaux_ver = (0x0001 << 16) | 2
+    aux_ver = (0x0001 << 16) | 0x00000100 | 4
+    nmc_nonaux_ver = (0x0001 << 16) | 4
     prev_hdr_2015 = _mine_regtest_hdr(nmc_nonaux_ver, b"\x00" * 32, b"\x11" * 32, 1795000000 + 604800, 0x207FFFFF)
     prev_hash_2015_le = sl.dsha256(prev_hdr_2015)
     exp_bits_2016 = sl.compute_namecoin_next_bits(0x207FFFFF, 1795000000, 1795000000 + 604800, network="regtest")
@@ -2463,28 +2478,33 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         [(5_000_000_000, b"\x00\x14" + (b"\x77" * 20))],
     )
     parent_cb_txid_le = sl.parse_raw_tx(parent_cb)["txid_le"]
-    parent_hdr = _mine_regtest_hdr(2, b"\x00" * 32, parent_cb_txid_le, 1795000000 + 605400, 0x207FFFFF)
+    parent_hdr = _mine_regtest_hdr(4, b"\x00" * 32, parent_cb_txid_le, 1795000000 + 605400, 0x207FFFFF)
     aux_proof_ok = {
         "chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1,
         "coinbase_branch": [], "parent_coinbase_hex": parent_cb.hex(), "parent_header_hex": parent_hdr.hex(),
     }
-    page_reg_empty = {**_mk_page("id/spv-notary", []), "network": "regtest"}
+
+    def _mk_hdr_only_page(hdrs: list[dict[str, Any]]) -> dict[str, Any]:
+        return _mk_page(
+            "id/spv-notary", [], headers=hdrs, network="regtest",
+            cursor_height=2014, cursor_txid=_h32("spv-cur-2014"), cursor_vout=0,
+        )
+
     add(
         "d11-tier2-auxpow-and-retarget-2016-admit",
         ["SL-ARTF-006"],
         "tier2_name_history",
         {
             "expected_owner_policy": spv_p2wpkh,
-            "headers": [
+            "page": _mk_hdr_only_page([
                 {"header_hex": prev_hdr_2015.hex(), "height": 2015},
-                {"auxpow": aux_proof_ok, "epoch_start_time": 1795000000, "header_hex": hdr_2016.hex(), "height": 2016},
-            ],
-            "page": page_reg_empty,
+                {"auxpow": aux_proof_ok, "header_hex": hdr_2016.hex(), "height": 2016},
+            ]),
             "pinned_network": "regtest",
         },
         "ADMIT",
         None,
-        "SL-ARTF-006 P0-CONS-1: Valid Namecoin AuxPoW (chain_id=1, fabe6d6d, GetExpectedIndex) + epoch-2016 retarget admits.",
+        "SL-ARTF-006 P0-CONS-1: Valid Namecoin AuxPoW (nVersion=0x00010104, chain_id=1, fabe6d6d, GetExpectedIndex) + regtest epoch-2016 constant nBits admits.",
         module="artifact-notarization",
     )
     # Real retarget failure at H=2016: valid non-AuxPoW regtest PoW with wrong nBits (0x203fffff != exp 0x207fffff)!
@@ -2495,11 +2515,10 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "tier2_name_history",
         {
             "expected_owner_policy": spv_p2wpkh,
-            "headers": [
+            "page": _mk_hdr_only_page([
                 {"header_hex": prev_hdr_2015.hex(), "height": 2015},
-                {"epoch_start_time": 1795000000, "header_hex": hdr_2016_bad_bits.hex(), "height": 2016},
-            ],
-            "page": page_reg_empty,
+                {"header_hex": hdr_2016_bad_bits.hex(), "height": 2016},
+            ]),
             "pinned_network": "regtest",
         },
         "REFUSE",
@@ -3263,20 +3282,20 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d11-mut-tier2-chain-mismatch",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": {**page_low, "genesis": _h32("wrong-gen")}},
+        {"expected_owner_policy": spv_p2wpkh, "page": {**page_low, "genesis": _h32("wrong-gen")}, "pinned_network": "regtest"},
         "REFUSE",
         "CHAIN_MISMATCH",
         "SL-ARTF-005: Tier-2 page with wrong genesis refuses CHAIN_MISMATCH.",
         module="artifact-notarization",
     )
     spv_pair_upds, spv_pair_hdr, spv_pair_reg = _build_same_block_chained_spv_pair(
-        "sameblk", spv_p2wpkh, spv_k1["sk"], "id/spv-chained", "{}", '{"link":{}}', block_height=750010, high_s_second=True
+        "sameblk", spv_p2wpkh, spv_k1["sk"], "id/spv-chained", "{}", f'{{"link":{{"notary":"{spv_k1["xonly"]}"}}}}', block_height=750010, high_s_second=True
     )
     add(
         "d11-mut-tier2-over-limit-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-chained", spv_pair_upds, limit=1, registration=spv_pair_reg)},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-chained", spv_pair_upds, limit=1, registration=spv_pair_reg), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-005: Validly chained len(updates) > limit refuses TICKET_PROOF_INVALID.",
@@ -3290,11 +3309,10 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "tier2_name_history",
         {
             "expected_owner_policy": spv_p2wpkh,
-            "headers": [
+            "page": _mk_hdr_only_page([
                 {"header_hex": prev_hdr_2015.hex(), "height": 2015},
-                {"auxpow": bad_aux_proof, "epoch_start_time": 1795000000, "header_hex": hdr_2016_bad_aux.hex(), "height": 2016},
-            ],
-            "page": page_reg_empty,
+                {"auxpow": bad_aux_proof, "header_hex": hdr_2016_bad_aux.hex(), "height": 2016},
+            ]),
             "pinned_network": "regtest",
         },
         "REFUSE",
@@ -3309,8 +3327,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "tier2_name_history",
         {
             "expected_owner_policy": spv_p2wpkh,
-            "headers": [{"header_hex": unmined_hdr.hex(), "height": 10}],
-            "page": page_reg_empty,
+            "page": _mk_hdr_only_page([{"header_hex": unmined_hdr.hex(), "height": 10}]),
             "pinned_network": "regtest",
         },
         "REFUSE",
@@ -3325,11 +3342,10 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "tier2_name_history",
         {
             "expected_owner_policy": spv_p2wpkh,
-            "headers": [
+            "page": _mk_hdr_only_page([
                 {"header_hex": prev_hdr_2015.hex(), "height": 2015},
                 {"header_hex": hdr_bad_prev.hex(), "height": 2016},
-            ],
-            "page": page_reg_empty,
+            ]),
             "pinned_network": "regtest",
         },
         "REFUSE",
@@ -3337,15 +3353,30 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-ARTF-006: Consecutive headers with broken prev_block_hash link refuse TICKET_PROOF_INVALID.",
         module="artifact-notarization",
     )
-    proof_earlier, _ = _build_synthetic_spv_proof(
-        "earlier", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}',
-        block_height=750009, prev_raw_override=bytes.fromhex(proof_low["tx_hex"]),
+    proof_earlier, hdr_earlier = _build_synthetic_spv_proof(
+        "earlier", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}",
+        block_height=750009, block_time=1795219900,
+    )
+    proof_after_earlier, hdr_after_earlier = _build_synthetic_spv_proof(
+        "after-earlier", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}",
+        block_height=750010, prev_block_hash_le=sl.dsha256(hdr_earlier), block_time=1795220000,
     )
     add(
         "d11-mut-tier2-out-of-order-heights-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_earlier])},
+        {
+            "expected_owner_policy": spv_p2wpkh,
+            "page": _mk_page(
+                "id/spv-notary",
+                [proof_after_earlier, proof_earlier],
+                headers=[
+                    {"header_hex": hdr_earlier.hex(), "height": 750009},
+                    {"header_hex": hdr_after_earlier.hex(), "height": 750010},
+                ],
+            ),
+            "pinned_network": "regtest",
+        },
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-005: Non-monotonic block_height sequence (750010 -> 750009) refuses TICKET_PROOF_INVALID.",
@@ -3357,8 +3388,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "tier2_name_history",
         {
             "expected_owner_policy": spv_p2wpkh,
-            "headers": [{"header_hex": prev_hdr_2015.hex(), "height": 750010}],
-            "page": {**page_low, "network": "regtest"},
+            "page": _mk_page("id/spv-notary", [proof_low], headers=[{"header_hex": prev_hdr_2015.hex(), "height": 750010}]),
             "pinned_network": "regtest",
         },
         "REFUSE",
@@ -3776,6 +3806,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
                 "checkpoint_txid": nlog["cp2_tx"],
                 "checkpoints_root": nlog["cp2_env"]["payload"]["checkpoints_root"],
                 "confirmed_height": 749990, "denials_root": nlog["cp2_env"]["payload"]["denials_root"],
+                "issuer_name": nlog["iss_name"], "issuer_registration": nlog["iss_reg"],
                 "log_id": nlog["log_id"], "max_seq": 2,
                 "next_log_outpoint": {"txid": nlog["cp2_tx"], "vout": 1},
                 "next_log_policy": nlog["seal_pol"],
@@ -3822,11 +3853,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "tier2_name_history",
         {
             "expected_owner_policy": spv_p2wpkh,
-            "headers": [{"header_hex": spv_pair_hdr.hex(), "height": 750010}],
-            "page": {
-                **_mk_page("id/spv-chained", spv_pair_upds, limit=2, registration=spv_pair_reg),
-                "network": "regtest",
-            },
+            "page": _mk_page("id/spv-chained", spv_pair_upds, limit=2, registration=spv_pair_reg),
             "pinned_network": "regtest",
         },
         "ADMIT",
@@ -3977,7 +4004,9 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
                         "block_hash": _h32("d12-ms-blk"), "checkpoint_id": sl.content_addr(ms_cp1_ab),
                         "checkpoint_object_id": sl.object_id(ms_cp1_p), "checkpoint_txid": ms_cp1_tx,
                         "checkpoints_root": sl.EMPTY_CHECKPOINTS_ROOT, "confirmed_height": 749990,
-                        "denials_root": sl.SMT_EMPTY_ROOT, "log_id": ms_lid, "max_seq": 1,
+                        "denials_root": sl.SMT_EMPTY_ROOT,
+                        "issuer_name": nlog["iss_name"], "issuer_registration": nlog["iss_reg"],
+                        "log_id": ms_lid, "max_seq": 1,
                         "next_log_outpoint": {"txid": ms_cp1_tx, "vout": 1}, "next_log_policy": nlog["seal_pol"],
                         "role": "notary", "terminal": False,
                     },
@@ -4075,7 +4104,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d12-b3-non-contiguous-headers-refuse",
         ["SL-ARTF-006"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "headers": [{"header_hex": prev_hdr_2015.hex(), "height": 2015}, {"header_hex": hdr_2017_gap.hex(), "height": 2017}], "page": page_reg_empty, "pinned_network": "regtest"},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_hdr_only_page([{"header_hex": prev_hdr_2015.hex(), "height": 2015}, {"header_hex": hdr_2017_gap.hex(), "height": 2017}]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-006 B3: Non-contiguous header heights (2015 -> 2017) MUST refuse TICKET_PROOF_INVALID.",
@@ -4088,46 +4117,46 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "tier2_name_history",
         {
             "expected_owner_policy": spv_p2wpkh,
-            "headers": [
+            "page": _mk_hdr_only_page([
                 {"header_hex": prev_hdr_2015.hex(), "height": 2015},
-                {"auxpow": aux_proof_ok, "epoch_start_time": 1795000000, "header_hex": hdr_2016.hex(), "height": 2016},
+                {"auxpow": aux_proof_ok, "header_hex": hdr_2016.hex(), "height": 2016},
                 {"header_hex": hdr_2017_drift.hex(), "height": 2017},
-            ],
-            "page": page_reg_empty, "pinned_network": "regtest",
+            ]),
+            "pinned_network": "regtest",
         },
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-006 B3: Non-retarget height 2017 changing nBits (0x203fffff != prev 0x207fffff) refuses TICKET_PROOF_INVALID.",
         module="artifact-notarization",
     )
-    parent_hdr_is_aux = _mine_regtest_hdr(0x00000102, b"\x00" * 32, parent_cb_txid_le, 1795000000 + 605400, 0x207FFFFF)
+    parent_hdr_is_aux = _mine_regtest_hdr(0x00000104, b"\x00" * 32, parent_cb_txid_le, 1795000000 + 605400, 0x207FFFFF)
     add(
         "d12-b3-auxpow-parent-is-auxpow-refuse",
         ["SL-ARTF-006"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "headers": [{"auxpow": {**aux_proof_ok, "parent_header_hex": parent_hdr_is_aux.hex()}, "header_hex": hdr_2016.hex(), "height": 2016}], "page": page_reg_empty, "pinned_network": "regtest"},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_hdr_only_page([{"auxpow": {**aux_proof_ok, "parent_header_hex": parent_hdr_is_aux.hex()}, "header_hex": hdr_2016.hex(), "height": 2016}]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-006 B3: AuxPoW parent header with AuxPoW flag 0x100 set MUST refuse TICKET_PROOF_INVALID (!parentBlock.IsAuxpow()).",
         module="artifact-notarization",
     )
-    parent_hdr_cid1 = _mine_regtest_hdr((0x0001 << 16) | 2, b"\x00" * 32, parent_cb_txid_le, 1795000000 + 605400, 0x207FFFFF)
+    parent_hdr_cid1 = _mine_regtest_hdr((0x0001 << 16) | 4, b"\x00" * 32, parent_cb_txid_le, 1795000000 + 605400, 0x207FFFFF)
     add(
         "d12-b3-auxpow-parent-chain-id-1-refuse",
         ["SL-ARTF-006"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "headers": [{"auxpow": {**aux_proof_ok, "parent_header_hex": parent_hdr_cid1.hex()}, "header_hex": hdr_2016.hex(), "height": 2016}], "page": page_reg_empty, "pinned_network": "regtest"},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_hdr_only_page([{"auxpow": {**aux_proof_ok, "parent_header_hex": parent_hdr_cid1.hex()}, "header_hex": hdr_2016.hex(), "height": 2016}]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-006 B3: AuxPoW parent header with chain_id==1 (fStrictChainId) MUST refuse TICKET_PROOF_INVALID.",
         module="artifact-notarization",
     )
-    hdr_no_cid = _mine_regtest_hdr(2, b"\x00" * 32, b"\x11" * 32, 1795000000, 0x207FFFFF)
+    hdr_no_cid = _mine_regtest_hdr(4, b"\x00" * 32, b"\x11" * 32, 1795000000, 0x207FFFFF)
     add(
         "d12-b3-non-auxpow-missing-chain-id-refuse",
         ["SL-ARTF-006"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "headers": [{"header_hex": hdr_no_cid.hex(), "height": 2015}], "page": page_reg_empty, "pinned_network": "regtest"},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_hdr_only_page([{"header_hex": hdr_no_cid.hex(), "height": 2015}]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-006 B3: Non-AuxPoW header with chain_id==0 (!= 1) MUST refuse TICKET_PROOF_INVALID.",
@@ -4135,46 +4164,60 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     )
 
     # F4 (B4): Tier-2 OP_NAME_FIRSTUPDATE, unlinked update, cursor pagination, branch unsupported, non-empty scriptSig, same-block tx_index tie, bad SLNK
-    proof_fu, hdr_fu = _build_synthetic_spv_proof("fu-only", spv_p2wpkh, [spv_k1["sk"]], "id/spv-fu", '{"link":{}}', op_kind="NAME_FIRSTUPDATE", block_height=750010)
+    proof_fu, hdr_fu = _build_synthetic_spv_proof("fu-only", spv_p2wpkh, [spv_k1["sk"]], "id/spv-fu", "{}", op_kind="NAME_FIRSTUPDATE", block_height=750010)
     add(
         "d12-b4-tier2-firstupdate-only-admit",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "headers": [{"header_hex": hdr_fu.hex(), "height": 750010}], "page": {**_mk_page("id/spv-fu", [proof_fu]), "network": "regtest"}, "pinned_network": "regtest"},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-fu", [proof_fu]), "pinned_network": "regtest"},
         "ADMIT",
         None,
         "SL-ARTF-005 B4: Standalone OP_NAME_FIRSTUPDATE spending OP_NAME_NEW (HASH160(rand||name)==hash20) admits in Tier-2.",
         module="artifact-notarization",
     )
     spv_reg_pol = {"kind": "key", "pk": spv_k2["comp"]}
-    proof_fu_reg, hdr_fu_reg = _build_synthetic_spv_proof("fu-reg-fund", spv_reg_pol, [spv_k2["sk"]], "id/spv-fu-reg", '{"link":{}}', op_kind="NAME_FIRSTUPDATE", new_owner_pol=spv_p2wpkh, block_height=750010)
+    proof_fu_reg, hdr_fu_reg = _build_synthetic_spv_proof("fu-reg-fund", spv_reg_pol, [spv_k2["sk"]], "id/spv-fu-reg", "{}", op_kind="NAME_FIRSTUPDATE", new_owner_pol=spv_p2wpkh, block_height=750010)
     add(
         "d12-b4-tier2-firstupdate-registrar-funded-admit",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "headers": [{"header_hex": hdr_fu_reg.hex(), "height": 750010}], "page": {**_mk_page("id/spv-fu-reg", [proof_fu_reg]), "network": "regtest"}, "pinned_network": "regtest"},
+        {"expect_owner_authored": [False], "expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-fu-reg", [proof_fu_reg]), "pinned_network": "regtest"},
         "ADMIT",
         None,
         "SL-ARTF-005 B4: Registrar-funded OP_NAME_FIRSTUPDATE (funding P2WPKH NAME_NEW -> owner_policy output, matching real nc28.0 & SL-LDGR-007) admits with owner_authored=false.",
         module="artifact-notarization",
     )
-    proof_fu_wrong_out, _ = _build_synthetic_spv_proof("fu-wrong-out", spv_reg_pol, [spv_k2["sk"]], "id/spv-fu-bad", '{"link":{}}', op_kind="NAME_FIRSTUPDATE", new_owner_pol=spv_reg_pol, block_height=750010)
+    proof_fu_wrong_out, _ = _build_synthetic_spv_proof("fu-wrong-out", spv_reg_pol, [spv_k2["sk"]], "id/spv-fu-bad", "{}", op_kind="NAME_FIRSTUPDATE", new_owner_pol=spv_reg_pol, block_height=750010)
     add(
         "d12-b4-tier2-firstupdate-wrong-output-owner-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-fu-bad", [proof_fu_wrong_out])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-fu-bad", [proof_fu_wrong_out]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-005 B4: OP_NAME_FIRSTUPDATE whose output trailing script mismatches expected_owner_policy MUST refuse TICKET_PROOF_INVALID.",
         module="artifact-notarization",
     )
-    proof_unlinked_next, _ = _build_synthetic_spv_proof("unlinked-next", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750011)
+    proof_unlinked_next, hdr_unlinked_next = _build_synthetic_spv_proof(
+        "unlinked-next", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}",
+        block_height=750011, prev_block_hash_le=sl.dsha256(hdr_low), block_time=1795220060,
+    )
     add(
         "d12-b4-tier2-unlinked-second-update-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_unlinked_next])},
+        {
+            "expected_owner_policy": spv_p2wpkh,
+            "page": _mk_page(
+                "id/spv-notary",
+                [proof_low, proof_unlinked_next],
+                headers=[
+                    {"header_hex": hdr_low.hex(), "height": 750010},
+                    {"header_hex": hdr_unlinked_next.hex(), "height": 750011},
+                ],
+            ),
+            "pinned_network": "regtest",
+        },
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-005 B4: Unchained updates[1] (at later height 750011) not spending updates[0]'s name output MUST refuse TICKET_PROOF_INVALID.",
@@ -4190,13 +4233,14 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
             "expected_owner_policy": spv_p2wpkh,
             "page": _mk_page(
                 "id/spv-chained", [spv_pair_upds[1]], limit=1, registration=spv_pair_reg,
-                cursor_height=750010, cursor_txid=p0_txid, cursor_vout=0,
-                next_cursor={"height": 750010, "txid": p1_txid, "vout": 0}, has_more=True,
+                cursor_height=750010, cursor_txid=p0_txid, cursor_vout=0, cursor_owner_policy=spv_p2wpkh,
+                next_cursor={"height": 750010, "owner_policy": spv_p2wpkh, "txid": p1_txid, "vout": 0}, has_more=True,
             ),
+            "pinned_network": "regtest",
         },
         "ADMIT",
         None,
-        "SL-ARTF-005 B4: Paginated Tier-2 page with cursor_txid/cursor_vout/cursor_height and matching next_cursor admits.",
+        "SL-ARTF-005 B4: Paginated Tier-2 page with cursor_txid/cursor_vout/cursor_height/cursor_owner_policy and matching next_cursor.owner_policy admits.",
         module="artifact-notarization",
     )
     spv_branch_pol = {"kind": "branch", "template": "both_of_2", "keys": sl.canonical_branch_pair(spv_k1["comp"], spv_k2["comp"])}
@@ -4204,29 +4248,29 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d12-b4-tier2-branch-policy-unsupported",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_branch_pol, "page": _mk_page("id/spv-notary", [proof_low])},
+        {"expected_owner_policy": spv_branch_pol, "page": _mk_page("id/spv-notary", [proof_low]), "pinned_network": "regtest"},
         "REFUSE",
         "CHAIN_SCRIPT_UNSUPPORTED",
         "SL-ARTF-005 B4: Tier-2 SPV is scoped to key/multisig; branch ScriptPolicy refuses CHAIN_SCRIPT_UNSUPPORTED.",
         module="artifact-notarization",
     )
-    proof_nonempty_ss, _ = _build_synthetic_spv_proof("nonempty-ss", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', script_sig_override=b"\x01\x01")
+    proof_nonempty_ss, _ = _build_synthetic_spv_proof("nonempty-ss", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}", script_sig_override=b"\x01\x01")
     add(
         "d12-b4-tier2-non-empty-script-sig-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_nonempty_ss])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_nonempty_ss]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-005 B4: Native SegWit name spend with non-empty scriptSig MUST refuse TICKET_PROOF_INVALID.",
         module="artifact-notarization",
     )
-    proof_bad_slnk, _ = _build_synthetic_spv_proof("bad-slnk", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', opreturns=[b"\x6a\x05SLNK\x06\x01\x00"])
+    proof_bad_slnk, _ = _build_synthetic_spv_proof("bad-slnk", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}", opreturns=[b"\x6a\x05SLNK\x06\x01\x00"])
     add(
         "d12-b4-tier2-bad-slnk-frame-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_bad_slnk])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_bad_slnk]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-005 B4: Tier-2 name update carrying malformed SLNK OP_RETURN MUST refuse TICKET_PROOF_INVALID.",
@@ -4571,7 +4615,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     brk_gk_rel = {
         "compromised_policy": {"m": 1, "pks": [rlog["iss_role"]["xonly"]]},
         "genesis": GENESIS_MAIN, "h_c": 749990,
-        "issuer": rlog["iss_pin"], "name_input": {"txid": prev_ru_gk["txid"], "vout": prev_ru_gk["vout"]},
+        "issuer": {"name": rlog["iss_name"], "registration": rlog["iss_reg"]}, "name_input": {"txid": prev_ru_gk["txid"], "vout": prev_ru_gk["vout"]},
         "role": "release", "type": "seallink-credential-break/1",
     }
     gk_ch_0b_rel["names"][rlog["iss_name"]]["updates"].append({
@@ -4694,9 +4738,10 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-IDEN-004 H5: Live resolve_role_policy without recent_block_height MUST honor mempool role rotation (mapped by verify_assent to CONTRACT_ASSENT_INVALID).",
     )
 
-    # F11 (M3 & M4): updates[0] malformed SLNK frame caught (CHAIN_FRAME_INVALID) + verify_notary_act log_tracked expected_child_binding!
+    # F11 (M3 & M4): owner-authored updates[0] malformed SLNK frame caught (CHAIN_FRAME_INVALID) + verify_notary_act log_tracked expected_child_binding!
     fx_m3 = rm._base_invocation_fixture()
-    fx_m3["chain"]["names"]["id/alice"]["updates"][0]["opreturn_hex"] = "6a05534c4e4b060100"  # malformed SLNK on updates[0]!
+    fx_m3["chain"]["names"]["id/alice"]["updates"][0]["firstupdate_self_funded"] = True
+    fx_m3["chain"]["names"]["id/alice"]["updates"][0]["opreturn_hex"] = "6a05534c4e4b060100"  # malformed SLNK on owner-authored updates[0]!
     add(
         "d12-m3-updates0-bad-slnk-frame-invalid",
         ["SL-LDGR-010"],
@@ -4875,7 +4920,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     brk_rot_k1 = {
         "compromised_policy": {"m": 1, "pks": [rot_eco["iss_role"]["xonly"]]},
         "genesis": GENESIS_MAIN, "h_c": 749995,  # > h_cp1 (749200) so cp1 admits, <= h_cp4 (749998) so reinst2 inc_cp compromises!
-        "issuer": rot_eco["iss_pin"],
+        "issuer": {"name": rot_eco["iss_name"], "registration": rot_eco["iss_reg"]},
         "name_input": {"txid": u_rk2, "vout": 0},
         "role": "notary", "type": "seallink-credential-break/1",
     }
@@ -4931,6 +4976,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
                 "checkpoint_txid": nlog["cp4_tx"],
                 "checkpoints_root": nlog["cp4_env"]["payload"]["checkpoints_root"],
                 "confirmed_height": 749998, "denials_root": nlog["cp4_env"]["payload"]["denials_root"],
+                "issuer_name": nlog["iss_name"], "issuer_registration": nlog["iss_reg"],
                 "log_id": nlog["log_id"], "max_seq": 4, "role": "notary", "terminal": True,
             },
             "kind": "log-head",
@@ -5080,62 +5126,91 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         module="artifact-notarization",
     )
 
-    # G7. verify_tier2_name_history_page exhaustive mutation & boundary closure
+    # G7. verify_tier2_name_history_page exhaustive mutation & boundary closure (BLK-8 wire headers[] + trusted_checkpoint + regtest 30-block expiry!)
     add(
         "d12-mut-tier2-bad-header-schema-refuse",
         ["SL-ARTF-006"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "headers": [{"header_hex": "abcd", "height": 1}], "page": page_reg_empty, "pinned_network": "regtest"},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_hdr_only_page([{"header_hex": "abcd", "height": 1}]), "pinned_network": "regtest"},
         "REFUSE",
-        "TICKET_PROOF_INVALID",
-        "SL-ARTF-006: BlockHeaderProof failing schema validation refuses TICKET_PROOF_INVALID.",
+        "WIRE_MEMBER",
+        "SL-ARTF-006 BLK-8: Wire BlockHeaderProof inside page.headers[] failing schema validation refuses WIRE_MEMBER at Step 8.",
         module="artifact-notarization",
     )
     add(
-        "d12-mut-tier2-missing-epoch-start-time-refuse",
+        "d12-mut-tier2-bad-trusted-checkpoint-refuse",
         ["SL-ARTF-006"],
         "tier2_name_history",
         {
             "expected_owner_policy": spv_p2wpkh,
-            "headers": [
+            "page": _mk_hdr_only_page([
                 {"header_hex": prev_hdr_2015.hex(), "height": 2015},
                 {"auxpow": aux_proof_ok, "header_hex": hdr_2016.hex(), "height": 2016},
-            ],
-            "page": page_reg_empty, "pinned_network": "regtest",
+            ]),
+            "pinned_network": "regtest",
+            "trusted_checkpoint": {
+                "block_hash": _h32("wrong-checkpoint-hash"),
+                "epoch_start_time": 1795000000,
+                "height": 2015,
+                "nbits_hex": "207fffff",
+            },
         },
         "REFUSE",
         "TICKET_PROOF_INVALID",
-        "SL-ARTF-006: Retarget height H % 2016 == 0 missing epoch_start_time (and ancestor header) refuses TICKET_PROOF_INVALID.",
+        "SL-ARTF-006 BLK-8: Mismatched trusted_checkpoint anchor at page.headers[0] refuses TICKET_PROOF_INVALID.",
         module="artifact-notarization",
     )
-    proof_exp_eq, _ = _build_synthetic_spv_proof("exp-eq", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750010 + 36000, prev_raw_override=bytes.fromhex(proof_low["tx_hex"]))
-    proof_exp_m1, _ = _build_synthetic_spv_proof("exp-m1", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750010 + 35999, prev_raw_override=bytes.fromhex(proof_low["tx_hex"]))
+    # Build contiguous 30-block regtest header chain from hdr_low (750010) to 750039 (+29 ADMIT) and 750040 (+30 REFUSE)
+    exp_hdrs_29: list[dict[str, Any]] = [{"header_hex": hdr_low.hex(), "height": 750010}]
+    cur_prev_le = sl.dsha256(hdr_low)
+    cur_t_exp = 1795220000
+    for step_h in range(750011, 750039):
+        cur_t_exp += 60
+        mid_h = _mine_regtest_hdr(nmc_nonaux_ver, cur_prev_le, sl.sha256(f"mid-h-{step_h}".encode()), cur_t_exp, 0x207FFFFF)
+        exp_hdrs_29.append({"header_hex": mid_h.hex(), "height": step_h})
+        cur_prev_le = sl.dsha256(mid_h)
+    proof_exp_m1, hdr_exp_m1 = _build_synthetic_spv_proof(
+        "exp-m1", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}",
+        block_height=750039, prev_raw_override=bytes.fromhex(proof_low["tx_hex"]),
+        prev_block_hash_le=cur_prev_le, block_time=cur_t_exp + 60,
+    )
+    exp_hdrs_29_full = exp_hdrs_29 + [{"header_hex": hdr_exp_m1.hex(), "height": 750039}]
+    mid_750039 = _mine_regtest_hdr(nmc_nonaux_ver, cur_prev_le, sl.sha256(b"mid-h-750039"), cur_t_exp + 60, 0x207FFFFF)
+    proof_exp_eq, hdr_exp_eq = _build_synthetic_spv_proof(
+        "exp-eq", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}",
+        block_height=750040, prev_raw_override=bytes.fromhex(proof_low["tx_hex"]),
+        prev_block_hash_le=sl.dsha256(mid_750039), block_time=cur_t_exp + 120,
+    )
+    exp_hdrs_30_full = exp_hdrs_29 + [
+        {"header_hex": mid_750039.hex(), "height": 750039},
+        {"header_hex": hdr_exp_eq.hex(), "height": 750040},
+    ]
     add(
         "d12-mut-tier2-exact-expiry-gap-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_exp_eq])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_exp_eq], headers=exp_hdrs_30_full), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
-        "SL-ARTF-005: Chained Tier-2 update at exact prev_h + 36000 expires -> TICKET_PROOF_INVALID.",
+        "SL-ARTF-005: Chained Tier-2 regtest update at exact prev_h + 30 expires -> TICKET_PROOF_INVALID.",
         module="artifact-notarization",
     )
     add(
         "d12-mut-tier2-exact-expiry-minus1-admit",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_exp_m1])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_exp_m1], headers=exp_hdrs_29_full), "pinned_network": "regtest"},
         "ADMIT",
         None,
-        "SL-ARTF-005: Chained Tier-2 update at exact prev_h + 35999 remains live -> ADMIT.",
+        "SL-ARTF-005: Chained Tier-2 regtest update at exact prev_h + 29 remains live -> ADMIT.",
         module="artifact-notarization",
     )
-    proof_sameh_diffblk, _ = _build_synthetic_spv_proof("sameh-diffblk", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750010, prev_raw_override=bytes.fromhex(proof_low["tx_hex"]))
+    proof_sameh_diffblk, _ = _build_synthetic_spv_proof("sameh-diffblk", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}", block_height=750010, prev_raw_override=bytes.fromhex(proof_low["tx_hex"]))
     add(
         "d12-mut-tier2-same-height-diff-block-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_sameh_diffblk])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_low, proof_sameh_diffblk], headers=[{"header_hex": hdr_low.hex(), "height": 750010}]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-005: Chained Tier-2 updates at equal block_height with different block_hash refuse TICKET_PROOF_INVALID.",
@@ -5146,7 +5221,7 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d12-mut-tier2-bad-jcs-value-refuse",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_bad_jcs])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_bad_jcs]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-005: Tier-2 update with non-JCS name value refuses TICKET_PROOF_INVALID.",
@@ -5154,24 +5229,24 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
     )
     pl_0x15 = bytes([0x01]) + bytes.fromhex(_h32("d12-t2-0x15")) + bytes([0x00])
     scr_0x15 = bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x15, len(pl_0x15)]) + pl_0x15
-    proof_0x15, _ = _build_synthetic_spv_proof("crit-0x15", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', opreturns=[scr_0x15])
+    proof_0x15, _ = _build_synthetic_spv_proof("crit-0x15", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}", opreturns=[scr_0x15])
     add(
         "d12-mut-tier2-future-critical-0x15-incomplete",
         ["SL-ARTF-005", "SL-LDGR-010"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_0x15])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_0x15]), "pinned_network": "regtest"},
         "REFUSE",
         "ORIGIN_STATUS_INCOMPLETE",
         "SL-ARTF-005: Tier-2 update carrying unknown future critical 0x15 SLNK frame fails closed ORIGIN_STATUS_INCOMPLETE.",
         module="artifact-notarization",
     )
-    proof_0b_gt, _ = _build_synthetic_spv_proof("0b-gt", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750010, opreturns=[sl.encode_opreturn(0x0B, _h32("d12-t2-0b-gt"), h_c=750011)])
-    proof_0b_eq, _ = _build_synthetic_spv_proof("0b-eq", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", '{"link":{}}', block_height=750010, opreturns=[sl.encode_opreturn(0x0B, _h32("d12-t2-0b-eq"), h_c=750010)])
+    proof_0b_gt, _ = _build_synthetic_spv_proof("0b-gt", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}", block_height=750010, opreturns=[sl.encode_opreturn(0x0B, _h32("d12-t2-0b-gt"), h_c=750011)])
+    proof_0b_eq, _ = _build_synthetic_spv_proof("0b-eq", spv_p2wpkh, [spv_k1["sk"]], "id/spv-notary", "{}", block_height=750010, opreturns=[sl.encode_opreturn(0x0B, _h32("d12-t2-0b-eq"), h_c=750010)])
     add(
         "d12-mut-tier2-0x0b-hc-gt-uh-refuse",
         ["SL-ARTF-005", "SL-LDGR-010"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_0b_gt])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_0b_gt]), "pinned_network": "regtest"},
         "REFUSE",
         "TICKET_PROOF_INVALID",
         "SL-ARTF-005: Tier-2 update with 0x0b h_c == uh + 1 (> block_height) refuses TICKET_PROOF_INVALID.",
@@ -5181,23 +5256,39 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "d12-mut-tier2-0x0b-hc-eq-uh-admit",
         ["SL-ARTF-005", "SL-LDGR-010"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_0b_eq])},
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_0b_eq]), "pinned_network": "regtest"},
         "ADMIT",
         None,
         "SL-ARTF-005: Tier-2 update with 0x0b at exact h_c == block_height admits (boundary >).",
         module="artifact-notarization",
     )
     spv_p2wpkh_2 = {"kind": "key", "pk": spv_k2["comp"]}
-    proof_rot_1, _ = _build_synthetic_spv_proof("t2-rot1", spv_p2wpkh, [spv_k1["sk"]], "id/spv-rot", '{"link":{}}', block_height=750010, new_owner_pol=spv_p2wpkh_2)
-    proof_rot_2, _ = _build_synthetic_spv_proof("t2-rot2", spv_p2wpkh_2, [spv_k2["sk"]], "id/spv-rot", '{"link":{}}', block_height=750011, prev_raw_override=bytes.fromhex(proof_rot_1["tx_hex"]))
+    proof_rot_1, hdr_rot_1 = _build_synthetic_spv_proof("t2-rot1", spv_p2wpkh, [spv_k1["sk"]], "id/spv-rot", "{}", block_height=750010, new_owner_pol=spv_p2wpkh_2)
+    proof_rot_2, hdr_rot_2 = _build_synthetic_spv_proof(
+        "t2-rot2", spv_p2wpkh_2, [spv_k2["sk"]], "id/spv-rot", "{}",
+        block_height=750011, prev_raw_override=bytes.fromhex(proof_rot_1["tx_hex"]),
+        prev_block_hash_le=sl.dsha256(hdr_rot_1), block_time=1795220060,
+    )
     add(
         "d12-mut-tier2-cold-p2wpkh-rotation-admit",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-rot", [proof_rot_1, proof_rot_2])},
+        {
+            "expect_owner_authored": [False, True],
+            "expected_owner_policy": spv_p2wpkh,
+            "page": _mk_page(
+                "id/spv-rot",
+                [proof_rot_1, proof_rot_2],
+                headers=[
+                    {"header_hex": hdr_rot_1.hex(), "height": 750010},
+                    {"header_hex": hdr_rot_2.hex(), "height": 750011},
+                ],
+            ),
+            "pinned_network": "regtest",
+        },
         "ADMIT",
         None,
-        "SL-ARTF-005: Tier-2 page evolves expected P2WPKH owner_policy across authorized cold owner rotation.",
+        "SL-ARTF-005: Tier-2 page evolves expected P2WPKH owner_policy across authorized cold owner rotation (owner_authored=[False, True]).",
         module="artifact-notarization",
     )
     add(
@@ -5206,7 +5297,8 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "tier2_name_history",
         {
             "expected_owner_policy": spv_p2wpkh,
-            "page": _mk_page("id/spv-notary", [proof_low], next_cursor={"height": 750010, "txid": _h32("wrong-nc-tx"), "vout": 0}, has_more=True),
+            "page": _mk_page("id/spv-notary", [proof_low], next_cursor={"height": 750010, "owner_policy": spv_p2wpkh, "txid": _h32("wrong-nc-tx"), "vout": 0}, has_more=True),
+            "pinned_network": "regtest",
         },
         "REFUSE",
         "TICKET_PROOF_INVALID",

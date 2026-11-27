@@ -34,7 +34,7 @@
       "custody_tier": "isolated_signer_with_presence",
       "derivation_recommendation": "Outside wallet accounts (e.g. BIP-85 m/83696968'/2'/7' or hardware/keyvault item); never shares UTXO funding seed",
       "published_in": "Name value link.grant (direct x-only pubkey or ThresholdPolicy SHA-256 pin)",
-      "allowed_operations": ["seallink-grant/1", "seallink-assent/1", "seallink-termination/1", "seallink-statement/1"],
+      "allowed_operations": ["seallink-grant/1", "seallink-assent/1", "seallink-termination/1", "seallink-statement/1", "seallink-session-open/1"],
       "forbidden_operations": ["chain_transactions", "seal_spends", "seallink-auth-challenge/1", "messaging"]
     },
     {
@@ -45,7 +45,7 @@
       "custody_tier": "isolated_signer_with_presence",
       "derivation_recommendation": "Each guardian signs its own SignatureSet with its link.grant role policy inside guardian_approvals[] matching guardian_context.revision",
       "published_in": "Each active guardian's Name value link.grant",
-      "allowed_operations": ["seallink-grant/1", "seallink-assent/1"],
+      "allowed_operations": ["seallink-grant/1", "seallink-assent/1", "seallink-termination/1"],
       "forbidden_operations": ["chain_transactions", "seallink-origin/1", "seallink-credential/1"]
     },
     {
@@ -243,7 +243,7 @@
       "custody_tier": "isolated_signer_with_presence",
       "derivation_recommendation": "Independent institution/court custody (never co-located with disposer)",
       "published_in": "seallink-origin/1, seallink-guardian-roster/1, seallink-contract/1",
-      "allowed_operations": ["2-of-2 guardian appointment (0x0d)", "2-of-2 roster transition (0x0f)", "2-of-2 name recovery (0x0c)", "arbiter contract termination (0x08)"],
+      "allowed_operations": ["2-of-2 guardian appointment (0x0d)", "2-of-2 roster transition (0x0f)", "2-of-2 name recovery (0x0c)", "arbiter contract termination (0x08)", "seallink-termination/1"],
       "forbidden_operations": ["unilateral_guardian_appointment", "grant_widening", "seallink-grant/1"]
     },
     {
@@ -253,7 +253,7 @@
       "pubkey_encoding": "compressed_66hex",
       "custody_tier": "isolated_signer_with_presence",
       "derivation_recommendation": "Dedicated isolated ECDSA HSM/KMS account strictly separated from hot funding keys",
-      "published_in": "manifest.notary.notary_log.genesis_seal, manifest.release.release_log.genesis_seal, and seallink-log-checkpoint/1 next_log_policy",
+      "published_in": "manifest.notary.log.genesis_seal, manifest.release.log.genesis_seal, and seallink-log-checkpoint/1 next_log_policy",
       "allowed_operations": ["LOG_CHECKPOINT (0x14)"],
       "forbidden_operations": ["seallink-grant/1", "seallink-notary/1", "seallink-release/1", "ordinary_fee_funding"]
     },

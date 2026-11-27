@@ -69,10 +69,22 @@
     "notary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["notary_log"],
+      "required": ["log"],
       "properties": {
         "policy_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
-        "notary_log": { "$ref": "#/$defs/LogBindingSpec" },
+        "log": { "$ref": "#/$defs/LogBindingSpec" },
+        "supported_claim_ids": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z0-9._-]+(/[a-z0-9._-]+)+$", "maxLength": 128, "not": { "pattern": "\n" } }
+        },
+        "supported_schemes": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z0-9][a-z0-9._/-]*$", "not": { "pattern": "\n" } }
+        },
         "mirror_endpoints": {
           "type": "array",
           "maxItems": 16,
@@ -92,7 +104,13 @@
           "uniqueItems": true,
           "items": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-z0-9._-]+(/[a-z0-9._-]+)*/$", "not": { "pattern": "\n" } }
         },
-        "release_log": { "$ref": "#/$defs/LogBindingSpec" },
+        "log": { "$ref": "#/$defs/LogBindingSpec" },
+        "supported_schemes": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z0-9][a-z0-9._/-]*$", "not": { "pattern": "\n" } }
+        },
         "mirror_endpoints": {
           "type": "array",
           "maxItems": 16,

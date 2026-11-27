@@ -490,7 +490,20 @@ class ColdNamecoinObserver:
         tip_h = int(b_info["blocks"])
         tip_hash = str(b_info["bestblockhash"])
         if self._last_tip is not None and self._last_tip != (tip_h, tip_hash):
-            self._invalidate_caches()
+            prev_h, prev_hash = self._last_tip
+            linear_ext = False
+            if tip_h > prev_h:
+                try:
+                    linear_ext = str(self.read_rpc("getblockhash", prev_h)) == prev_hash
+                except RuntimeError:
+                    linear_ext = False
+            if linear_ext:
+                # M-6 / F-11a: Linear tip advance (no reorg) preserves immutable confirmed block/header/tx caches
+                # while flushing unconfirmed mempool entries; any reorg or rollback still triggers full invalidation (A-3).
+                for tid_k in [k for k, v in self._tx_cache.items() if "blockhash" not in v]:
+                    self._tx_cache.pop(tid_k, None)
+            else:
+                self._invalidate_caches()
         self._last_tip = (tip_h, tip_hash)
         self._active_hash_by_height[tip_h] = tip_hash
 
@@ -667,12 +680,14 @@ class ColdNamecoinObserver:
         created_height: int,
         tip_height: int,
         mempool_txs: dict[str, dict[str, Any]],
+        *,
+        spend_txid_hint: str | None = None,
     ) -> tuple[dict[str, Any] | None, bool]:
         """Discover the spending transaction of `(txid, vout)` strictly from the reading node.
 
         Returns `(spender_txd_or_None, absent_from_utxo)`:
           - `(None, False)`: `gettxout(..., True)` proved the output is currently UNSPENT.
-          - `(spender, False)`: spender located in live mempool or active confirmed blocks.
+          - `(spender, False)`: spender located via verified `spend_txid_hint`, live mempool, or active confirmed blocks.
           - `(None, True)`: output is ABSENT from the UTXO set and no spender was found (`A-1`, fail closed!).
         """
         # 1. Fast check: is it STILL unspent in the node's UTXO set + mempool? (A-13, D8-M2 strict fail-closed!)
@@ -705,6 +720,13 @@ class ColdNamecoinObserver:
             for vin in mtx.get("vin", []):
                 if vin.get("txid") == txid and int(vin.get("vout", -1)) == vout:
                     return mtx, False
+        # 2b. O(1) verified presenter spend_txid hint (M-6 / F-11a: verified strictly via active-chain getrawtransaction + vin match!)
+        if isinstance(spend_txid_hint, str) and len(spend_txid_hint) == 64:
+            htx = self._get_raw_tx(spend_txid_hint, allow_mempool=True, mempool_set=set(mempool_txs.keys()))
+            if htx is not None:
+                for vin in htx.get("vin", []):
+                    if vin.get("txid") == txid and int(vin.get("vout", -1)) == vout:
+                        return htx, False
         # 3. Scan active confirmed blocks from created_height..tip_height (cached per height)
         for h in range(max(1, created_height), tip_height + 1):
             blk = self._get_block_by_height(h)
@@ -812,22 +834,28 @@ class ColdNamecoinObserver:
             if spent_vin is None:
                 continue
             found_spender = True
-            # Try to derive witness_policy if last_confirmed had an unknown_unspent_spk
+            # Try to derive witness_policy (P2WPKH or P2WSH m-of-n multisig, M-6) if last_confirmed had an unknown_unspent_spk
             wit_pol = last_confirmed.get("owner_policy")
             wit = spent_vin.get("txinwitness", [])
-            if (
-                isinstance(wit_pol, dict)
-                and wit_pol.get("kind") == "unknown_unspent_spk"
-                and len(wit) == 2
-                and len(wit[1]) == 66
-                and sl.is_valid_compressed_pubkey(wit[1])
-            ):
-                cand = {"kind": "key", "pk": wit[1]}
-                cand_spk_hex = sl.compile_script_policy(cand)[0].hex()
-                if cand_spk_hex == wit_pol.get("spk_hex"):
-                    wit_pol = cand
-                    last_confirmed["owner_policy"] = cand
-                    policies_by_spk.setdefault(cand_spk_hex, cand)
+            if isinstance(wit_pol, dict) and wit_pol.get("kind") == "unknown_unspent_spk":
+                if len(wit) == 2 and len(wit[1]) == 66 and sl.is_valid_compressed_pubkey(wit[1]):
+                    cand = {"kind": "key", "pk": wit[1]}
+                    cand_spk_hex = sl.compile_script_policy(cand)[0].hex()
+                    if cand_spk_hex == wit_pol.get("spk_hex"):
+                        wit_pol = cand
+                        last_confirmed["owner_policy"] = cand
+                        policies_by_spk.setdefault(cand_spk_hex, cand)
+                elif len(wit) >= 3 and isinstance(wit[-1], str):
+                    try:
+                        cand_ms = sl.parse_p2wsh_multisig_script(bytes.fromhex(wit[-1]))
+                        if isinstance(cand_ms, dict):
+                            cand_ms_spk = sl.compile_script_policy(cand_ms)[0].hex()
+                            if cand_ms_spk == wit_pol.get("spk_hex"):
+                                wit_pol = cand_ms
+                                last_confirmed["owner_policy"] = cand_ms
+                                policies_by_spk.setdefault(cand_ms_spk, cand_ms)
+                    except ValueError:
+                        pass
 
             parsed_any_for_name = False
             saw_unparseable_name_out = False
@@ -836,7 +864,14 @@ class ColdNamecoinObserver:
                 if not m_spk_hex:
                     continue
                 try:
-                    parsed_m = sl.parse_name_output(bytes.fromhex(m_spk_hex))
+                    m_spk_b = bytes.fromhex(m_spk_hex)
+                except ValueError:
+                    continue
+                # H-4 / R12-M2: Skip standard SegWit/Taproot/P2A witness programs (e.g. 51024e73) before name-op check!
+                if sl.is_witness_program_script(m_spk_b):
+                    continue
+                try:
+                    parsed_m = sl.parse_name_output(m_spk_b)
                 except ValueError:
                     # R2-A-03: Namecoin name-op prefix (OP_NAME_NEW=51 / OP_NAME_FIRSTUPDATE=52 / OP_NAME_UPDATE=53) failing parse MUST fail closed!
                     if m_spk_hex.startswith(("51", "52", "53")):
@@ -904,9 +939,15 @@ class ColdNamecoinObserver:
             raw_hist = self.read_rpc("name_history", name)
         except RuntimeError as exc:
             msg = str(exc).lower()
-            if "name not found" in msg and "method not found" not in msg:
+            if (
+                ("name not found" in msg or "name never existed" in msg)
+                and "method not found" not in msg
+                and "not enabled" not in msg
+                and "403" not in msg
+                and "forbidden" not in msg
+            ):
                 return []
-            # R2-A-01 / D8-M2: Transient/RPC failure or -32601 Method not found MUST fail closed with history_truncated=True!
+            # R2-A-01 / D8-M2 / R12-L3: Transient/RPC failure, -1 -namehistory disabled, HTTP 403, or -32601 MUST fail closed!
             return [{
                 "first_error_height": 0,
                 "history_truncated": True,
@@ -1042,6 +1083,14 @@ class ColdNamecoinObserver:
                         if sl.compile_script_policy(cand)[0].hex() == t_spk_hex:
                             derived_pols[pos] = cand
                             policies_by_spk.setdefault(t_spk_hex, cand)
+                    elif len(wit) >= 3 and isinstance(wit[-1], str):
+                        try:
+                            cand_ms = sl.parse_p2wsh_multisig_script(bytes.fromhex(wit[-1]))
+                            if isinstance(cand_ms, dict) and sl.compile_script_policy(cand_ms)[0].hex() == t_spk_hex:
+                                derived_pols[pos] = cand_ms
+                                policies_by_spk.setdefault(t_spk_hex, cand_ms)
+                        except ValueError:
+                            pass
 
             updates_v: list[dict[str, Any]] = []
             for pos, (h_conf, b_time, txd, vout_n, parsed) in enumerate(lin):
@@ -1058,6 +1107,36 @@ class ColdNamecoinObserver:
                     "txid": txd["txid"],
                     "vout": vout_n,
                 }
+                if pos == 0 and parsed["op"] == "NAME_FIRSTUPDATE":
+                    # H-11: Check whether OP_NAME_FIRSTUPDATE spent a self-owned SegWit NAME_NEW with SIGHASH_ALL (0x01)!
+                    fu_self = False
+                    for vin_f in txd.get("vin", []):
+                        pt_id = vin_f.get("txid")
+                        pt_v = vin_f.get("vout")
+                        if not isinstance(pt_id, str) or not isinstance(pt_v, int):
+                            continue
+                        if vin_f.get("scriptSig", {}).get("hex", "") != "":
+                            continue
+                        ptx_f = collected_txs.get(pt_id) or self._get_raw_tx(pt_id, allow_mempool=False)
+                        if ptx_f is None:
+                            continue
+                        pout_f = next((o for o in ptx_f.get("vout", []) if int(o["n"]) == pt_v), None)
+                        if pout_f is None:
+                            continue
+                        pspk_h = pout_f.get("scriptPubKey", {}).get("hex", "")
+                        try:
+                            pspk_b = bytes.fromhex(pspk_h)
+                            if sl.is_witness_program_script(pspk_b):
+                                continue
+                            p_new = sl.parse_name_output(pspk_b)
+                        except ValueError:
+                            continue
+                        if p_new.get("op") == "NAME_NEW" and p_new.get("trailing_script_pubkey") == t_spk_hex:
+                            sh_f = _extract_sighash_bytes(vin_f.get("txinwitness", []))
+                            if sh_f and all(b == 0x01 for b in sh_f):
+                                fu_self = True
+                            break
+                    u_obj["firstupdate_self_funded"] = fu_self
                 raw_uver = txd.get("version")
                 if isinstance(raw_uver, int) and not isinstance(raw_uver, bool):
                     u_obj["version"] = raw_uver
@@ -1144,6 +1223,9 @@ class ColdNamecoinObserver:
                 selected |= continuation_vouts_by_frame.get((dec["action"], dec["commitment"]), set())
                 if dec["action"] == "0x0e":
                     selected.add(0)
+                elif dec["action"] == "0x14" and len(vouts) > 1 and 1 in out_by_n:
+                    # BLK-2: Every non-terminal 0x14 checkpoint MUST place next_log_outpoint at vout=1!
+                    selected.add(1)
         else:
             # Frameless spend (e.g. active/pending halt returning vacant_seal at vout 0, or P2A CPFP anchor)
             if 0 in out_by_n:
@@ -1155,10 +1237,19 @@ class ColdNamecoinObserver:
             if spk_hex == p2a_hex or spk_hex in policies_by_spk:
                 selected.add(n)
 
+        def _is_non_continuation_spk(h: str) -> bool:
+            if h.startswith("6a"):
+                return True
+            try:
+                b = bytes.fromhex(h)
+            except ValueError:
+                return False
+            return (not sl.is_witness_program_script(b)) and h.startswith(("52", "53"))
+
         return [
             n
             for n in sorted(selected)
-            if n in out_by_n and not out_by_n[n].startswith(("6a", "52", "53"))
+            if n in out_by_n and not _is_non_continuation_spk(out_by_n[n])
         ]
 
     def build_chain_view(
@@ -1171,8 +1262,10 @@ class ColdNamecoinObserver:
         extra_block_hashes: list[str] | None = None,
         extra_block_heights: list[int] | set[int] | None = None,
         extra_policies: list[dict[str, Any]] | None = None,
+        extra_spend_hints: dict[tuple[str, int], str] | None = None,
         manifests: dict[str, Any] | None = None,
         max_spend_hops: int = 16,
+        max_log_chain_hops: int = 4096,
         retry_on_tip_change: int = 0,
         max_hint_names: int = 64,
         max_hint_txids: int = 256,
@@ -1274,6 +1367,45 @@ class ColdNamecoinObserver:
                 if txd is not None:
                     collected_txs[tid] = txd
 
+            # 2b. BLK-2: Backward 0x14 single-use-seal chain walk along canonical vout==1 (no 16-hop limit!)
+            def _is_0x14_tx(t_obj: dict[str, Any]) -> bool:
+                op_h = _extract_slnk_opreturn_hex(t_obj.get("vout", []))
+                if op_h is None:
+                    return False
+                try:
+                    return sl.decode_opreturn(bytes.fromhex(op_h)).get("action") == "0x14"
+                except ValueError:
+                    return False
+
+            log_back_q: list[tuple[dict[str, Any], int]] = [
+                (txd, 0) for txd in collected_txs.values() if _is_0x14_tx(txd)
+            ]
+            seen_log_back: set[str] = {txd["txid"] for txd, _ in log_back_q}
+            while log_back_q:
+                cur_ltx, lhop = log_back_q.pop(0)
+                if lhop >= max_log_chain_hops:
+                    continue
+                for vin in cur_ltx.get("vin", []):
+                    ptx_id = vin.get("txid")
+                    pv = int(vin.get("vout", -1))
+                    if not isinstance(ptx_id, str) or len(ptx_id) != 64:
+                        continue
+                    if pv != 1 and (ptx_id, pv) not in target_outpoints:
+                        continue
+                    if ptx_id in seen_log_back:
+                        continue
+                    ptx_obj = collected_txs.get(ptx_id) or self._get_raw_tx(
+                        ptx_id, allow_mempool=True, mempool_set=mempool_set
+                    )
+                    if ptx_obj is None:
+                        continue
+                    if _is_0x14_tx(ptx_obj):
+                        collected_txs[ptx_id] = ptx_obj
+                        seen_log_back.add(ptx_id)
+                        log_back_q.append((ptx_obj, lhop + 1))
+                    elif (ptx_id, pv) in target_outpoints or ptx_id in target_txids:
+                        collected_txs[ptx_id] = ptx_obj
+
             # 3. Build initial spent_map strictly from verified active-chain txs & live mempool (A-10)
             spent_map: dict[tuple[str, int], str] = {}
             absent_outpoints: set[tuple[str, int]] = set()
@@ -1289,6 +1421,7 @@ class ColdNamecoinObserver:
             queue: list[tuple[str, int, int]] = [(txid, vout, 0) for txid, vout in sorted(target_outpoints)]
             visited_ops: set[tuple[str, int]] = set()
             utxo_rpc_failed = False
+            spend_hints_map = dict(extra_spend_hints or {})
             while queue:
                 op_txid, op_vout, hop = queue.pop(0)
                 if (op_txid, op_vout) in visited_ops or hop > max_spend_hops:
@@ -1301,15 +1434,26 @@ class ColdNamecoinObserver:
                 act_cr = self._active_confirmed_height(txd["blockhash"], txd.get("confirmations")) if "blockhash" in txd else None
                 created_h = act_cr[0] if act_cr is not None else tip_h
                 out_match = next((o for o in txd.get("vout", []) if int(o["n"]) == op_vout), None)
-                if out_match and out_match.get("scriptPubKey", {}).get("hex", "").startswith(("52", "53")):
-                    continue
+                if out_match:
+                    om_hex = out_match.get("scriptPubKey", {}).get("hex", "")
+                    try:
+                        om_b = bytes.fromhex(om_hex)
+                    except ValueError:
+                        om_b = b""
+                    if (not sl.is_witness_program_script(om_b)) and om_hex.startswith(("52", "53")):
+                        continue
                 if (op_txid, op_vout) in spent_map:
                     spender = collected_txs.get(spent_map[(op_txid, op_vout)])
                     absent = False
                 else:
                     try:
                         spender, absent = self._find_spender_cold(
-                            op_txid, op_vout, created_h, tip_height=tip_h, mempool_txs=mempool_txs
+                            op_txid,
+                            op_vout,
+                            created_h,
+                            tip_height=tip_h,
+                            mempool_txs=mempool_txs,
+                            spend_txid_hint=spend_hints_map.get((op_txid, op_vout)),
                         )
                     except RuntimeError:
                         utxo_rpc_failed = True
@@ -1328,7 +1472,8 @@ class ColdNamecoinObserver:
                 for txid, txd in collected_txs.items()
             }
 
-            # Verify every target_block (recent_block) is on the active chain (A-2) and collect confirmed block_times (verified MTP ONLY, never header.time)!
+            # Verify every target_block (recent_block) is on the active chain (A-2), populate blocks[block_hash] for ALL
+            # confirmed txs (M06), and collect confirmed block_times (verified MTP ONLY, never header.time)!
             blocks_view: dict[str, int] = {tip_hash: tip_h}
             block_times_view: dict[str, int] = {}
             if start_s["mediantime"] is not None:
@@ -1340,8 +1485,11 @@ class ColdNamecoinObserver:
                     if act_b[1] is not None:
                         block_times_view[str(act_b[0])] = act_b[1]
             for tv in txs_view.values():
-                if tv.get("confirmed_height") is not None and tv.get("block_time") is not None:
-                    block_times_view[str(tv["confirmed_height"])] = int(tv["block_time"])
+                if tv.get("confirmed_height") is not None:
+                    if isinstance(tv.get("block_hash"), str):
+                        blocks_view[tv["block_hash"]] = int(tv["confirmed_height"])
+                    if tv.get("block_time") is not None:
+                        block_times_view[str(tv["confirmed_height"])] = int(tv["block_time"])
             for lins in name_regs_view.values():
                 for lin in lins:
                     for u in lin.get("updates", []):
@@ -2007,7 +2155,9 @@ def self_test() -> None:
     state["strip_mediantime"] = False
     obs._invalidate_caches()
 
-    # Test 15 (draft.11): 0x14 next_log_vout continuation + 0x13 quiet maturity MTP + nVersion preservation + first_error_height!
+    # Test 15 (draft.11 / draft.13 BLK-2 + M-6 + H-4 + H-11):
+    # Canonical 0x14 next_log_vout=1 + 20-hop backward walk (>16-hop limit) + 0x13 quiet maturity MTP + nVersion +
+    # blocks_view referential integrity (M06) + P2A mempool non-collision (H-4) + P2WSH multisig recovery + firstupdate_self_funded (H-11)!
     log_gen_txid = hashlib.sha256(b"log-gen-tx").hexdigest()
     log_cp1_txid = hashlib.sha256(b"log-cp1-tx").hexdigest()
     log_cp2_txid = hashlib.sha256(b"log-cp2-tx").hexdigest()
@@ -2026,7 +2176,7 @@ def self_test() -> None:
         "log_id": log_id_t,
         "network": "regtest",
         "next_log_policy": pol2,
-        "next_log_vout": 2,
+        "next_log_vout": 1,
         "prev_log_outpoint": {"txid": log_gen_txid, "vout": 0},
         "role": "notary",
         "seq": 1,
@@ -2034,7 +2184,7 @@ def self_test() -> None:
         "type": "seallink-log-checkpoint/1",
     }
     cp1_env = sl.sign_envelope(cp1_p, [reg_sk])
-    cp2_p = dict(cp1_p, seq=2, prev_checkpoint_id=sl.content_addr(cp1_env), prev_log_outpoint={"txid": log_cp1_txid, "vout": 2}, terminal=True, checkpoints_root=sl.rfc9162_mth([sl.ckpt_leaf(1, sl.content_addr(cp1_env))]).hex())
+    cp2_p = dict(cp1_p, seq=2, prev_checkpoint_id=sl.content_addr(cp1_env), prev_log_outpoint={"txid": log_cp1_txid, "vout": 1}, terminal=True, checkpoints_root=sl.rfc9162_mth([sl.ckpt_leaf(1, sl.content_addr(cp1_env))]).hex())
     cp2_p.pop("next_log_vout")
     cp2_p.pop("next_log_policy")
     cp2_env = sl.sign_envelope(cp2_p, [reg_sk])
@@ -2044,13 +2194,13 @@ def self_test() -> None:
         "vin": [{"txid": log_gen_txid, "vout": 0, "sequence": 0xFFFFFFFF, "scriptSig": {"hex": ""}, "txinwitness": [fake_sig, pk1]}],
         "vout": [
             {"n": 0, "value": 0.0, "scriptPubKey": {"hex": sl.encode_opreturn(0x14, sl.content_addr(cp1_env)).hex()}},
-            {"n": 1, "scriptPubKey": {"hex": other_spk.hex()}},
-            {"n": 2, "scriptPubKey": {"hex": spk2.hex()}},
+            {"n": 1, "scriptPubKey": {"hex": spk2.hex()}},
+            {"n": 2, "scriptPubKey": {"hex": other_spk.hex()}},
         ],
     }
     txs[log_cp2_txid] = {
         "txid": log_cp2_txid, "version": 2, "blockhash": b204, "confirmations": 1,
-        "vin": [{"txid": log_cp1_txid, "vout": 2, "sequence": 0xFFFFFFFF, "scriptSig": {"hex": ""}, "txinwitness": [fake_sig, pk2]}],
+        "vin": [{"txid": log_cp1_txid, "vout": 1, "sequence": 0xFFFFFFFF, "scriptSig": {"hex": ""}, "txinwitness": [fake_sig, pk2]}],
         "vout": [{"n": 0, "value": 0.0, "scriptPubKey": {"hex": sl.encode_opreturn(0x14, sl.content_addr(cp2_env)).hex()}}],
     }
     txs[reb13_txid] = {
@@ -2059,7 +2209,7 @@ def self_test() -> None:
     }
     blocks_by_h[200]["tx"].extend([txs[log_gen_txid], txs[log_cp1_txid]])
     blocks_by_h[204]["tx"].append(txs[log_cp2_txid])
-    state["spent_utxos"] = {(log_gen_txid, 0), (log_cp1_txid, 2)}
+    state["spent_utxos"] = {(log_gen_txid, 0), (log_cp1_txid, 1)}
     txs[u2_txid]["version"] = 0x7100
     state["corrupt_second_reg"] = True
     reb_hint = {"type": "seallink-name-binding/1", "binding_mode": "voluntary", "delay_blocks": 3}
@@ -2070,12 +2220,107 @@ def self_test() -> None:
         extra_policies=[pol1, pol2],
     )
     assert cv_d11["txs"][log_gen_txid]["outputs"]["0"]["spent_by_txid"] == log_cp1_txid
-    assert cv_d11["txs"][log_cp1_txid]["outputs"]["2"]["spent_by_txid"] == log_cp2_txid
+    assert cv_d11["txs"][log_cp1_txid]["outputs"]["1"]["spent_by_txid"] == log_cp2_txid
     assert cv_d11["txs"][reb13_txid]["version"] == 0x7100
     assert cv_d11["block_times"].get("203") == 1795218777
     assert cv_d11["names"]["id/school"]["first_error_height"] == 204
     assert cv_d11["names"]["id/school"]["updates"][-1]["version"] == 0x7100
+    # M06: Every confirmed tx's block_hash MUST exist in cv["blocks"] with matching confirmed_height!
+    for tid_m6, tv_m6 in cv_d11["txs"].items():
+        if tv_m6.get("confirmed_height") is not None:
+            assert tv_m6.get("block_hash") in cv_d11["blocks"], f"Missing block_hash in blocks for {tid_m6}"
+            assert cv_d11["blocks"][tv_m6["block_hash"]] == tv_m6["confirmed_height"]
     state["corrupt_second_reg"] = False
+
+    # Test 16 (BLK-2): 20-hop 0x14 backward walk presenting ONLY the head txid (exceeds max_spend_hops=16!)
+    chain_gen_txid = hashlib.sha256(b"log20-gen").hexdigest()
+    txs[chain_gen_txid] = {"txid": chain_gen_txid, "version": 2, "blockhash": b200, "confirmations": 5, "vin": [], "vout": [{"n": 0, "scriptPubKey": {"hex": spk1.hex()}}]}
+    prev_tid_20, prev_v_20 = chain_gen_txid, 0
+    chain20_txids: list[str] = []
+    for step_i in range(1, 21):
+        st_txid = hashlib.sha256(f"log20-hop-{step_i}".encode()).hexdigest()
+        vouts_20: list[dict[str, Any]] = [
+            {"n": 0, "value": 0.0, "scriptPubKey": {"hex": sl.encode_opreturn(0x14, f"{step_i:064x}").hex()}},
+        ]
+        if step_i < 20:
+            vouts_20.append({"n": 1, "scriptPubKey": {"hex": spk2.hex()}})
+        txs[st_txid] = {
+            "txid": st_txid, "version": 2, "blockhash": b200, "confirmations": 5,
+            "vin": [{"txid": prev_tid_20, "vout": prev_v_20, "sequence": 0xFFFFFFFF, "scriptSig": {"hex": ""}, "txinwitness": [fake_sig, pk1]}],
+            "vout": vouts_20,
+        }
+        chain20_txids.append(st_txid)
+        prev_tid_20, prev_v_20 = st_txid, 1
+    cv_20 = obs.build_chain_view(extra_txids=[chain20_txids[-1]], extra_outpoints=[(chain_gen_txid, 0)])
+    assert all(t in cv_20["txs"] for t in chain20_txids), "Backward 0x14 walk MUST fetch all 20 hops!"
+    assert cv_20["txs"][chain_gen_txid]["outputs"]["0"]["spent_by_txid"] == chain20_txids[0]
+    assert cv_20["txs"][chain20_txids[18]]["outputs"]["1"]["spent_by_txid"] == chain20_txids[19]
+
+    # Test 17 (H-4 / R12-M2): Mempool OP_NAME_UPDATE carrying P2A output (51024e73) MUST NOT trigger unparseable=True!
+    p2a_mem_txid = hashlib.sha256(b"p2a-mem-name").hexdigest()
+    txs[p2a_mem_txid] = {
+        "txid": p2a_mem_txid,
+        "vin": [{"txid": u2_txid, "vout": 0, "sequence": 0xFFFFFFFF, "scriptSig": {"hex": ""}, "txinwitness": [fake_sig, pk2]}],
+        "vout": [
+            {"n": 0, "scriptPubKey": {"hex": sl.encode_name_output("NAME_UPDATE", spk2, name=b"id/school", value=v2_b).hex()}},
+            {"n": 1, "scriptPubKey": {"hex": sl.P2A_SCRIPTPUBKEY.hex()}},
+        ],
+    }
+    state["mempool"] = [p2a_mem_txid]
+    cv_p2a = obs.build_chain_view(extra_names=["id/school"], extra_policies=[pol1, pol2])
+    mem_us_p2a = cv_p2a["names"]["id/school"].get("mempool_updates", [])
+    assert len(mem_us_p2a) == 1 and not mem_us_p2a[0].get("unparseable"), f"P2A falsely triggered unparseable: {mem_us_p2a}"
+    state["mempool"] = []
+
+    # Test 18 (M-6 + H-11): P2WSH 2-of-2 recovery from wit[-1], firstupdate_self_funded=True, spend_txid hint O(1), & linear tip advance cache retention!
+    ms_pks = sorted([pk1, pk2])
+    ms_pol = {"kind": "multisig", "m": 2, "pks": ms_pks}
+    ms_spk, ms_ws = sl.compile_script_policy(ms_pol)
+    assert ms_ws is not None
+    nn_self_txid = hashlib.sha256(b"nn-self").hexdigest()
+    fu_ms_txid = hashlib.sha256(b"fu-ms").hexdigest()
+    u_ms_txid = hashlib.sha256(b"u-ms").hexdigest()
+    txs[nn_self_txid] = {
+        "txid": nn_self_txid, "blockhash": b200, "confirmations": 5, "vin": [],
+        "vout": [{"n": 0, "scriptPubKey": {"hex": sl.encode_name_output("NAME_NEW", ms_spk, hash20=sl.hash160(b"\x07" * 20 + b"id/ms")).hex()}}],
+    }
+    txs[fu_ms_txid] = {
+        "txid": fu_ms_txid, "blockhash": b200, "confirmations": 5,
+        "vin": [{"txid": nn_self_txid, "vout": 0, "sequence": 0xFFFFFFFF, "scriptSig": {"hex": ""}, "txinwitness": ["", fake_sig, fake_sig, ms_ws.hex()]}],
+        "vout": [{"n": 0, "scriptPubKey": {"hex": sl.encode_name_output("NAME_FIRSTUPDATE", ms_spk, name=b"id/ms", rand=b"\x07" * 20, value=v2_b).hex()}}],
+    }
+    txs[u_ms_txid] = {
+        "txid": u_ms_txid, "blockhash": b204, "confirmations": 1,
+        "vin": [{"txid": fu_ms_txid, "vout": 0, "sequence": 0xFFFFFFFF, "scriptSig": {"hex": ""}, "txinwitness": ["", fake_sig, fake_sig, ms_ws.hex()]}],
+        "vout": [{"n": 0, "scriptPubKey": {"hex": sl.encode_name_output("NAME_UPDATE", spk1, name=b"id/ms", value=v2_b).hex()}}],
+    }
+    orig_nh = mock_rpc
+
+    def mock_rpc_ext(method: str, *args: Any) -> Any:
+        if method == "name_history" and args[0] == "id/ms":
+            return [{"txid": fu_ms_txid, "vout": 0, "height": 200}, {"txid": u_ms_txid, "vout": 0, "height": 204}]
+        if method == "name_history" and args[0] == "id/forbidden403":
+            raise RuntimeError("namecoin-cli name_history failed: error: HTTP 403 Forbidden")
+        return orig_nh(method, *args)
+
+    obs_ext = ColdNamecoinObserver(mock_rpc_ext, [("peer-a", mock_compare_rpc)], network="regtest", clock_mode="regtest_deterministic")
+    # Notice: NO extra_policies passed for ms_pol — derived purely from P2WSH wit[-1]!
+    cv_ms = obs_ext.build_chain_view(extra_names=["id/ms", "id/forbidden403"])
+    ms_us = cv_ms["names"]["id/ms"]["updates"]
+    assert ms_us[0]["owner_policy"] == ms_pol, f"Expected P2WSH multisig derived from wit[-1], got {ms_us[0]['owner_policy']}"
+    assert ms_us[0]["firstupdate_self_funded"] is True
+    assert cv_ms["names"]["id/forbidden403"].get("history_truncated") is True
+    # Linear tip advance 204 -> 205 keeps confirmed block 200 cached!
+    obs_ext._get_block_by_height(200)
+    assert 200 in obs_ext._block_cache
+    state["tip_h"], state["tip_hash"] = 205, b205
+    obs_ext._sample_tip()
+    assert 200 in obs_ext._block_cache, "Linear tip advance MUST preserve immutable confirmed block cache!"
+    # Reorg at same height 205 -> b204_orphan MUST still wipe caches (A-3)!
+    state["tip_hash"] = b204_orphan
+    obs_ext._sample_tip()
+    assert 200 not in obs_ext._block_cache, "Reorg MUST invalidate caches (A-3)!"
+    state["tip_h"], state["tip_hash"] = 204, b204
 
 
 if __name__ == "__main__":

@@ -192,7 +192,7 @@
             "predecessor_terminal_denials_root": { "$ref": "common.schema.json#/$defs/Hex64" },
             "prev_log_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
             "terminal": { "type": "boolean" },
-            "next_log_vout": { "$ref": "common.schema.json#/$defs/Vout" },
+            "next_log_vout": { "type": "integer", "const": 1, "x-seallink-refusal": "WIRE_INTEGER" },
             "next_log_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
             "batch_count": { "type": "integer", "minimum": 0, "maximum": 65536, "x-seallink-refusal": "WIRE_INTEGER" },
             "cumulative_entries_count": { "$ref": "common.schema.json#/$defs/Uint53" },
@@ -202,7 +202,6 @@
             "checkpoints_root": { "$ref": "common.schema.json#/$defs/Hex64" }
           },
           "dependentRequired": {
-            "predecessor_log_id": ["predecessor_terminal_denials_root"],
             "predecessor_terminal_denials_root": ["predecessor_log_id"],
             "next_log_vout": ["next_log_policy"],
             "next_log_policy": ["next_log_vout"]
@@ -210,10 +209,15 @@
           "allOf": [
             {
               "if": { "required": ["seq"], "properties": { "seq": { "type": "integer", "const": 1 } } },
-              "then": { "not": { "required": ["prev_checkpoint_id"] } },
+              "then": {
+                "not": { "required": ["prev_checkpoint_id"] },
+                "dependentRequired": {
+                  "predecessor_log_id": ["predecessor_terminal_denials_root"]
+                }
+              },
               "else": {
                 "required": ["prev_checkpoint_id"],
-                "not": { "anyOf": [{ "required": ["predecessor_log_id"] }, { "required": ["predecessor_terminal_denials_root"] }] }
+                "not": { "required": ["predecessor_terminal_denials_root"] }
               }
             },
             {
@@ -253,6 +257,11 @@
               "if": { "required": ["state_seq"], "properties": { "state_seq": { "type": "integer", "const": 1 } } },
               "then": { "not": { "required": ["prev_record_id"] } },
               "else": { "required": ["prev_record_id"] }
+            },
+            {
+              "if": { "required": ["role"], "properties": { "role": { "const": "release" } } },
+              "then": { "properties": { "denial_key": { "pattern": "^rel:[0-9a-f]{64}\\|\\*$" } } },
+              "else": { "properties": { "denial_key": { "pattern": "^(act|target):[0-9a-f]{64}\\|\\*$" } } }
             }
           ]
         },
@@ -280,7 +289,14 @@
             "prev_record_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "reason_code": { "type": "string", "pattern": "^[a-z0-9._-]+$", "minLength": 1, "maxLength": 64, "not": { "pattern": "\n" } },
             "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" }
-          }
+          },
+          "allOf": [
+            {
+              "if": { "required": ["role"], "properties": { "role": { "const": "release" } } },
+              "then": { "properties": { "denial_key": { "pattern": "^rel:[0-9a-f]{64}\\|\\*$" } } },
+              "else": { "properties": { "denial_key": { "pattern": "^(act|target):[0-9a-f]{64}\\|\\*$" } } }
+            }
+          ]
         },
         "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
       }
@@ -290,6 +306,16 @@
         { "$ref": "#/$defs/LogRevocation" },
         { "$ref": "#/$defs/LogReinstatement" }
       ]
+    },
+    "PredecessorTerminalCheckpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoint", "checkpoint_txid"],
+      "description": "Authenticated terminal checkpoint of a predecessor log in an O(1) handover chain.",
+      "properties": {
+        "checkpoint": { "$ref": "#/$defs/LogCheckpoint" },
+        "checkpoint_txid": { "$ref": "common.schema.json#/$defs/Hex64" }
+      }
     },
     "StateRecordInclusion": {
       "type": "object",
@@ -316,6 +342,7 @@
             "role": { "$ref": "#/$defs/LogRole" },
             "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "genesis_seal_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
+            "predecessor_log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "fraud_mode": { "const": "equivocation" },
             "cp_a": { "$ref": "#/$defs/LogCheckpoint" },
             "cp_b": { "$ref": "#/$defs/LogCheckpoint" },
@@ -334,6 +361,7 @@
             "role": { "$ref": "#/$defs/LogRole" },
             "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "genesis_seal_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
+            "predecessor_log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "fraud_mode": { "const": "revocation_omission" },
             "cp_a": { "$ref": "#/$defs/LogCheckpoint" },
             "cp_a_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
@@ -357,6 +385,7 @@
             "role": { "$ref": "#/$defs/LogRole" },
             "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "genesis_seal_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
+            "predecessor_log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "fraud_mode": { "const": "illegal_reversion" },
             "cp_a": { "$ref": "#/$defs/LogCheckpoint" },
             "cp_a_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
@@ -367,7 +396,13 @@
             "smt_proof_a": { "$ref": "#/$defs/SmtProof" },
             "smt_proof_b": { "$ref": "#/$defs/SmtProof" },
             "rec_b": { "$ref": "#/$defs/LogStateRecord" },
-            "rec_b_inclusion": { "$ref": "#/$defs/StateRecordInclusion" }
+            "rec_b_inclusion": { "$ref": "#/$defs/StateRecordInclusion" },
+            "predecessor_chain": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 16,
+              "items": { "$ref": "#/$defs/PredecessorTerminalCheckpoint" }
+            }
           }
         },
         {
@@ -381,6 +416,7 @@
             "role": { "$ref": "#/$defs/LogRole" },
             "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "genesis_seal_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
+            "predecessor_log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
             "fraud_mode": { "const": "invalid_checkpoint_chain" },
             "cp_next": { "$ref": "#/$defs/LogCheckpoint" },
             "cp_next_txid": { "$ref": "common.schema.json#/$defs/Hex64" },

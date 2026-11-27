@@ -227,11 +227,35 @@
     },
     {
       "decoded": {
+        "action": "0x1a",
+        "critical_scope": "forward_only"
+      },
+      "id": "future-0x1a-forward_only",
+      "script_hex": "6a05534c4e4b1a0105"
+    },
+    {
+      "decoded": {
         "action": "0x1b",
         "critical_scope": "retroactive"
       },
       "id": "future-0x1b-retroactive",
       "script_hex": "6a05534c4e4b1b220119882bd3ba284d6056276faa285e5afe4fa8dc760309312e1a13be1f92cf98fb00"
+    },
+    {
+      "decoded": {
+        "action": "0x1c",
+        "critical_scope": "retroactive"
+      },
+      "id": "future-0x1c-retroactive",
+      "script_hex": "6a05534c4e4b1c4aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "decoded": {
+        "action": "0x1f",
+        "critical_scope": "retroactive"
+      },
+      "id": "future-0x1f-retroactive",
+      "script_hex": "6a05534c4e4b1f22010c810c45d29c35e295cb56755cb952afd450eaab611a25162900a491c29bca5f00"
     },
     {
       "decoded": {
@@ -243,6 +267,17 @@
       },
       "id": "future-0x20-advisory",
       "script_hex": "6a05534c4e4b2022010bd9ff9466ad64be3650ac9cb8c0217fc97ac863f37077360d6ddd0efe31f73800"
+    },
+    {
+      "decoded": {
+        "action": "0x2f",
+        "advisory": true,
+        "commitment": "be0b31a918ca73f609628cadfd3db30e74fde5ea0100bd0770109e0f808fd9af",
+        "loc_type": "0x00",
+        "version": 1
+      },
+      "id": "future-0x2f-advisory",
+      "script_hex": "6a05534c4e4b2f2201be0b31a918ca73f609628cadfd3db30e74fde5ea0100bd0770109e0f808fd9af00"
     }
   ],
   "opreturn_frames": [
@@ -294,6 +329,19 @@
       "id": "NOTARY_ACT",
       "script_bytes": 42,
       "script_hex": "6a05534c4e4b04220138c1e76bffbb74cd639c64cc8e52443e7ccb576eca47ef6a688aa139e09518b200"
+    },
+    {
+      "action": "0x04",
+      "decoded": {
+        "action": "0x04",
+        "commitment": "0b301052e13b9c5fe83a23958b41066a84127b11c15a8c5cb9ba01d831a19bdd",
+        "loc_type": "0x01",
+        "pointer": "44aaf4e8342f209bc4860eac128a0adfa880c9c8370e48d7aa38d95a64565284",
+        "version": 1
+      },
+      "id": "NOTARY_ACT_blossom",
+      "script_bytes": 74,
+      "script_hex": "6a05534c4e4b0442010b301052e13b9c5fe83a23958b41066a84127b11c15a8c5cb9ba01d831a19bdd0144aaf4e8342f209bc4860eac128a0adfa880c9c8370e48d7aa38d95a64565284"
     },
     {
       "action": "0x07",
@@ -449,13 +497,28 @@
     },
     {
       "expected_refusal": "CHAIN_FRAME_INVALID",
-      "id": "forbidden-locator-0x01-on-0x04",
-      "script_hex": "6a47534c4e4b0442011277d6e132fbf9ebe46f92cac396b7cd7bfb77bed5f187d74688a036fe62df5b01b9ab9d532d83ded8b481abed63b4233363534220e1c8c463e09e743b65bb15d5"
+      "id": "forbidden-locator-0x01-on-0x10",
+      "script_hex": "6a05534c4e4b1042012c91bc08c169a913c0acd208c1d1fcc9909fd484fc54f6d0dedde032ca1f5c7601aa23c4f175af2a849bb57b6f81b583d17ac9290c4ef894e78cab14b79be6293a"
     },
     {
       "expected_refusal": "CHAIN_FRAME_INVALID",
       "id": "non-minimal-op-pushdata1",
       "script_hex": "6a05534c4e4b144c22014c24841bfa7cfbcccd704e42540b1d5108882b3d7a7a3d214b16878cee1365ca00"
+    },
+    {
+      "expected_refusal": "CHAIN_FRAME_INVALID",
+      "id": "op5-instead-of-direct-len-prefix",
+      "script_hex": "6a05534c4e4b1555"
+    },
+    {
+      "expected_refusal": "CHAIN_FRAME_INVALID",
+      "id": "over-83-bytes-opreturn",
+      "script_hex": "6a05534c4e4b204c4baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "expected_refusal": "CHAIN_FRAME_INVALID",
+      "id": "unallocated-action-0x30",
+      "script_hex": "6a05534c4e4b300101"
     }
   ],
   "script_policies": [

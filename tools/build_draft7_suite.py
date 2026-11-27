@@ -1039,6 +1039,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
     oid_ag = sl.object_id(op_ag)
     of_b13_ag["origin_bundle"]["origin"] = o_ag
     of_b13_ag["origin_bundle"]["name_binding"]["origin_id"] = oid_ag
+    rm.sync_ward_origin_link(of_b13_ag, oid_ag)
     of_b13_ag["origin_bundle"]["opened_majority_unix"] = 1700000000  # Unauthenticated attacker-injected value in past!
     of_b13_ag["origin_bundle"].pop("majority_salt_hex", None)
     of_b13_ag["chain"]["txs"][of_b13_ag["origin_bundle"]["origin_anchor_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x09, sl.content_addr(o_ag)).hex()
@@ -1203,6 +1204,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
     for sl_s in op_6a["guardian_policy"]["slots"]:
         of_6a["chain"]["txs"][sl_s["vacant_utxo"]["txid"]]["outputs"]["0"]["script_pubkey_hex"] = _spk_hex(vac_6a)
     of_6a["chain"]["txs"][of_6a["origin_bundle"]["origin_anchor_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x09, sl.content_addr(o_6a)).hex()
+    rm.sync_ward_origin_link(of_6a, sl.object_id(op_6a))
     of_6a["chain"]["txs"][of_6a["origin_bundle"]["name_binding_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x0C, sl.object_id(of_6a["origin_bundle"]["name_binding"])).hex()
     of_6a["chain"]["txs"][rm._h32("og1-init-0x12")]["opreturn_hex"] = sl.encode_opreturn(0x12, sl.content_addr(g1_6a)).hex()
     of_6a["chain"]["txs"][rm._h32("og1-init-0x12")]["outputs"]["0"]["script_pubkey_hex"] = _spk_hex(act_6a)
@@ -1378,8 +1380,8 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "auth_upgrade",
         {"upgrade": au_bad_reg, "expected_service_id": "mail.example.org", "expected_provisional_auth_pubkey": au_key["xonly"], "chain": fx_au["chain"], "manifests": {au_man_h: au_man}},
         "REFUSE",
-        "NAME_REREGISTERED",
-        "H-24: seallink-auth-upgrade/1 with mismatched firstupdate_txid MUST refuse NAME_REREGISTERED.",
+        "NAME_OWNER_MISMATCH",
+        "H-24 / M-7: seallink-auth-upgrade/1 with mismatched firstupdate_txid MUST refuse registered code NAME_OWNER_MISMATCH.",
     )
 
     # 2. seallink-session-open/1 full lifecycle (open -> bearer verify -> extend -> close -> post-close refuse)
@@ -1760,7 +1762,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "compromised_policy": {"m": 1, "pks": [_kp("d7-cb-comp")["xonly"]]},
         "genesis": GENESIS_MAIN,
         "h_c": 749400,
-        "issuer": {"name": "id/alice", "owner_policy": fx_b1_ctrl["_alice_owner_pol"], "registration": fx_b1_ctrl["_alice_reg"]},
+        "issuer": {"name": "id/alice", "registration": fx_b1_ctrl["_alice_reg"]},
         "name_input": {"txid": _h32("d7-cb-name-in"), "vout": 0},
         "role": "cred",
         "type": "seallink-credential-break/1",
@@ -2893,8 +2895,17 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     add("d7-bnd-stmt-not-before-eq-now-admit", ["SL-IDEN-006"], "statement", {"chain": fx_au2["chain"], "statement": sl.sign_envelope(st_p2, [fx_au2["_keys"]["alice_gr"]["sk"]])}, "ADMIT", None, "Exact boundary: statement at not_before == chain.now admits (kills <= -> <).")
     add("d7-bnd-stmt-not-after-eq-not-before-refuse", ["SL-IDEN-006"], "statement", {"chain": fx_au2["chain"], "statement": sl.sign_envelope({**st_p2, "not_after": now_au - 10, "not_before": now_au - 10}, [fx_au2["_keys"]["alice_gr"]["sk"]])}, "REFUSE", "INVOKE_TIME_INVALID", "Exact boundary: statement with not_after == not_before refuses INVOKE_TIME_INVALID (kills <= -> <).")
     stmt_dev_ok = sl.sign_envelope(st_p2, [p256_s2], alg="p256")
-    add("d7-stmt-device-list-p256-admit", ["SL-IDEN-006", "SL-WIRE-012"], "statement", {"chain": fx_au2["chain"], "device_list": dl_ok, "statement": stmt_dev_ok}, "ADMIT", None, "config-section statement signed by enrolled P-256 device admits.")
-    add("d7-stmt-device-list-unregistered-refuse", ["SL-IDEN-006"], "statement", {"chain": fx_au2["chain"], "device_list": {**dl_ok, "owner": "id/bob"}, "statement": stmt_dev_ok}, "REFUSE", "DEVICE_UNAUTHORIZED", "statement signed by device whose device_list owner mismatches refuses DEVICE_UNAUTHORIZED.")
+    ch_st_dl = copy.deepcopy(fx_au2["chain"])
+    man_st_dl = rm.bind_device_list_manifest(
+        ch_st_dl,
+        "id/alice",
+        fx_au2["_alice_owner_pol"],
+        fx_au2["_alice_reg"],
+        dl_ok,
+        extra_link={"grant": fx_au2["_keys"]["alice_gr"]["xonly"]},
+    )
+    add("d7-stmt-device-list-p256-admit", ["SL-IDEN-006", "SL-WIRE-012"], "statement", {"chain": ch_st_dl, "device_list": dl_ok, "owner_manifest": man_st_dl, "statement": stmt_dev_ok}, "ADMIT", None, "config-section statement signed by enrolled P-256 device (bound via confirmed manifest sets.devices) admits.")
+    add("d7-stmt-device-list-unregistered-refuse", ["SL-IDEN-006"], "statement", {"chain": ch_st_dl, "device_list": {**dl_ok, "owner": "id/bob"}, "owner_manifest": man_st_dl, "statement": stmt_dev_ok}, "REFUSE", "DEVICE_UNAUTHORIZED", "statement signed by device whose device_list owner mismatches refuses DEVICE_UNAUTHORIZED.")
 
     # --- Batch 5: Invocation (admit_and_reserve), commit_result, & Decision 6B Optional Modules ---
     # 5a. Invocation CHAIN_MISMATCH, iat == now ADMIT, grant CHAIN_MISMATCH, root_gp is child grant -> GRANT_NOT_DELEGABLE
@@ -3386,6 +3397,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     oid_s12 = sl.object_id(op_s12)
     of_s12["origin_bundle"]["origin"] = o_s12
     of_s12["origin_bundle"]["name_binding"]["origin_id"] = oid_s12
+    rm.sync_ward_origin_link(of_s12, oid_s12)
     g1_s12_p = {**of_s12["origin_bundle"]["guardian_records"][0]["payload"], "origin_id": oid_s12}
     g1_s12 = sl.sign_envelope(g1_s12_p, [of_s12["_keys"]["reg_cred"]["sk"]])
     of_s12["origin_bundle"]["guardian_records"] = [g1_s12]
@@ -3437,7 +3449,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
         "compromised_policy": {"m": 1, "pks": [of_r_0b["_keys"]["reg_cred"]["xonly"]]},
         "genesis": GENESIS_MAIN,
         "h_c": of_r_0b["chain"]["txs"][rtx_rd]["confirmed_height"],  # Compromises roster 0x0f (NOT origin at 749000)!
-        "issuer": {"name": reg_name, "owner_policy": reg_opol, "registration": of_r_0b["chain"]["names"][reg_name]["registration"]},
+        "issuer": {"name": reg_name, "registration": of_r_0b["chain"]["names"][reg_name]["registration"]},
         "name_input": {"txid": reg_prev["txid"], "vout": reg_prev["vout"]},
         "role": "cred",
         "type": "seallink-credential-break/1",

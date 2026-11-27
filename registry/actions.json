@@ -198,7 +198,7 @@
       "allowed_where_predicates": {
         "origin_id": ["eq"],
         "subject_ward_name": ["eq"],
-        "revision": ["eq", "range"],
+        "revision": ["range"],
         "message_sha256": ["hash_eq"],
         "channel": ["eq", "in", "not_in"],
         "delivery_mode": ["eq"]

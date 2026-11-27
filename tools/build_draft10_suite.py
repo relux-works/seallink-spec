@@ -97,7 +97,7 @@ def _make_0x0b_update(
         "compromised_policy": compromised_pol,
         "genesis": GENESIS_MAIN,
         "h_c": h_c,
-        "issuer": {"name": name, "owner_policy": owner_pol, "registration": reg},
+        "issuer": {"name": name, "registration": reg},
         "name_input": {"txid": prev_u["txid"], "vout": prev_u["vout"]},
         "role": role,
         "type": "seallink-credential-break/1",
@@ -1367,6 +1367,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     oid_a17 = sl.object_id(op_a17)
     of_a17["origin_bundle"]["origin"] = o_a17
     of_a17["origin_bundle"]["name_binding"]["origin_id"] = oid_a17
+    rm.sync_ward_origin_link(of_a17, oid_a17)
     g1_a17_p = {**of_a17["origin_bundle"]["guardian_records"][0]["payload"], "origin_id": oid_a17}
     g1_a17 = sl.sign_envelope(g1_a17_p, [of_a17["_keys"]["reg_cred"]["sk"]])
     of_a17["origin_bundle"]["guardian_records"] = [g1_a17]
@@ -1990,12 +1991,15 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     add("d10-l1-slnk-0x13-malformed-outer-frame-invalid", ["SL-LDGR-010"], "credential",
         {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x13_bad_outer), "credential": sl_cred_env},
         "REFUSE", "CHAIN_FRAME_INVALID", "L1 (SPEC-02 §5.2): Truncated outer push on 0x13 MUST refuse CHAIN_FRAME_INVALID before range criticality.")
-    add("d10-l1-slnk-non-sighash-all-0x1b-still-critical-refuse", ["SL-LDGR-010"], "credential",
+    add("d10-l1-slnk-non-sighash-all-0x1b-inert-admit", ["SL-LDGR-010"], "credential",
         {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x1b_ok, sighash=0x81), "credential": sl_cred_env},
-        "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "L1 (SPEC-02 §5.2): Non-SIGHASH_ALL confirmed update after at_height carrying critical_retroactive 0x1b MUST still be checked and refuse ORIGIN_STATUS_INCOMPLETE.")
-    add("d10-l1-slnk-non-sighash-all-0x0b-bad-hc-frame-invalid", ["SL-LDGR-010"], "credential",
+        "ADMIT", None, "H-10 / R12-M3 (SPEC-02 §5.2): Non-SIGHASH_ALL update carrying 0x1b is strictly inert and MUST NOT poison historical eternal credentials.")
+    add("d10-l1-slnk-non-sighash-all-0x0b-bad-hc-inert-admit", ["SL-LDGR-010"], "credential",
         {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x0b_bad_hc, sighash=0x81), "credential": sl_cred_env},
-        "REFUSE", "CHAIN_FRAME_INVALID", "L1 (SPEC-02 §5.2): Non-SIGHASH_ALL confirmed update carrying 0x0b with h_c > inclusion_height MUST refuse CHAIN_FRAME_INVALID.")
+        "ADMIT", None, "H-10 / R12-M3 (SPEC-02 §5.2): Non-SIGHASH_ALL update carrying malformed/bad-hc 0x0b is strictly inert.")
+    add("d10-l1-slnk-sighash-all-0x0b-bad-hc-frame-invalid", ["SL-LDGR-010"], "credential",
+        {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x0b_bad_hc, sighash=0x01), "credential": sl_cred_env},
+        "REFUSE", "CHAIN_FRAME_INVALID", "SPEC-02 §5.2: Owner-authored SIGHASH_ALL confirmed update carrying 0x0b with h_c > inclusion_height MUST refuse CHAIN_FRAME_INVALID.")
 
     # L1-5: A -> B -> A role rotation consistency (retired_before_height) + cause-keyed role closures (NAME_ROLE_CHANGED vs 0x0b CRED_ISSUER_CLOSED)
     fx_aba = rm._base_invocation_fixture()
@@ -2054,7 +2058,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         "compromised_policy": {"m": 1, "pks": [k_a["xonly"]]},
         "genesis": GENESIS_MAIN,
         "h_c": 750001,
-        "issuer": {"name": "id/alice", "owner_policy": fx_aba["_alice_owner_pol"], "registration": fx_aba["_alice_reg"]},
+        "issuer": {"name": "id/alice", "registration": fx_aba["_alice_reg"]},
         "name_input": {"txid": u_rot_a2_tx, "vout": 0},
         "role": "grant",
         "type": "seallink-credential-break/1",
@@ -2459,7 +2463,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         "compromised_policy": {"m": 1, "pks": [fx_f10["_keys"]["alice_gr"]["xonly"]]},
         "genesis": GENESIS_MAIN,
         "h_c": 750001,
-        "issuer": {"name": "id/alice", "owner_policy": fx_f10["_alice_owner_pol"], "registration": fx_f10["_alice_reg"]},
+        "issuer": {"name": "id/alice", "registration": fx_f10["_alice_reg"]},
         "name_input": {"txid": u_prev_f10["txid"], "vout": u_prev_f10["vout"]},
         "role": "grant",
         "type": "seallink-credential-break/1",
@@ -2832,7 +2836,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         "compromised_policy": {"m": 1, "pks": [fx_f10["_keys"]["alice_gr"]["xonly"]]},
         "genesis": GENESIS_MAIN,
         "h_c": 750010,
-        "issuer": {"name": "id/alice", "owner_policy": fx_f10["_alice_owner_pol"], "registration": fx_f10["_alice_reg"]},
+        "issuer": {"name": "id/alice", "registration": fx_f10["_alice_reg"]},
         "name_input": {"txid": u_prev_f10_t["txid"], "vout": u_prev_f10_t["vout"]},
         "role": "grant",
         "type": "seallink-credential-break/1",

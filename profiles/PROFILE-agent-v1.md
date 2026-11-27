@@ -75,6 +75,7 @@ This profile defines normative SealLink authorization for autonomous software ag
 | `agent/session` | `max_wall_sec` | `uint64_str` | `range` |
 | `agent/guardian-message` | `origin_id` | `hex64` | `eq` |
 | `agent/guardian-message` | `subject_ward_name` | `NameStr` | `eq` |
+| `agent/guardian-message` | `revision` | `PositiveUint53` (`uint53`) | `range` |
 | `agent/guardian-message` | `message_sha256` | `hex64` | `hash_eq` |
 | `agent/guardian-message` | `channel` | `string` | `eq`, `in` |
 | `agent/guardian-message` | `delivery_mode` | `string` (`strict_drop \| untrusted_fallback`) | `eq` |

@@ -1126,6 +1126,18 @@
           }
         }
       },
+      "3b280b9cbb38bfb86844302c4290c8da512b960ba162932e9bb114661f77ef84": {
+        "confirmed_height": 749990,
+        "outputs": {
+          "0": {
+            "script_pubkey_hex": "0014ad9f63095b7f4972ef79129aa677b8746ce2b7f8",
+            "spent_by_txid": "167673cf4290e6424c9c4fd7eb049e8fd39ac22478a58b66dd9eab17fb003e72"
+          },
+          "1": {
+            "script_pubkey_hex": "0014ad9f63095b7f4972ef79129aa677b8746ce2b7f8"
+          }
+        }
+      },
       "3be06158c89e034a609651d496ab202ca4c87af1ac5563769a81fcdd54f39508": {
         "inputs": [
           {
@@ -1246,6 +1258,22 @@
         ],
         "opreturn_hex": "6a05534c4e4b0122012a5161d6fccaae212cab208d5af36a64e30f83208b1fb6603ab4d09f809076c500",
         "outputs": {}
+      },
+      "fd4d9417f34d3f8eaaf12c57f9ccf6b8903c076265a5782b9e54939cd82c1732": {
+        "confirmed_height": 749990,
+        "outputs": {
+          "0": {
+            "script_pubkey_hex": "0014ad9f63095b7f4972ef79129aa677b8746ce2b7f8",
+            "spent_by_txid": "3f2510be7239326703b3aa9a86f9f70b5e4c4d714718b571d007fa9b02304fd7"
+          },
+          "1": {
+            "script_pubkey_hex": "0014ad9f63095b7f4972ef79129aa677b8746ce2b7f8",
+            "spent_by_txid": "f95d394d32587c1d8153f8e319ce928f307ffae838de241b5f8fb88ce35eefc9"
+          },
+          "2": {
+            "script_pubkey_hex": "0014ad9f63095b7f4972ef79129aa677b8746ce2b7f8"
+          }
+        }
       },
       "ff896927135a71a35976598a111e02964dfc7798a6cdf352d78a38debeb36aac": {
         "confirmed_height": 750002,

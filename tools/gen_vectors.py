@@ -105,7 +105,7 @@ def build_wire_vectors() -> dict[str, Any]:
     seal_k = make_keypair("wire-seal")
 
     utf16_obj = {"\ue000": "private", "\U0001f512": "surrogate-pair", "a": 1, "b": "line1"}
-    multiline_obj = {"terms_text": "Line 1\nLine 2"}
+    multiline_obj = {"terms_text": "Line 1\nLine 2", "type": "seallink-grant/1"}
     max_int_obj = {"amount": "18446744073709551615", "height": 9007199254740991}
 
     positive_jcs = [
@@ -162,12 +162,22 @@ def build_wire_vectors() -> dict[str, Any]:
         {"id": "neg-null-value", "rule": "SL-WIRE-004", "input_hex": b'{"a":null}'.hex(), "expected_refusal": "WIRE_VALUE"},
         {"id": "neg-null-precedes-control-string", "rule": "SL-WIRE-018", "input_hex": b'{"a":"\\t","b":null}'.hex(), "expected_refusal": "WIRE_VALUE"},
         {"id": "neg-float-number", "rule": "SL-WIRE-007", "input_hex": b'{"a":1.5}'.hex(), "expected_refusal": "WIRE_NUMBER"},
+        {"id": "neg-trailing-dot-number", "rule": "SL-WIRE-007", "input_hex": b'{"a":1.}'.hex(), "expected_refusal": "WIRE_NUMBER"},
+        {"id": "neg-leading-dot-number", "rule": "SL-WIRE-007", "input_hex": b'{"a":.5}'.hex(), "expected_refusal": "WIRE_NUMBER"},
+        {"id": "neg-neg-leading-dot-number", "rule": "SL-WIRE-007", "input_hex": b'{"a":-.5}'.hex(), "expected_refusal": "WIRE_NUMBER"},
+        {"id": "neg-plus-prefix-number", "rule": "SL-WIRE-007", "input_hex": b'{"a":+1}'.hex(), "expected_refusal": "WIRE_NUMBER"},
+        {"id": "neg-incomplete-exp-number", "rule": "SL-WIRE-007", "input_hex": b'{"a":1e}'.hex(), "expected_refusal": "WIRE_NUMBER"},
         {"id": "neg-leading-zero-number", "rule": "SL-WIRE-007", "input_hex": b'{"a":01}'.hex(), "expected_refusal": "WIRE_NUMBER"},
         {"id": "neg-negative-number", "rule": "SL-WIRE-007", "input_hex": b'{"a":-1}'.hex(), "expected_refusal": "WIRE_NUMBER"},
         {"id": "neg-uint53-overflow", "rule": "SL-WIRE-007", "input_hex": b'{"a":9007199254740992}'.hex(), "expected_refusal": "WIRE_NUMBER"},
+        {"id": "neg-huge-5000-digit-int", "rule": "SL-WIRE-007", "input_hex": (b'{"a":' + (b"9" * 5000) + b"}").hex(), "expected_refusal": "WIRE_NUMBER"},
+        {"id": "neg-nan-constant", "rule": "SL-WIRE-002", "input_hex": b'{"a":NaN}'.hex(), "expected_refusal": "WIRE_JSON"},
+        {"id": "neg-infinity-constant", "rule": "SL-WIRE-002", "input_hex": b'{"a":Infinity}'.hex(), "expected_refusal": "WIRE_JSON"},
+        {"id": "neg-arabic-digit-number", "rule": "SL-WIRE-002", "input_hex": '{"a":0\u0661}'.encode("utf-8").hex(), "expected_refusal": "WIRE_JSON"},
         {"id": "neg-del-char", "rule": "SL-WIRE-005", "input_hex": b'{"a":"x\x7fy"}'.hex(), "expected_refusal": "WIRE_STRING"},
         {"id": "neg-c1-control", "rule": "SL-WIRE-005", "input_hex": '{"a":"x\u0085y"}'.encode("utf-8").hex(), "expected_refusal": "WIRE_STRING"},
         {"id": "neg-lf-in-non-multiline", "rule": "SL-WIRE-005", "input_hex": b'{"name":"id/a\\nb"}'.hex(), "expected_refusal": "WIRE_STRING"},
+        {"id": "neg-lf-in-untyped-terms-text", "rule": "SL-WIRE-005", "input_hex": b'{"terms_text":"Line 1\\nLine 2"}'.hex(), "expected_refusal": "WIRE_STRING"},
         {"id": "neg-unsorted-keys", "rule": "SL-WIRE-006", "input_hex": b'{"b":1,"a":2}'.hex(), "expected_refusal": "WIRE_NOT_CANONICAL"},
         {"id": "neg-pretty-whitespace", "rule": "SL-WIRE-006", "input_hex": b'{"a": 1}'.hex(), "expected_refusal": "WIRE_NOT_CANONICAL"},
     ]
@@ -282,11 +292,14 @@ def build_wire_vectors() -> dict[str, Any]:
     fsv_small = sl.fsverity_sha256_digest(fsv_small_data)
     fsv_multi_data = (b"A" * 4096) + (b"B" * 100)
     fsv_multi = sl.fsverity_sha256_digest(fsv_multi_data)
+    fsv_3level_digest = sl.fsverity_sha256_digest(b"\x5a" * 524289)
     art_sha = {"digest": sl.sha256(fsv_small_data).hex(), "scheme": "sha256"}
     art_fsv = {"digest": fsv_empty, "params": {"block_size": 4096, "hash_alg": "sha256", "salt_hex": "", "version": 1}, "scheme": "fsverity-sha256"}
     g_log_reg = {"txid": h32("golden-log-reg"), "vout": 0}
     g_log_gen = {"txid": h32("golden-log-gen"), "vout": 2}
     g_log_id = sl.compute_log_id("main", GENESIS_MAIN, "notary", "id/notary-golden", g_log_reg, g_log_gen)
+    g_log_gen_next = {"txid": h32("golden-log-gen-2"), "vout": 0}
+    g_log_id_ho = sl.compute_log_id("main", GENESIS_MAIN, "notary", "id/notary-golden", g_log_reg, g_log_gen_next, predecessor_log_id=g_log_id)
     g_ckpts = [sl.ckpt_leaf(i + 1, h32(f"golden-cp-{i + 1}")) for i in range(5)]
     g_mth_3 = sl.rfc9162_mth(g_ckpts[:3]).hex()
     g_peaks_3 = sl.rfc9162_peaks(g_ckpts[:3])
@@ -308,6 +321,41 @@ def build_wire_vectors() -> dict[str, Any]:
         and sl.smt_verify_proof(g_smt_abs)
         and g_smt_abs["root"] == g_smt_root
     )
+    g_smt4_kv = {
+        f"act:{h32('smt4-k1')}|*": h32("smt4-v1"),
+        f"act:{h32('smt4-k2')}|*": h32("smt4-v2"),
+        f"target:{h32('smt4-k3')}|*": h32("smt4-v3"),
+        f"rel:{h32('smt4-k4')}|*": h32("smt4-v4"),
+    }
+    g_smt4_root = sl.smt_root(g_smt4_kv)
+    g_smt4_proofs = [
+        sl.smt_prove(g_smt4_kv, f"act:{h32('smt4-k1')}|*"),
+        sl.smt_prove(g_smt4_kv, f"rel:{h32('smt4-k4')}|*"),
+        sl.smt_prove(g_smt4_kv, f"act:{h32('smt4-absent')}|*"),
+    ]
+    assert all(sl.smt_verify_proof(p) and p["root"] == g_smt4_root for p in g_smt4_proofs)
+
+    # Atomic journal_commit_init / journal_commit_step & strict cofactorless Ed25519 vectors (L-2)
+    g_jid = h32("golden-journal-id")
+    g_c0 = sl.journal_commit_init(g_jid)
+    g_je1 = {"body": {"cause": "SEAL_SPENT", "observed_at": 1795220000, "subject": {"subject_id": h32("g-sub"), "subject_kind": "grant"}}, "kind": "closure", "pos": 1}
+    g_c1 = sl.journal_commit_step(g_c0, g_je1)
+    g_je2 = {"body": {"expires_at": 1795220300, "invocation_id": h32("g-inv"), "nonce": h32("g-nonce"), "scope": "invocation"}, "kind": "nonce", "pos": 2}
+    g_c2 = sl.journal_commit_step(g_c1, g_je2)
+
+    ed_msg = b"SealLink-Ed25519-SpecCheck-v1"
+    ed_pk_ok = sl.ed25519_pubkey(ed_seed)
+    ed_sig_ok = sl.ed25519_sign(ed_msg, ed_seed)
+    # Non-canonical S == L (ed25519 group order) MUST be rejected!
+    ed_sig_noncanon_s = ed_sig_ok[:64] + sl._ED_L.to_bytes(32, "little").hex()
+    ed_speccheck = [
+        {"id": "ed25519-valid", "msg_hex": ed_msg.hex(), "pubkey_hex": ed_pk_ok, "sig_hex": ed_sig_ok, "expected_valid": True},
+        {"id": "ed25519-small-order-identity-pk", "msg_hex": ed_msg.hex(), "pubkey_hex": "01" + ("00" * 31), "sig_hex": ed_sig_ok, "expected_valid": False},
+        {"id": "ed25519-noncanonical-s-eq-L", "msg_hex": ed_msg.hex(), "pubkey_hex": ed_pk_ok, "sig_hex": ed_sig_noncanon_s, "expected_valid": False},
+        {"id": "ed25519-wrong-msg", "msg_hex": b"wrong-msg".hex(), "pubkey_hex": ed_pk_ok, "sig_hex": ed_sig_ok, "expected_valid": False},
+    ]
+    for ec in ed_speccheck:
+        assert sl.ed25519_verify(bytes.fromhex(ec["msg_hex"]), ec["pubkey_hex"], ec["sig_hex"]) is ec["expected_valid"]
 
     return {
         "suite": "wire-jcs-and-hashes",
@@ -344,12 +392,22 @@ def build_wire_vectors() -> dict[str, Any]:
             "owner_command_ed25519": envelope_record(env_cmd_ed25519, "schemas/invocation.schema.json#/$defs/OwnerCommand"),
             "owner_command_p256_low_s": envelope_record(env_cmd_p256, "schemas/invocation.schema.json#/$defs/OwnerCommand"),
         },
+        "ed25519_speccheck": ed_speccheck,
+        "journal_commit_vectors": {
+            "journal_id": g_jid,
+            "c0": g_c0,
+            "steps": [
+                {"id": "step-1-closure", "entry": g_je1, "c_after": g_c1},
+                {"id": "step-2-nonce", "entry": g_je2, "c_after": g_c2},
+            ],
+        },
         "artifact_and_log_primitives": {
             "rules": ["SL-ARTF-002", "SL-CONT-012"],
             "fsverity_sha256_linux": [
                 {"id": "fsverity-empty", "data_hex": "", "data_len": 0, "digest": fsv_empty},
                 {"id": "fsverity-13b", "data_hex": fsv_small_data.hex(), "data_len": len(fsv_small_data), "digest": fsv_small},
                 {"id": "fsverity-4196b-2blocks", "pattern": "4096*0x41 || 100*0x42", "data_len": len(fsv_multi_data), "digest": fsv_multi},
+                {"id": "fsverity-524289b-3levels", "data_pattern": {"byte": 0x5A, "length": 524289}, "data_len": 524289, "digest": fsv_3level_digest},
             ],
             "artifact_target_ids": [
                 {"id": "target-id-sha256", "artifact_identity": art_sha, "target_id": sl.artifact_target_id(art_sha)},
@@ -364,7 +422,18 @@ def build_wire_vectors() -> dict[str, Any]:
                 "genesis_seal_outpoint": g_log_gen,
                 "log_id": g_log_id,
             },
+            "log_id_with_predecessor": {
+                "network": "main",
+                "genesis": GENESIS_MAIN,
+                "role": "notary",
+                "name": "id/notary-golden",
+                "registration": g_log_reg,
+                "genesis_seal_outpoint": g_log_gen_next,
+                "predecessor_log_id": g_log_id,
+                "log_id": g_log_id_ho,
+            },
             "log_entry_digests": {
+                "input_content_addr": h32("golden-entry"),
                 "entry_0x01": sl.log_entry_digest(0x01, h32("golden-entry")),
                 "entry_0x02": sl.log_entry_digest(0x02, h32("golden-entry")),
                 "entry_0x03": sl.log_entry_digest(0x03, h32("golden-entry")),
@@ -386,6 +455,11 @@ def build_wire_vectors() -> dict[str, Any]:
                 "root": g_smt_root,
                 "inclusion_proof": g_smt_inc,
                 "absence_proof": g_smt_abs,
+            },
+            "smt256_multi_leaf": {
+                "kv": g_smt4_kv,
+                "root": g_smt4_root,
+                "proofs": g_smt4_proofs,
             },
         },
     }
@@ -463,6 +537,7 @@ def build_ledger_vectors() -> dict[str, Any]:
         (0x01, "GRANT_ISSUANCE_blossom", 0x01, h32("blossom-ptr"), None),
         (0x02, "BATCH_ANCHOR_merkle5", 0x00, None, None),
         (0x04, "NOTARY_ACT", 0x00, None, None),
+        (0x04, "NOTARY_ACT_blossom", 0x01, h32("blossom-notary-ptr"), None),
         (0x07, "CONTRACT_ANCHOR", 0x00, None, None),
         (0x09, "ORIGIN_OR_CRED_ANCHOR", 0x00, None, None),
         (0x0B, "KEY_COMPROMISE_BREAK", 0x00, None, 750050),
@@ -488,14 +563,25 @@ def build_ledger_vectors() -> dict[str, Any]:
         })
 
     reserved_06_hex = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x06, 0x22, 0x01]) + bytes.fromhex(h32("bad06")) + bytes([0x00])).hex()
-    bad_loc_04_hex = (bytes([0x6A, 0x47]) + b"SLNK" + bytes([0x04, 0x42, 0x01]) + bytes.fromhex(h32("bad04c")) + bytes([0x01]) + bytes.fromhex(h32("bad04p"))).hex()
+    # R12-L2: Real properly-framed forbidden locator 0x01 on 0x10 (RECOVERY_CANCEL allows only loc_type 0x00!)
+    bad_loc_10_hex = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x10, 0x42, 0x01]) + bytes.fromhex(h32("bad10c")) + bytes([0x01]) + bytes.fromhex(h32("bad10p"))).hex()
     valid_14_raw = sl.encode_opreturn(0x14, h32("nonmin-14"))
     nonminimal_pushdata1_hex = (valid_14_raw[:7] + bytes([0x4C, len(valid_14_raw) - 8]) + valid_14_raw[8:]).hex()
+    bad_op5_push_hex = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x15, 0x55])).hex()  # OP_5 instead of direct length prefix 0x01 0x05
+    bad_84b_overlimit_hex = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x20, 0x4C, 75]) + (b"\xaa" * 75)).hex()  # 84 bytes > 83B max
+    bad_0x30_unallocated_hex = (bytes([0x6A, 0x05]) + b"SLNK" + bytes([0x30, 0x01, 0x01])).hex()
 
     opreturn_criticality = []
-    for act_c, scope_lbl in [(0x15, "forward_only"), (0x1B, "retroactive"), (0x20, "advisory")]:
-        pl_c = bytes([0x01]) + bytes.fromhex(h32(f"crit-{act_c:02x}")) + bytes([0x00])
-        scr_c = bytes([0x6A, 0x05]) + b"SLNK" + bytes([act_c, len(pl_c)]) + pl_c
+    for act_c, scope_lbl, payload_c in [
+        (0x15, "forward_only", bytes([0x01]) + bytes.fromhex(h32("crit-15")) + bytes([0x00])),
+        (0x1A, "forward_only", bytes([0x05])),  # 1-byte payload (8-byte total script, direct length prefix 0x01 0x05!)
+        (0x1B, "retroactive", bytes([0x01]) + bytes.fromhex(h32("crit-1b")) + bytes([0x00])),
+        (0x1C, "retroactive", b"\xaa" * 74),  # exact 83-byte max OP_RETURN script (6a 05 SLNK 1c 4a <74B>)!
+        (0x1F, "retroactive", bytes([0x01]) + bytes.fromhex(h32("crit-1f")) + bytes([0x00])),
+        (0x20, "advisory", bytes([0x01]) + bytes.fromhex(h32("crit-20")) + bytes([0x00])),
+        (0x2F, "advisory", bytes([0x01]) + bytes.fromhex(h32("crit-2f")) + bytes([0x00])),
+    ]:
+        scr_c = bytes([0x6A, 0x05]) + b"SLNK" + bytes([act_c, len(payload_c)]) + payload_c
         dec_c = sl.decode_opreturn_with_criticality(scr_c)
         if scope_lbl == "advisory":
             assert dec_c.get("advisory") is True
@@ -553,8 +639,11 @@ def build_ledger_vectors() -> dict[str, Any]:
         "opreturn_criticality": opreturn_criticality,
         "opreturn_negative": [
             {"id": "reserved-action-0x06", "script_hex": reserved_06_hex, "expected_refusal": "CHAIN_FRAME_INVALID"},
-            {"id": "forbidden-locator-0x01-on-0x04", "script_hex": bad_loc_04_hex, "expected_refusal": "CHAIN_FRAME_INVALID"},
+            {"id": "forbidden-locator-0x01-on-0x10", "script_hex": bad_loc_10_hex, "expected_refusal": "CHAIN_FRAME_INVALID"},
             {"id": "non-minimal-op-pushdata1", "script_hex": nonminimal_pushdata1_hex, "expected_refusal": "CHAIN_FRAME_INVALID"},
+            {"id": "op5-instead-of-direct-len-prefix", "script_hex": bad_op5_push_hex, "expected_refusal": "CHAIN_FRAME_INVALID"},
+            {"id": "over-83-bytes-opreturn", "script_hex": bad_84b_overlimit_hex, "expected_refusal": "CHAIN_FRAME_INVALID"},
+            {"id": "unallocated-action-0x30", "script_hex": bad_0x30_unallocated_hex, "expected_refusal": "CHAIN_FRAME_INVALID"},
         ],
         "merkle_batch_0x02": {
             "rule": "SL-LDGR-014",
@@ -2115,6 +2204,21 @@ def build_trace_03_delegation() -> dict[str, Any]:
             )
         },
         "txs": {
+            rows_a_tx: {
+                "confirmed_height": 749990,
+                "outputs": {
+                    "0": {"script_pubkey_hex": spk_hex({"kind": "key", "pk": row_coin_k["compressed_pk"]}), "spent_by_txid": c1_issuance_txid},
+                    "1": {"script_pubkey_hex": spk_hex({"kind": "key", "pk": row_coin_k["compressed_pk"]}), "spent_by_txid": c3_issuance_txid},
+                    "2": {"script_pubkey_hex": spk_hex({"kind": "key", "pk": row_coin_k["compressed_pk"]})},
+                },
+            },
+            rows_b_tx: {
+                "confirmed_height": 749990,
+                "outputs": {
+                    "0": {"script_pubkey_hex": spk_hex({"kind": "key", "pk": row_coin_k["compressed_pk"]}), "spent_by_txid": c2_issuance_txid},
+                    "1": {"script_pubkey_hex": spk_hex({"kind": "key", "pk": row_coin_k["compressed_pk"]})},
+                },
+            },
             parent_seal_tx: {
                 "confirmed_height": 750002,
                 "inputs": [sv.make_segwit_input(h32("t3-org-fund"), 0)],

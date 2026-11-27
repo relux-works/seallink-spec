@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://seallink.org/releases/v1.0.0-draft.12/schemas/common.schema.json",
   "title": "SealLink v1.0 Shared Wire Primitives",
-  "description": "Shared primitives with normative x-seallink-refusal class annotations (SPEC-01 §7 deterministic leaf-wins precedence: WIRE_TYPE -> WIRE_MEMBER -> WIRE_INTEGER -> WIRE_KEY -> WIRE_SIGNATURE -> WIRE_CONSTRAINT -> CHAIN_SCRIPT_UNSUPPORTED). Regular expressions follow portable RE2 / ECMA-262 / Rust regex semantics without lookaround.",
+  "description": "Shared primitives with normative x-seallink-refusal class annotations (SPEC-01 §7 deterministic leaf-wins precedence: WIRE_DUPLICATE -> WIRE_STRING -> WIRE_TYPE -> WIRE_MEMBER -> WIRE_INTEGER -> WIRE_KEY -> WIRE_SIGNATURE -> WIRE_CONSTRAINT -> CHAIN_SCRIPT_UNSUPPORTED). Regular expressions follow portable RE2 / ECMA-262 / Rust regex semantics without lookaround.",
   "$defs": {
     "SingleLine": {
       "type": "string",
@@ -748,6 +748,7 @@
         "version": { "type": "integer", "minimum": 0, "maximum": 4294967295, "x-seallink-refusal": "WIRE_INTEGER" },
         "output_script_hex": { "type": "string", "pattern": "^([0-9a-f]{2})+$", "maxLength": 20000, "not": { "pattern": "\n" } },
         "owner_policy": { "$ref": "#/$defs/ChainViewOwnerPolicy" },
+        "firstupdate_self_funded": { "type": "boolean" },
         "prev_input": { "$ref": "#/$defs/ChainViewPrevInput" },
         "opreturn_hex": { "type": "string", "pattern": "^([0-9a-f]{2})*$", "maxLength": 20000, "not": { "pattern": "\n" } },
         "opreturns": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/ChainViewOpReturn" } }
@@ -824,6 +825,27 @@
         "opreturns": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/ChainViewOpReturn" } }
       }
     },
+    "ActorRegistrationPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "registration"],
+      "description": "Cold-rotation-invariant registration identity pin binding an actor's Namecoin name and OP_NAME_FIRSTUPDATE outpoint without freezing owner_policy.",
+      "properties": {
+        "name": { "$ref": "#/$defs/NameStr" },
+        "registration": { "$ref": "#/$defs/Outpoint" }
+      }
+    },
+    "ObservationBracketInitialSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "tip_hash", "tip_height"],
+      "properties": {
+        "start": { "$ref": "#/$defs/ChainViewTipRef" },
+        "end": { "$ref": "#/$defs/ChainViewTipRef" },
+        "tip_hash": { "$ref": "#/$defs/Hex64" },
+        "tip_height": { "$ref": "#/$defs/Uint53" }
+      }
+    },
     "ChainViewSnapshot": {
       "type": "object",
       "additionalProperties": false,
@@ -867,7 +889,7 @@
             "pre_effect_start": { "$ref": "#/$defs/ChainViewTipRef" },
             "pre_effect_end": { "$ref": "#/$defs/ChainViewTipRef" },
             "pre_effect_tip": { "$ref": "#/$defs/ChainViewTipRef" },
-            "initial_snapshot": { "type": "object" }
+            "initial_snapshot": { "$ref": "#/$defs/ObservationBracketInitialSnapshot" }
           }
         },
         "rebracket_tip": {
@@ -913,7 +935,10 @@
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/Hex64" }
         },
-        "manifests": { "type": "object" }
+        "manifests": {
+          "type": "object",
+          "additionalProperties": { "$ref": "manifest.schema.json" }
+        }
       }
     }
   }

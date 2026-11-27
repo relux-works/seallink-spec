@@ -402,7 +402,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     pol_a_0b = {"m": 1, "pks": [cb_a["xonly"]]}
     iss_pin_0b = {"name": "id/bnd-0b", "owner_policy": cb_pol, "registration": cb_reg, "role_policy": pol_a_0b}
     # First 0x0b break: h_c == inclusion_height == 749600 (exact boundary L1194!)
-    brk1 = {"compromised_policy": pol_a_0b, "genesis": GENESIS_MAIN, "h_c": 749600, "issuer": {"name": "id/bnd-0b", "owner_policy": cb_pol, "registration": cb_reg}, "name_input": {"txid": prev_0b["txid"], "vout": prev_0b["vout"]}, "role": "cred", "type": "seallink-credential-break/1"}
+    brk1 = {"compromised_policy": pol_a_0b, "genesis": GENESIS_MAIN, "h_c": 749600, "issuer": {"name": "id/bnd-0b", "registration": cb_reg}, "name_input": {"txid": prev_0b["txid"], "vout": prev_0b["vout"]}, "role": "cred", "type": "seallink-credential-break/1"}
     u_brk1_tx = _h32("bnd-0b-u1")
     cb_hist["updates"].append({
         "confirmed_height": 749600, "op": "NAME_UPDATE",
@@ -485,13 +485,14 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     ch_oc_b = copy.deepcopy(fx0["chain"])
     ch_oc_b["txs"][oc_seal_tx] = {"confirmed_height": 749990, "outputs": {"0": {"script_pubkey_hex": _spk_hex(oc_seal_pol)}}}
     dlist_b = {"devices": [{"alg": "bip340", "ceiling": 1, "key": oc_dev["xonly"], "label": "d1", "presence": False, "seal": {"script_policy": oc_seal_pol, "txid": oc_seal_tx, "vout": 0}}], "network": "main", "owner": "id/alice", "seq": 1, "type": "seallink-device-list/1"}
+    oc_man_bnd = rm.bind_device_list_manifest(ch_oc_b, "id/alice", ch_oc_b["names"]["id/alice"]["updates"][-1]["owner_policy"], ch_oc_b["names"]["id/alice"]["registration"], dlist_b)
     oc_now_iat = sl.sign_envelope({"arguments": {"brief_sha256": _h32("b"), "run_id": "r1"}, "command": "agent-dispatch", "exp": ch_oc_b["now"] + 60, "genesis": GENESIS_MAIN, "iat": ch_oc_b["now"], "level": 1, "network": "main", "nonce": _h32("bnd-oc-iat"), "owner": "id/alice", "target_executor": "id/st", "type": "seallink-owner-command/1"}, [oc_dev["sk"]])
     add("bnd-owner-cmd-now-eq-iat-admit", ["SL-IDEN-011"], "owner_command",
-        {"command": oc_now_iat, "device_list": dlist_b, "is_foreign_service": False, "chain": ch_oc_b}, "ADMIT", None,
+        {"command": oc_now_iat, "device_list": dlist_b, "owner_manifest": oc_man_bnd, "is_foreign_service": False, "chain": ch_oc_b}, "ADMIT", None,
         "Owner command at exact now == iat MUST admit.")
     oc_now_exp = sl.sign_envelope({"arguments": {"brief_sha256": _h32("b"), "run_id": "r2"}, "command": "agent-dispatch", "exp": ch_oc_b["now"], "genesis": GENESIS_MAIN, "iat": ch_oc_b["now"] - 60, "level": 1, "network": "main", "nonce": _h32("bnd-oc-exp"), "owner": "id/alice", "target_executor": "id/st", "type": "seallink-owner-command/1"}, [oc_dev["sk"]])
     add("bnd-owner-cmd-now-eq-exp-refuse", ["SL-IDEN-011"], "owner_command",
-        {"command": oc_now_exp, "device_list": dlist_b, "is_foreign_service": False, "chain": ch_oc_b}, "REFUSE", "INVOKE_TIME_INVALID",
+        {"command": oc_now_exp, "device_list": dlist_b, "owner_manifest": oc_man_bnd, "is_foreign_service": False, "chain": ch_oc_b}, "REFUSE", "INVOKE_TIME_INVALID",
         "Owner command at exact now == exp MUST refuse INVOKE_TIME_INVALID.")
 
     # 3j. Assent exact TTL == 259200 (72h ADMIT), expires_at == issued_at (REFUSE), now == expires_at (REFUSE) (kills all 3 shifts on L2123!)
@@ -587,6 +588,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     of_ga_eq["origin_bundle"]["guardian_assents"] = [bad_ga]
     of_ga_eq["chain"]["txs"][of_ga_eq["origin_bundle"]["origin_anchor_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x09, sl.content_addr(o_1of2_b)).hex()
     of_ga_eq["chain"]["txs"][of_ga_eq["origin_bundle"]["name_binding_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x0C, sl.object_id(of_ga_eq["origin_bundle"]["name_binding"])).hex()
+    rm.sync_ward_origin_link(of_ga_eq, oid_1of2_b)
     of_ga_eq["chain"]["txs"][rm._h32("og1-init-0x12")]["opreturn_hex"] = sl.encode_opreturn(0x12, sl.content_addr(grec_1_b)).hex()
     c_1of2_b = copy.deepcopy(of_ga_eq["contract"])
     c_1of2_b["parties"][0]["ward_origin_id"] = oid_1of2_b
@@ -906,7 +908,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
         reg_pol = reg_iss["owner_policy"]
         reg_brk = {
             "compromised_policy": reg_iss["role_policy"], "genesis": GENESIS_MAIN, "h_c": 749800,
-            "issuer": {"name": reg_iss["name"], "owner_policy": reg_pol, "registration": reg_iss["registration"]},
+            "issuer": {"name": reg_iss["name"], "registration": reg_iss["registration"]},
             "name_input": {"txid": reg_prev["txid"], "vout": reg_prev["vout"]}, "role": "cred", "type": "seallink-credential-break/1",
         }
         reg_brk_tx = _h32(f"bnd-reg-brk-{rec_kind}")

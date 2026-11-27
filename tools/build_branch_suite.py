@@ -191,6 +191,14 @@ def _build_delegation_base(
             )
         },
         "txs": {
+            rows_tx: {
+                "confirmed_height": 749990,
+                "outputs": {
+                    "0": {"script_pubkey_hex": _spk_hex(row_coin_pol), "spent_by_txid": c1_itx},
+                    "1": {"script_pubkey_hex": _spk_hex(row_coin_pol), "spent_by_txid": c2_itx},
+                    "2": {"script_pubkey_hex": _spk_hex(row_coin_pol)},
+                },
+            },
             p_seal_tx: {"confirmed_height": 750002, "inputs": [sv.make_segwit_input(_h32("pf"), 0)], "outputs": {"0": {"script_pubkey_hex": _spk_hex(p_seal_pol)}, "1": {"script_pubkey_hex": _spk_hex(org_owner_pol)}}},
             p_iss_tx: {"confirmed_height": 750005, "inputs": [sv.make_segwit_input(p_seal_tx, 1)], "opreturn_hex": p_iss_opret, "outputs": {}},
             c1_stx: {"confirmed_height": 750101, "inputs": [sv.make_segwit_input(_h32("c1f"), 0)], "outputs": {"0": {"script_pubkey_hex": _spk_hex(c1_spol)}, "1": {"script_pubkey_hex": _spk_hex(org_owner_pol)}}},
@@ -251,7 +259,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         "compromised_policy": {"m": 1, "pks": [key_a["xonly"]]},
         "genesis": GENESIS_MAIN,
         "h_c": 749400,
-        "issuer": {"name": "id/issuer-rot", "owner_policy": iss_owner_pol, "registration": iss_reg},
+        "issuer": {"name": "id/issuer-rot", "registration": iss_reg},
         "name_input": {"txid": prev_u["txid"], "vout": prev_u["vout"]},
         "role": "cred",
         "type": "seallink-credential-break/1",
@@ -758,27 +766,30 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
         "iat": 1795220000, "level": 0, "network": "main", "nonce": _h32("oc-1"),
         "owner": "id/alice", "target_executor": "id/station-a", "type": "seallink-owner-command/1",
     }
+    oc_alice_pol = ch_oc["names"]["id/alice"]["updates"][-1]["owner_policy"]
+    oc_alice_reg = ch_oc["names"]["id/alice"]["registration"]
+    oc_man_br = rm.bind_device_list_manifest(ch_oc, "id/alice", oc_alice_pol, oc_alice_reg, dev_list_br)
     add("branch-oc-foreign-service-refused", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope(oc_base, [dev1["sk"]]), "device_list": dev_list_br, "is_foreign_service": True, "chain": ch_oc},
+        {"command": sl.sign_envelope(oc_base, [dev1["sk"]]), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": True, "chain": ch_oc},
         "REFUSE", "DEVICE_UNAUTHORIZED", "Valid L0 owner command presented to foreign service MUST refuse DEVICE_UNAUTHORIZED.")
     add("branch-oc-chain-mismatch", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope({**oc_base, "genesis": _h32("wrong-gen")}, [dev1["sk"]]), "device_list": dev_list_br, "is_foreign_service": False, "chain": ch_oc},
+        {"command": sl.sign_envelope({**oc_base, "genesis": _h32("wrong-gen")}, [dev1["sk"]]), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
         "REFUSE", "CHAIN_MISMATCH", "Owner command for wrong genesis MUST refuse CHAIN_MISMATCH.")
     add("branch-oc-expired", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope({**oc_base, "iat": 1795210000, "exp": 1795210100}, [dev1["sk"]]), "device_list": dev_list_br, "is_foreign_service": False, "chain": ch_oc},
+        {"command": sl.sign_envelope({**oc_base, "iat": 1795210000, "exp": 1795210100}, [dev1["sk"]]), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
         "REFUSE", "INVOKE_TIME_INVALID", "Expired owner command MUST refuse INVOKE_TIME_INVALID.")
     add("branch-oc-multisig-disallowed", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope(oc_base, [dev1["sk"], dev2["sk"]], m=2), "device_list": dev_list_br, "is_foreign_service": False, "chain": ch_oc},
+        {"command": sl.sign_envelope(oc_base, [dev1["sk"], dev2["sk"]], m=2), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
         "REFUSE", "DEVICE_UNAUTHORIZED", "Owner command signed by 2-of-2 instead of 1 enrolled device key MUST refuse DEVICE_UNAUTHORIZED.")
     add("branch-oc-unknown-device", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope(oc_base, [_kp("oc-stranger")["sk"]]), "device_list": dev_list_br, "is_foreign_service": False, "chain": ch_oc},
+        {"command": sl.sign_envelope(oc_base, [_kp("oc-stranger")["sk"]]), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
         "REFUSE", "DEVICE_UNAUTHORIZED", "Owner command from unenrolled device key MUST refuse DEVICE_UNAUTHORIZED.")
     add("branch-oc-level-exceeds-ceiling", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope({**oc_base, "level": 2}, [dev1["sk"]]), "device_list": dev_list_br, "is_foreign_service": False, "chain": ch_oc},
+        {"command": sl.sign_envelope({**oc_base, "level": 2}, [dev1["sk"]]), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
         "REFUSE", "DEVICE_UNAUTHORIZED", "Owner command level exceeding device ceiling MUST refuse DEVICE_UNAUTHORIZED.")
     oc_l2_nopres = {**oc_base, "command": "policy-apply", "level": 2, "arguments": {"config_sha256": _h32("c"), "statement_id": _h32("s")}}
     add("branch-oc-policy-apply-requires-presence", ["SL-IDEN-011"], "owner_command",
-        {"command": sl.sign_envelope(oc_l2_nopres, [dev2["sk"]]), "device_list": dev_list_br, "is_foreign_service": False, "chain": ch_oc},
+        {"command": sl.sign_envelope(oc_l2_nopres, [dev2["sk"]]), "device_list": dev_list_br, "owner_manifest": oc_man_br, "is_foreign_service": False, "chain": ch_oc},
         "REFUSE", "DEVICE_UNAUTHORIZED", "L2 policy-apply from device without user-presence verification MUST refuse DEVICE_UNAUTHORIZED.")
 
     # --- Group 7: Origin, Recovery, Status, Roster & Ward Approvals ---
@@ -847,6 +858,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     of_rnone["origin_bundle"].pop("initial_guardian_disclosures", None)
     of_rnone["origin_bundle"].pop("opened_majority_unix", None)
     of_rnone["origin_bundle"]["name_binding"]["origin_id"] = oid_none
+    rm.sync_ward_origin_link(of_rnone, oid_none)
     of_rnone["chain"]["txs"][of_rnone["origin_bundle"]["origin_anchor_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x09, sl.content_addr(o_none)).hex()
     of_rnone["chain"]["txs"][of_rnone["origin_bundle"]["name_binding_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x0C, sl.object_id(of_rnone["origin_bundle"]["name_binding"])).hex()
     of_rnone["origin_bundle"]["recovery_bindings"] = [copy.deepcopy(of_rnone["origin_bundle"]["name_binding"])]
@@ -978,6 +990,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             oc["origin_bundle"]["origin"] = o2
             oc["_origin_id"] = sl.object_id(op2)
             oc["origin_bundle"]["name_binding"]["origin_id"] = oc["_origin_id"]
+            rm.sync_ward_origin_link(oc, oc["_origin_id"])
             oc["chain"]["txs"][oc["origin_bundle"]["origin_anchor_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x09, sl.content_addr(o2)).hex()
             oc["chain"]["txs"][oc["origin_bundle"]["name_binding_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x0C, sl.object_id(oc["origin_bundle"]["name_binding"])).hex()
         nxt_pol = {"kind": "key", "pk": other_iss["comp"]}
@@ -1143,6 +1156,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             ow["_origin_id"] = oid_m
             ow["origin_bundle"]["origin"] = o_m
             ow["origin_bundle"]["name_binding"]["origin_id"] = oid_m
+            rm.sync_ward_origin_link(ow, oid_m)
             ow["contract"]["parties"][0]["ward_origin_id"] = oid_m
             for gr_idx in range(len(ow["origin_bundle"]["guardian_records"])):
                 gp_x = {**ow["origin_bundle"]["guardian_records"][gr_idx]["payload"], "origin_id": oid_m}
@@ -1279,6 +1293,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
                 {**ow["origin_bundle"]["guardian_assents"][gr_idx]["payload"], "target_id": sl.object_id(gp_x)}, [sk_x]
             )
         ow["chain"]["txs"][ow["origin_bundle"]["origin_anchor_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x09, sl.content_addr(o_m)).hex()
+        rm.sync_ward_origin_link(ow, ow["_origin_id"])
         ow["chain"]["txs"][ow["origin_bundle"]["name_binding_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x0C, sl.object_id(ow["origin_bundle"]["name_binding"])).hex()
         ow["chain"]["txs"][rm._h32("og1-init-0x12")]["opreturn_hex"] = sl.encode_opreturn(0x12, sl.content_addr(ow["origin_bundle"]["guardian_records"][0])).hex()
         ow["chain"]["txs"][_h32("br-g2-init-0x12")]["opreturn_hex"] = sl.encode_opreturn(0x12, sl.content_addr(ow["origin_bundle"]["guardian_records"][1])).hex()
@@ -1949,6 +1964,7 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
     wa_item_rev["origin_bundle"]["guardian_records"] = [grec_1]
     wa_item_rev["origin_bundle"]["guardian_assents"] = [sl.sign_envelope({**wa_item_rev["origin_bundle"]["guardian_assents"][0]["payload"], "target_id": sl.object_id(grec_1p)}, [wa_item_rev["_keys"]["g1_gr"]["sk"]])]
     wa_item_rev["chain"]["txs"][wa_item_rev["origin_bundle"]["origin_anchor_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x09, sl.content_addr(o_1of2)).hex()
+    rm.sync_ward_origin_link(wa_item_rev, oid_1of2)
     wa_item_rev["chain"]["txs"][wa_item_rev["origin_bundle"]["name_binding_txid"]]["opreturn_hex"] = sl.encode_opreturn(0x0C, sl.object_id(wa_item_rev["origin_bundle"]["name_binding"])).hex()
     wa_item_rev["chain"]["txs"][rm._h32("og1-init-0x12")]["opreturn_hex"] = sl.encode_opreturn(0x12, sl.content_addr(grec_1)).hex()
     c_1of2 = copy.deepcopy(wa_item_rev["contract"])

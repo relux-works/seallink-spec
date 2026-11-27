@@ -24,6 +24,18 @@
         "chain_merkle_size": { "type": "integer", "minimum": 1, "maximum": 1073741824, "x-seallink-refusal": "WIRE_INTEGER" }
       }
     },
+    "TrustedHeaderCheckpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["height", "block_hash", "nbits_hex", "epoch_start_time"],
+      "description": "Policy-pinned trusted Namecoin header checkpoint anchoring Tier-2 SPV header chains and retarget epoch start timestamp.",
+      "properties": {
+        "height": { "$ref": "common.schema.json#/$defs/Uint53" },
+        "block_hash": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "nbits_hex": { "type": "string", "pattern": "^[0-9a-f]{8}$", "not": { "pattern": "\n" } },
+        "epoch_start_time": { "$ref": "common.schema.json#/$defs/Uint53" }
+      }
+    },
     "BlockHeaderProof": {
       "type": "object",
       "additionalProperties": false,
@@ -31,11 +43,7 @@
       "properties": {
         "height": { "$ref": "common.schema.json#/$defs/Uint53" },
         "header_hex": { "type": "string", "pattern": "^[0-9a-f]{160}$", "not": { "pattern": "\n" } },
-        "auxpow": { "$ref": "#/$defs/AuxPowProof" },
-        "epoch_start_time": {
-          "$ref": "common.schema.json#/$defs/Uint53",
-          "description": "Verified nTime of the Namecoin retarget ancestor block (H - 2017 when H - 1 >= nAuxpowStartHeight and H > 2016; H - 2016 otherwise) when H % 2016 == 0 and that ancestor is outside the supplied header segment."
-        }
+        "auxpow": { "$ref": "#/$defs/AuxPowProof" }
       }
     },
     "SegWitNameUpdateProof": {
@@ -84,7 +92,7 @@
     "Tier2NameHistoryPage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "network", "genesis", "name", "registration", "limit", "updates", "has_more"],
+      "required": ["type", "network", "genesis", "name", "registration", "limit", "headers", "updates", "has_more"],
       "properties": {
         "type": { "const": "seallink-tier2-name-history/1" },
         "network": { "$ref": "common.schema.json#/$defs/Network" },
@@ -94,7 +102,14 @@
         "cursor_height": { "$ref": "common.schema.json#/$defs/Uint53" },
         "cursor_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
         "cursor_vout": { "$ref": "common.schema.json#/$defs/Vout" },
+        "cursor_owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
         "limit": { "type": "integer", "minimum": 1, "maximum": 64, "x-seallink-refusal": "WIRE_INTEGER" },
+        "headers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5000,
+          "items": { "$ref": "#/$defs/BlockHeaderProof" }
+        },
         "updates": {
           "type": "array",
           "maxItems": 64,
@@ -104,24 +119,30 @@
         "next_cursor": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["height", "txid", "vout"],
+          "required": ["height", "txid", "vout", "owner_policy"],
           "properties": {
             "height": { "$ref": "common.schema.json#/$defs/Uint53" },
             "txid": { "$ref": "common.schema.json#/$defs/Hex64" },
-            "vout": { "$ref": "common.schema.json#/$defs/Vout" }
+            "vout": { "$ref": "common.schema.json#/$defs/Vout" },
+            "owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }
           }
         }
       },
       "dependentRequired": {
         "cursor_height": ["cursor_txid", "cursor_vout"],
         "cursor_txid": ["cursor_height", "cursor_vout"],
-        "cursor_vout": ["cursor_height", "cursor_txid"]
+        "cursor_vout": ["cursor_height", "cursor_txid"],
+        "cursor_owner_policy": ["cursor_height", "cursor_txid", "cursor_vout"]
       },
       "allOf": [
         {
           "if": { "required": ["has_more"], "properties": { "has_more": { "const": true } } },
           "then": { "required": ["next_cursor"] },
           "else": { "not": { "required": ["next_cursor"] } }
+        },
+        {
+          "if": { "not": { "required": ["cursor_txid"] } },
+          "then": { "properties": { "updates": { "minItems": 1 } } }
         }
       ]
     },
@@ -138,6 +159,12 @@
         "head_checkpoint": { "$ref": "log.schema.json#/$defs/LogCheckpoint" },
         "head_checkpoint_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
         "checkpoints_proof": { "$ref": "log.schema.json#/$defs/CheckpointsInclusionProof" },
+        "predecessor_chain": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": { "$ref": "log.schema.json#/$defs/PredecessorTerminalCheckpoint" }
+        },
         "act_smt_proof": { "$ref": "log.schema.json#/$defs/SmtProof" },
         "target_smt_proof": { "$ref": "log.schema.json#/$defs/SmtProof" },
         "act_state_record": { "$ref": "log.schema.json#/$defs/LogStateRecord" },
@@ -154,6 +181,12 @@
         "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
         "head_checkpoint": { "$ref": "log.schema.json#/$defs/LogCheckpoint" },
         "head_checkpoint_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "predecessor_chain": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": { "$ref": "log.schema.json#/$defs/PredecessorTerminalCheckpoint" }
+        },
         "target_smt_proof": { "$ref": "log.schema.json#/$defs/SmtProof" },
         "target_state_record": { "$ref": "log.schema.json#/$defs/LogStateRecord" },
         "target_state_inclusion": { "$ref": "log.schema.json#/$defs/StateRecordInclusion" }
@@ -177,6 +210,12 @@
         "release_head_checkpoint": { "$ref": "log.schema.json#/$defs/LogCheckpoint" },
         "release_head_checkpoint_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
         "release_checkpoints_proof": { "$ref": "log.schema.json#/$defs/CheckpointsInclusionProof" },
+        "release_predecessor_chain": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": { "$ref": "log.schema.json#/$defs/PredecessorTerminalCheckpoint" }
+        },
         "release_smt_proof": { "$ref": "log.schema.json#/$defs/SmtProof" },
         "release_state_record": { "$ref": "log.schema.json#/$defs/LogStateRecord" },
         "release_state_inclusion": { "$ref": "log.schema.json#/$defs/StateRecordInclusion" },
@@ -205,6 +244,7 @@
       "required": ["mode", "trusted_notaries", "quorum_m", "required_claims", "allow_reinstatement"],
       "properties": {
         "mode": { "type": "string", "enum": ["standard", "hardened"] },
+        "trusted_checkpoint": { "$ref": "#/$defs/TrustedHeaderCheckpoint" },
         "trusted_notaries": {
           "type": "array",
           "maxItems": 32,
@@ -262,7 +302,7 @@
         {
           "if": { "not": { "required": ["require_release"], "properties": { "require_release": { "const": true } } } },
           "then": {
-            "properties": { "quorum_m": { "minimum": 1 } },
+            "properties": { "quorum_m": { "minimum": 1, "x-seallink-refusal": "WIRE_INTEGER" } },
             "not": { "required": ["release_floor"] }
           }
         }

@@ -77,7 +77,7 @@ def _make_0x0b_update(
         "compromised_policy": compromised_pol,
         "genesis": GENESIS_MAIN,
         "h_c": h_c,
-        "issuer": {"name": name, "owner_policy": owner_pol, "registration": reg},
+        "issuer": {"name": name, "registration": reg},
         "name_input": {"txid": prev_u["txid"], "vout": prev_u["vout"]},
         "role": role,
         "type": "seallink-credential-break/1",
@@ -113,7 +113,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
         "compromised_policy": {"m": 1, "pks": [g1_old_pk]},
         "genesis": GENESIS_MAIN,
         "h_c": 749500,
-        "issuer": {"name": "id/parent-a", "owner_policy": g1_opol, "registration": g1_reg},
+        "issuer": {"name": "id/parent-a", "registration": g1_reg},
         "name_input": {"txid": g1_prev["txid"], "vout": g1_prev["vout"]},
         "role": "grant",
         "type": "seallink-credential-break/1",
@@ -135,6 +135,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
     oid_b1 = sl.object_id(op_b1)
     of_b1["origin_bundle"]["origin"] = o_b1
     of_b1["origin_bundle"]["name_binding"]["origin_id"] = oid_b1
+    rm.sync_ward_origin_link(of_b1, oid_b1)
     g1_b1_p = {**of_b1["origin_bundle"]["guardian_records"][0]["payload"], "origin_id": oid_b1}
     g1_b1 = sl.sign_envelope(g1_b1_p, [of_b1["_keys"]["reg_cred"]["sk"]])
     of_b1["origin_bundle"]["guardian_records"] = [g1_b1]
@@ -481,7 +482,13 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
     # =========================================================================
     fx_96 = rm._delegation_fx()
     quotas_32 = [
-        {"kind": "seallink/count", "max": "10", "resource": f"station:id/station-a:tools:r{i:02d}", "unit": "calls", "window": "term"}
+        {
+            "kind": "seallink/count",
+            "max": "10",
+            "resource": "station:id/station-a:tools" if i == 0 else f"station:id/station-a:tools:r{i:02d}",
+            "unit": "calls",
+            "window": "term",
+        }
         for i in range(32)
     ]
     pools_32 = [{**q, "max": "20"} for q in quotas_32]

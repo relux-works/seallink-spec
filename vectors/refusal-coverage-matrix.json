@@ -9438,7 +9438,7 @@
                 {
                   "confirmed_height": 749600,
                   "op": "NAME_UPDATE",
-                  "opreturn_hex": "6a05534c4e4b0b2a017e8ce86de7e0786d58c3c71271253e60c9713fd130897c27f17ef4911dbb7cc5586f0b000000000000",
+                  "opreturn_hex": "6a05534c4e4b0b2a0169bd515090cf7c548b87255fef5b5c81cc5af90146310beda4ea912a95367172586f0b000000000000",
                   "output_script_hex": "530b69642f6973737565722d614c547b226c696e6b223a7b2263726564223a2264373837303639383962373365383234383262376663623638346466656563386235386637666264333064623338343761333832633062306361343861306261227d7d6d75001440c609c77b9184ad947075d75074acf2d14a5865",
                   "owner_policy": {
                     "kind": "key",
@@ -11170,6 +11170,18 @@
                 },
                 "1": {
                   "script_pubkey_hex": "001482eae605349bbb4a974f7c816ff25aa4fff51949"
+                }
+              }
+            },
+            "d57215d50aab63c9fb581eb7e31aa4af7c47f01b3521a9a5f2390b25cf443bf1": {
+              "confirmed_height": 749985,
+              "outputs": {
+                "0": {
+                  "script_pubkey_hex": "0014bfa8c1810cce333e6a8a275d226157e2df4d5925",
+                  "spent_by_txid": "3fc65c4ae7c9919c275f51f490ba9c66f0135473309ba925a5993a5d910fcb47"
+                },
+                "1": {
+                  "script_pubkey_hex": "0014bfa8c1810cce333e6a8a275d226157e2df4d5925"
                 }
               }
             }
@@ -13537,6 +13549,18 @@
                   "script_pubkey_hex": "001482eae605349bbb4a974f7c816ff25aa4fff51949"
                 }
               }
+            },
+            "d57215d50aab63c9fb581eb7e31aa4af7c47f01b3521a9a5f2390b25cf443bf1": {
+              "confirmed_height": 749985,
+              "outputs": {
+                "0": {
+                  "script_pubkey_hex": "0014bfa8c1810cce333e6a8a275d226157e2df4d5925",
+                  "spent_by_txid": "3fc65c4ae7c9919c275f51f490ba9c66f0135473309ba925a5993a5d910fcb47"
+                },
+                "1": {
+                  "script_pubkey_hex": "0014bfa8c1810cce333e6a8a275d226157e2df4d5925"
+                }
+              }
             }
           }
         },
@@ -14170,6 +14194,18 @@
                 },
                 "1": {
                   "script_pubkey_hex": "001482eae605349bbb4a974f7c816ff25aa4fff51949"
+                }
+              }
+            },
+            "d57215d50aab63c9fb581eb7e31aa4af7c47f01b3521a9a5f2390b25cf443bf1": {
+              "confirmed_height": 749985,
+              "outputs": {
+                "0": {
+                  "script_pubkey_hex": "0014bfa8c1810cce333e6a8a275d226157e2df4d5925",
+                  "spent_by_txid": "3fc65c4ae7c9919c275f51f490ba9c66f0135473309ba925a5993a5d910fcb47"
+                },
+                "1": {
+                  "script_pubkey_hex": "0014bfa8c1810cce333e6a8a275d226157e2df4d5925"
                 }
               }
             }
@@ -14820,6 +14856,18 @@
                 },
                 "1": {
                   "script_pubkey_hex": "001482eae605349bbb4a974f7c816ff25aa4fff51949"
+                }
+              }
+            },
+            "d57215d50aab63c9fb581eb7e31aa4af7c47f01b3521a9a5f2390b25cf443bf1": {
+              "confirmed_height": 749985,
+              "outputs": {
+                "0": {
+                  "script_pubkey_hex": "0014bfa8c1810cce333e6a8a275d226157e2df4d5925",
+                  "spent_by_txid": "3fc65c4ae7c9919c275f51f490ba9c66f0135473309ba925a5993a5d910fcb47"
+                },
+                "1": {
+                  "script_pubkey_hex": "0014bfa8c1810cce333e6a8a275d226157e2df4d5925"
                 }
               }
             },
@@ -27245,6 +27293,18 @@
                 },
                 "1": {
                   "script_pubkey_hex": "001482eae605349bbb4a974f7c816ff25aa4fff51949"
+                }
+              }
+            },
+            "d57215d50aab63c9fb581eb7e31aa4af7c47f01b3521a9a5f2390b25cf443bf1": {
+              "confirmed_height": 749985,
+              "outputs": {
+                "0": {
+                  "script_pubkey_hex": "0014bfa8c1810cce333e6a8a275d226157e2df4d5925",
+                  "spent_by_txid": "3fc65c4ae7c9919c275f51f490ba9c66f0135473309ba925a5993a5d910fcb47"
+                },
+                "1": {
+                  "script_pubkey_hex": "0014bfa8c1810cce333e6a8a275d226157e2df4d5925"
                 }
               }
             }

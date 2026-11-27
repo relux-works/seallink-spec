@@ -936,12 +936,45 @@ def build_site(version: str, out_dir: Path, archive_tags: str = "auto") -> dict[
     (rel_base / "index.html").write_text(
         render_page(f"SealLink {version}", version, cur_rel_body), encoding="utf-8"
     )
+    # 6c. Emit browsable schema directory index pages (/releases/<ver>/schemas/index.html, /schemas/index.html, archived)
+    schemas_idx_body = (
+        '<section class="hero">'
+        f'<span class="badge">JSON Schemas &middot; {html.escape(version)}</span>'
+        f'<h1>Draft 2020-12 JSON Schemas ({len(schema_files)})</h1>'
+        f'<p class="lead">Canonical live <code>$id</code> endpoints under <code>https://seallink.org/releases/{html.escape(version)}/schemas/</code>.</p>'
+        '<div class="btn-row">'
+        f'<a class="btn btn-primary" href="/releases/{html.escape(version)}/">Release {html.escape(version)}</a>'
+        '<a class="btn" href="/">Home</a>'
+        '</div></section>\n'
+        f'<ul>{schema_links}</ul>\n'
+    )
+    (rel_base / "schemas" / "index.html").write_text(
+        render_page(f"SealLink Schemas ({version})", version, schemas_idx_body), encoding="utf-8"
+    )
+    (out_dir / "schemas" / "index.html").write_text(
+        render_page(f"SealLink Schemas ({version})", version, schemas_idx_body), encoding="utf-8"
+    )
     for prev_tag, prev_schemas in archived_releases:
         pdir = out_dir / "releases" / prev_tag
         ps_links = "".join(
             f'<li><a href="/releases/{html.escape(prev_tag)}/schemas/{html.escape(s)}"><code>{html.escape(s)}</code></a></li>'
             for s in prev_schemas
         )
+        if (pdir / "schemas").is_dir():
+            ps_idx_body = (
+                '<section class="hero">'
+                f'<span class="badge">Archived Schemas &middot; {html.escape(prev_tag)}</span>'
+                f'<h1>Draft 2020-12 JSON Schemas ({len(prev_schemas)})</h1>'
+                f'<p class="lead">Preserved immutable <code>$id</code> endpoints for release <code>{html.escape(prev_tag)}</code>.</p>'
+                '<div class="btn-row">'
+                f'<a class="btn btn-primary" href="/releases/{html.escape(prev_tag)}/">Release {html.escape(prev_tag)}</a>'
+                f'<a class="btn" href="/releases/{html.escape(version)}/schemas/">Latest ({html.escape(version)})</a>'
+                '</div></section>\n'
+                f'<ul>{ps_links}</ul>\n'
+            )
+            (pdir / "schemas" / "index.html").write_text(
+                render_page(f"SealLink Schemas ({prev_tag})", version, ps_idx_body), encoding="utf-8"
+            )
         pr_files = sorted((pdir / "registry").glob("*.json")) if (pdir / "registry").is_dir() else []
         pr_links = "".join(
             f'<li><a href="/releases/{html.escape(prev_tag)}/registry/{html.escape(f.name)}"><code>{html.escape(f.name)}</code></a></li>'

@@ -88,7 +88,7 @@
         "capacity_authority": { "$ref": "common.schema.json#/$defs/NamePin" },
         "end_authority": {
           "$ref": "common.schema.json#/$defs/NamePin",
-          "description": "Optional designated authority for seallink-end/1 (defaults to origin.issuer when omitted)."
+          "description": "Optional designated authority for seallink-end/1 (defaults to capacity_authority, falling back to origin.issuer when omitted)."
         },
         "name_recovery": {
           "oneOf": [

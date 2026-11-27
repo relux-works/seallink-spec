@@ -8,7 +8,10 @@
       "minLength": 1,
       "maxLength": 512,
       "pattern": "^/([^/\\r\\n]+(/[^/\\r\\n]+)*)?/?$",
-      "not": { "pattern": "(^|/)\\.\\.?(/|$)|\n" },
+      "not": { "pattern": "\n" },
+      "allOf": [
+        { "not": { "pattern": "(^|/)\\.\\.?(/|$)" } }
+      ],
       "description": "Canonical slash-rooted path forbidding '.' and '..' path traversal segments."
     },
     "AuthorityFrame": {

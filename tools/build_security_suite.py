@@ -53,6 +53,12 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             return "ADMIT", None
         except ValueError:
             return "REFUSE", "ORIGIN_UNVERIFIED"
+    if "enabled_modules" in inp:
+        eff_mods = inp["enabled_modules"]
+    elif case.get("module") in sv.ALL_OPTIONAL_MODULES:
+        eff_mods = ["core", case["module"]]
+    else:
+        eff_mods = None
     v = sv.Tier1Verifier(
         pinned_network=inp.get("pinned_network", "main"),
         pinned_genesis=inp.get("pinned_genesis", GENESIS_MAIN),
@@ -61,10 +67,10 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         trusted_origin_issuer_pins=inp.get("trusted_origin_issuer_pins"),
         enforce_schemas=True,
         require_jsonschema=require_jsonschema,
-        max_history_steps=inp.get("max_history_steps", 500),
+        max_history_steps=inp.get("max_history_steps", 4096),
         max_automaton_steps=inp.get("max_automaton_steps", 1024),
         require_observation_bracket=inp.get("require_observation_bracket", True),
-        enabled_modules=inp.get("enabled_modules"),
+        enabled_modules=eff_mods,
     )
     if runner == "origin_status":
         chain = sv.ChainView(inp["chain"])
@@ -162,6 +168,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             holder_assent=inp.get("holder_assent"),
             dest_accept_stmt=inp.get("dest_accept_stmt"),
             origin_bundle=inp.get("origin_bundle"),
+            origin_bundles_by_oid=inp.get("origin_bundles_by_oid"),
             local_executor_pin=inp.get("local_executor_pin"),
             mode=inp.get("mode", "activate"),
         )
@@ -176,6 +183,8 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             inp["is_foreign_service"],
             chain,
             owner_manifest=inp.get("owner_manifest"),
+            presented_manifests=inp.get("manifests"),
+            origin_bundle=inp.get("origin_bundle"),
         )
         return res.verdict, res.refusal_code
     if runner == "federation":
@@ -206,6 +215,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         return res.verdict, res.refusal_code
     if runner == "issuer_role":
         chain = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
         err = v.verify_issuer_role_at_height(
             inp["issuer_pin"],
             inp["envelope"],
@@ -213,6 +223,8 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             inp["anchor_height"],
             chain,
             resolve_at_tip=inp.get("resolve_at_tip", False),
+            journal=j,
+            origin_bundle=inp.get("origin_bundle"),
         )
         return ("REFUSE", err) if err else ("ADMIT", None)
     if runner == "sibling_rows_replay":
@@ -362,6 +374,8 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             target=inp.get("target"),
             arguments=inp.get("arguments"),
             actual_message_meta=inp.get("actual_message_meta"),
+            executor_cfg=inp.get("executor_cfg"),
+            disclosed_clauses=inp.get("disclosed_clauses"),
         )
         if inp.get("expect_zero_writes") and len(journal.entries) != before_n:
             return "REFUSE", f"UNEXPECTED_BEARER_WRITES:{len(journal.entries) - before_n}"
@@ -464,6 +478,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             ch,
             j,
             inp.get("manifests", {}),
+            origin_bundle=inp.get("origin_bundle"),
         )
         return res.verdict, res.refusal_code
     if runner == "notary_act":
@@ -479,12 +494,14 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             expected_child_binding=inp.get("expected_child_binding"),
             log_ctx=inp.get("log_ctx"),
             allow_reinstatement=inp.get("allow_reinstatement", True),
+            origin_bundle=inp.get("origin_bundle"),
         )
         return res.verdict, res.refusal_code
     if runner == "log_checkpoint":
         ch = sv.ChainView(inp["chain"])
         j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
         before_n = len(j.entries) if j is not None else 0
+        before_cl = len(j.closures) if j is not None else 0
         res = v.verify_log_checkpoint(
             inp["checkpoint"],
             inp.get("checkpoint_txid"),
@@ -493,13 +510,21 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             prev_cp_txid=inp.get("prev_checkpoint_txid"),
             genesis_seal=inp.get("genesis_seal"),
             predecessor_terminal_checkpoint=inp.get("predecessor_terminal_checkpoint"),
+            predecessor_chain=inp.get("predecessor_chain"),
             journal=j,
             required_depth=inp.get("required_depth"),
             is_head=inp.get("is_head", True),
+            origin_bundle=inp.get("origin_bundle"),
         )
+        if inp.get("expect_closure_written") and j is not None and len(j.closures) <= before_cl:
+            return "REFUSE", "EXPECTED_CLOSURE_NOT_WRITTEN"
         if res.verdict == "ADMIT" and "expect_journal_writes" in inp and j is not None:
             if len(j.entries) - before_n != int(inp["expect_journal_writes"]):
                 return "REFUSE", f"LOG_HEAD_WRITES_MISMATCH:{len(j.entries) - before_n}"
+        if res.verdict == "ADMIT" and "expect_log_head_txid" in inp and j is not None:
+            lid = inp["checkpoint"]["payload"]["log_id"]
+            if (j.log_heads.get(lid) or {}).get("checkpoint_txid") != inp["expect_log_head_txid"]:
+                return "REFUSE", f"LOG_HEAD_TXID_MISMATCH:{(j.log_heads.get(lid) or {}).get('checkpoint_txid')}"
         if res.verdict == "ADMIT" and inp.get("replay_restart_check") and j is not None:
             j2 = sv.FencedJournal.replay_persisted_entries(
                 j.journal_id,
@@ -514,7 +539,13 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
     if runner == "log_fraud":
         ch = sv.ChainView(inp["chain"])
         j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
-        res = v.verify_log_fraud(inp["fraud"], ch, journal=j)
+        before_cl = len(j.closures) if j is not None else 0
+        before_ent = len(j.entries) if j is not None else 0
+        res = v.verify_log_fraud(inp["fraud"], ch, journal=j, origin_bundle=inp.get("origin_bundle"))
+        if inp.get("expect_zero_closures") and j is not None and len(j.closures) != before_cl:
+            return "REFUSE", f"UNEXPECTED_FRAUD_CLOSURES:{len(j.closures) - before_cl}"
+        if inp.get("expect_zero_writes") and j is not None and len(j.entries) != before_ent:
+            return "REFUSE", f"UNEXPECTED_FRAUD_WRITES:{len(j.entries) - before_ent}"
         if res.verdict == "ADMIT" and j is not None and "post_fraud_ticket" in inp:
             t_res = v.verify_artifact_ticket(inp["post_fraud_ticket"], inp["post_fraud_policy"], ch, journal=j)
             return t_res.verdict, t_res.refusal_code
@@ -533,6 +564,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             journal=j,
             allow_reinstatement=inp.get("allow_reinstatement", True),
             heartbeat_max_blocks=inp.get("heartbeat_max_blocks"),
+            origin_bundle=inp.get("origin_bundle"),
         )
         return res.verdict, res.refusal_code
     if runner == "artifact_ticket":
@@ -544,14 +576,26 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             ch,
             journal=j,
             provisional_revocations=inp.get("provisional_revocations"),
+            origin_bundles_by_oid=inp.get("origin_bundles_by_oid"),
         )
         return res.verdict, res.refusal_code
     if runner == "tier2_name_history":
         res = v.verify_tier2_name_history_page(
             inp["page"],
             inp["expected_owner_policy"],
-            headers=inp.get("headers"),
+            trusted_checkpoint=inp.get("trusted_checkpoint"),
+            current_time=inp.get("current_time"),
+            allow_unresolved_voluntary_rebind=inp.get("allow_unresolved_voluntary_rebind", False),
         )
+        if res.verdict == "ADMIT":
+            if "expect_owner_authored" in inp:
+                got_oa = [u.get("owner_authored") for u in res.details.get("verified_updates", [])]
+                if got_oa != inp["expect_owner_authored"]:
+                    return "REFUSE", f"TIER2_OWNER_AUTHORED_MISMATCH:{got_oa}"
+            if "expect_next_cursor_owner_policy" in inp:
+                got_pol = res.details.get("final_owner_policy")
+                if got_pol != inp["expect_next_cursor_owner_policy"]:
+                    return "REFUSE", f"TIER2_CURSOR_POLICY_MISMATCH:{got_pol}"
         return res.verdict, res.refusal_code
     if runner == "verdict":
         ch = sv.ChainView(inp["chain"])
@@ -565,7 +609,16 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         return res.verdict, res.refusal_code
     if runner == "termination":
         ch = sv.ChainView(inp["chain"])
-        res = v.verify_termination(inp["termination"], inp["contract"], ch, spend_txid=inp.get("spend_txid"))
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+        res = v.verify_termination(
+            inp["termination"],
+            inp["contract"],
+            ch,
+            spend_txid=inp.get("spend_txid"),
+            origin_bundle=inp.get("origin_bundle"),
+            origin_bundles_by_oid=inp.get("origin_bundles_by_oid"),
+            journal=j,
+        )
         return res.verdict, res.refusal_code
     if runner == "certset_head":
         res = v.verify_certset_head(inp["head"], inp["statements"], inp["owner_manifest"])
@@ -577,6 +630,9 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             ch,
             expected_policy=inp.get("expected_policy"),
             device_list=inp.get("device_list"),
+            owner_manifest=inp.get("owner_manifest"),
+            presented_manifests=inp.get("manifests"),
+            origin_bundle=inp.get("origin_bundle"),
         )
         return res.verdict, res.refusal_code
     if runner == "session_lifecycle":
@@ -628,6 +684,8 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                     target=step.get("target"),
                     arguments=step.get("arguments"),
                     actual_message_meta=step.get("actual_message_meta"),
+                    executor_cfg=step.get("executor_cfg") or inp.get("executor_cfg"),
+                    disclosed_clauses=step.get("disclosed_clauses"),
                 )
             else:
                 raise ValueError(f"Unknown session_lifecycle step kind: {op_kind}")
@@ -1534,11 +1592,19 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "type": "seallink-owner-command/1",
     }
     cmd_ed = sl.sign_envelope(cmd_base, [ed_seed], alg="ed25519")
+    alice_dev_man = rm.bind_device_list_manifest(
+        fx_dev["chain"],
+        "id/alice",
+        fx_dev["_alice_owner_pol"],
+        fx_dev["_alice_reg"],
+        dev_list,
+        extra_link={"grant": fx_dev["_keys"]["alice_gr"]["xonly"]},
+    )
     add(
         "owner-command-ed25519-admit",
         ["SL-WIRE-012", "SL-WIRE-013", "SL-IDEN-011"],
         "owner_command",
-        {"command": cmd_ed, "device_list": dev_list, "is_foreign_service": False, "chain": fx_dev["chain"]},
+        {"command": cmd_ed, "device_list": dev_list, "owner_manifest": alice_dev_man, "is_foreign_service": False, "chain": fx_dev["chain"]},
         "ADMIT",
         None,
         "Enrolled L2 Ed25519 hardware key signing seallink-owner-command/1 MUST be admitted.",
@@ -1549,7 +1615,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "owner-command-p256-low-s-admit",
         ["SL-WIRE-012", "SL-WIRE-013", "SL-IDEN-011"],
         "owner_command",
-        {"command": cmd_p256, "device_list": dev_list, "is_foreign_service": False, "chain": fx_dev["chain"]},
+        {"command": cmd_p256, "device_list": dev_list, "owner_manifest": alice_dev_man, "is_foreign_service": False, "chain": fx_dev["chain"]},
         "ADMIT",
         None,
         "Enrolled L2 NIST P-256 Secure Enclave key with strict low-S signature MUST be admitted.",
@@ -1651,6 +1717,8 @@ def build_security_conformance_suite() -> dict[str, Any]:
     bd10.add_draft10_conformance_cases(add)
     import build_draft11_suite as bd11
     bd11.add_draft11_conformance_cases(add)
+    import build_draft13_suite as bd13
+    bd13.add_draft13_conformance_cases(add)
 
     return {
         "suite": "security-conformance",

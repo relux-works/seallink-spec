@@ -184,7 +184,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
             "compromised_policy": {"m": 1, "pks": [of_hist["_keys"]["g1_gr"]["xonly"]]},
             "genesis": GENESIS_MAIN,
             "h_c": hc_val,
-            "issuer": {"name": "id/parent-a", "owner_policy": g1_pin_h["owner_policy"], "registration": g1_pin_h["registration"]},
+            "issuer": {"name": "id/parent-a", "registration": g1_pin_h["registration"]},
             "name_input": {"txid": prev_g1_u["txid"], "vout": prev_g1_u["vout"]},
             "role": "grant",
             "type": "seallink-credential-break/1",
@@ -2108,7 +2108,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
 
     ch_aa_0b = copy.deepcopy(fx_aa["chain"])
     al_prev_u = ch_aa_0b["names"]["id/alice"]["updates"][-1]
-    brk_aa = {"compromised_policy": {"m": 1, "pks": [fx_aa["_keys"]["alice_gr"]["xonly"]]}, "genesis": GENESIS_MAIN, "h_c": 749500, "issuer": {"name": "id/alice", "owner_policy": fx_aa["_alice_owner_pol"], "registration": fx_aa["_alice_reg"]}, "name_input": {"txid": al_prev_u["txid"], "vout": al_prev_u["vout"]}, "role": "grant", "type": "seallink-credential-break/1"}
+    brk_aa = {"compromised_policy": {"m": 1, "pks": [fx_aa["_keys"]["alice_gr"]["xonly"]]}, "genesis": GENESIS_MAIN, "h_c": 749500, "issuer": {"name": "id/alice", "registration": fx_aa["_alice_reg"]}, "name_input": {"txid": al_prev_u["txid"], "vout": al_prev_u["vout"]}, "role": "grant", "type": "seallink-credential-break/1"}
     ch_aa_0b["names"]["id/alice"] = sv.make_name_history(
         "id/alice", fx_aa["_alice_reg"], fx_aa["_alice_owner_pol"],
         {"link": {"grant": fx_aa["_keys"]["alice_gr"]["xonly"]}, "m": {"h": sl.content_addr(fx_aa["_alice_man"]), "s": 1}},

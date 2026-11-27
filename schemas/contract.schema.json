@@ -182,28 +182,53 @@
         }
       ]
     },
-    "TerminationStatement": {
+    "TerminationPayload": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["payload", "signatures"],
+      "required": ["type", "network", "genesis", "contract_id", "termination_branch", "reason", "issued_at"],
       "properties": {
-        "payload": {
+        "type": { "const": "seallink-termination/1" },
+        "network": { "$ref": "common.schema.json#/$defs/Network" },
+        "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "contract_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "termination_branch": { "type": "string", "enum": ["issuer_only", "either_party", "both_together", "arbiter"] },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2048, "x-seallink-allow-lf": true },
+        "verdict_id": { "$ref": "common.schema.json#/$defs/Hex64" },
+        "guardian_context": { "$ref": "common.schema.json#/$defs/GuardianContext" },
+        "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+      }
+    },
+    "TerminationStatement": {
+      "oneOf": [
+        {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type", "network", "genesis", "contract_id", "termination_branch", "reason", "issued_at"],
+          "required": ["payload", "signatures"],
           "properties": {
-            "type": { "const": "seallink-termination/1" },
-            "network": { "$ref": "common.schema.json#/$defs/Network" },
-            "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
-            "contract_id": { "$ref": "common.schema.json#/$defs/Hex64" },
-            "termination_branch": { "type": "string", "enum": ["issuer_only", "either_party", "both_together", "arbiter"] },
-            "reason": { "type": "string", "minLength": 1, "maxLength": 2048, "x-seallink-allow-lf": true },
-            "verdict_id": { "$ref": "common.schema.json#/$defs/Hex64" },
-            "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+            "payload": {
+              "allOf": [
+                { "$ref": "#/$defs/TerminationPayload" },
+                { "not": { "required": ["guardian_context"] } }
+              ]
+            },
+            "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
           }
         },
-        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
-      }
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["payload", "guardian_approvals"],
+          "properties": {
+            "payload": {
+              "allOf": [
+                { "$ref": "#/$defs/TerminationPayload" },
+                { "required": ["guardian_context"] }
+              ]
+            },
+            "guardian_approvals": { "$ref": "common.schema.json#/$defs/GuardianApprovals" }
+          }
+        }
+      ]
     },
     "Verdict": {
       "type": "object",
