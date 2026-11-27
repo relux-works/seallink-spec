@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.13/schemas/invocation.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/invocation.schema.json",
   "title": "SealLink v1.0 Invocation, Receipt, Sessions, Auth, Owner Control, Journal & Migration",
   "$defs": {
     "Invocation": {
@@ -176,6 +176,7 @@
                 "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
                 "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "channel_binding": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "name": { "$ref": "common.schema.json#/$defs/NameStr" },
                 "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
@@ -194,12 +195,13 @@
                 "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
                 "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "channel_binding": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "name": { "$ref": "common.schema.json#/$defs/NameStr" },
                 "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
                 "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
                 "auth_alg": { "const": "p256" },
-                "auth_pubkey": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" }
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/P256Pubkey66" }
               }
             },
             {
@@ -212,6 +214,7 @@
                 "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
                 "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "channel_binding": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "name": { "$ref": "common.schema.json#/$defs/NameStr" },
                 "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
@@ -242,6 +245,7 @@
                 "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
                 "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "channel_binding": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "account_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
                 "name": { "$ref": "common.schema.json#/$defs/NameStr" },
                 "auth_alg": { "const": "bip340" },
@@ -262,10 +266,11 @@
                 "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
                 "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "channel_binding": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "account_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
                 "name": { "$ref": "common.schema.json#/$defs/NameStr" },
                 "auth_alg": { "const": "p256" },
-                "auth_pubkey": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/P256Pubkey66" },
                 "firstupdate_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
@@ -282,6 +287,7 @@
                 "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
                 "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "channel_binding": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "account_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
                 "name": { "$ref": "common.schema.json#/$defs/NameStr" },
                 "auth_alg": { "const": "ed25519" },
@@ -729,7 +735,29 @@
                 "registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
                 "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
                 "manifest_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
-                "anchoring_txid": { "$ref": "common.schema.json#/$defs/Hex64" }
+                "anchoring_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "sets": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "auth": { "$ref": "common.schema.json#/$defs/SetPin" },
+                    "card": { "$ref": "common.schema.json#/$defs/SetPin" },
+                    "certs": { "$ref": "common.schema.json#/$defs/SetPin" },
+                    "devices": { "$ref": "common.schema.json#/$defs/SetPin" },
+                    "members": { "$ref": "common.schema.json#/$defs/SetPin" }
+                  }
+                },
+                "removed_sets": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "auth": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                    "card": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                    "certs": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                    "devices": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+                    "members": { "$ref": "common.schema.json#/$defs/PositiveUint53" }
+                  }
+                }
               }
             }
           }
@@ -910,16 +938,23 @@
                 "checkpoints_root": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "terminal": { "type": "boolean" },
                 "next_log_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
-                "next_log_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }
+                "next_log_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+                "handover_next_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
+                "handover_next_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }
               },
               "dependentRequired": {
                 "next_log_outpoint": ["next_log_policy"],
-                "next_log_policy": ["next_log_outpoint"]
+                "next_log_policy": ["next_log_outpoint"],
+                "handover_next_outpoint": ["handover_next_policy"],
+                "handover_next_policy": ["handover_next_outpoint"]
               },
               "allOf": [
                 {
                   "if": { "required": ["terminal"], "properties": { "terminal": { "const": false } } },
-                  "then": { "required": ["next_log_outpoint", "next_log_policy"] },
+                  "then": {
+                    "required": ["next_log_outpoint", "next_log_policy"],
+                    "not": { "anyOf": [{ "required": ["handover_next_outpoint"] }, { "required": ["handover_next_policy"] }] }
+                  },
                   "else": { "not": { "anyOf": [{ "required": ["next_log_outpoint"] }, { "required": ["next_log_policy"] }] } }
                 }
               ]

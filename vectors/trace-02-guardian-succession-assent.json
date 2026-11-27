@@ -962,6 +962,62 @@
               }
             ]
           },
+          "id/child-leo-attempted-rec": {
+            "registration": {
+              "txid": "34f0f978b460a0667720e8ccc3ed74f09df2e6b7f8ed25c505b21e24f28ae0a2",
+              "vout": 0
+            },
+            "updates": [
+              {
+                "confirmed_height": 750350,
+                "op": "NAME_FIRSTUPDATE",
+                "output_script_hex": "521a69642f6368696c642d6c656f2d617474656d707465642d726563147c85ddbeac064b5da8713a9901e83f5b3e35ae024c567b226c696e6b223a7b226f726967696e223a2238373365333361333166313232663866656539393338373534323530363731393937663962393432396130396336353135316438663064323964356132346263227d7d6d6d002083f431803325b969b68c0162775719d39a3709a6b8799e197d8450136b2b3525",
+                "owner_policy": {
+                  "kind": "multisig",
+                  "m": 2,
+                  "pks": [
+                    "02861ba2e0e305f4e48ebaee19242ddc98ac94e3e6ae17c4ebad2073b910ef24e5",
+                    "038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f",
+                    "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
+                  ]
+                },
+                "txid": "34f0f978b460a0667720e8ccc3ed74f09df2e6b7f8ed25c505b21e24f28ae0a2",
+                "vout": 0
+              },
+              {
+                "confirmed_height": 750360,
+                "op": "NAME_UPDATE",
+                "output_script_hex": "531a69642f6368696c642d6c656f2d617474656d707465642d7265634c567b226c696e6b223a7b226f726967696e223a2238373365333361333166313232663866656539393338373534323530363731393937663962393432396130396336353135316438663064323964356132346263227d7d6d75002083f431803325b969b68c0162775719d39a3709a6b8799e197d8450136b2b3525",
+                "owner_policy": {
+                  "kind": "multisig",
+                  "m": 2,
+                  "pks": [
+                    "02861ba2e0e305f4e48ebaee19242ddc98ac94e3e6ae17c4ebad2073b910ef24e5",
+                    "038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f",
+                    "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
+                  ]
+                },
+                "prev_input": {
+                  "sighash_bytes": [
+                    1
+                  ],
+                  "txid": "34f0f978b460a0667720e8ccc3ed74f09df2e6b7f8ed25c505b21e24f28ae0a2",
+                  "vout": 0,
+                  "witness_policy": {
+                    "kind": "multisig",
+                    "m": 2,
+                    "pks": [
+                      "02861ba2e0e305f4e48ebaee19242ddc98ac94e3e6ae17c4ebad2073b910ef24e5",
+                      "038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f",
+                      "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
+                    ]
+                  }
+                },
+                "txid": "91bd19ecb425d6a811ecd62cf7f84b667b9600c58fa375850e806ab2a2f54521",
+                "vout": 0
+              }
+            ]
+          },
           "id/civil-registry": {
             "registration": {
               "txid": "0fbc9f555f92ade88547b08f2d5abea8299937bd41d2f3d0d6b166fb9419f6eb",
@@ -1365,6 +1421,62 @@
                   }
                 },
                 "txid": "475d62a2151950641c6b6193caa98b79296949dcab866792d60701fba606924b",
+                "vout": 0
+              }
+            ]
+          },
+          "id/child-leo-attempted-rec": {
+            "registration": {
+              "txid": "34f0f978b460a0667720e8ccc3ed74f09df2e6b7f8ed25c505b21e24f28ae0a2",
+              "vout": 0
+            },
+            "updates": [
+              {
+                "confirmed_height": 750350,
+                "op": "NAME_FIRSTUPDATE",
+                "output_script_hex": "521a69642f6368696c642d6c656f2d617474656d707465642d726563147c85ddbeac064b5da8713a9901e83f5b3e35ae024c567b226c696e6b223a7b226f726967696e223a2238373365333361333166313232663866656539393338373534323530363731393937663962393432396130396336353135316438663064323964356132346263227d7d6d6d002083f431803325b969b68c0162775719d39a3709a6b8799e197d8450136b2b3525",
+                "owner_policy": {
+                  "kind": "multisig",
+                  "m": 2,
+                  "pks": [
+                    "02861ba2e0e305f4e48ebaee19242ddc98ac94e3e6ae17c4ebad2073b910ef24e5",
+                    "038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f",
+                    "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
+                  ]
+                },
+                "txid": "34f0f978b460a0667720e8ccc3ed74f09df2e6b7f8ed25c505b21e24f28ae0a2",
+                "vout": 0
+              },
+              {
+                "confirmed_height": 750360,
+                "op": "NAME_UPDATE",
+                "output_script_hex": "531a69642f6368696c642d6c656f2d617474656d707465642d7265634c567b226c696e6b223a7b226f726967696e223a2238373365333361333166313232663866656539393338373534323530363731393937663962393432396130396336353135316438663064323964356132346263227d7d6d75002083f431803325b969b68c0162775719d39a3709a6b8799e197d8450136b2b3525",
+                "owner_policy": {
+                  "kind": "multisig",
+                  "m": 2,
+                  "pks": [
+                    "02861ba2e0e305f4e48ebaee19242ddc98ac94e3e6ae17c4ebad2073b910ef24e5",
+                    "038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f",
+                    "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
+                  ]
+                },
+                "prev_input": {
+                  "sighash_bytes": [
+                    1
+                  ],
+                  "txid": "34f0f978b460a0667720e8ccc3ed74f09df2e6b7f8ed25c505b21e24f28ae0a2",
+                  "vout": 0,
+                  "witness_policy": {
+                    "kind": "multisig",
+                    "m": 2,
+                    "pks": [
+                      "02861ba2e0e305f4e48ebaee19242ddc98ac94e3e6ae17c4ebad2073b910ef24e5",
+                      "038f3c2140a36df0d135cb82f22d615d7f358ce3c932cb48239808f599060a6f4f",
+                      "03a1ac2e1b266090b6683c74c4de01af866fedcae2dfa07830662b07a15afb75b9"
+                    ]
+                  }
+                },
+                "txid": "91bd19ecb425d6a811ecd62cf7f84b667b9600c58fa375850e806ab2a2f54521",
                 "vout": 0
               }
             ]
@@ -2347,5 +2459,5 @@
       }
     }
   ],
-  "version": "1.0.0-draft.13"
+  "version": "1.0.0-draft.14"
 }

@@ -295,7 +295,7 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     # Use `seallink-statement/1` (max_bytes=4096, body freeform? Let's use `seallink-grant/1`? Grant max_bytes=65536).
     # `seallink-card/1` has `max_bytes=16384` and `contact` / `relays` / `transports`. Let's use `seallink-contract/1`? Contract max_bytes=65536.
     # Actually `seallink-card/1` `contact` items `{kind, value}` with 31*500 + exact filler hits EXACT 16384 bytes!
-    # Wait: `seallink-card/1` schema has `maxItems: 16` or `32`? Let's check using `seallink-grant/1`? No, let's build a valid `seallink-statement/1`? Even simpler: `seallink-migration/1`? No, check `seallink-receipt/1`? No, `seallink-card/1`! Wait: check `seallink-device-list/1` (`max_bytes=16384`) or `seallink-manifest/1` (`max_bytes=16384`, `providers` maxItems=64 -> each provider ~260 bytes -> 60 providers = ~16384B)! Let's pad `manifest.service.endpoint` (maxLength=1024) + `providers` to hit EXACT 16384 bytes!
+    # `seallink-manifest/1` has `max_bytes=16384` and `providers` maxItems=64 -> each provider ~260 bytes -> 60 providers = ~16384B; pad `manifest.service.endpoint` (maxLength=1024) + `providers` to hit EXACT 16384 bytes!
     man_exact = {
         "network": "main",
         "owner": "id/alice",
@@ -558,6 +558,10 @@ def add_boundary_and_recovery_cases(add: Callable[..., None]) -> None:
     h_rec_start = 749800
     delay_r = of_rec["origin_bundle"]["origin"]["payload"]["name_recovery"]["delay_blocks"]  # 144
     deadline_r = h_rec_start + delay_r
+    of_rec["chain"]["names"][cand_b2["name"]] = sv.make_name_history(
+        cand_b2["name"], cand_b2["registration"], cand_b2["owner_policy"],
+        {"link": {"origin": of_rec["_origin_id"]}}, first_height=749750, update_height=749760,
+    )
     of_rec["chain"]["txs"][rec_tx_id]["outputs"]["0"]["spent_by_txid"] = rspend_tx
     of_rec["chain"]["txs"][rspend_tx] = {"confirmed_height": h_rec_start, "opreturn_hex": sl.encode_opreturn(0x0C, cand_b2_id).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(rec_pol)}}}
     # Put 0x10 cancel at EXACT deadline_r (NOT < deadline_r -> MUST NOT cancel!) and set tip_height == deadline_r!

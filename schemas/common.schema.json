@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.13/schemas/common.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/common.schema.json",
   "title": "SealLink v1.0 Shared Wire Primitives",
   "description": "Shared primitives with normative x-seallink-refusal class annotations (SPEC-01 §7 deterministic leaf-wins precedence: WIRE_DUPLICATE -> WIRE_STRING -> WIRE_TYPE -> WIRE_MEMBER -> WIRE_INTEGER -> WIRE_KEY -> WIRE_SIGNATURE -> WIRE_CONSTRAINT -> CHAIN_SCRIPT_UNSUPPORTED). Regular expressions follow portable RE2 / ECMA-262 / Rust regex semantics without lookaround.",
   "$defs": {
@@ -28,12 +28,26 @@
       "x-seallink-refusal": "WIRE_KEY",
       "description": "Valid compressed secp256k1 public key (SEC 1)."
     },
+    "P256Pubkey66": {
+      "type": "string",
+      "pattern": "^0[23][0-9a-f]{64}$",
+      "not": { "pattern": "\n" },
+      "x-seallink-refusal": "WIRE_KEY",
+      "description": "Valid compressed NIST P-256 (secp256r1) public key (SEC 1)."
+    },
     "Ed25519Pubkey64": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
       "not": { "pattern": "\n" },
       "x-seallink-refusal": "WIRE_KEY",
       "description": "Valid canonical non-small-order Ed25519 compressed public key (RFC 8032 / SPEC-01 §4.1)."
+    },
+    "X25519Pubkey64": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "not": { "pattern": "\n" },
+      "x-seallink-refusal": "WIRE_KEY",
+      "description": "Valid non-low-order X25519 Curve25519 u-coordinate public key (RFC 7748; verifier MUST reject all 12 low-order u-coordinates with WIRE_KEY)."
     },
     "Sig128": {
       "type": "string",
@@ -100,13 +114,21 @@
       "pattern": "^(mail|agent-session|xmpp|blob|wallet|names|compute|rental|sso|[a-z0-9-]+(\\.[a-z0-9-]+)+/[a-z0-9][a-z0-9._-]{0,63})$",
       "not": { "pattern": "\n" }
     },
+    "HttpsUri": {
+      "type": "string",
+      "minLength": 9,
+      "maxLength": 512,
+      "pattern": "^https://[A-Za-z0-9._~:\\[\\]-]+(/[A-Za-z0-9._~:/?#\\[\\]@!$&'()*+,;=%-]*)?$",
+      "not": { "pattern": "\n" },
+      "description": "Strict printable-ASCII HTTPS URI forbidding userinfo (@), backslash, whitespace, non-ASCII, and query/fragment inside authority."
+    },
     "LocatorUri": {
       "type": "string",
       "minLength": 8,
       "maxLength": 512,
-      "pattern": "^((https|blossom|sftp)://[^/@ \\t\\r\\n]+(/[^ \\t\\r\\n]*)?|ipfs://[A-Za-z0-9][A-Za-z0-9._~-]*(/[^ \\t\\r\\n]*)?|magnet:\\?[^ \\t\\r\\n]+|nostr:(nevent1|naddr1|note1|npub1|nprofile1)[02-9ac-hj-np-z]+)$",
+      "pattern": "^[a-z][a-z0-9+.-]{1,15}:(//[A-Za-z0-9._~:\\[\\]-]+(/[A-Za-z0-9._~:/?#\\[\\]@!$&'()*+,;=%-]*)?|[A-Za-z0-9._~:?#\\[\\]!$&'()*+,;=%-][A-Za-z0-9._~:/?#\\[\\]@!$&'()*+,;=%-]*)$",
       "not": { "pattern": "\n" },
-      "description": "Safe-by-design off-chain locator URI matching registry/locator-schemes.json (allowlists https, blossom, ipfs, magnet, nostr, sftp; forbids user:pass@ in authority, cleartext http/javascript/data/file/ftp, and control/whitespace chars)."
+      "description": "Strict printable-ASCII RFC 3986 locator URI (forbids userinfo '@', backslash, whitespace, non-ASCII, and query/fragment inside authority). Wire Step 8b additionally enforces registry/locator-schemes.json: forbidden_schemes refuse WIRE_MEMBER, allowed_schemes enforce per-scheme syntax and SSRF rules, and unrecognized future schemes are wire-valid but MUST NOT be auto-fetched (SPEC-01 §7, SPEC-03 §4)."
     },
     "QuotaKindStr": {
       "type": "string",
@@ -118,10 +140,11 @@
     },
     "RelayUri": {
       "type": "string",
-      "minLength": 6,
+      "minLength": 7,
       "maxLength": 512,
-      "pattern": "^wss?://[^\\r\\n\u2028\u2029]+$",
-      "not": { "pattern": "\n" }
+      "pattern": "^wss://[A-Za-z0-9._~:\\[\\]-]+(/[A-Za-z0-9._~:/?#\\[\\]@!$&'()*+,;=%-]*)?$",
+      "not": { "pattern": "\n" },
+      "description": "Strict TLS-only Nostr relay URI (wss:// only; forbids cleartext ws://, userinfo '@', backslash, whitespace, and non-ASCII)."
     },
     "Outpoint": {
       "type": "object",
@@ -380,7 +403,7 @@
       }
     },
     "DeviceThresholdPolicy": {
-      "description": "Canonical device-capable threshold policy: omits alg for BIP-340 (explicit alg='bip340' forbidden), or specifies alg='p256' (CompressedPubkey66) or alg='ed25519' (Ed25519Pubkey64).",
+      "description": "Canonical device-capable threshold policy: omits alg for BIP-340 (explicit alg='bip340' forbidden), or specifies alg='p256' (P256Pubkey66) or alg='ed25519' (Ed25519Pubkey64).",
       "oneOf": [
         { "$ref": "#/$defs/ThresholdPolicy" },
         {
@@ -395,7 +418,7 @@
               "minItems": 1,
               "maxItems": 32,
               "uniqueItems": true,
-              "items": { "$ref": "#/$defs/CompressedPubkey66" }
+              "items": { "$ref": "#/$defs/P256Pubkey66" }
             }
           }
         },
@@ -663,12 +686,13 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["leaf_digest", "root", "steps"],
-      "description": "Selective-disclosure Merkle inclusion proof (<= 8 steps, up to 256 entries) under seallink-merkle-leaf/1 and seallink-merkle-node/1 for salted sets.auth and sets.devices.",
+      "description": "Fixed-depth size-hiding selective-disclosure Merkle inclusion proof (exact length 8 steps over a 256-leaf tree padded with CSPRNG seallink-set-dummy/1 leaves) under seallink-merkle-leaf/1 and seallink-merkle-node/1 for salted sets.auth and sets.devices.",
       "properties": {
         "leaf_digest": { "$ref": "#/$defs/Hex64" },
         "root": { "$ref": "#/$defs/Hex64" },
         "steps": {
           "type": "array",
+          "minItems": 8,
           "maxItems": 8,
           "items": {
             "type": "object",

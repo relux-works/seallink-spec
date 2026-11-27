@@ -1,6 +1,6 @@
 # SPEC-00: SealLink Architecture, Ontology, and Governance
 
-- **Version:** `1.0.0-draft.13`
+- **Version:** `1.0.0-draft.14`
 - **Status:** `draft` (normative rules tagged `decided` or `open`; open items tracked in `OPEN-QUESTIONS.md`)
 - **Evidence / Maturity:** `prose`
 - **Authors:** Ivan Oparin, Alexey Grigorev
@@ -105,9 +105,10 @@ The SealLink v1.0 specification is organized as eight orthogonal normative docum
    - `vectors` — deterministic positive/negative and end-to-end RFC 8448-style byte traces published and verified against schemas and reference cryptography;
    - `dual-impl` — verified byte-for-byte identical across at least two independent implementations with disjoint crypto stacks (target: Rust + Go);
    - `chain-tested` — end-to-end verified on Namecoin regtest and/or mainnet.
-5. **Post-Freeze Evolution (`Registry Update` vs. Core SLIP):** Once v1.0 freezes, changes follow a two-tier governance process:
-   - **Lightweight `Registry Update`:** Additive, non-breaking entries in `registry/locator-schemes.json` (safe-by-design URI schemes passing SSRF and credential-leakage review), optional algorithm modules in `registry/crypto-algorithms.json` (national or post-quantum suites), and new artifact/service schemes MAY be published via a lightweight `Registry Update` PR + security review + conformance vectors without opening a breaking Core SLIP.
-   - **Core SLIP (`SLIP-TEMPLATE.md`):** Wire-format changes, MTI cryptographic suite changes, consensus/ledger rules, new refusal codes, and new canonical object types require a numbered SealLink Improvement Proposal (`SLIP-TEMPLATE.md`) with full normative prose, Draft 2020-12 schemas, and executable conformance vectors.
+5. **Post-Freeze Evolution (`Registry Update` vs. `Optional Module SLIP` vs. Core SLIP):** Once v1.0 freezes, changes follow a three-tier governance process:
+   - **Lightweight `Registry Update`:** Additive, non-breaking entries in `registry/locator-schemes.json` (safe-by-design RFC 3986 URI schemes enforced at runtime Step 8b against the registry without changing closed schemas, passing SSRF and credential-leakage review) and metadata/reserved-slot registrations in `registry/crypto-algorithms.json` or `registry/service-types.json` MAY be published via a lightweight `Registry Update` PR + security review + conformance vectors without opening a Core SLIP.
+   - **Optional Module SLIP:** Enabling a new active wire signature algorithm (`ml-dsa-65`, `bip340+ml-dsa-65`, `gost-r-34.10-2012-256`, `sm2`, `brainpoolp256r1`), new `service_type` enum member, or new `artifact-schemes.json` hash scheme on the wire requires an Optional Module SLIP shipped synchronously with a versioned schema extension and conformance vectors; v1.0 verifiers without that module enabled fail closed (`ACTION_UNSUPPORTED` / `WIRE_KEY` / `WIRE_MEMBER`).
+   - **Core SLIP (`SLIP-TEMPLATE.md`):** Breaking wire-format changes, MTI cryptographic suite changes, consensus/ledger rules, new refusal codes, and new canonical object types require a numbered SealLink Improvement Proposal (`SLIP-TEMPLATE.md`) with full normative prose, Draft 2020-12 schemas, and executable conformance vectors.
 6. **Algorithmic Neutrality:** SealLink v1.0 mandates a minimal, globally interoperable **Mandatory-To-Implement (`mti_v1`)** cryptographic core (`bip340`, `p256`, `ed25519`, `ecdsa-secp256k1-bip66`, `sha256`, `x25519`, `sha256-spki` in `registry/crypto-algorithms.json`) so any two implementations worldwide interoperate out of the box, while reserving equal-footing **optional module** slots (`reserved_optional_module`) for national and post-quantum suites (including `ml-dsa-65`, `bip340+ml-dsa-65`, `gost-r-34.10-2012-256`, `sm2`, and `brainpoolp256r1`) governed strictly as opt-in modules with identical architectural standing and fail-closed `ACTION_UNSUPPORTED` / `WIRE_KEY` isolation when disabled.
 
 ---

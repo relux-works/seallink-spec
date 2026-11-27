@@ -634,16 +634,22 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
     ho_term_p["terminal"] = True
     ho_term_p.pop("next_log_policy", None)
     ho_term_p.pop("next_log_vout", None)
+    ho_term_p["handover_next_policy"] = eco_ho["seal_pol"]
+    ho_term_p["handover_next_vout"] = 1
     ho_term_env = sl.sign_envelope(ho_term_p, [eco_ho["iss_role"]["sk"]])
     ho_term_ca = sl.content_addr(ho_term_env)
     ch_b5 = copy.deepcopy(eco_ho["chain_at_cp3"])
     rm.sync_chain_tip(ch_b5, height=750004)
-    ch_b5["txs"][eco_ho["cp3_tx"]]["opreturn_hex"] = sl.encode_opreturn(0x14, ho_term_ca).hex()
-    ch_b5["txs"][eco_ho["cp3_tx"]]["outputs"] = {}
-
-    gen2_op = {"txid": _h32("d13-blk5-gen2"), "vout": 0}
-    log2_id = sl.compute_log_id("main", GENESIS_MAIN, "notary", eco_ho["iss_name"], eco_ho["iss_reg"], gen2_op, predecessor_log_id=eco_ho["log_id"])
     cp2_1_tx = _h32("d13-blk5-log2-cp1")
+    ch_b5["txs"][eco_ho["cp3_tx"]]["opreturn_hex"] = sl.encode_opreturn(0x14, ho_term_ca).hex()
+    ch_b5["txs"][eco_ho["cp3_tx"]]["outputs"] = {"1": {"script_pubkey_hex": _spk_hex(eco_ho["seal_pol"]), "spent_by_txid": cp2_1_tx}}
+
+    gen2_op = {"txid": eco_ho["cp3_tx"], "vout": 1}
+    log2_id = sl.compute_log_id(
+        "main", GENESIS_MAIN, "notary", eco_ho["iss_name"], eco_ho["iss_reg"], gen2_op,
+        predecessor_log_id=eco_ho["log_id"],
+        predecessor_terminal_denials_root=ho_term_p["denials_root"],
+    )
     cp2_1_p = {
         "batch_count": 0,
         "batch_root": sl.EMPTY_BATCH_ROOT,
@@ -668,14 +674,10 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
     }
     cp2_1_env = sl.sign_envelope(cp2_1_p, [eco_ho["iss_role"]["sk"]])
     cp2_1_ca = sl.content_addr(cp2_1_env)
-    ch_b5["txs"][gen2_op["txid"]] = {
-        "confirmed_height": 749995,
-        "outputs": {"0": {"script_pubkey_hex": _spk_hex(eco_ho["seal_pol"]), "spent_by_txid": cp2_1_tx}},
-    }
     ch_b5["txs"][cp2_1_tx] = {
         "block_hash": _h32("d13-blk5-blk-log2-cp1"),
         "confirmed_height": 749999,
-        "inputs": [sv.make_segwit_input(gen2_op["txid"], 0)],
+        "inputs": [sv.make_segwit_input(eco_ho["cp3_tx"], 1)],
         "opreturn_hex": sl.encode_opreturn(0x14, cp2_1_ca).hex(),
         "outputs": {"1": {"script_pubkey_hex": _spk_hex(eco_ho["seal_pol"])}},
     }
@@ -737,7 +739,11 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
     eve_o_pol = {"kind": "key", "pk": eve_o["comp"]}
     eve_reg = {"txid": _h32("d13-blk5-eve-reg"), "vout": 0}
     eve_pin = {"name": "id/eve-d13", "owner_policy": eve_o_pol, "registration": eve_reg, "role_policy": {"m": 1, "pks": [eve_r["xonly"]]}}
-    eve_lid = sl.compute_log_id("main", GENESIS_MAIN, "notary", "id/eve-d13", eve_reg, gen2_op, predecessor_log_id=eco_ho["log_id"])
+    eve_lid = sl.compute_log_id(
+        "main", GENESIS_MAIN, "notary", "id/eve-d13", eve_reg, gen2_op,
+        predecessor_log_id=eco_ho["log_id"],
+        predecessor_terminal_denials_root=ho_term_p["denials_root"],
+    )
     eve_cp1_p = {
         **cp2_1_p,
         "issuer": eve_pin,
@@ -907,12 +913,13 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
     t2_p2_sks = [t2_k2["sk"], t2_k3["sk"]] if t2_p2_pks[0] == t2_k2["comp"] else [t2_k3["sk"], t2_k2["sk"]]
     t2_p2 = {"kind": "multisig", "m": 2, "pks": t2_p2_pks}
 
+    t2_notary_role = _kp("d13-t2-notary-role")
     pr_rot1, hdr_rot1 = bd11._build_synthetic_spv_proof(
         "d13-p2wsh-rot1", t2_p1, [t2_k1["sk"]], "id/t2-p2wsh-rot", "{}",
         block_height=750010, block_time=1795220000, new_owner_pol=t2_p2,
     )
     pr_rot2, hdr_rot2 = bd11._build_synthetic_spv_proof(
-        "d13-p2wsh-rot2", t2_p2, t2_p2_sks, "id/t2-p2wsh-rot", f'{{"link":{{"notary":"{t2_k2["xonly"]}"}}}}',
+        "d13-p2wsh-rot2", t2_p2, t2_p2_sks, "id/t2-p2wsh-rot", f'{{"link":{{"notary":"{t2_notary_role["xonly"]}"}}}}',
         block_height=750011, prev_raw_override=bytes.fromhex(pr_rot1["tx_hex"]),
         prev_block_hash_le=sl.dsha256(hdr_rot1), block_time=1795220060,
     )
@@ -1507,7 +1514,7 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
     so_h3 = sl.sign_envelope(so_h3_p, [fx_h3["_keys"]["agent_req"]["sk"]])
     add(
         "d13-h3-session-open-mail-send-missing-required-quota-refuse",
-        ["SL-GRNT-015"],
+        ["SL-GRNT-013"],
         "session_lifecycle",
         {
             "executor_cfg": fx_h3["executor_cfg"],
@@ -1523,7 +1530,7 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
         },
         "ADMIT",
         None,
-        "SL-GRNT-015 H-3: verify_session_open MUST enforce act_meta.required_quotas (mail/send without messages_per_day refuses QUOTA_EXCEEDED).",
+        "SL-GRNT-013 H-3: verify_session_open MUST enforce act_meta.required_quotas (mail/send without messages_per_day refuses QUOTA_EXCEEDED).",
         module="bearer-sessions",
     )
 
@@ -1585,7 +1592,7 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
     bad_cfg_h3c = {**fx_h3c["executor_cfg"], "runtime_config_sha256": _h32("d13-h3-wrong-cfg")}
     add(
         "d13-h3-bearer-session-config-sha256-mismatch-refuse",
-        ["SL-GRNT-015"],
+        ["SL-GRNT-013"],
         "session_lifecycle",
         {
             "executor_cfg": good_cfg_h3c,
@@ -1619,7 +1626,7 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
         },
         "ADMIT",
         None,
-        "SL-GRNT-015 H-3: verify_bearer_session MUST verify executor_cfg.runtime_config_sha256 against contract.config_sha256 and refuse CONTRACT_CONFIG_MISMATCH.",
+        "SL-GRNT-013 H-3: verify_bearer_session MUST verify executor_cfg.runtime_config_sha256 against contract.config_sha256 and refuse CONTRACT_CONFIG_MISMATCH.",
         module="bearer-sessions",
     )
 
@@ -2823,7 +2830,7 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
         block_height=750010, new_owner_pol=t2_p_1of2, block_time=1795220000,
     )
     pr_1of2_b, hdr_1of2_b = bd11._build_synthetic_spv_proof(
-        "d13-mk-1of2-b", t2_p_1of2, [t2_k2["sk"]], "id/t2-1of2", sl.jcs_encode({"link": {"notary": t2_k2["xonly"]}}).decode(),
+        "d13-mk-1of2-b", t2_p_1of2, [t2_k2["sk"]], "id/t2-1of2", sl.jcs_encode({"link": {"notary": t2_notary_role["xonly"]}}).decode(),
         block_height=750011, prev_raw_override=bytes.fromhex(pr_1of2_a["tx_hex"]), prev_vout=0,
         prev_block_hash_le=sl.dsha256(hdr_1of2_a), block_time=1795220600,
     )
@@ -2964,7 +2971,7 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
     )
     add(
         "d13-mk-session-open-agent-session-missing-config-sha256-refuse",
-        ["SL-GRNT-015"],
+        ["SL-GRNT-013"],
         "session_lifecycle",
         {
             "executor_cfg": {**fx_so_nocfg["executor_cfg"], "actions": ["agent/session"]},
@@ -2980,7 +2987,7 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
         },
         "ADMIT",
         None,
-        "SL-GRNT-015 H-3: verify_session_open for agent/session backed by a contract without config_sha256 MUST refuse CONTRACT_CONFIG_MISMATCH.",
+        "SL-GRNT-013 H-3: verify_session_open for agent/session backed by a contract without config_sha256 MUST refuse CONTRACT_CONFIG_MISMATCH.",
         module="bearer-sessions",
     )
 
@@ -3007,7 +3014,7 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
     }
     add(
         "d13-mk-bearer-session-executor-mismatch-refuse",
-        ["SL-GRNT-015"],
+        ["SL-GRNT-013"],
         "bearer_session",
         {
             "action": "mail/send",
@@ -3022,12 +3029,12 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
         },
         "REFUSE",
         "GRANT_EXECUTOR_MISMATCH",
-        "SL-GRNT-015 H-3: verify_bearer_session with executor_cfg mismatching grant.executor MUST refuse GRANT_EXECUTOR_MISMATCH.",
+        "SL-GRNT-013 H-3: verify_bearer_session with executor_cfg mismatching grant.executor MUST refuse GRANT_EXECUTOR_MISMATCH.",
         module="bearer-sessions",
     )
     add(
         "d13-mk-bearer-session-missing-required-quota-refuse",
-        ["SL-GRNT-015"],
+        ["SL-GRNT-013"],
         "bearer_session",
         {
             "action": "mail/send",
@@ -3042,7 +3049,7 @@ def add_draft13_conformance_cases(add: Callable[..., None]) -> None:
         },
         "REFUSE",
         "QUOTA_EXCEEDED",
-        "SL-GRNT-015 H-3: verify_bearer_session for mail/send without mandatory messages_per_day quota MUST refuse QUOTA_EXCEEDED.",
+        "SL-GRNT-013 H-3: verify_bearer_session for mail/send without mandatory messages_per_day quota MUST refuse QUOTA_EXCEEDED.",
         module="bearer-sessions",
     )
 
@@ -3164,7 +3171,7 @@ def _add_draft13_commit2_symmetry_cases(add: Callable[..., None], fx_ward_rev2: 
         "d13-c2-auth-salted-ed25519-admit",
         ["SL-IDEN-010", "SL-WIRE-013"],
         "auth_challenge",
-        {"auth_proof": auth_proofs_4[2], "chain": fx_c2["chain"], "challenge": ac_ed_env, "journal": _ac_j(ac_ed_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        {"auth_proof": auth_proofs_4[2], "chain": fx_c2["chain"], "challenge": ac_ed_env, "journal": _ac_j(ac_ed_n, aud="https://app.example.org/oidc"), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
         "ADMIT",
         None,
         "Commit 2: Selective-disclosure 1-of-4 salted sets.auth Ed25519 challenge admits.",
@@ -3175,7 +3182,7 @@ def _add_draft13_commit2_symmetry_cases(add: Callable[..., None], fx_ward_rev2: 
         "d13-c2-auth-challenge-chain-mismatch-refuse",
         ["SL-IDEN-010"],
         "auth_challenge",
-        {"auth_proof": auth_proofs_4[0], "chain": fx_c2["chain"], "challenge": sl.sign_envelope({**ac_bip_p, "genesis": _h32("bad-ac-g")}, [a_bip["sk"]]), "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        {"auth_proof": auth_proofs_4[0], "chain": fx_c2["chain"], "challenge": sl.sign_envelope({**ac_bip_p, "genesis": _h32("bad-ac-g")}, [a_bip["sk"]]), "journal": _ac_j(ac_bip_n, aud="https://app.example.org/oidc"), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
         "REFUSE",
         "CHAIN_MISMATCH",
         "Commit 2: AuthChallenge with mismatched genesis MUST refuse CHAIN_MISMATCH.",
@@ -3193,7 +3200,7 @@ def _add_draft13_commit2_symmetry_cases(add: Callable[..., None], fx_ward_rev2: 
         "d13-c2-auth-challenge-missing-proof-refuse",
         ["SL-IDEN-010"],
         "auth_challenge",
-        {"chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        {"chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n, aud="https://app.example.org/oidc"), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
         "REFUSE",
         "AUTH_KEY_UNPINNED",
         "Commit 2: Named AuthChallenge omitting auth_proof MUST refuse AUTH_KEY_UNPINNED.",
@@ -3202,7 +3209,7 @@ def _add_draft13_commit2_symmetry_cases(add: Callable[..., None], fx_ward_rev2: 
         "d13-c2-auth-proof-extra-key-refuse",
         ["SL-IDEN-010", "SL-WIRE-010"],
         "auth_challenge",
-        {"auth_proof": {**auth_proofs_4[0], "extra": 1}, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        {"auth_proof": {**auth_proofs_4[0], "extra": 1}, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n, aud="https://app.example.org/oidc"), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
         "REFUSE",
         "WIRE_MEMBER",
         "Commit 2: AuthEntryProof with unknown top-level member MUST refuse WIRE_MEMBER.",
@@ -3211,7 +3218,7 @@ def _add_draft13_commit2_symmetry_cases(add: Callable[..., None], fx_ward_rev2: 
         "d13-c2-auth-proof-wrong-head-type-refuse",
         ["SL-IDEN-010", "SL-WIRE-010"],
         "auth_challenge",
-        {"auth_proof": {**auth_proofs_4[0], "head": dev_head_3}, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        {"auth_proof": {**auth_proofs_4[0], "head": dev_head_3}, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n, aud="https://app.example.org/oidc"), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
         "REFUSE",
         "WIRE_TYPE",
         "Commit 2: Cross-set replay presenting seallink-device-set-head/1 as auth_proof.head MUST refuse WIRE_TYPE.",
@@ -3220,7 +3227,7 @@ def _add_draft13_commit2_symmetry_cases(add: Callable[..., None], fx_ward_rev2: 
         "d13-c2-auth-proof-cross-set-device-entry-refuse",
         ["SL-IDEN-010", "SL-WIRE-010"],
         "auth_challenge",
-        {"auth_proof": {**auth_proofs_4[0], "entry": dev_proofs_3[0]["entry"]}, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        {"auth_proof": {**auth_proofs_4[0], "entry": dev_proofs_3[0]["entry"]}, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n, aud="https://app.example.org/oidc"), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
         "REFUSE",
         "WIRE_TYPE",
         "Commit 2: Cross-set replay presenting seallink-device-entry/1 as auth_proof.entry MUST refuse WIRE_TYPE.",
@@ -3230,7 +3237,7 @@ def _add_draft13_commit2_symmetry_cases(add: Callable[..., None], fx_ward_rev2: 
         "d13-c2-auth-proof-steps-over-8-refuse",
         ["SL-IDEN-010", "SL-WIRE-010"],
         "auth_challenge",
-        {"auth_proof": bad_merkle_schema_pf, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        {"auth_proof": bad_merkle_schema_pf, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n, aud="https://app.example.org/oidc"), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
         "REFUSE",
         "WIRE_MEMBER",
         "Commit 2: SetEntryMerkleProof exceeding maxItems=8 steps MUST refuse WIRE_MEMBER.",
@@ -3241,7 +3248,7 @@ def _add_draft13_commit2_symmetry_cases(add: Callable[..., None], fx_ward_rev2: 
         "d13-c2-auth-proof-tampered-sibling-refuse",
         ["SL-IDEN-010"],
         "auth_challenge",
-        {"auth_proof": tampered_sib_pf, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        {"auth_proof": tampered_sib_pf, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n, aud="https://app.example.org/oidc"), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
         "REFUSE",
         "AUTH_KEY_UNPINNED",
         "Commit 2: AuthEntryProof with tampered Merkle sibling hash MUST refuse AUTH_KEY_UNPINNED.",
@@ -3252,7 +3259,7 @@ def _add_draft13_commit2_symmetry_cases(add: Callable[..., None], fx_ward_rev2: 
         "d13-c2-auth-proof-spent-seal-refuse",
         ["SL-IDEN-010", "SL-LDGR-011"],
         "auth_challenge",
-        {"auth_proof": auth_proofs_4[3], "chain": fx_c2["chain"], "challenge": ac_rev_env, "journal": _ac_j(ac_rev_n), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
+        {"auth_proof": auth_proofs_4[3], "chain": fx_c2["chain"], "challenge": ac_rev_env, "journal": _ac_j(ac_rev_n, aud="https://app.example.org/oidc"), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
         "REFUSE",
         "SEAL_SPENT",
         "Commit 2: AuthEntry whose individual revocation seal is spent on-chain MUST refuse SEAL_SPENT.",

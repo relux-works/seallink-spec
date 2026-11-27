@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Key Role & Custody Registry (SPEC-03). Coherent with registry/object-types.json (verified by tools/speclint.py).",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.13",
+  "version": "1.0.0-draft.14",
   "namecoin_coin_type": 7,
   "roles": [
     {
@@ -87,7 +87,7 @@
       "scheme": "ECDSA-P256 (low-S) | Ed25519 | BIP-340",
       "pubkey_encoding": "alg_tagged_hex",
       "custody_tier": "hardware_device_or_isolated_signer",
-      "derivation_recommendation": "Hardware passkey / Secure Enclave / StrongBox / TPM key or isolated hot signer seed m/84'/7'/2'/0/i (isolated from funding 0' and dynamic pool 10+)",
+      "derivation_recommendation": "Hardware security enclave (Secure Enclave / StrongBox / TPM / HSM raw-digest P-256 or Ed25519 key) or isolated hot signer seed m/84'/7'/2'/0/i (isolated from funding 0' and dynamic pool 10+; standard WebAuthn passkeys wrap authenticatorData and require a future WebAuthn wrapper SLIP rather than raw-digest signing)",
       "published_in": "seallink-auth-entry/1 (salted Merkle inclusion in manifest sets.auth -> seallink-auth-set-head/1)",
       "allowed_operations": ["seallink-auth-challenge/1", "seallink-auth-upgrade/1"],
       "forbidden_operations": ["seallink-grant/1", "seallink-assent/1", "seallink-owner-command/1", "chain_transactions"]

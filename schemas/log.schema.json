@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.13/schemas/log.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/log.schema.json",
   "title": "SealLink v1.0 Release Records, Transparency/Denial Logs (0x14), Fixed-Depth-256 SMT & 4-Mode Fraud Proofs",
   "$defs": {
     "ArtifactIdentity": {
@@ -194,6 +194,16 @@
             "terminal": { "type": "boolean" },
             "next_log_vout": { "type": "integer", "const": 1, "x-seallink-refusal": "WIRE_INTEGER" },
             "next_log_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
+            "handover_next_vout": {
+              "type": "integer",
+              "const": 1,
+              "x-seallink-refusal": "WIRE_INTEGER",
+              "description": "Optional on-chain handover continuation output index (vout 1) when terminal=true, committing the exact genesis_seal_outpoint = (T_handover, 1) of the single successor log L2 (D14-B07). Omitted on permanent end-of-life (EOL) terminal checkpoints."
+            },
+            "handover_next_policy": {
+              "$ref": "common.schema.json#/$defs/ScriptPolicy",
+              "description": "Optional on-chain handover continuation ScriptPolicy locked at vout 1 when terminal=true; strictly forbidden when terminal=false."
+            },
             "batch_count": { "type": "integer", "minimum": 0, "maximum": 65536, "x-seallink-refusal": "WIRE_INTEGER" },
             "cumulative_entries_count": { "$ref": "common.schema.json#/$defs/Uint53" },
             "batch_root": { "$ref": "common.schema.json#/$defs/Hex64" },
@@ -204,7 +214,9 @@
           "dependentRequired": {
             "predecessor_terminal_denials_root": ["predecessor_log_id"],
             "next_log_vout": ["next_log_policy"],
-            "next_log_policy": ["next_log_vout"]
+            "next_log_policy": ["next_log_vout"],
+            "handover_next_vout": ["handover_next_policy"],
+            "handover_next_policy": ["handover_next_vout"]
           },
           "allOf": [
             {
@@ -222,7 +234,10 @@
             },
             {
               "if": { "required": ["terminal"], "properties": { "terminal": { "const": false } } },
-              "then": { "required": ["next_log_vout", "next_log_policy"] },
+              "then": {
+                "required": ["next_log_vout", "next_log_policy"],
+                "not": { "anyOf": [{ "required": ["handover_next_vout"] }, { "required": ["handover_next_policy"] }] }
+              },
               "else": { "not": { "anyOf": [{ "required": ["next_log_vout"] }, { "required": ["next_log_policy"] }] } }
             }
           ]
@@ -347,7 +362,13 @@
             "cp_a": { "$ref": "#/$defs/LogCheckpoint" },
             "cp_b": { "$ref": "#/$defs/LogCheckpoint" },
             "cp_a_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
-            "cp_b_txid": { "$ref": "common.schema.json#/$defs/Hex64" }
+            "cp_b_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "predecessor_chain": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 16,
+              "items": { "$ref": "#/$defs/PredecessorTerminalCheckpoint" }
+            }
           }
         },
         {
@@ -371,13 +392,19 @@
             "batch_proof": { "$ref": "#/$defs/BatchMerkleProof" },
             "checkpoints_proof": { "$ref": "#/$defs/CheckpointsInclusionProof" },
             "smt_proof": { "$ref": "#/$defs/SmtProof" },
-            "rec_b": { "$ref": "#/$defs/LogStateRecord" }
+            "rec_b": { "$ref": "#/$defs/LogStateRecord" },
+            "predecessor_chain": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 16,
+              "items": { "$ref": "#/$defs/PredecessorTerminalCheckpoint" }
+            }
           }
         },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type", "network", "genesis", "role", "log_id", "genesis_seal_outpoint", "fraud_mode", "cp_a", "cp_a_txid", "cp_b", "cp_b_txid", "checkpoints_proof", "rec_a", "smt_proof_a", "smt_proof_b"],
+          "required": ["type", "network", "genesis", "role", "log_id", "genesis_seal_outpoint", "fraud_mode", "cp_a", "cp_a_txid", "cp_b", "cp_b_txid", "rec_a", "smt_proof_a", "smt_proof_b"],
           "properties": {
             "type": { "const": "seallink-log-fraud/1" },
             "network": { "$ref": "common.schema.json#/$defs/Network" },
@@ -403,7 +430,13 @@
               "maxItems": 16,
               "items": { "$ref": "#/$defs/PredecessorTerminalCheckpoint" }
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": { "not": { "required": ["predecessor_chain"] } },
+              "then": { "required": ["checkpoints_proof"] }
+            }
+          ]
         },
         {
           "type": "object",
@@ -426,6 +459,12 @@
               "type": "array",
               "maxItems": 64,
               "items": { "$ref": "common.schema.json#/$defs/Hex64" }
+            },
+            "predecessor_chain": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 16,
+              "items": { "$ref": "#/$defs/PredecessorTerminalCheckpoint" }
             }
           },
           "dependentRequired": {

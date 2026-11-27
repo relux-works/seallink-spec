@@ -873,6 +873,28 @@ def ed25519_verify(msg: bytes, pubkey_hex: str, sig_hex: str) -> bool:
     return (lhs[0] * rhs[2] - rhs[0] * lhs[2]) % _ED_P == 0 and (lhs[1] * rhs[2] - rhs[1] * lhs[2]) % _ED_P == 0
 
 
+# RFC 7748 Curve25519 low-order u-coordinates modulo 2^255 - 19 (covers all 12 blacklisted 32-byte inputs after clearing bit 255)
+_X25519_LOW_ORDER_U = frozenset({
+    0,
+    1,
+    int.from_bytes(bytes.fromhex("e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800"), "little"),
+    int.from_bytes(bytes.fromhex("5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157"), "little"),
+    _ED_P - 1,
+})
+
+
+def is_valid_x25519_pubkey(hex_pk: str) -> bool:
+    """Validate 32-byte X25519 public key rejecting all RFC 7748 low-order u-coordinates (SPEC-01 §4.1, D14-H03)."""
+    if len(hex_pk) != 64 or hex_pk != hex_pk.lower():
+        return False
+    try:
+        raw = bytes.fromhex(hex_pk)
+    except ValueError:
+        return False
+    u = (int.from_bytes(raw, "little") & ((1 << 255) - 1)) % _ED_P
+    return u not in _X25519_LOW_ORDER_U
+
+
 # --- SEC 1 NIST P-256 (secp256r1) ECDSA with Strict Low-S (s <= n/2) ---
 _P256_P = 0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF
 _P256_A = _P256_P - 3
@@ -1862,18 +1884,55 @@ def verify_merkle_proof(proof: dict[str, Any]) -> bool:
     return cur.hex() == root
 
 
-def build_salted_set_merkle(entries: list[dict[str, Any]]) -> tuple[str, dict[str, dict[str, Any]]]:
-    """Build salted selective-disclosure Merkle tree for seallink-auth-entry/1 or seallink-device-entry/1 (<= 256 entries, <= 8 proof steps).
+FIXED_SALTED_SET_TREE_SIZE = 256
+FIXED_SALTED_SET_PROOF_STEPS = 8
 
-    Each leaf digest is domain-separated by its entry type via signing_digest(entry) = SHA256(SHA256(entry['type']) || JCS(entry)).
-    Returns (merkle_root_hex, proofs_by_leaf_digest).
+
+def build_salted_set_merkle(
+    entries: list[dict[str, Any]],
+    *,
+    dummy_digests: list[str] | None = None,
+    pad_seed: bytes | None = None,
+) -> tuple[str, dict[str, dict[str, Any]]]:
+    """Build fixed-depth (256-leaf padded, exact 8 proof steps) size-hiding salted selective-disclosure Merkle tree
+    for seallink-auth-entry/1 or seallink-device-entry/1 (1..256 real entries; SPEC-03 §1.5, D14-B02, D14-H01).
+
+    Each real leaf digest is domain-separated via BIP-340 double-tagged hash:
+        leaf_digest = signing_digest(entry) = H_tag(entry['type'], JCS(entry))
+                    = SHA256(SHA256(tag) || SHA256(tag) || JCS(entry))
+    and committed as Merkle leaf H_tag('seallink-merkle-leaf/1', leaf_digest).
+    Remaining (256 - len(entries)) positions are padded with independent dummy leaf digests
+    H_tag('seallink-set-dummy/1', csprng_32B) so every SetEntryMerkleProof has exact length 8.
+    Production signers MUST pass fresh CSPRNG dummy_digests or 32B CSPRNG pad_seed; omitting both
+    derives a deterministic seed strictly for reproducible test vector generation.
+    Returns (merkle_root_hex, proofs_by_real_leaf_digest).
     """
-    if not isinstance(entries, list) or not (1 <= len(entries) <= 256):
+    if not isinstance(entries, list) or not (1 <= len(entries) <= FIXED_SALTED_SET_TREE_SIZE):
         raise ValueError("salted set must have 1..256 entries")
-    digests = [signing_digest(e).hex() for e in entries]
-    if len(set(digests)) != len(digests):
+    real_digests = [signing_digest(e).hex() for e in entries]
+    if len(set(real_digests)) != len(real_digests):
         raise ValueError("duplicate salted set entry digest")
-    return build_merkle_tree(digests)
+    needed = FIXED_SALTED_SET_TREE_SIZE - len(real_digests)
+    if dummy_digests is not None:
+        if len(dummy_digests) != needed:
+            raise ValueError(f"expected {needed} dummy digests, got {len(dummy_digests)}")
+        pad_list = list(dummy_digests)
+    else:
+        seed = pad_seed
+        if seed is None:
+            seed = tagged_hash(
+                "seallink-test-set-pad-seed/1",
+                b"".join(bytes.fromhex(d) for d in sorted(real_digests)),
+            )
+        pad_list = [
+            tagged_hash("seallink-set-dummy/1", sha256(seed + i.to_bytes(4, "big"))).hex()
+            for i in range(needed)
+        ]
+    all_digests = real_digests + pad_list
+    if len(set(all_digests)) != FIXED_SALTED_SET_TREE_SIZE:
+        raise ValueError("salted set dummy digest collision")
+    root_hex, all_proofs = build_merkle_tree(all_digests)
+    return root_hex, {d: all_proofs[d] for d in real_digests}
 
 
 # ============================================================================
@@ -2288,8 +2347,9 @@ def compute_log_id(
     issuer_registration: dict[str, Any],
     genesis_seal_outpoint: dict[str, Any],
     predecessor_log_id: str | None = None,
+    predecessor_terminal_denials_root: str | None = None,
 ) -> str:
-    """Immutable log_id bound to (name, registration, genesis_seal_outpoint[, predecessor_log_id]) WITHOUT owner_policy (survives cold rotation, M-b, BLK-5)."""
+    """Immutable log_id bound to (name, registration, genesis_seal_outpoint[, predecessor_log_id, predecessor_terminal_denials_root]) WITHOUT owner_policy (survives cold rotation, M-b, BLK-5, D14-B07)."""
     obj: dict[str, Any] = {
         "genesis": genesis,
         "genesis_seal_outpoint": {"txid": genesis_seal_outpoint["txid"], "vout": genesis_seal_outpoint["vout"]},
@@ -2299,7 +2359,12 @@ def compute_log_id(
         "role": role,
     }
     if predecessor_log_id is not None:
+        if predecessor_terminal_denials_root is None:
+            raise ValueError("predecessor_terminal_denials_root is required when predecessor_log_id is set")
         obj["predecessor_log_id"] = predecessor_log_id
+        obj["predecessor_terminal_denials_root"] = predecessor_terminal_denials_root
+    elif predecessor_terminal_denials_root is not None:
+        raise ValueError("predecessor_terminal_denials_root requires predecessor_log_id")
     return tagged_hash("seallink-log-id/1", jcs_encode(obj)).hex()
 
 
@@ -2827,22 +2892,39 @@ def verify_btc_merkle_branch(leaf_le: bytes, index: int, branch_be: list[str], e
 
 
 def compute_bip143_sighash(tx: dict[str, Any], in_idx: int, script_code: bytes, value_sat: int, sighash_type: int = 0x01) -> bytes:
-    """Compute BIP-143 SegWit v0 sighash with CompactSize varint prefix on scriptCode."""
-    prevouts = b"".join(v["prev_txid_le"] + struct.pack("<I", v["prev_vout"]) for v in tx["vin"])
-    seqs = b"".join(struct.pack("<I", v["sequence"]) for v in tx["vin"])
-    outs = b"".join(struct.pack("<Q", o["value_sat"]) + _encode_varint(len(o["script_pubkey"])) + o["script_pubkey"] for o in tx["vout"])
+    """Compute consensus-exact BIP-143 SegWit v0 sighash with CompactSize varint prefix on scriptCode (supports ALL, NONE, SINGLE, ANYONECANPAY)."""
+    base_type = sighash_type & 0x1F
+    anyone_can_pay = (sighash_type & 0x80) != 0
+    if anyone_can_pay:
+        hash_prevouts = b"\x00" * 32
+    else:
+        prevouts = b"".join(v["prev_txid_le"] + struct.pack("<I", v["prev_vout"]) for v in tx["vin"])
+        hash_prevouts = dsha256(prevouts)
+    if anyone_can_pay or base_type in (0x02, 0x03):
+        hash_sequence = b"\x00" * 32
+    else:
+        seqs = b"".join(struct.pack("<I", v["sequence"]) for v in tx["vin"])
+        hash_sequence = dsha256(seqs)
+    if base_type not in (0x02, 0x03):
+        outs = b"".join(struct.pack("<Q", o["value_sat"]) + _encode_varint(len(o["script_pubkey"])) + o["script_pubkey"] for o in tx["vout"])
+        hash_outputs = dsha256(outs)
+    elif base_type == 0x03 and in_idx < len(tx["vout"]):
+        o = tx["vout"][in_idx]
+        hash_outputs = dsha256(struct.pack("<Q", o["value_sat"]) + _encode_varint(len(o["script_pubkey"])) + o["script_pubkey"])
+    else:
+        hash_outputs = b"\x00" * 32
     inp = tx["vin"][in_idx]
     preimage = (
         struct.pack("<I", tx["version"])
-        + dsha256(prevouts)
-        + dsha256(seqs)
+        + hash_prevouts
+        + hash_sequence
         + inp["prev_txid_le"]
         + struct.pack("<I", inp["prev_vout"])
         + _encode_varint(len(script_code))
         + script_code
         + struct.pack("<Q", value_sat)
         + struct.pack("<I", inp["sequence"])
-        + dsha256(outs)
+        + hash_outputs
         + struct.pack("<I", tx["locktime"])
         + struct.pack("<I", sighash_type)
     )
@@ -3004,54 +3086,90 @@ def verify_segwit_name_update_proof(
     if name_in_idx is None or prev_out is None or prev_parsed is None:
         return False, "TICKET_PROOF_INVALID"
 
-    # Step 7: Strict consensus BIP-66 DER + SIGHASH_ALL (0x01), WITHOUT rejecting consensus-valid high-S!
+    # Step 7: Strict consensus BIP-66 DER verification WITHOUT rejecting consensus-valid high-S or historical non-SIGHASH_ALL!
+    # Any non-0x01 sighash byte still validates under BIP-143 consensus rules (Tier-1 H-10 parity) while clearing
+    # owner_authored and prev_owner_sighash_all so SealLink ignores non-SIGHASH_ALL name/SLNK payloads.
     # For registrar-funded OP_NAME_FIRSTUPDATE (NAME_NEW trailing script != expected_owner_policy), verify the native
-    # SegWit NAME_NEW witness directly and mark owner_authored=False (SL-LDGR-007 rule 3 requires a subsequent OP_NAME_UPDATE).
+    # SegWit NAME_NEW witness directly (including P2WSH multisig ECDSA) and mark owner_authored=False.
     wit = tx["vin"][name_in_idx]["witness"]
     owner_authored = True
+    prev_owner_sighash_all = True
+
+    def _verify_p2wpkh_witness(pk_hex_exp: str, w_items: list[bytes]) -> tuple[bool, bool]:
+        if len(w_items) != 2 or w_items[1].hex() != pk_hex_exp or not w_items[0]:
+            return False, False
+        sht_cand = w_items[0][-1]
+        sc = b"\x76\xa9\x14" + hash160(w_items[1]) + b"\x88\xac"
+        sh = compute_bip143_sighash(tx, name_in_idx, sc, prev_out["value_sat"], sht_cand)
+        ok_s, sht_p = secp256k1_ecdsa_verify_bip66(sh, pk_hex_exp, w_items[0])
+        if not ok_s or sht_p != sht_cand:
+            return False, False
+        return True, (sht_p == 0x01)
+
+    def _verify_p2wsh_multisig_witness(ms_pol: dict[str, Any], ws_bytes: bytes, w_items: list[bytes]) -> tuple[bool, bool]:
+        m_req = int(ms_pol["m"])
+        pks_ms = list(ms_pol["pks"])
+        if len(w_items) != m_req + 2 or w_items[0] != b"" or w_items[-1] != ws_bytes:
+            return False, False
+        sigs_ms = w_items[1:-1]
+        pk_pos_ms = 0
+        all_01 = True
+        for sb in sigs_ms:
+            if not sb:
+                return False, False
+            sht_cand = sb[-1]
+            sh = compute_bip143_sighash(tx, name_in_idx, ws_bytes, prev_out["value_sat"], sht_cand)
+            matched = False
+            while pk_pos_ms < len(pks_ms):
+                ok_s, sht_p = secp256k1_ecdsa_verify_bip66(sh, pks_ms[pk_pos_ms], sb)
+                pk_pos_ms += 1
+                if ok_s and sht_p == sht_cand:
+                    if sht_p != 0x01:
+                        all_01 = False
+                    matched = True
+                    break
+            if not matched:
+                return False, False
+        return True, all_01
+
     if parsed_new["op"] == "NAME_FIRSTUPDATE" and prev_parsed["trailing_script_pubkey"] != exp_spk.hex():
         owner_authored = False
         reg_spk = prev_parsed["trailing_script_pubkey"]
         if len(reg_spk) == 44 and reg_spk.startswith("0014"):
             if len(wit) != 2 or not is_valid_compressed_pubkey(wit[1].hex()) or hash160(wit[1]).hex() != reg_spk[4:]:
                 return False, "TICKET_PROOF_INVALID"
-            script_code = b"\x76\xa9\x14" + hash160(wit[1]) + b"\x88\xac"
-            sighash = compute_bip143_sighash(tx, name_in_idx, script_code, prev_out["value_sat"], 0x01)
-            ok_sig, sht = secp256k1_ecdsa_verify_bip66(sighash, wit[1].hex(), wit[0])
-            if not ok_sig or sht != 0x01:
+            ok_w, is_all = _verify_p2wpkh_witness(wit[1].hex(), wit)
+            if not ok_w:
                 return False, "TICKET_PROOF_INVALID"
+            prev_owner_sighash_all = is_all
         elif len(reg_spk) == 68 and reg_spk.startswith("0020"):
             if len(wit) < 2 or sha256(wit[-1]).hex() != reg_spk[4:]:
                 return False, "TICKET_PROOF_INVALID"
+            reg_ms = parse_p2wsh_multisig_script(wit[-1])
+            if reg_ms is not None:
+                ok_w, is_all = _verify_p2wsh_multisig_witness(reg_ms, wit[-1], wit)
+                if not ok_w:
+                    return False, "TICKET_PROOF_INVALID"
+                prev_owner_sighash_all = is_all
+            else:
+                prev_owner_sighash_all = False
         else:
             return False, "TICKET_PROOF_INVALID"
     elif kind == "key":
-        if len(wit) != 2 or wit[1].hex() != expected_owner_policy["pk"]:
+        ok_w, is_all = _verify_p2wpkh_witness(expected_owner_policy["pk"], wit)
+        if not ok_w:
             return False, "TICKET_PROOF_INVALID"
-        script_code = b"\x76\xa9\x14" + hash160(wit[1]) + b"\x88\xac"
-        sighash = compute_bip143_sighash(tx, name_in_idx, script_code, prev_out["value_sat"], 0x01)
-        ok_sig, sht = secp256k1_ecdsa_verify_bip66(sighash, expected_owner_policy["pk"], wit[0])
-        if not ok_sig or sht != 0x01:
-            return False, "TICKET_PROOF_INVALID"
+        prev_owner_sighash_all = is_all
+        if not is_all:
+            owner_authored = False
     else:  # multisig
         assert exp_ws is not None
-        m = int(expected_owner_policy["m"])
-        pks = list(expected_owner_policy["pks"])
-        if len(wit) != m + 2 or wit[0] != b"" or wit[-1] != exp_ws:
+        ok_w, is_all = _verify_p2wsh_multisig_witness(expected_owner_policy, exp_ws, wit)
+        if not ok_w:
             return False, "TICKET_PROOF_INVALID"
-        sighash = compute_bip143_sighash(tx, name_in_idx, exp_ws, prev_out["value_sat"], 0x01)
-        sigs = wit[1:-1]
-        pk_pos = 0
-        for sb in sigs:
-            matched = False
-            while pk_pos < len(pks):
-                ok_s, sht = secp256k1_ecdsa_verify_bip66(sighash, pks[pk_pos], sb)
-                pk_pos += 1
-                if ok_s and sht == 0x01:
-                    matched = True
-                    break
-            if not matched:
-                return False, "TICKET_PROOF_INVALID"
+        prev_owner_sighash_all = is_all
+        if not is_all:
+            owner_authored = False
 
     # For OP_NAME_UPDATE ownership transfer (new_trailing_script_pubkey != exp_spk), the departing previous owner
     # signed the spend — NOT the new owner — so owner_authored MUST be False (SL-LDGR-007, H-1a / H05).
@@ -3066,6 +3184,7 @@ def verify_segwit_name_update_proof(
         "new_trailing_script_pubkey": parsed_new["trailing_script_pubkey"],
         "opreturns": opreturns,
         "owner_authored": owner_authored,
+        "prev_owner_sighash_all": prev_owner_sighash_all,
         "parsed_update": parsed_new,
     }
 
@@ -3213,7 +3332,7 @@ def verify_namecoin_header_pow(header_hex: str, *, network: str = "main", height
 
 
 def verify_namecoin_auxpow(header_hex: str, auxpow: dict[str, Any], *, network: str = "main", height: int | None = None) -> bool:
-    """Verify Namecoin Core nc28.0 CAuxPow::check (AuxPoW start height, chain_id=1, !parent.IsAuxpow(), fStrictChainId, len(chain_branch)<=30, parent PoW, !parent_coinbase.vin.empty(), coinbase branch, fabe6d6d, GetExpectedIndex)."""
+    """Verify Namecoin Core nc28.0 CAuxPow::check (AuxPoW start height, chain_id=1, fStrictChainId on parentBlock.GetChainId(), len(chain_branch)<=30, parent PoW, !parent_coinbase.vin.empty(), coinbase branch, fabe6d6d, GetExpectedIndex; allows Bitcoin BIP-9/BIP-320 bit-8 parent versions per nc28.0 src/auxpow.cpp, D14-B04)."""
     try:
         hdr = bytes.fromhex(header_hex)
         if len(hdr) != 80:
@@ -3233,10 +3352,8 @@ def verify_namecoin_auxpow(header_hex: str, auxpow: dict[str, Any], *, network: 
         if len(parent_hdr) != 80:
             return False
         parent_ver = struct.unpack("<I", parent_hdr[0:4])[0]
-        if (parent_ver & 0x00000100) != 0:
-            return False  # !parentBlock.IsAuxpow()
         if network != "testnet" and (parent_ver >> 16) == NAMECOIN_AUX_CHAIN_ID:
-            return False  # fStrictChainId: parent block cannot have Namecoin's own chain_id
+            return False  # fStrictChainId: parent block cannot have Namecoin's own chain_id (nc28.0 src/auxpow.cpp)
         parent_hash_int = int.from_bytes(dsha256(parent_hdr), "little")
         if parent_hash_int > target:
             return False
@@ -3482,11 +3599,11 @@ def self_test() -> None:
         return h
     _ph_ok = _mine_hdr(1, dsha256(_cb_ok))
     _ph_far = _mine_hdr(1, dsha256(_cb_far))
-    _ph_aux = _mine_hdr(0x00000101, dsha256(_cb_ok))
+    _ph_bip320_bit8 = _mine_hdr(0x20000100, dsha256(_cb_ok))
     _ph_same_cid = _mine_hdr(0x00010002, dsha256(_cb_ok))
     assert verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_ok.hex(), "parent_header_hex": _ph_ok.hex()}, network="regtest")
     assert not verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_far.hex(), "parent_header_hex": _ph_far.hex()}, network="regtest")
-    assert not verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_ok.hex(), "parent_header_hex": _ph_aux.hex()}, network="regtest")
+    assert verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_ok.hex(), "parent_header_hex": _ph_bip320_bit8.hex()}, network="regtest")
     assert not verify_namecoin_auxpow(_aux_hdr.hex(), {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _cb_ok.hex(), "parent_header_hex": _ph_same_cid.hex()}, network="regtest")
     assert not verify_namecoin_header_pow(_ph_ok.hex(), network="regtest", height=10)  # missing chain_id=1 on non-legacy
     _hdr_badv2 = struct.pack("<I", 0x00010002) + (b"\x00" * 32) + dsha256(_cb_ok) + struct.pack("<III", 1700000000, 0x207FFFFF, 0)
@@ -3528,7 +3645,14 @@ def self_test() -> None:
     _de = {**_ae, "ceiling": 1, "presence": False, "type": "seallink-device-entry/1"}
     _mr_a, _pr_a = build_salted_set_merkle([_ae])
     _mr_d, _pr_d = build_salted_set_merkle([_de])
-    assert _mr_a != _mr_d and verify_merkle_proof(_pr_a[signing_digest(_ae).hex()]) and verify_merkle_proof(_pr_d[signing_digest(_de).hex()])
+    assert (
+        _mr_a != _mr_d
+        and len(_pr_a[signing_digest(_ae).hex()]["steps"]) == FIXED_SALTED_SET_PROOF_STEPS
+        and len(_pr_d[signing_digest(_de).hex()]["steps"]) == FIXED_SALTED_SET_PROOF_STEPS
+        and verify_merkle_proof(_pr_a[signing_digest(_ae).hex()])
+        and verify_merkle_proof(_pr_d[signing_digest(_de).hex()])
+    )
+    assert not is_valid_x25519_pubkey("00" * 32) and is_valid_x25519_pubkey("09" + "00" * 31)
 
     print(f"seallink_ref self_test PASS (BIP-340 + RFC8032 Ed25519 + low-S P-256 + RIPEMD-160 + RFC9162 + SMT256 + BIP66 + CAuxPow + fsverity) | clause_commit={c_hash}")
 

@@ -896,6 +896,10 @@ def add_acceptance_and_branch_cases(add: Callable[..., None]) -> None:
             "registration": {"txid": _h32("rec-new-reg"), "vout": 0},
         }
         rtx_id = _h32("br-rec-spend-tx")
+        o2["chain"]["names"][cand["name"]] = sv.make_name_history(
+            cand["name"], cand["registration"], cand["owner_policy"],
+            {"link": {"origin": o2["_origin_id"]}}, first_height=749950, update_height=749960,
+        )
         o2["chain"]["txs"][o2["origin_bundle"]["origin"]["payload"]["name_recovery"]["recovery_seal"]["txid"]]["outputs"]["0"]["spent_by_txid"] = rtx_id
         o2["chain"]["txs"][rtx_id] = {
             "confirmed_height": 750000,

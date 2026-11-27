@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.13/schemas/contract.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/contract.schema.json",
   "title": "SealLink v1.0 Contracts, Clauses, Assent, Termination & Violation Verdicts",
   "$defs": {
     "MachineClauseTerms": {
@@ -108,7 +108,10 @@
             "script_policy": { "$ref": "common.schema.json#/$defs/ContractSealScriptPolicy" }
           }
         },
-        "assent_output": { "$ref": "common.schema.json#/$defs/Seal" },
+        "assent_output": {
+          "$ref": "common.schema.json#/$defs/Seal",
+          "description": "Optional N-of-N P2WSH assent output spent by the 0x07 contract anchor transaction. For historical verification (anchor_height != None) of contracts with a ward party, either assent_output spent by the 0x07 anchor tx OR on-chain 0x01/0x02 anchoring of each ward seallink-assent/1 at h_assent <= anchor_height is MANDATORY (prevents post-emancipation/post-halt backdating)."
+        },
         "config_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
         "moderation": {
           "type": "object",

@@ -1,20 +1,19 @@
 {
   "$comment": "SealLink v1.0 OP_RETURN Commitment Framing Registry (SPEC-02). All standard frames fit strictly within Bitcoin/Namecoin MAX_OP_RETURN_RELAY = 83 bytes.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.13",
+  "version": "1.0.0-draft.14",
   "magic_ascii": "SLNK",
   "magic_hex": "534c4e4b",
   "reserved_sibling_prefixes": [
     {
       "magic_ascii": "SLSC",
       "magic_hex": "534c5343",
-      "purpose": "Officially reserved sibling OP_RETURN prefix for application-layer SealLink Social & Nostr L1 Anchoring profiles (e.g., PROFILE-social-v1 / NIP-YY). Core SLNK verifiers MUST ignore SLSC outputs."
+      "purpose": "Officially reserved sibling OP_RETURN prefix for application-layer SealLink Social & Nostr L1 Anchoring profiles (e.g., PROFILE-social-v1 / NIP-YY). Core SLNK verifiers MUST ignore SLSC outputs. Because Namecoin Core nc28.0 standard relay policy rejects transactions carrying >1 OP_RETURN (multi-op-return), wallets MUST place SLSC frames in separate transactions from SLNK frames."
     }
   ],
   "max_relay_script_bytes": 83,
   "header_format": "OP_RETURN(0x6a) PUSH5(0x05) magic(4B='SLNK') action(1B) PUSH_N(1B) payload(N bytes)",
   "standard_payload_format": "version(1B=0x01) || commitment(32B) || loc_type(1B) || pointer(0B | 32B)",
-  "critical_forward_only_range": "0x13..0x1a",
   "critical_forward_only_reserved_range": "0x15..0x1a",
   "critical_retroactive_range": "0x1b..0x1f",
   "critical_reserved_range": "0x15..0x1f",

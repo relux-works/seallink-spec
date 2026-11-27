@@ -1,24 +1,37 @@
 {
-  "$comment": "SealLink v1.0 Safe-by-Design Off-Chain Locator URI Scheme Registry (SPEC-00 §5, SPEC-03 §4). Extensible via lightweight Registry Update without a breaking Core SLIP.",
+  "$comment": "SealLink v1.0 Safe-by-Design Off-Chain Locator URI Scheme Registry (SPEC-00 §5, SPEC-03 §4). Forward-compatible via Step 8b runtime registry enforcement: forbidden_schemes refuse WIRE_MEMBER, allowed_schemes validate strictly and allow SSRF-guarded fetch, and unrecognized future schemes pass wire validation but MUST NEVER be auto-fetched by older verifiers.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.13",
+  "version": "1.0.0-draft.14",
   "governance": "Registry Update (SPEC-00 §5)",
   "syntax_invariants": {
+    "ascii_printable_only": true,
     "forbid_userinfo_at_authority": true,
+    "forbid_backslash_and_delimiters_in_authority": true,
     "forbid_control_chars_and_whitespace": true,
     "max_uri_length": 512,
-    "require_content_hash_verification": true
+    "require_content_hash_verification": true,
+    "display_only_exception": "Human-clicked seallink-card/1 links[] are display-only hyperlinks (NEVER auto-fetched by verifiers) and therefore do not carry a content SHA-256."
   },
   "ssrf_protection_rules": {
+    "policy": "deny_all_non_globally_reachable_rfc6890",
     "block_loopback": ["127.0.0.0/8", "::1/128"],
     "block_private_rfc1918": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
     "block_link_local": ["169.254.0.0/16", "fe80::/10"],
     "block_cgnat": ["100.64.0.0/10"],
     "block_ula_ipv6": ["fc00::/7"],
     "block_unspecified": ["0.0.0.0/8", "::/128"],
+    "block_ipv4_mapped_and_translation_ipv6": ["::ffff:0:0/96", "::/96", "64:ff9b::/96", "64:ff9b:1::/48", "2002::/16", "2001::/32", "fec0::/10"],
+    "block_multicast_and_broadcast": ["224.0.0.0/4", "240.0.0.0/4", "255.255.255.255/32", "ff00::/8"],
+    "block_special_use_and_benchmark": ["192.0.0.0/24", "198.18.0.0/15", "100::/64"],
+    "unwrap_ipv4_mapped_ipv6_before_check": true,
+    "forbid_ipv6_zone_ids": true,
+    "pin_resolved_ip_on_connect": true,
+    "forbid_cross_scheme_redirects": true,
     "revalidate_after_dns_and_redirects": true,
     "max_redirects": 3,
-    "notes": "Normative SSRF guard for any automatic off-chain fetch initiated from untrusted manifest, card, mirror, or profile-section locators. Verifiers MUST resolve DNS, reject prohibited IP ranges on every hop before connecting, enforce response byte ceilings, and verify SHA-256 content addressing before parsing."
+    "well_known_max_redirects": 0,
+    "apply_ssrf_rules_to_relay_service_and_embedded_urls": true,
+    "notes": "Normative SSRF guard for any automatic off-chain fetch initiated from untrusted manifest, card, mirror, relay, service.endpoint, or profile-section locators. Verifiers MUST resolve DNS, unwrap IPv4-mapped/translated IPv6 addresses, reject all RFC 6890 non-globally-reachable IP ranges, dial the validated IP directly (preventing DNS-rebinding TOCTOU while keeping SNI/Host for TLS), forbid cross-scheme redirects (0 redirects on Channel 2 /.well-known/; <= 3 same-scheme HTTPS redirects elsewhere with per-hop revalidation), ignore or SSRF-filter embedded magnet tr=/ws=/xs=/x.pe= and Nostr relay hints, enforce response byte ceilings, and verify SHA-256 content addressing before parsing."
   },
   "allowed_schemes": [
     {
@@ -31,7 +44,7 @@
       "scheme": "blossom",
       "status": "active",
       "authority_forbids_userinfo": true,
-      "description": "Content-addressed Blossom (BUD-01) blob server URI."
+      "description": "Content-addressed Blossom (BUD-01) blob server URI; dereferenced strictly over HTTPS/TLS (default port 443) with identical SSRF guards."
     },
     {
       "scheme": "ipfs",
@@ -43,23 +56,24 @@
       "scheme": "magnet",
       "status": "active",
       "authority_forbids_userinfo": false,
-      "description": "BitTorrent v2 (BEP 52) magnet URI carrying btih/btmh infohash parameters."
+      "description": "BitTorrent v2 (BEP 52) magnet URI requiring xt=urn:btmh:1220<64hex> (or legacy xt=urn:btih:...); embedded tr=/ws=/xs=/x.pe= parameters MUST be ignored for auto-fetch unless strictly HTTPS and SSRF-validated."
     },
     {
       "scheme": "nostr",
       "status": "active",
       "authority_forbids_userinfo": false,
-      "description": "NIP-19 bech32 Nostr entity URI (nevent1, naddr1, note1, npub1, nprofile1)."
+      "description": "NIP-19 bech32 Nostr entity URI (nevent1, naddr1, note1, npub1, nprofile1); embedded relay hints MUST obey wss:// + SSRF rules."
     },
     {
       "scheme": "sftp",
       "status": "active",
       "authority_forbids_userinfo": true,
-      "description": "SSH File Transfer Protocol locator without embedded credentials (authentication is out-of-band)."
+      "description": "SSH File Transfer Protocol locator without embedded credentials (authentication is out-of-band; NEVER auto-fetched without explicit operator configuration to prevent SSH key/username probing)."
     }
   ],
   "forbidden_schemes": [
     "http",
+    "ws",
     "javascript",
     "data",
     "file",

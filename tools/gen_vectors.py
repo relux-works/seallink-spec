@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.13.
+Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.14.
 
 Produces nine executable JSON vector suites under vectors/:
   1. wire-jcs-and-hashes.json
@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import json
+import struct
 import sys
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,7 @@ import build_security_suite as sec
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.13"
+VERSION = "1.0.0-draft.14"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 VECTORS_DIR = ROOT / "vectors"
 
@@ -298,8 +299,94 @@ def build_wire_vectors() -> dict[str, Any]:
     g_log_reg = {"txid": h32("golden-log-reg"), "vout": 0}
     g_log_gen = {"txid": h32("golden-log-gen"), "vout": 2}
     g_log_id = sl.compute_log_id("main", GENESIS_MAIN, "notary", "id/notary-golden", g_log_reg, g_log_gen)
-    g_log_gen_next = {"txid": h32("golden-log-gen-2"), "vout": 0}
-    g_log_id_ho = sl.compute_log_id("main", GENESIS_MAIN, "notary", "id/notary-golden", g_log_reg, g_log_gen_next, predecessor_log_id=g_log_id)
+    g_log_gen_next = {"txid": h32("golden-log-gen-2"), "vout": 1}
+    g_log_pred_dr = h32("golden-pred-term-dr")
+    g_log_id_ho = sl.compute_log_id(
+        "main",
+        GENESIS_MAIN,
+        "notary",
+        "id/notary-golden",
+        g_log_reg,
+        g_log_gen_next,
+        predecessor_log_id=g_log_id,
+        predecessor_terminal_denials_root=g_log_pred_dr,
+    )
+    # D14-B02 / D14-H01: Atomic 256-leaf padded salted-Merkle golden vector (exact 8 steps, BIP-340 H_tag)
+    g_sm_auth_k = make_keypair("golden-sm256-auth")
+    g_sm_seal_k = make_keypair("golden-sm256-seal")
+    g_sm_entry = {
+        "alg": "bip340",
+        "key": g_sm_auth_k["xonly_pk"],
+        "label": "golden-login",
+        "network": "main",
+        "owner": "id/alice-golden",
+        "salt": h32("golden-sm256-salt"),
+        "seal": {"script_policy": {"kind": "key", "pk": g_sm_seal_k["compressed_pk"]}, "txid": h32("golden-sm256-seal-tx"), "vout": 0},
+        "type": "seallink-auth-entry/1",
+    }
+    g_sm_root, g_sm_proofs = sl.build_salted_set_merkle([g_sm_entry], pad_seed=b"golden-sm256-dummy")
+    g_sm_leaf_digest = sl.signing_digest(g_sm_entry).hex()
+    g_sm_merkle_leaf = sl.tagged_hash("seallink-merkle-leaf/1", bytes.fromhex(g_sm_leaf_digest)).hex()
+    g_sm_proof_0 = g_sm_proofs[g_sm_leaf_digest]
+    assert len(g_sm_proof_0["steps"]) == sl.FIXED_SALTED_SET_PROOF_STEPS == 8
+    # D14-B01: All 6 SLNK loc_type frames (0x00..0x05) matching registry/opreturn-actions.json
+    g_lt_frames = []
+    for lt_name, lt_act_int, lt_byte, lt_ptr in [
+        ("loc-0x00-none", 0x01, 0x00, None),
+        ("loc-0x01-content_sha256", 0x01, 0x01, h32("golden-loc-01")),
+        ("loc-0x02-bt_v2", 0x02, 0x02, h32("golden-loc-02")),
+        ("loc-0x03-ipfs_cidv1_dag_pb", 0x01, 0x03, h32("golden-loc-03")),
+        ("loc-0x04-bt_v2_private", 0x01, 0x04, h32("golden-loc-04")),
+        ("loc-0x05-nostr_event_id", 0x01, 0x05, h32("golden-loc-05")),
+    ]:
+        lt_comm = h32(f"golden-comm-{lt_name}")
+        lt_spk = sl.encode_opreturn(lt_act_int, lt_comm, loc_type=lt_byte, pointer_hex=lt_ptr)
+        g_lt_frames.append({
+            "action": f"0x{lt_act_int:02x}",
+            "commitment": lt_comm,
+            "id": lt_name,
+            "loc_type_byte": lt_byte,
+            "locator_hex": lt_ptr or "",
+            "script_pubkey_hex": lt_spk.hex(),
+        })
+    # D14-H03: X25519 RFC 7748 low-order u-coordinates rejected & mixed-order R Ed25519 rejected (strict cofactorless)
+    g_x25519_low_order = [
+        "00" * 32,
+        "01" + ("00" * 31),
+        "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800",
+        "5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157",
+        "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "0000000000000000000000000000000000000000000000000000000000000080",
+    ]
+    assert all(not sl.is_valid_x25519_pubkey(xk) for xk in g_x25519_low_order)
+    # Construct a canonical mixed-order R = r*B + T (where T has exact order 8) that passes cofactored 8[S]B==8R+8[k]A but FAILS strict cofactorless!
+    import hashlib as _hl_ed
+    _ed_h = _hl_ed.sha512(ed_seed).digest()
+    _ed_a = int.from_bytes(bytes([_ed_h[0] & 248]) + _ed_h[1:31] + bytes([(_ed_h[31] & 63) | 64]), "little")
+    _ed_r = int.from_bytes(sl.sha256(b"golden-mixed-order-r"), "little") % sl._ED_L
+    _ed_T8 = sl._ed_decode_point(bytes.fromhex("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a"))
+    assert _ed_T8 is not None and sl._ed_is_small_order(_ed_T8) and not sl._ed_is_identity(_ed_T8)
+    _ed_R_mixed_pt = sl._ed_add(sl._ed_mul(sl._ED_B, _ed_r), _ed_T8)
+    assert not sl._ed_is_small_order(_ed_R_mixed_pt)
+    _ed_R_mixed_b = sl._ed_encode_point(_ed_R_mixed_pt)
+    _ed_A_b = bytes.fromhex(sl.ed25519_pubkey(ed_seed))
+    _ed_mix_msg = b"SealLink-Ed25519-MixedOrderR-v1"
+    _ed_k_mix = int.from_bytes(_hl_ed.sha512(_ed_R_mixed_b + _ed_A_b + _ed_mix_msg).digest(), "little") % sl._ED_L
+    _ed_S_mix = (_ed_r + _ed_k_mix * _ed_a) % sl._ED_L
+    _ed_mix_sig = (_ed_R_mixed_b + _ed_S_mix.to_bytes(32, "little")).hex()
+    assert not sl.ed25519_verify(_ed_mix_msg, _ed_A_b.hex(), _ed_mix_sig)
+    # D14-B04: Namecoin AuxPoW with Bitcoin BIP-9/BIP-320 bit-8 parent version 0x20000100 MUST be accepted
+    _g_aux_hdr = struct.pack("<I", 0x00010104) + (b"\x00" * 32) + (b"\x22" * 32) + struct.pack("<III", 1700000000, 0x207FFFFF, 0)
+    _g_aux_root = sl.dsha256(_g_aux_hdr)[::-1]
+    _g_cb_ss = b"\x28" + _g_aux_root + struct.pack("<II", 1, 0)
+    _g_cb = struct.pack("<I", 1) + b"\x01" + (b"\x00" * 32) + struct.pack("<I", 0xFFFFFFFF) + bytes([len(_g_cb_ss)]) + _g_cb_ss + struct.pack("<I", 0xFFFFFFFF) + b"\x00" + struct.pack("<I", 0)
+    _g_ph = struct.pack("<I", 0x20000100) + (b"\x00" * 32) + sl.dsha256(_g_cb) + struct.pack("<III", 1700000000, 0x207FFFFF, 0)
+    while int.from_bytes(sl.dsha256(_g_ph), "little") > sl.bits_to_target(0x207FFFFF):
+        _g_ph = _g_ph[:-4] + struct.pack("<I", struct.unpack("<I", _g_ph[-4:])[0] + 1)
+    _g_aux_obj = {"chain_branch": [], "chain_merkle_nonce": 0, "chain_merkle_size": 1, "coinbase_branch": [], "parent_coinbase_hex": _g_cb.hex(), "parent_header_hex": _g_ph.hex()}
+    assert sl.verify_namecoin_auxpow(_g_aux_hdr.hex(), _g_aux_obj, network="regtest", height=10)
     g_ckpts = [sl.ckpt_leaf(i + 1, h32(f"golden-cp-{i + 1}")) for i in range(5)]
     g_mth_3 = sl.rfc9162_mth(g_ckpts[:3]).hex()
     g_peaks_3 = sl.rfc9162_peaks(g_ckpts[:3])
@@ -430,7 +517,28 @@ def build_wire_vectors() -> dict[str, Any]:
                 "registration": g_log_reg,
                 "genesis_seal_outpoint": g_log_gen_next,
                 "predecessor_log_id": g_log_id,
+                "predecessor_terminal_denials_root": g_log_pred_dr,
                 "log_id": g_log_id_ho,
+            },
+            "salted_set_merkle_256": {
+                "entry": g_sm_entry,
+                "leaf_digest": g_sm_leaf_digest,
+                "merkle_leaf": g_sm_merkle_leaf,
+                "root": g_sm_root,
+                "proof": g_sm_proof_0,
+            },
+            "loc_type_frames": g_lt_frames,
+            "x25519_low_order_rejects": g_x25519_low_order,
+            "ed25519_mixed_order_R_reject": {
+                "msg_hex": _ed_mix_msg.hex(),
+                "pk_hex": _ed_A_b.hex(),
+                "sig_hex": _ed_mix_sig,
+            },
+            "auxpow_bip9_bit8_parent_admit": {
+                "auxpow": _g_aux_obj,
+                "header_hex": _g_aux_hdr.hex(),
+                "height": 10,
+                "network": "regtest",
             },
             "log_entry_digests": {
                 "input_content_addr": h32("golden-entry"),
@@ -1722,8 +1830,12 @@ def build_trace_02_guardian() -> dict[str, Any]:
     b3_id = sl.object_id(b3)
     t_rec2 = h32("t2-rec2-0x0c-tx")
 
-    # Build Branch A chain (cancel B2 via owner-authored 0x10 at height 750500 < 750400 + 1008)
+    # Build Branch A chain (cancel B2 via owner-authored 0x10 at height 750500 < 750400 + 1008; B2 registered with link.origin at <= 750400 per D14-B10)
     ch_rec_a_raw = copy.deepcopy(chain_state)
+    ch_rec_a_raw["names"][b2["name"]] = sv.make_name_history(
+        b2["name"], b2["registration"], b2["owner_policy"],
+        {"link": {"origin": origin_id}}, first_height=750350, update_height=750360,
+    )
     ch_rec_a_raw["txs"][h32("t2-recov-seal-tx")]["outputs"]["0"]["spent_by_txid"] = t_rec1
     ch_rec_a_raw["txs"][t_rec1] = {
         "confirmed_height": 750400,

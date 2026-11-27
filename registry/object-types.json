@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Canonical Object Type Registry. Authoritative SSOT for object types, byte limits, signing roles, and schema targets. Signing domain tag equals the exact type string under SPEC-01.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.13",
+  "version": "1.0.0-draft.14",
   "reserved_internal_domains": [
     "seallink-clause/1",
     "seallink-journal/1",
@@ -44,7 +44,7 @@
       "max_bytes": 4096,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/AuthSetHead",
-      "description": "Manifest-pinned salted Merkle root head committing to an actor's foreign-service authentication keys (sets.auth) with size-hiding selective disclosure."
+      "description": "Manifest-pinned fixed-256-leaf salted Merkle root head committing to an actor's foreign-service authentication keys (sets.auth) with CSPRNG dummy-leaf size-hiding selective disclosure (proof.steps length == 8)."
     },
     {
       "type": "seallink-auth-entry/1",
@@ -53,7 +53,7 @@
       "max_bytes": 4096,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/AuthEntry",
-      "description": "Salted leaf entry inside sets.auth (domain-separated leaf digest, alg in {bip340, p256, ed25519}, individual disposable fast-revocation seal)."
+      "description": "Salted leaf entry inside sets.auth (BIP-340 H_tag domain-separated leaf digest, alg in {bip340, p256, ed25519}, individual disposable fast-revocation seal)."
     },
     {
       "type": "seallink-device-set-head/1",
@@ -62,7 +62,7 @@
       "max_bytes": 4096,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/DeviceSetHead",
-      "description": "Manifest-pinned salted Merkle root head committing to an actor's owner control-plane devices (sets.devices) with size-hiding selective disclosure."
+      "description": "Manifest-pinned fixed-256-leaf salted Merkle root head committing to an actor's owner control-plane devices (sets.devices) with CSPRNG dummy-leaf size-hiding selective disclosure (proof.steps length == 8)."
     },
     {
       "type": "seallink-device-entry/1",
@@ -71,7 +71,7 @@
       "max_bytes": 4096,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/DeviceEntry",
-      "description": "Salted leaf entry inside sets.devices (domain-separated leaf digest, alg in {bip340, p256, ed25519}, presence claim, L0-L2 ceiling, individual disposable fast-revocation seal)."
+      "description": "Salted leaf entry inside sets.devices (BIP-340 H_tag domain-separated leaf digest, alg in {bip340, p256, ed25519}, presence claim, L0-L2 ceiling, individual disposable fast-revocation seal)."
     },
     {
       "type": "seallink-members-list/1",
@@ -95,10 +95,10 @@
       "type": "seallink-statement/1",
       "signed": true,
       "signer_roles": ["grant", "device", "receipt", "guardian_quorum"],
-      "max_bytes": 16384,
+      "max_bytes": 32768,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/Statement",
-      "description": "Typed actor-, guardian-quorum-, device-, or service-signed statement for external transport key bindings, bilateral identity links, extensible profile sections, host configuration sections, trust-root rotation/cancellation, or migration acceptance/fencing."
+      "description": "Typed actor-, guardian-quorum-, device-, or service-signed statement for external transport key bindings, unilateral identity links (reciprocally confirmable via peer statement or members list), extensible profile sections, host configuration sections, trust-root rotation/cancellation, or migration acceptance/fencing."
     },
     {
       "type": "seallink-owner-command/1",
@@ -251,7 +251,7 @@
       "max_bytes": 65536,
       "owning_spec": "SPEC-05",
       "schema": "schemas/credential.schema.json#/$defs/NotaryAct",
-      "description": "General notary act (contract notarization, document copy, fact attestation, or optional child-grant attestation), supporting eternal (anchor-height) and revocable modes."
+      "description": "General notary act (contract notarization, document copy, fact attestation, optional child-grant attestation, or artifact-notarization), supporting eternal (0x04), revocable (0x04 + seal), and log_tracked (0x14 transparency/denial log) lifecycles."
     },
     {
       "type": "seallink-grant/1",

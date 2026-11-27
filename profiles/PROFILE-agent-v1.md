@@ -1,6 +1,6 @@
 # PROFILE-agent-v1: Bounded Autonomous Agent Tasks, Tool Execution, Isolated Sessions, and Guardian Intake
 
-- **Version:** `1.0.0-draft.13`
+- **Version:** `1.0.0-draft.14`
 - **Service Type:** `agent-session` (`registry/service-types.json`)
 - **Status:** `draft` (normative profile rules `decided`)
 - **Evidence / Maturity:** `vectors` (`vectors/trace-03-delegation-pool-single-use.json`, `vectors/trace-04-agent-guardian-intake.json`, `vectors/refusal-coverage-matrix.json`)
@@ -60,24 +60,25 @@ This profile defines normative SealLink authorization for autonomous software ag
 
 | Action | Argument | Schema Type | Supported `where` Predicates |
 | --- | --- | --- | --- |
-| `agent/brief` | `task_id` | `string` | `eq`, `prefix` |
+| `agent/brief` | `task_id` | `string` | `eq`, `in`, `prefix` |
 | `agent/brief` | `brief_sha256` | `hex64` | `hash_eq` |
 | `agent/brief` | `max_duration_sec` | `uint64_str` | `range` |
+| `agent/brief` | `artifact_channel` *(optional)* | `string` | `eq`, `in`, `prefix` |
 | `agent/tool` | `tool_name` | `string` | `eq`, `in`, `not_in` |
 | `agent/tool` | `input_sha256` | `hex64` | `hash_eq` |
-| `agent/tool` | `resource_path` | `string` | `eq`, `prefix` |
+| `agent/tool` | `resource_path` | `string` | `eq`, `in`, `not_in`, `prefix` |
 | `agent/tool` | `max_output_bytes` | `uint64_str` | `range` |
 | `agent/tool` | `max_tokens` *(optional)* | `uint64_str` (`tokens`) | `range` |
 | `agent/tool` | `max_cost` *(optional)* | `uint64_str` (atomic currency units matching `seallink/cost` quota `unit`) | `range` |
 | `agent/session` | `op` | `string` (`start \| checkpoint \| halt`) | `eq`, `in` |
-| `agent/session` | `session_slot` | `string` | `eq`, `prefix` |
+| `agent/session` | `session_slot` | `string` | `eq`, `in`, `prefix` |
 | `agent/session` | `config_sha256` | `hex64` | `hash_eq` |
 | `agent/session` | `max_wall_sec` | `uint64_str` | `range` |
 | `agent/guardian-message` | `origin_id` | `hex64` | `eq` |
 | `agent/guardian-message` | `subject_ward_name` | `NameStr` | `eq` |
 | `agent/guardian-message` | `revision` | `PositiveUint53` (`uint53`) | `range` |
 | `agent/guardian-message` | `message_sha256` | `hex64` | `hash_eq` |
-| `agent/guardian-message` | `channel` | `string` | `eq`, `in` |
+| `agent/guardian-message` | `channel` | `string` | `eq`, `in`, `not_in` |
 | `agent/guardian-message` | `delivery_mode` | `string` (`strict_drop \| untrusted_fallback`) | `eq` |
 
 ---

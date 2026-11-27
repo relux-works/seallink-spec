@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Authoritative Refusal Code Registry. No normative document may emit a refusal code absent from this file. Verifiers report the FIRST failing code in each pipeline's deterministic check order.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.13",
+  "version": "1.0.0-draft.14",
   "codes": [
     {"code": "WIRE_SIZE", "category": "wire", "owning_spec": "SPEC-01", "creates_closure": false, "retryable": false, "description": "Document exceeds type max_bytes or nesting depth > 16."},
     {"code": "WIRE_JSON", "category": "wire", "owning_spec": "SPEC-01", "creates_closure": false, "retryable": false, "description": "Invalid UTF-8, BOM present, trailing bytes, or malformed RFC 8259 JSON object."},
@@ -66,7 +66,7 @@
     {"code": "CRED_ANCHOR_MISSING", "category": "credential", "owning_spec": "SPEC-05", "creates_closure": false, "retryable": true, "description": "Signed-form credential or notary anchor (0x09 / 0x04) missing or below required depth."},
     {"code": "CRED_ISSUER_CLOSED", "category": "credential", "owning_spec": "SPEC-05", "creates_closure": true, "retryable": false, "description": "Credential anchor height >= owner-authenticated compromise height h_c (0x0b)."},
     {"code": "CRED_WINDOW_CLOSED", "category": "credential", "owning_spec": "SPEC-05", "creates_closure": false, "retryable": false, "description": "Current chain height or UTC time outside credential validity window."},
-    {"code": "CRED_REVOKED_FOR_CAUSE", "category": "credential", "owning_spec": "SPEC-05", "creates_closure": true, "retryable": false, "description": "Revocable credential or notary seal spent with verified cause commitment (0x0a / 0x05)."},
+    {"code": "CRED_REVOKED_FOR_CAUSE", "category": "credential", "owning_spec": "SPEC-05", "creates_closure": true, "retryable": false, "description": "Revocable credential/notary seal spent with verified cause commitment (0x0a / 0x05; creates permanent credential closure), or log_tracked act/release currently denied in verified 0x14 denials_root SMT (reinstatable via higher state_seq unless allow_reinstatement=false)."},
     {"code": "NOTARY_REQUIRED", "category": "credential", "owning_spec": "SPEC-05", "creates_closure": false, "retryable": false, "description": "Missing or invalid notary act where required by parent policy or verifier policy."},
     {"code": "NOTARY_LOG_COMPROMISED", "category": "credential", "owning_spec": "SPEC-05", "creates_closure": true, "retryable": false, "description": "Verified seallink-log-fraud/1 proof (equivocation, revocation_omission, illegal_reversion, or invalid_checkpoint_chain) permanently closes 100% of acts and releases issued under this log_id."},
     {"code": "TICKET_PROOF_INVALID", "category": "credential", "owning_spec": "PROFILE-artifact-v1", "creates_closure": false, "retryable": false, "description": "Artifact ticket, Fixed-Depth-256 SMT proof, RFC 9162 checkpoints_root proof, Namecoin AuxPoW/header retarget proof, or Tier-2 SegWitNameUpdateProof failed cryptographic verification."},

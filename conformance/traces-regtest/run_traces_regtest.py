@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.13.
+Live Two-Node Namecoin Core nc28.0 Regtest Conformance Harness for SealLink v1.0.0-draft.14.
 
 Executes seven end-to-end SealLink protocol traces on two fresh loopback-only
 Namecoin Core 28 regtest nodes under strict standard policy (`-acceptnonstdtxn=0`,
@@ -1120,7 +1120,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     ])
 
     # Pre-fund origin seals in a single confirmed setup tx (binding=0, status=1, recovery=2, roster=3, slot1_vacant=4)
-    f_orig = cl.split_funding(6, each_sat=5_000_000)
+    f_orig = cl.split_funding(7, each_sat=5_000_000)
     seals_txid, seals_raw = build_signed_tx(
         [f_orig[0]],
         [
@@ -1198,9 +1198,10 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     cl.broadcast_and_wait_peer(anc09_raw)
     cl.mine(1)
 
-    # Register id/t2-child-leo (P2WSH 2-of-3 multisig!) strictly AFTER 0x09 origin anchor (R3-B3 & BLK-7 link.origin on FIRSTUPDATE)!
+    # Register id/t2-child-leo & recovery candidate id/t2-child-leo-recovered (P2WSH 2-of-3 multisig!) strictly AFTER 0x09 origin anchor (R3-B3 & BLK-7/D14-B10 link.origin on FIRSTUPDATE)!
     names_ward = cl.register_names_batch([
         {"name": "id/t2-child-leo", "owner_policy": ward_ms_pol, "value_obj": {"link": {"grant": ward_gr["xonly"], "origin": origin_id}}, "rand_label": "t2-ward"},
+        {"name": "id/t2-child-leo-recovered", "owner_policy": ward_ms_pol, "value_obj": {"link": {"grant": ward_gr["xonly"], "origin": origin_id}}, "rand_label": "t2-ward-rec"},
     ])
     names = {**names_pre, **names_ward}
     # Renew pre-registered names once so none approach regtest's 30-block TTL during the trace!
@@ -1304,20 +1305,12 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         "window": {"not_after_height": h_init_tip + 30, "not_before_height": h_init_tip - 5},
     }
     hist_cid = sl.object_id(hist_contract)
-    hist_0x07_txid, hist_0x07_raw = build_signed_tx(
-        [f_orig[5]],
-        [(0, op_return_spk(0x07, hist_cid)), (f_orig[5]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
-    )
-    cl.broadcast_and_wait_peer(hist_0x07_raw)
-    hist_blk = cl.mine(1)[0]
-    h_hist_0x07 = cl.rpc(1, "getblockcount")
-    t_hist_0x07 = int(cl.rpc(1, "getblockheader", hist_blk)["time"])
     assent_hist_g1 = sl.sign_guardian_envelope(
         {
-            "expires_at": t_hist_0x07 + 200_000,
+            "expires_at": t_init_tip + 200_000,
             "genesis": cl.genesis_hash,
             "guardian_context": {"event_class": "contract_assent", "origin_id": origin_id, "revision": 1, "ward_name": "id/t2-child-leo"},
-            "issued_at": t_hist_0x07 - 10,
+            "issued_at": t_init_tip - 10,
             "network": "regtest",
             "nonce": sl.sha256(b"t2-hist-a-g1").hex(),
             "party_id": "student-1",
@@ -1329,6 +1322,20 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         },
         [{"slot": 1, "revision": 1, "guardian_name": "id/t2-parent-a", "signers": [g1_gr["sk"]]}],
     )
+    hist_0x07_txid, hist_0x07_raw = build_signed_tx(
+        [f_orig[5]],
+        [(0, op_return_spk(0x07, hist_cid)), (f_orig[5]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+    )
+    # D14-H08: Anchor content_addr(assent_hist_g1) on-chain via 0x01 at height <= h_hist_0x07 (same block) to prevent post-emancipation/post-halt backdating!
+    hist_assent_0x01_txid, hist_assent_0x01_raw = build_signed_tx(
+        [f_orig[6]],
+        [(0, op_return_spk(0x01, sl.content_addr(assent_hist_g1))), (f_orig[6]["value_sat"] - FEE_SAT, cl.fund_key["p2wpkh_spk"])],
+    )
+    cl.broadcast_and_wait_peer(hist_0x07_raw)
+    cl.broadcast_and_wait_peer(hist_assent_0x01_raw)
+    hist_blk = cl.mine(1)[0]
+    h_hist_0x07 = cl.rpc(1, "getblockcount")
+    t_hist_0x07 = int(cl.rpc(1, "getblockheader", hist_blk)["time"])
 
     # Halt spend of slot 1's active either_of_2(2-of-3 disposer, g1_seal) seal using 2-of-3 disposer branch -> vacant!
     halt_txid, halt_raw = build_signed_tx(
@@ -1475,7 +1482,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         "next_recovery_vout": 0,
         "origin_id": origin_id,
         "owner_policy": ward_ms_pol,
-        "registration": {"txid": sl.sha256(b"t2-cand-reg").hex(), "vout": 0},
+        "registration": names["id/t2-child-leo-recovered"]["registration"],
         "seq": 2,
         "supersedes_binding_id": sl.object_id(binding),
         "type": "seallink-name-binding/1",
@@ -1539,7 +1546,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         "roster_records": [roster2],
     }
     t2_ctr: dict[str, int] = {}
-    ch_dict = cl.new_cold_observer(rpc_counter=t2_ctr).build_chain_view(wire_objects=[origin_bundle], extra_txids=[hist_0x07_txid])
+    ch_dict = cl.new_cold_observer(rpc_counter=t2_ctr).build_chain_view(wire_objects=[origin_bundle], extra_txids=[hist_0x07_txid, hist_assent_0x01_txid])
     assert t2_ctr.get("getblockchaininfo", 0) >= 2 and ch_dict["observation_bracket"]["consistent"] is True
     ch = sv.ChainView(ch_dict)
     reg_pin_t2 = {k: origin_env["payload"]["issuer"][k] for k in ("name", "owner_policy", "registration")}
@@ -1592,12 +1599,25 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
     r_self = v.verify_assent(assent_ward_self, contract, origin_bundle, ch)
     r_old = v.verify_assent(assent_old_g1, contract, origin_bundle, ch)
     r_new = v.verify_assent(assent_new_g2, contract, origin_bundle, ch)
-    # R1 #1 live verification: historical ward contract anchored at h_hist_0x07 (rev=1, K1) SURVIVES 0x0f (rev=2) + K1->K2 rotation!
-    r_hist_ok = v.verify_assent(assent_hist_g1, hist_contract, origin_bundle, ch, anchor_height=h_hist_0x07, anchor_time=t_hist_0x07)
+    # R1 #1 + D14-H08 live verification: historical ward contract anchored at h_hist_0x07 (rev=1, K1) SURVIVES 0x0f (rev=2) + K1->K2 rotation
+    # when assent is anchored via 0x01 at height <= h_hist_0x07, and FAILS CLOSED without on-chain assent binding!
+    r_hist_ok = v.verify_assent(
+        assent_hist_g1,
+        hist_contract,
+        origin_bundle,
+        ch,
+        anchor_height=h_hist_0x07,
+        anchor_time=t_hist_0x07,
+        assent_anchor_txid=hist_assent_0x01_txid,
+    )
+    r_hist_unanchored = v.verify_assent(assent_hist_g1, hist_contract, origin_bundle, ch, anchor_height=h_hist_0x07, anchor_time=t_hist_0x07)
     assert (r_self.verdict, r_self.refusal_code) == ("REFUSE", "WARD_AUTONOMOUS_FORBIDDEN"), f"Trace 02 self got {r_self}"
     assert (r_old.verdict, r_old.refusal_code) == ("REFUSE", "GUARDIAN_INACTIVE"), f"Trace 02 old got {r_old}"
     assert r_new.verdict == "ADMIT", f"Trace 02 new Carol got {r_new}"
     assert r_hist_ok.verdict == "ADMIT", f"Trace 02 R1 #1 historical ward contract survival failed: {r_hist_ok}"
+    assert (r_hist_unanchored.verdict, r_hist_unanchored.refusal_code) == ("REFUSE", "CONTRACT_ASSENT_INVALID"), (
+        f"Trace 02 D14-H08 unanchored historical ward assent expected CONTRACT_ASSENT_INVALID, got {r_hist_unanchored}"
+    )
 
     # Decision 1B / R2G-04 live proof: Emancipate id/t2-child-leo via confirmed seallink-capacity/1 (spending status_seal)
     # + P2WSH 2-of-3 custodian handover + adult subject SIGHASH_ALL self-update -> State 4 autonomous assent ADMIT!
@@ -1700,6 +1720,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
         "init_0x12_txid": init12_txid,
         "init_0x12_raw_hex": init12_raw,
         "historical_ward_contract_0x07_txid": hist_0x07_txid,
+        "historical_ward_assent_0x01_txid": hist_assent_0x01_txid,
         "historical_ward_contract_anchor_height": h_hist_0x07,
         "guardian_1_key_rotation_txid": g1_rot_txid,
         "halt_either_of_2_txid": halt_txid,
@@ -1729,6 +1750,7 @@ def run_trace_02(cl: RegtestCluster) -> dict[str, Any]:
             "halted_guardian_assent": {"verdict": r_old.verdict, "refusal_code": r_old.refusal_code},
             "csv_activated_successor_assent": {"verdict": r_new.verdict, "outcome": r_new.outcome},
             "historical_ward_contract_survives_0x0f_and_key_rot": {"verdict": r_hist_ok.verdict, "outcome": r_hist_ok.outcome},
+            "historical_ward_contract_unanchored_assent_refused": {"verdict": r_hist_unanchored.verdict, "refusal_code": r_hist_unanchored.refusal_code},
             "decision_1b_state4_emancipated_autonomous_assent": {"verdict": r_adult_s4.verdict, "outcome": r_adult_s4.outcome},
         },
     }
@@ -3660,6 +3682,18 @@ def run_trace_07(cl: RegtestCluster, *, spv_fixture_out: Path | None = None) -> 
     rot2_spv = _extract_spv_proof(rot_tx2)
     h_lo, h_hi = fu_spv["block_height"], rot2_spv["block_height"]
     contiguous_headers = [_extract_header_proof(h_n) for h_n in range(h_lo, h_hi + 1)]
+    bh_lo = obs_rpc("getblockhash", h_lo)
+    hdr_lo = obs_rpc("getblockheader", bh_lo)
+    epoch_start_h = (h_lo // 2016) * 2016
+    epoch_start_t = int(obs_rpc("getblockheader", obs_rpc("getblockhash", epoch_start_h))["time"])
+    r11_start = max(0, h_lo - 10)
+    tc_h_lo = {
+        "block_hash": bh_lo,
+        "epoch_start_time": epoch_start_t,
+        "height": h_lo,
+        "nbits_hex": hdr_lo["bits"],
+        "recent_11_times": [int(obs_rpc("getblockheader", obs_rpc("getblockhash", hi))["time"]) for hi in range(r11_start, h_lo + 1)],
+    }
     tier2_page = {
         "genesis": cl.genesis_hash, "has_more": False, "headers": contiguous_headers,
         "limit": 10, "name": "id/t7-notary-1", "network": "regtest",
@@ -3668,15 +3702,15 @@ def run_trace_07(cl: RegtestCluster, *, spv_fixture_out: Path | None = None) -> 
         "updates": [fu_spv, upd_spv, rot1_spv, rot2_spv],
     }
 
-    # Verdict 8 (BLK-8): REAL mined 4-step chained nc28.0 Tier-2 page with wire headers[] (P2WPKH -> P2WSH 2-of-2 cold rotation!) -> ADMIT!
-    r_spv_ok = v_art.verify_tier2_name_history_page(tier2_page, not_pol)
+    # Verdict 8 (BLK-8 / D14-B08): REAL mined 4-step chained nc28.0 Tier-2 page anchored to TrustedHeaderCheckpoint (with recent_11_times MTP(11)) & wire headers[] (P2WPKH -> P2WSH 2-of-2 cold rotation!) -> ADMIT!
+    r_spv_ok = v_art.verify_tier2_name_history_page(tier2_page, not_pol, trusted_checkpoint=tc_h_lo)
     assert r_spv_ok.verdict == "ADMIT", f"Trace 07 REAL mined 4-step nc28.0 Tier-2 SPV page failed: {r_spv_ok}"
     v_upds = r_spv_ok.details["verified_updates"]
     oa_flags = [u["owner_authored"] for u in v_upds]
     assert oa_flags == [False, True, False, True], f"Trace 07 BLK-8 owner_authored flags expected [False, True, False, True], got {oa_flags}"
     assert r_spv_ok.details["final_owner_policy"] == not_pol2, f"Trace 07 final_owner_policy mismatch: {r_spv_ok.details}"
 
-    # Verdict 9 (BLK-8 / M-14): 2-page Tier-2 pagination across P2WPKH -> P2WSH 2-of-2 rotation carrying next_cursor.owner_policy -> cursor_owner_policy!
+    # Verdict 9 (BLK-8 / M-14 / D14-B08): 2-page Tier-2 pagination across P2WPKH -> P2WSH 2-of-2 rotation carrying BOTH next_cursor.owner_policy -> cursor_owner_policy AND next_header_checkpoint -> trusted_checkpoint!
     p1_headers = [h for h in contiguous_headers if h["height"] <= rot1_spv["block_height"]]
     p2_headers = [h for h in contiguous_headers if h["height"] >= rot1_spv["block_height"]]
     tier2_page_1 = {
@@ -3696,11 +3730,13 @@ def run_trace_07(cl: RegtestCluster, *, spv_fixture_out: Path | None = None) -> 
         "type": "seallink-tier2-name-history/1",
         "updates": [rot2_spv],
     }
-    r_spv_p1 = v_art.verify_tier2_name_history_page(tier2_page_1, not_pol)
+    r_spv_p1 = v_art.verify_tier2_name_history_page(tier2_page_1, not_pol, trusted_checkpoint=tc_h_lo)
     assert r_spv_p1.verdict == "ADMIT", f"Trace 07 Tier-2 page 1 failed: {r_spv_p1}"
     assert r_spv_p1.details["final_owner_policy"] == not_pol2
-    r_spv_p2 = v_art.verify_tier2_name_history_page(tier2_page_2, not_pol2)
-    assert r_spv_p2.verdict == "ADMIT", f"Trace 07 Tier-2 page 2 (P2WSH 2-of-2 resume) failed: {r_spv_p2}"
+    r_spv_p2 = v_art.verify_tier2_name_history_page(
+        tier2_page_2, not_pol2, trusted_checkpoint=r_spv_p1.details["next_header_checkpoint"]
+    )
+    assert r_spv_p2.verdict == "ADMIT", f"Trace 07 Tier-2 page 2 (P2WSH 2-of-2 + next_header_checkpoint resume) failed: {r_spv_p2}"
     assert [u["owner_authored"] for u in r_spv_p2.details["verified_updates"]] == [True]
 
     # Verdict 10: Core-only verifier refuses Tier-2 module page with ACTION_UNSUPPORTED!
@@ -3711,7 +3747,7 @@ def run_trace_07(cl: RegtestCluster, *, spv_fixture_out: Path | None = None) -> 
 
     if spv_fixture_out is not None:
         spv_fixture = {
-            "description": "Real mined Namecoin Core nc28.0 regtest 4-step Tier-2 SPV fixture (OP_NAME_FIRSTUPDATE -> OP_NAME_UPDATE -> P2WPKH->P2WSH 2-of-2 cold rotation -> P2WSH 2-of-2 self-update) with contiguous AuxPoW headers and 2-page cursor split for offline Go/Rust verification.",
+            "description": "Real mined Namecoin Core nc28.0 regtest 4-step Tier-2 SPV fixture (OP_NAME_FIRSTUPDATE -> OP_NAME_UPDATE -> P2WPKH->P2WSH 2-of-2 cold rotation -> P2WSH 2-of-2 self-update) with TrustedHeaderCheckpoint (recent_11_times MTP(11)), contiguous AuxPoW headers, and 2-page cursor + next_header_checkpoint split for offline Go/Rust verification.",
             "expected_final_owner_policy": not_pol2,
             "expected_initial_owner_policy": not_pol,
             "expected_owner_authored": [False, True, False, True],
@@ -3720,6 +3756,7 @@ def run_trace_07(cl: RegtestCluster, *, spv_fixture_out: Path | None = None) -> 
             "network": "regtest",
             "page_1": tier2_page_1,
             "page_2": tier2_page_2,
+            "trusted_checkpoint": tc_h_lo,
         }
         spv_fixture_out.parent.mkdir(parents=True, exist_ok=True)
         spv_fixture_out.write_text(json.dumps(spv_fixture, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -3785,7 +3822,7 @@ def main() -> int:
         elapsed = round(time.monotonic() - t0, 2)
         report = {
             "suite": "seallink-nc28-live-traces-regtest",
-            "spec_version": "1.0.0-draft.13",
+            "spec_version": "1.0.0-draft.14",
             "chain": "regtest",
             "policy": "standard (-acceptnonstdtxn=0 -txindex=1 -namehistory=1), two loopback-only nodes (node A writer outbound -> node B read-only cold observer with -disablewallet=1 and -rpcwhitelistdefault=0)",
             "node_b_rpcwhitelist": cl.obs_whitelist.split(","),

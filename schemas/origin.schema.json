@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.13/schemas/origin.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/origin.schema.json",
   "title": "SealLink v1.0 Origin Certificate (Birth, Materialization, Incorporation)",
   "type": "object",
   "additionalProperties": false,

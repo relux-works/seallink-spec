@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.13/schemas/profile-artifact.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/profile-artifact.schema.json",
   "title": "SealLink v1.0 PROFILE-artifact-v1: Artifact Tickets, Tier-2 SPV SegWitNameUpdateProof, AuxPoW & Gatekeeper Policy",
   "$defs": {
     "AuxPowProof": {
@@ -28,12 +28,18 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["height", "block_hash", "nbits_hex", "epoch_start_time"],
-      "description": "Policy-pinned trusted Namecoin header checkpoint anchoring Tier-2 SPV header chains and retarget epoch start timestamp.",
+      "description": "Policy-pinned trusted Namecoin header checkpoint anchoring Tier-2 SPV header chains, retarget epoch start timestamp, and optional up-to-11 recent block timestamps ending at height for exact BIP-113 MTP(11) verification from header 0.",
       "properties": {
         "height": { "$ref": "common.schema.json#/$defs/Uint53" },
         "block_hash": { "$ref": "common.schema.json#/$defs/Hex64" },
         "nbits_hex": { "type": "string", "pattern": "^[0-9a-f]{8}$", "not": { "pattern": "\n" } },
-        "epoch_start_time": { "$ref": "common.schema.json#/$defs/Uint53" }
+        "epoch_start_time": { "$ref": "common.schema.json#/$defs/Uint53" },
+        "recent_11_times": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 11,
+          "items": { "$ref": "common.schema.json#/$defs/Uint53" }
+        }
       }
     },
     "BlockHeaderProof": {
@@ -126,6 +132,14 @@
             "vout": { "$ref": "common.schema.json#/$defs/Vout" },
             "owner_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" }
           }
+        },
+        "next_header_checkpoint": {
+          "$ref": "#/$defs/TrustedHeaderCheckpoint",
+          "description": "Optional verified header checkpoint at headers[-1] for header-only bridging pages (updates=[]) and multi-page mainnet SPV sync under the 1 MiB page cap."
+        },
+        "final_owner_policy": {
+          "$ref": "common.schema.json#/$defs/ScriptPolicy",
+          "description": "Optional revealed post-rotation ScriptPolicy on the terminal page (has_more=false) when the final name update rotated ownership away from the previous owner_policy."
         }
       },
       "dependentRequired": {
@@ -136,13 +150,54 @@
       },
       "allOf": [
         {
-          "if": { "required": ["has_more"], "properties": { "has_more": { "const": true } } },
-          "then": { "required": ["next_cursor"] },
-          "else": { "not": { "required": ["next_cursor"] } }
+          "if": { "required": ["has_more"], "properties": { "has_more": { "const": false } } },
+          "then": { "not": { "required": ["next_cursor"] } }
         },
         {
-          "if": { "not": { "required": ["cursor_txid"] } },
+          "if": { "required": ["has_more"], "properties": { "has_more": { "const": true } } },
+          "then": { "not": { "required": ["final_owner_policy"] } }
+        },
+        {
+          "if": {
+            "required": ["has_more", "cursor_txid"],
+            "properties": { "has_more": { "const": true } }
+          },
+          "then": { "required": ["next_cursor"] }
+        },
+        {
+          "if": {
+            "required": ["has_more"],
+            "not": { "required": ["cursor_txid"] },
+            "properties": {
+              "has_more": { "const": false }
+            }
+          },
           "then": { "properties": { "updates": { "minItems": 1 } } }
+        },
+        {
+          "if": {
+            "required": ["has_more", "updates"],
+            "not": { "required": ["cursor_txid"] },
+            "properties": {
+              "has_more": { "const": true },
+              "updates": { "maxItems": 0 }
+            }
+          },
+          "then": {
+            "required": ["next_header_checkpoint"],
+            "not": { "required": ["next_cursor"] }
+          }
+        },
+        {
+          "if": {
+            "required": ["has_more", "updates"],
+            "not": { "required": ["cursor_txid"] },
+            "properties": {
+              "has_more": { "const": true },
+              "updates": { "minItems": 1 }
+            }
+          },
+          "then": { "required": ["next_cursor"] }
         }
       ]
     },

@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Canonical Artifact Identity Scheme Registry (SPEC-05, PROFILE-artifact-v1). target_id = target_sha256 = H_tag('seallink-artifact-id/1', JCS({'digest': digest, 'scheme': scheme})) strictly EXCLUDING params to prevent target_id splitting attacks.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.13",
+  "version": "1.0.0-draft.14",
   "target_id_domain": "seallink-artifact-id/1",
   "target_id_inputs": ["digest", "scheme"],
   "custom_scheme_regex": "^[a-z0-9-]+(\\.[a-z0-9-]+)+/[a-z0-9][a-z0-9._-]{0,63}$",

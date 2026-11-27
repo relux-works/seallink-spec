@@ -2010,7 +2010,7 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     assert len(sl.jcs_encode(cred_exact)) == cred_max
     add(
         "d7-bnd-wire-exact-max-bytes-admit",
-        ["SL-WIRE-001", "SL-WIRE-020"],
+        ["SL-WIRE-001", "SL-WIRE-018"],
         "raw_wire",
         {"object": cred_exact},
         "ADMIT",

@@ -20,7 +20,7 @@ import seallink_ref as sl
 import seallink_verifier as sv
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = "1.0.0-draft.13"
+VERSION = "1.0.0-draft.14"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 
 
@@ -1453,6 +1453,10 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
     }
     rec_txid = _h32("orec-0x0c-tx")
     rec_id = sl.object_id(rec_binding)
+    of["chain"]["names"][rec_binding["name"]] = sv.make_name_history(
+        rec_binding["name"], rec_binding["registration"], rec_binding["owner_policy"],
+        {"link": {"origin": of["_origin_id"]}}, first_height=750010, update_height=750020,
+    )
     of["chain"]["txs"][_h32("orecov-tx")]["outputs"]["0"]["spent_by_txid"] = rec_txid
     of["chain"]["txs"][rec_txid] = {
         "confirmed_height": 750050,
@@ -2045,6 +2049,7 @@ def build_refusal_coverage_matrix() -> dict[str, Any]:
         "policy": {"require_contour_a": True, "trusted_peers": ["id/peer-b"]},
         "peer_ctx": {
             "fields_sha256": _h32("pii-fields"),
+            "issuance_txid": fx_fed["invocation"]["payload"]["proof_path"][0]["issuance_txid"],
             "phase": "pii_disclosure",
             "route_hops": [
                 {"actor": "id/screener-bot", "role": "screening_agent"},

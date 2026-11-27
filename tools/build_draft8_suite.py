@@ -154,6 +154,12 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         update_height=748600,
         extra_updates=[{"txid": _h32("d8-r1-1-g1-rot-tx"), "confirmed_height": 749800, "value": {"link": {"grant": g1_new_gr["xonly"]}}}],
     )
+    wa_h_atx = _h32("d8-r1-1-wa-0x01")
+    of_hist["chain"]["txs"][wa_h_atx] = {
+        "confirmed_height": h_anchor,
+        "opreturn_hex": sl.encode_opreturn(0x01, sl.content_addr(wa_h)).hex(),
+        "outputs": {},
+    }
     add(
         "d8-r1-1-historical-ward-contract-survives-0x0f-and-guardian-key-rot-admit",
         ["SL-CONT-004", "SL-ORIG-006"],
@@ -162,6 +168,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
             "anchor_height": h_anchor,
             "anchor_time": t_anchor,
             "assent": wa_h,
+            "assent_anchor_txid": wa_h_atx,
             "chain": of_hist["chain"],
             "contract": of_hist["contract"],
             "origin_bundle": of_hist["origin_bundle"],
@@ -203,6 +210,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
             "anchor_height": h_anchor,
             "anchor_time": t_anchor,
             "assent": wa_h,
+            "assent_anchor_txid": wa_h_atx,
             "chain": of_b["chain"],
             "contract": of_b["contract"],
             "origin_bundle": of_b["origin_bundle"],
@@ -729,6 +737,10 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
     }
     b2_nr10_id = sl.object_id(b2_nr10)
     t_rec_nr10 = _h32("d8-nr10-trec")
+    of_nr10["chain"]["names"][b2_nr10["name"]] = sv.make_name_history(
+        b2_nr10["name"], b2_nr10["registration"], b2_nr10["owner_policy"],
+        {"link": {"origin": of_nr10["_origin_id"]}}, first_height=749050, update_height=749060,
+    )
     of_nr10["chain"]["txs"][rec_nr10["txid"]]["outputs"]["0"]["spent_by_txid"] = t_rec_nr10
     of_nr10["chain"]["txs"][t_rec_nr10] = {
         "confirmed_height": 749100,
@@ -1533,7 +1545,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         "owner_policy": {"kind": "key", "pk": ag1_own["comp"]},
         "registration": {"txid": _h32("d8-fed-ag1-reg"), "vout": 0},
     }
-    fx_fd["bundle"]["grants"][0] = sl.sign_envelope(fd_gp, [fx_fd["_keys"]["alice_gr"]["sk"]])
+    _reanchor(fx_fd, fd_gp)
     p256_fd_sk = sl.deterministic_p256_privkey("d8-fed-p256-l2")
     p256_fd_pk = sl.p256_compressed_pubkey(p256_fd_sk)
     dseal_fd_pol = {"kind": "key", "pk": _kp("d8-fed-dseal")["comp"]}
@@ -1563,6 +1575,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
         [p256_fd_sk],
         alg="p256",
     )
+    fd_iss_txid = fx_fd["invocation"]["payload"]["proof_path"][0]["issuance_txid"]
     add(
         "d8-2a-federation-missing-holder-manifest-refuse",
         ["SL-SERV-004"],
@@ -1575,6 +1588,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
                 "approval_command": l2_fd_cmd,
                 "device_proof": dev_proofs_fd[0],
                 "fields_sha256": _h32("d8-fed-f"),
+                "issuance_txid": fd_iss_txid,
                 "manifests": {},  # MISSING holder manifest!
                 "phase": "pii_disclosure",
                 "route_hops": [{"actor": "id/agent-1", "role": "counterparty"}],
@@ -1597,6 +1611,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
                 "approval_command": l2_fd_cmd,
                 "device_proof": dev_proofs_fd[0],
                 "fields_sha256": _h32("d8-fed-f"),
+                "issuance_txid": fd_iss_txid,
                 "manifests": {al_man_fd_h: al_man_fd},
                 "phase": "pii_disclosure",
                 "route_hops": [{"actor": "id/hub-1", "role": "hub"}, {"actor": "id/agent-1", "role": "counterparty"}],
@@ -1619,6 +1634,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
                 "approval_command": l2_fd_cmd,
                 "device_proof": dev_proofs_fd[0],
                 "fields_sha256": _h32("d8-fed-f"),
+                "issuance_txid": fd_iss_txid,
                 "manifests": {al_man_fd_h: al_man_fd},
                 "phase": "pii_disclosure",
                 "route_hops": [{"actor": "id/agent-1", "role": "counterparty"}],
@@ -1644,6 +1660,7 @@ def add_draft8_conformance_cases(add: Callable[..., None]) -> None:
                 "approval_command": l2_fd_cmd,
                 "device_proof": dev_proofs_fd[0],
                 "fields_sha256": _h32("d8-fed-f"),
+                "issuance_txid": fd_iss_txid,
                 "manifests": {al_man_nod_h: fx_fd["_alice_man"]},
                 "phase": "pii_disclosure",
                 "route_hops": [{"actor": "id/agent-1", "role": "counterparty"}],
@@ -1895,8 +1912,10 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
         {"expires_at": of_sl_eq["chain"]["now"] + 10000, "genesis": GENESIS_MAIN, "guardian_context": {"event_class": "contract_assent", "origin_id": oid_sl, "revision": 1, "ward_name": "id/child-leo"}, "issued_at": of_sl_eq["chain"]["now"] - 10, "network": "main", "nonce": _h32("d8-mk-wasl"), "party_id": "student-1", "party_name": "id/child-leo", "party_role": "student_ward", "target_id": sl.object_id(of_sl_eq["contract"]), "target_type": "seallink-contract/1", "type": "seallink-assent/1"},
         [{"guardian_name": "id/parent-a", "revision": 1, "signers": [of_sl_eq["_keys"]["g1_gr"]["sk"]], "slot": 1}],
     )
+    wa_sl_atx = _h32("d8-mk-wasl-0x01")
+    of_sl_eq["chain"]["txs"][wa_sl_atx] = {"confirmed_height": eval_eq, "opreturn_hex": sl.encode_opreturn(0x01, sl.content_addr(wa_sl)).hex(), "outputs": {}}
     add("d8-mk-assent-hist-slot-0x12-at-exact-eval-h-admit", ["SL-ORIG-006", "SL-CONT-004"], "assent",
-        {"anchor_height": eval_eq, "anchor_time": of_sl_eq["chain"]["now"], "assent": wa_sl, "chain": of_sl_eq["chain"], "contract": of_sl_eq["contract"], "origin_bundle": of_sl_eq["origin_bundle"], "trusted_origin_issuer_pins": of_sl_eq["trusted_origin_issuer_pins"]},
+        {"anchor_height": eval_eq, "anchor_time": of_sl_eq["chain"]["now"], "assent": wa_sl, "assent_anchor_txid": wa_sl_atx, "chain": of_sl_eq["chain"], "contract": of_sl_eq["contract"], "origin_bundle": of_sl_eq["origin_bundle"], "trusted_origin_issuer_pins": of_sl_eq["trusted_origin_issuer_pins"]},
         "ADMIT", None, "0x12 guardian activation confirmed at exact historical anchor_height MUST count as active.")
 
     # Path B emancipation handover self-update at exact at_height (kills L2413 confirmed_height <= eval_h -> <!)
@@ -1935,6 +1954,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
         of_rc["chain"]["txs"][rec_s["txid"]]["outputs"]["0"]["spent_by_txid"] = t_rc
         of_rc["chain"]["txs"][t_rc] = {"confirmed_height": h_rec, "opreturn_hex": sl.encode_opreturn(0x0C, b2_id).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(rec_s["script_policy"])}}}
         of_rc["origin_bundle"]["recovery_bindings"] = [b2]
+        of_rc["chain"]["names"]["id/child-leo-rec-mk"] = sv.make_name_history("id/child-leo-rec-mk", b2["registration"], b2["owner_policy"], {"link": {"origin": of_rc["_origin_id"]}}, first_height=h_rec - 20, update_height=h_rec - 10)
         if cap_h is not None:
             s_pol_c = {"kind": "key", "pk": _kp("d8-mk-rc-cap-s")["comp"]}
             cap_p = {"basis_sha256": _h32("d8-mk-rc-cb"), "genesis": GENESIS_MAIN, "issued_at": of_rc["chain"]["now"] - 500, "issuer": of_rc["origin_bundle"]["origin"]["payload"]["issuer"], "network": "main", "next_status_policy": of_rc["origin_bundle"]["origin"]["payload"]["status_seal"]["script_policy"], "next_status_vout": 0, "origin_id": of_rc["_origin_id"], "status_prev_outpoint": {"txid": of_rc["origin_bundle"]["origin"]["payload"]["status_seal"]["txid"], "vout": 0}, "subject_new_owner_policy": s_pol_c, "type": "seallink-capacity/1"}
@@ -1943,7 +1963,6 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
             of_rc["chain"]["txs"][of_rc["origin_bundle"]["origin"]["payload"]["status_seal"]["txid"]]["outputs"]["0"]["spent_by_txid"] = cap_tx
             of_rc["chain"]["txs"][cap_tx] = {"confirmed_height": cap_h, "opreturn_hex": sl.encode_opreturn(0x09, sl.content_addr(cap_e)).hex(), "outputs": {"0": {"script_pubkey_hex": _spk_hex(cap_p["next_status_policy"])}}}
             of_rc["origin_bundle"]["capacity_record"] = cap_e
-            of_rc["chain"]["names"]["id/child-leo-rec-mk"] = sv.make_name_history("id/child-leo-rec-mk", b2["registration"], b2["owner_policy"], {"link": {"origin": of_rc["_origin_id"]}}, first_height=h_rec + 5, update_height=h_rec + 10)
             s_spk_c = sl.compile_script_policy(s_pol_c)[0]
             lu_b2 = of_rc["chain"]["names"]["id/child-leo-rec-mk"]["updates"]
             lu_b2.append({"confirmed_height": h_rec + 200, "op": "NAME_UPDATE", "output_script_hex": sl.encode_name_output("NAME_UPDATE", s_spk_c, name=b"id/child-leo-rec-mk", value=sl.jcs_encode({"link": {"origin": of_rc["_origin_id"]}})).hex(), "owner_policy": s_pol_c, "prev_input": {"sighash_bytes": [0x01], "txid": lu_b2[-1]["txid"], "vout": 0, "witness_policy": lu_b2[-1]["owner_policy"]}, "txid": _h32("d8-mk-rc-b2-ho"), "vout": 0})
@@ -2093,7 +2112,7 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
     of_shalt["chain"]["txs"][rm._h32("og1-init-0x12")]["outputs"]["0"]["spent_by_txid"] = shalt_tx
     of_shalt["chain"]["txs"][shalt_tx] = {"confirmed_height": shalt_h, "outputs": {"0": {"script_pubkey_hex": _spk_hex(of_shalt["origin_bundle"]["origin"]["payload"]["guardian_policy"]["roster_seal"]["script_policy"])}}}
     add("d8-mk-slot-spend-at-exact-eval-h", ["SL-ORIG-006"], "assent",
-        {"anchor_height": shalt_h, "anchor_time": of_shalt["chain"]["now"], "assent": wa_sl, "chain": of_shalt["chain"], "contract": of_shalt["contract"], "origin_bundle": of_shalt["origin_bundle"], "trusted_origin_issuer_pins": of_shalt["trusted_origin_issuer_pins"]},
+        {"anchor_height": shalt_h, "anchor_time": of_shalt["chain"]["now"], "assent": wa_sl, "assent_anchor_txid": wa_sl_atx, "chain": of_shalt["chain"], "contract": of_shalt["contract"], "origin_bundle": of_shalt["origin_bundle"], "trusted_origin_issuer_pins": of_shalt["trusted_origin_issuer_pins"]},
         "REFUSE", "GUARDIAN_INACTIVE", "Active guardian slot halt confirmed at exact historical anchor_height MUST render slot inactive.")
 
     # verify_assent: autonomous party_name mismatch (L3732) & retroactive 0x0b on anchored autonomous party (L3759)
@@ -2128,7 +2147,8 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
 
     # Persisted closures on verify_credential (Step 8 per SPEC-05 §4.2) & verify_notary_act (Step 4 per SPEC-05 §5)
     c_iss_k = _kp("d8-mk-cr-iss")
-    c_iss_pol = {"kind": "key", "pk": c_iss_k["comp"]}
+    c_iss_own = _kp("d8-mk-cr-own")
+    c_iss_pol = {"kind": "key", "pk": c_iss_own["comp"]}
     c_iss_reg = {"txid": _h32("d8-mk-cr-reg"), "vout": 0}
     cr_p = {"claims": {"k": "v"}, "credential_kind": "test/cert", "genesis": GENESIS_MAIN, "issued_at": 1795220000, "issuer": {"name": "id/uni-mk", "owner_policy": c_iss_pol, "registration": c_iss_reg, "role_policy": {"m": 1, "pks": [c_iss_k["xonly"]]}}, "lifecycle": "eternal", "network": "main", "not_before_height": 749000, "subject": {"key": _kp("d8-mk-cr-s")["xonly"], "mode": "key"}, "type": "seallink-credential/1"}
     cr_env = sl.sign_envelope(cr_p, [c_iss_k["sk"]])
@@ -2441,11 +2461,12 @@ def _add_draft8_mutation_kill_cases(add: Callable[..., None]) -> None:
 
     ch_fd_nb = rm.sync_chain_tip(copy.deepcopy(fx_fd2["chain"]), height=gp_fd2["not_before_height"])
     ch_fd_na = rm.sync_chain_tip(copy.deepcopy(fx_fd2["chain"]), height=gp_fd2["not_after_height"])
+    fd2_iss_txid = fx_fd2["invocation"]["payload"]["proof_path"][0]["issuance_txid"]
     add("d8-mk-2a-federation-screening-exact-nb-admit", ["SL-SERV-004"], "federation",
-        {"chain": ch_fd_nb, "grant": g_fd2, "journal": {"journal_id": _h32("d8-mk-fdnb-j")}, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": {"trusted_peers": ["id/peer-b"]}},
+        {"chain": ch_fd_nb, "grant": g_fd2, "journal": {"journal_id": _h32("d8-mk-fdnb-j")}, "peer_ctx": {"issuance_txid": fd2_iss_txid, "peer_id": "id/peer-b", "phase": "screening"}, "policy": {"trusted_peers": ["id/peer-b"]}},
         "ADMIT", None, "Federation screening at exact tip_height == not_before_height MUST admit.")
     add("d8-mk-2a-federation-screening-exact-na-refuse", ["SL-SERV-004"], "federation",
-        {"chain": ch_fd_na, "grant": g_fd2, "journal": {"journal_id": _h32("d8-mk-fdna-j")}, "peer_ctx": {"peer_id": "id/peer-b", "phase": "screening"}, "policy": {"trusted_peers": ["id/peer-b"]}},
+        {"chain": ch_fd_na, "grant": g_fd2, "journal": {"journal_id": _h32("d8-mk-fdna-j")}, "peer_ctx": {"issuance_txid": fd2_iss_txid, "peer_id": "id/peer-b", "phase": "screening"}, "policy": {"trusted_peers": ["id/peer-b"]}},
         "REFUSE", "GRANT_WINDOW_CLOSED", "Federation screening at exact tip_height == not_after_height MUST refuse GRANT_WINDOW_CLOSED.")
 
     # Schema leaf validator=='type' branches (kills _map_schema_error_to_refusal L302 on BOTH refusal-return & wrong-code!)

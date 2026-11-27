@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.13/schemas/manifest.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/manifest.schema.json",
   "title": "SealLink v1.0 Manifest, Salted Sets & Statements",
   "type": "object",
   "additionalProperties": false,
@@ -29,13 +29,14 @@
         "service_type": { "$ref": "common.schema.json#/$defs/ServiceTypeStr" },
         "actions": {
           "type": "array",
-          "minItems": 1,
+          "minItems": 0,
           "maxItems": 256,
           "uniqueItems": true,
-          "items": { "$ref": "common.schema.json#/$defs/ActionStr" }
+          "items": { "$ref": "common.schema.json#/$defs/ActionStr" },
+          "description": "Grant-delegated action strings executed by this service (may be [] for authentication-only services such as service_type='sso')."
         },
         "receipt_key": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" },
-        "endpoint": { "type": "string", "minLength": 1, "maxLength": 1024, "not": { "pattern": "\n" } },
+        "endpoint": { "$ref": "common.schema.json#/$defs/HttpsUri" },
         "tls_spki_sha256": { "$ref": "common.schema.json#/$defs/Hex64" }
       }
     },
@@ -152,7 +153,7 @@
       "additionalProperties": false,
       "required": ["url"],
       "properties": {
-        "url": { "type": "string", "minLength": 8, "maxLength": 512, "pattern": "^https://[^/@ \\t\\r\\n]+(/[^ \\t\\r\\n]*)?$", "not": { "pattern": "\n" } },
+        "url": { "$ref": "common.schema.json#/$defs/HttpsUri" },
         "tls_spki_sha256": { "$ref": "common.schema.json#/$defs/Hex64" }
       }
     },
@@ -160,7 +161,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "network", "owner", "seq", "merkle_root"],
-      "description": "Manifest-pinned size-hiding salted Merkle root committing to seallink-auth-entry/1 leaves (sets.auth).",
+      "description": "Manifest-pinned fixed-depth (256-leaf padded) size-hiding salted Merkle root committing to seallink-auth-entry/1 leaves (sets.auth).",
       "properties": {
         "type": { "const": "seallink-auth-set-head/1" },
         "network": { "$ref": "common.schema.json#/$defs/Network" },
@@ -170,7 +171,7 @@
       }
     },
     "AuthEntry": {
-      "description": "Salted leaf entry inside sets.auth; domain-separated leaf digest = SHA256(SHA256('seallink-auth-entry/1') || JCS(entry)).",
+      "description": "Salted leaf entry inside sets.auth; domain-separated leaf digest = H_tag('seallink-auth-entry/1', JCS(entry)) = SHA256(SHA256(tag) || SHA256(tag) || JCS(entry)), committed as Merkle leaf H_tag('seallink-merkle-leaf/1', leaf_digest) inside a fixed 256-leaf padded tree.",
       "oneOf": [
         {
           "type": "object",
@@ -198,7 +199,7 @@
             "salt": { "$ref": "common.schema.json#/$defs/Hex64" },
             "label": { "type": "string", "minLength": 1, "maxLength": 64, "not": { "pattern": "\n" } },
             "alg": { "const": "p256" },
-            "key": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" },
+            "key": { "$ref": "common.schema.json#/$defs/P256Pubkey66" },
             "seal": { "$ref": "common.schema.json#/$defs/Seal" }
           }
         },
@@ -233,7 +234,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "network", "owner", "seq", "merkle_root"],
-      "description": "Manifest-pinned size-hiding salted Merkle root committing to seallink-device-entry/1 leaves (sets.devices).",
+      "description": "Manifest-pinned fixed-depth (256-leaf padded) size-hiding salted Merkle root committing to seallink-device-entry/1 leaves (sets.devices).",
       "properties": {
         "type": { "const": "seallink-device-set-head/1" },
         "network": { "$ref": "common.schema.json#/$defs/Network" },
@@ -243,7 +244,7 @@
       }
     },
     "DeviceEntry": {
-      "description": "Salted leaf entry inside sets.devices; domain-separated leaf digest = SHA256(SHA256('seallink-device-entry/1') || JCS(entry)).",
+      "description": "Salted leaf entry inside sets.devices; domain-separated leaf digest = H_tag('seallink-device-entry/1', JCS(entry)) = SHA256(SHA256(tag) || SHA256(tag) || JCS(entry)), committed as Merkle leaf H_tag('seallink-merkle-leaf/1', leaf_digest) inside a fixed 256-leaf padded tree.",
       "oneOf": [
         {
           "type": "object",
@@ -273,7 +274,7 @@
             "salt": { "$ref": "common.schema.json#/$defs/Hex64" },
             "label": { "type": "string", "minLength": 1, "maxLength": 64, "not": { "pattern": "\n" } },
             "alg": { "const": "p256" },
-            "key": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" },
+            "key": { "$ref": "common.schema.json#/$defs/P256Pubkey66" },
             "presence": { "type": "boolean" },
             "ceiling": { "type": "integer", "enum": [0, 1, 2] },
             "seal": { "$ref": "common.schema.json#/$defs/Seal" }
@@ -430,7 +431,7 @@
                           "properties": {
                             "transport": { "$ref": "#/$defs/TransportKind" },
                             "endpoint": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
-                            "key_alg": { "type": "string", "enum": ["sha256-spki", "bip340", "ed25519", "x25519"] },
+                            "key_alg": { "const": "sha256-spki" },
                             "key_hex": { "$ref": "common.schema.json#/$defs/Hex64" }
                           }
                         },
@@ -441,8 +442,41 @@
                           "properties": {
                             "transport": { "$ref": "#/$defs/TransportKind" },
                             "endpoint": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                            "key_alg": { "const": "bip340" },
+                            "key_hex": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["transport", "endpoint", "key_alg", "key_hex"],
+                          "properties": {
+                            "transport": { "$ref": "#/$defs/TransportKind" },
+                            "endpoint": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                            "key_alg": { "const": "ed25519" },
+                            "key_hex": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["transport", "endpoint", "key_alg", "key_hex"],
+                          "properties": {
+                            "transport": { "$ref": "#/$defs/TransportKind" },
+                            "endpoint": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                            "key_alg": { "const": "x25519" },
+                            "key_hex": { "$ref": "common.schema.json#/$defs/X25519Pubkey64" }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["transport", "endpoint", "key_alg", "key_hex"],
+                          "properties": {
+                            "transport": { "$ref": "#/$defs/TransportKind" },
+                            "endpoint": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
                             "key_alg": { "const": "p256" },
-                            "key_hex": { "$ref": "common.schema.json#/$defs/CompressedPubkey66" }
+                            "key_hex": { "$ref": "common.schema.json#/$defs/P256Pubkey66" }
                           }
                         }
                       ]
@@ -507,8 +541,35 @@
                     "seq": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
                     "not_before": { "$ref": "common.schema.json#/$defs/Uint53" },
                     "not_after": { "$ref": "common.schema.json#/$defs/Uint53" }
-                  }
-                },
+                  },
+                  "allOf": [
+                    {
+                      "if": {
+                        "required": ["subject"],
+                        "properties": {
+                          "subject": {
+                            "required": ["visibility"],
+                            "properties": { "visibility": { "const": "private" } }
+                          }
+                        }
+                      },
+                      "then": { "not": { "required": ["locators"] } }
+                    }
+                  ]
+                }
+              ]
+            },
+            "signatures": { "$ref": "common.schema.json#/$defs/DeviceSignatureSet" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["payload", "signatures"],
+          "description": "Privileged BIP-340-only statements (root-rotate, root-cancel, migration-accept, migration-fence); device keys are strictly forbidden.",
+          "properties": {
+            "payload": {
+              "oneOf": [
                 {
                   "type": "object",
                   "additionalProperties": false,
@@ -618,7 +679,7 @@
                 }
               ]
             },
-            "signatures": { "$ref": "common.schema.json#/$defs/DeviceSignatureSet" }
+            "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
           }
         },
         {

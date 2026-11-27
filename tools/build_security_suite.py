@@ -19,7 +19,7 @@ import build_refusal_matrix as rm
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.13"
+VERSION = "1.0.0-draft.14"
 GENESIS_MAIN = rm.GENESIS_MAIN
 
 
@@ -112,6 +112,9 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             chain,
             anchor_height=inp.get("anchor_height"),
             anchor_time=inp.get("anchor_time"),
+            contract_anchor_txid=inp.get("contract_anchor_txid"),
+            assent_anchor_txid=inp.get("assent_anchor_txid"),
+            assent_batch_proof=inp.get("assent_batch_proof"),
             journal=j,
         )
         return res.verdict, res.refusal_code
@@ -177,6 +180,7 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         return res.verdict, res.refusal_code
     if runner == "owner_command":
         chain = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
         res = v.verify_owner_command(
             inp["command"],
             inp.get("device_proof"),
@@ -184,6 +188,8 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             chain,
             owner_manifest=inp.get("owner_manifest"),
             presented_manifests=inp.get("manifests"),
+            journal=j,
+            expected_target_executor=inp.get("expected_target_executor"),
             origin_bundle=inp.get("origin_bundle"),
         )
         return res.verdict, res.refusal_code
@@ -343,11 +349,17 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             inp.get("manifests", {}),
             auth_proof=inp.get("auth_proof"),
             expected_audience=inp.get("expected_audience"),
+            expected_channel_binding=inp.get("expected_channel_binding"),
+            expected_registration=inp.get("expected_registration"),
             origin_bundle=inp.get("origin_bundle"),
         )
+        if res.verdict == "ADMIT" and "expect_registration" in inp:
+            if res.details.get("registration") != inp["expect_registration"]:
+                return "REFUSE", f"AUTH_REG_MISMATCH:{res.details.get('registration')}"
         return res.verdict, res.refusal_code
     if runner == "contract_assents":
         chain = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
         res = v.verify_contract_assents(
             inp["contract"],
             inp["assents"],
@@ -356,6 +368,9 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             origin_bundles_by_oid=inp.get("origin_bundles_by_oid") or inp.get("origin_bundles"),
             anchor_time=inp.get("anchor_time"),
             anchor_height=inp.get("anchor_height"),
+            contract_anchor_txid=inp.get("contract_anchor_txid"),
+            assent_anchors=inp.get("assent_anchors"),
+            journal=j,
         )
         return res.verdict, res.refusal_code
     if runner == "bearer_session":
@@ -483,6 +498,8 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             expected_provisional_auth_alg=inp.get("expected_provisional_auth_alg", "bip340"),
             auth_proof=inp.get("auth_proof"),
             expected_audience=inp.get("expected_audience"),
+            expected_account_id=inp.get("expected_account_id"),
+            expected_channel_binding=inp.get("expected_channel_binding"),
             origin_bundle=inp.get("origin_bundle"),
         )
         return res.verdict, res.refusal_code
@@ -601,6 +618,12 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                 got_pol = res.details.get("final_owner_policy")
                 if got_pol != inp["expect_next_cursor_owner_policy"]:
                     return "REFUSE", f"TIER2_CURSOR_POLICY_MISMATCH:{got_pol}"
+            if "expect_final_owner_policy_is_none" in inp and inp["expect_final_owner_policy_is_none"]:
+                if res.details.get("final_owner_policy") is not None:
+                    return "REFUSE", f"TIER2_FINAL_POL_NOT_NONE:{res.details.get('final_owner_policy')}"
+            if "expect_next_header_checkpoint" in inp:
+                if res.details.get("next_header_checkpoint") != inp["expect_next_header_checkpoint"]:
+                    return "REFUSE", f"TIER2_NHC_MISMATCH:{res.details.get('next_header_checkpoint')}"
         return res.verdict, res.refusal_code
     if runner == "verdict":
         ch = sv.ChainView(inp["chain"])
@@ -630,13 +653,16 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
         return res.verdict, res.refusal_code
     if runner == "statement":
         ch = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
         res = v.verify_statement(
             inp["statement"],
             ch,
             expected_policy=inp.get("expected_policy"),
             device_proof=inp.get("device_proof"),
+            is_foreign_service=inp.get("is_foreign_service", False),
             owner_manifest=inp.get("owner_manifest"),
             presented_manifests=inp.get("manifests"),
+            journal=j,
             origin_bundle=inp.get("origin_bundle"),
             origin_bundles_by_oid=inp.get("origin_bundles_by_oid"),
         )
@@ -1000,6 +1026,77 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
                     chain=ch,
                     journal=j,
                 )
+            elif op == "auth_challenge":
+                res = v.verify_auth_challenge(
+                    step["challenge"],
+                    ch,
+                    j,
+                    step["service_id"],
+                    step.get("manifests", {}),
+                    auth_proof=step.get("auth_proof"),
+                    expected_audience=step.get("expected_audience"),
+                    expected_channel_binding=step.get("expected_channel_binding"),
+                    origin_bundle=step.get("origin_bundle"),
+                )
+            elif op == "auth_upgrade":
+                res = v.verify_auth_upgrade(
+                    step["upgrade"],
+                    step["expected_service_id"],
+                    step["expected_provisional_auth_pubkey"],
+                    ch,
+                    j,
+                    step.get("manifests", {}),
+                    expected_provisional_auth_alg=step.get("expected_provisional_auth_alg", "bip340"),
+                    auth_proof=step.get("auth_proof"),
+                    expected_audience=step.get("expected_audience"),
+                    expected_account_id=step.get("expected_account_id"),
+                    expected_channel_binding=step.get("expected_channel_binding"),
+                    origin_bundle=step.get("origin_bundle"),
+                )
+            elif op == "owner_command":
+                res = v.verify_owner_command(
+                    step["command"],
+                    step.get("device_proof"),
+                    step.get("is_foreign_service", False),
+                    ch,
+                    owner_manifest=step.get("owner_manifest"),
+                    presented_manifests=step.get("manifests"),
+                    journal=j,
+                    expected_target_executor=step.get("expected_target_executor"),
+                    origin_bundle=step.get("origin_bundle"),
+                )
+            elif op == "statement":
+                res = v.verify_statement(
+                    step["statement"],
+                    ch,
+                    expected_policy=step.get("expected_policy"),
+                    device_proof=step.get("device_proof"),
+                    is_foreign_service=step.get("is_foreign_service", False),
+                    owner_manifest=step.get("owner_manifest"),
+                    presented_manifests=step.get("manifests"),
+                    journal=j,
+                    origin_bundle=step.get("origin_bundle"),
+                    origin_bundles_by_oid=step.get("origin_bundles_by_oid"),
+                )
+            elif op == "origin_status":
+                st_o, o_err = v.verify_origin_and_status(
+                    step["origin_bundle"],
+                    ch,
+                    at_height=step.get("at_height"),
+                    journal=j,
+                )
+                if o_err:
+                    res = sv.VerifierResult("REFUSE", o_err)
+                else:
+                    assert st_o is not None
+                    res = sv.VerifierResult("ADMIT_WARD" if st_o["capacity"] == "ward" else "ADMIT_AUTONOMOUS", None)
+            elif op == "manifest":
+                nrec_m, nerr_m = v.resolve_name(step["name"], ch, expected_owner_policy=step.get("expected_owner_policy"), expected_registration=step.get("expected_registration"))
+                if nerr_m or nrec_m is None:
+                    res = sv.VerifierResult("REFUSE", nerr_m or "NAME_NOT_FOUND")
+                else:
+                    _, merr_m = v.resolve_manifest(step["name"], nrec_m, step.get("manifests", {}), ch, j, record_head=step.get("record_head", True))
+                    res = sv.VerifierResult("REFUSE", merr_m) if merr_m else sv.VerifierResult("ADMIT", None)
             else:
                 raise ValueError(f"Unknown multi_step_journal op: {op}")
             if (res.verdict, res.refusal_code) != (step["want_verdict"], step.get("want_refusal")):
@@ -1650,6 +1747,12 @@ def build_security_conformance_suite() -> dict[str, Any]:
         "registration": {"txid": _h32("peer-b-reg-sec"), "vout": 0},
     }
     fed_grant_env = sl.sign_envelope(fed_gp, [fx_fed_pos["_keys"]["alice_gr"]["sk"]])
+    fed_grant_itx = _h32("sec-fed-0x01")
+    fx_fed_pos["chain"]["txs"][fed_grant_itx] = {
+        "confirmed_height": 750000,
+        "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(fed_grant_env), "grant_id": sl.object_id(fed_gp), "type": "seallink-issuance/1"}).hex()).hex(),
+        "outputs": {},
+    }
     al_man_fed = copy.deepcopy(fx_fed_pos["_alice_man"])
     al_man_fed["seq"] = 2
     al_man_fed["sets"] = {"devices": {"seq": 1, "sha256": sl.content_addr(dev_head)}}
@@ -1695,6 +1798,7 @@ def build_security_conformance_suite() -> dict[str, Any]:
                 "approval_command": l2_fed_cmd,
                 "device_proof": dev_proofs[1],
                 "fields_sha256": _h32("contour-a-pii-fields"),
+                "issuance_txid": fed_grant_itx,
                 "manifests": {al_man_fed_h: al_man_fed},
             },
             "grant": fed_grant_env,
@@ -1722,6 +1826,8 @@ def build_security_conformance_suite() -> dict[str, Any]:
     bd11.add_draft11_conformance_cases(add)
     import build_draft13_suite as bd13
     bd13.add_draft13_conformance_cases(add)
+    import build_draft14_suite as bd14
+    bd14.add_draft14_conformance_cases(add)
 
     return {
         "suite": "security-conformance",

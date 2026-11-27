@@ -181,6 +181,9 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
         ("hc-plus-1-refuse", 749501, wa_b1_old, "REFUSE", "CRED_ISSUER_CLOSED", "D8-B1: Historical ward assent at h_anchor = h_c + 1 (retroactive break before key rotation at 749505) refuses CRED_ISSUER_CLOSED."),
         ("successor-key-admit", 749505, wa_b1_new, "ADMIT", None, "D8-B1: Historical ward assent signed by unaffected successor link.grant key B after rotation admits cleanly."),
     ]:
+        ch_b1_h = copy.deepcopy(of_b1["chain"])
+        wa_b1_atx = _h32(f"d9-b1-wa-0x01-{label_h}")
+        ch_b1_h["txs"][wa_b1_atx] = {"confirmed_height": h_a, "opreturn_hex": sl.encode_opreturn(0x01, sl.content_addr(assent_obj)).hex(), "outputs": {}}
         add(
             f"d9-b1-ward-assent-0x0b-grant-{label_h}",
             ["SL-CONT-009", "SL-ORIG-006", "SL-CONT-004"],
@@ -189,7 +192,8 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
                 "anchor_height": h_a,
                 "anchor_time": 1795220010,
                 "assent": assent_obj,
-                "chain": of_b1["chain"],
+                "assent_anchor_txid": wa_b1_atx,
+                "chain": ch_b1_h,
                 "contract": c_b1,
                 "origin_bundle": of_b1["origin_bundle"],
                 "trusted_origin_issuer_pins": of_b1["trusted_origin_issuer_pins"],
@@ -1172,6 +1176,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
 
     # Grant 1: bare key recipient (MUST refuse FEDERATION_POLICY_DENIED!)
     g_bare = fx_f9["bundle"]["grants"][0]
+    g_bare_iss_tx = fx_f9["invocation"]["payload"]["proof_path"][0]["issuance_txid"]
     cmd_bare = sl.sign_envelope(
         {
             "arguments": {"fields_sha256": _h32("d9-m9-f"), "grant_id": sl.object_id(g_bare["payload"]), "recipient_name": "id/peer-b", "route_mode": "direct"},
@@ -1194,6 +1199,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
                 "approval_command": cmd_bare,
                 "device_proof": dp_f9[0],
                 "fields_sha256": _h32("d9-m9-f"),
+                "issuance_txid": g_bare_iss_tx,
                 "manifests": {am_f9_h: am_f9},
                 "phase": "pii_disclosure",
                 "route_hops": [{"actor": "id/peer-b", "role": "counterparty"}],
@@ -1210,6 +1216,12 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
     g_named_p = copy.deepcopy(g_bare["payload"])
     g_named_p["recipient"] = {"mode": "name", "name": "id/peer-b", "owner_policy": {"kind": "key", "pk": _kp("d9-m9-pb")["comp"]}, "registration": {"txid": _h32("d9-m9-pbr"), "vout": 0}}
     g_named = sl.sign_envelope(g_named_p, [fx_f9["_keys"]["alice_gr"]["sk"]])
+    g_named_iss_tx = _h32("d9-m9-gnamed-0x01")
+    fx_f9["chain"]["txs"][g_named_iss_tx] = {
+        "confirmed_height": 749991,
+        "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(g_named), "grant_id": sl.object_id(g_named_p), "type": "seallink-issuance/1"}).hex()).hex(),
+        "outputs": {},
+    }
     cmd_named = sl.sign_envelope(
         {
             "arguments": {"fields_sha256": _h32("d9-m9-f"), "grant_id": sl.object_id(g_named_p), "recipient_name": "id/peer-b", "route_mode": "direct"},
@@ -1231,6 +1243,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
             "peer_ctx": {
                 "approval_command": cmd_named,
                 "device_proof": dp_f9[0],
+                "issuance_txid": g_named_iss_tx,
                 "manifests": {am_f9_h: am_f9},
                 "phase": "pii_disclosure",
                 "route_hops": [{"actor": "id/peer-b", "role": "counterparty"}],
@@ -1263,6 +1276,7 @@ def add_draft9_conformance_cases(add: Callable[..., None]) -> None:
                 "approval_command": cmd_wrong_rcpt,
                 "device_proof": dp_f9[0],
                 "fields_sha256": _h32("d9-m9-f"),
+                "issuance_txid": g_named_iss_tx,
                 "manifests": {am_f9_h: am_f9},
                 "phase": "pii_disclosure",
                 "route_hops": [{"actor": "id/peer-b", "role": "counterparty"}],

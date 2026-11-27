@@ -131,7 +131,7 @@ def _extract_opreturns(vouts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _extract_slnk_opreturn_hex(vouts: list[dict[str, Any]]) -> str | None:
-    """Extract the unique zero-value SLNK OP_RETURN scriptPubKey hex, or None if 0, >1, or non-zero value (`H-23`)."""
+    """Extract the unique zero-value SLNK OP_RETURN scriptPubKey hex using strict canonical push check, or None if 0, >1, or non-zero value (`H-23`, `D14-B12`)."""
     slnk_frames: list[dict[str, Any]] = []
     for item in _extract_opreturns(vouts):
         spk_hex = item["script_pubkey_hex"]
@@ -140,7 +140,7 @@ def _extract_slnk_opreturn_hex(vouts: list[dict[str, Any]]) -> str | None:
                 spk_b = bytes.fromhex(spk_hex)
             except ValueError:
                 continue
-            if len(spk_b) >= 6 and spk_b[2:6] == b"SLNK":
+            if sl.is_slnk_opreturn(spk_b):
                 slnk_frames.append(item)
     if len(slnk_frames) != 1 or slnk_frames[0]["value_sat"] != 0:
         return None
@@ -236,13 +236,11 @@ def _collect_wire_hints(
                         vset.add(s_item["new_vacant_vout"])
             elif ptype == "seallink-capacity/1" and isinstance(payload.get("next_status_vout"), int):
                 continuation_vouts_by_frame.setdefault(("0x09", ca), set()).add(payload["next_status_vout"])
-            elif (
-                ptype == "seallink-log-checkpoint/1"
-                and payload.get("terminal") is False
-                and isinstance(payload.get("next_log_vout"), int)
-                and not isinstance(payload.get("next_log_vout"), bool)
-            ):
-                continuation_vouts_by_frame.setdefault(("0x14", ca), set()).add(payload["next_log_vout"])
+            elif ptype == "seallink-log-checkpoint/1":
+                if payload.get("terminal") is False and isinstance(payload.get("next_log_vout"), int) and not isinstance(payload.get("next_log_vout"), bool):
+                    continuation_vouts_by_frame.setdefault(("0x14", ca), set()).add(payload["next_log_vout"])
+                elif payload.get("terminal") is True and isinstance(payload.get("handover_next_vout"), int) and not isinstance(payload.get("handover_next_vout"), bool):
+                    continuation_vouts_by_frame.setdefault(("0x14", ca), set()).add(payload["handover_next_vout"])
     elif obj.get("type") == "seallink-name-binding/1" and isinstance(obj.get("next_recovery_vout"), int):
         try:
             bid = sl.object_id(obj)
@@ -613,6 +611,7 @@ class ColdNamecoinObserver:
         try:
             hdr = self._get_header(blockhash)
         except RuntimeError:
+            self._hdr_rpc_failed = True
             return None
         if "confirmations" in hdr and int(hdr["confirmations"]) <= 0:
             return None
@@ -1223,8 +1222,8 @@ class ColdNamecoinObserver:
                 selected |= continuation_vouts_by_frame.get((dec["action"], dec["commitment"]), set())
                 if dec["action"] == "0x0e":
                     selected.add(0)
-                elif dec["action"] == "0x14" and len(vouts) > 1 and 1 in out_by_n:
-                    # BLK-2: Every non-terminal 0x14 checkpoint MUST place next_log_outpoint at vout=1!
+                elif dec["action"] == "0x14" and len(vouts) > 1 and 1 in out_by_n and out_by_n[1] != sl.P2A_SCRIPTPUBKEY.hex():
+                    # BLK-2 / D14-B12: Non-terminal or handover 0x14 checkpoint places continuation at vout=1 (reject P2A EOL sentinel as continuation)!
                     selected.add(1)
         else:
             # Frameless spend (e.g. active/pending halt returning vacant_seal at vout 0, or P2A CPFP anchor)
@@ -1266,6 +1265,7 @@ class ColdNamecoinObserver:
         manifests: dict[str, Any] | None = None,
         max_spend_hops: int = 16,
         max_log_chain_hops: int = 4096,
+        max_mempool_log_seeds: int = 64,
         retry_on_tip_change: int = 0,
         max_hint_names: int = 64,
         max_hint_txids: int = 256,
@@ -1327,6 +1327,7 @@ class ColdNamecoinObserver:
         max_attempts = max(1, int(retry_on_tip_change) + 1)
         last_view: dict[str, Any] = {}
         for attempt in range(1, max_attempts + 1):
+            self._hdr_rpc_failed = False
             # Opening tip bracket (hash_0, height_0)
             start_s = self._sample_tip()
             b_info = start_s["b_info"]
@@ -1367,7 +1368,7 @@ class ColdNamecoinObserver:
                 if txd is not None:
                     collected_txs[tid] = txd
 
-            # 2b. BLK-2: Backward 0x14 single-use-seal chain walk along canonical vout==1 (no 16-hop limit!)
+            # 2b. BLK-2 / D14-B12: Backward 0x14 single-use-seal chain walk along canonical vout==1 (<= 4096 hops; bounded mempool seeding!)
             def _is_0x14_tx(t_obj: dict[str, Any]) -> bool:
                 op_h = _extract_slnk_opreturn_hex(t_obj.get("vout", []))
                 if op_h is None:
@@ -1377,9 +1378,20 @@ class ColdNamecoinObserver:
                 except ValueError:
                     return False
 
-            log_back_q: list[tuple[dict[str, Any], int]] = [
-                (txd, 0) for txd in collected_txs.values() if _is_0x14_tx(txd)
-            ]
+            target_op_txids = {tx_id for tx_id, _ in target_outpoints}
+            seed_ref_txids = target_txids | target_op_txids
+            log_back_q: list[tuple[dict[str, Any], int]] = []
+            mempool_log_seeds = 0
+            for tid_c, txd in collected_txs.items():
+                if not _is_0x14_tx(txd):
+                    continue
+                if tid_c not in mempool_set or tid_c in seed_ref_txids:
+                    log_back_q.append((txd, 0))
+                elif mempool_log_seeds < max_mempool_log_seeds and any(
+                    vin.get("txid") in seed_ref_txids for vin in txd.get("vin", [])
+                ):
+                    log_back_q.append((txd, 0))
+                    mempool_log_seeds += 1
             seen_log_back: set[str] = {txd["txid"] for txd, _ in log_back_q}
             while log_back_q:
                 cur_ltx, lhop = log_back_q.pop(0)
@@ -1546,7 +1558,7 @@ class ColdNamecoinObserver:
                 "name_registrations": name_regs_view,
                 "names": names_view,
                 "network": self.network,
-                "node_reachable": bool(start_s["chain_match"] and end_s["chain_match"] and not utxo_rpc_failed),
+                "node_reachable": bool(start_s["chain_match"] and end_s["chain_match"] and not utxo_rpc_failed and not getattr(self, "_hdr_rpc_failed", False)),
                 "now": decision_now,
                 "observation_bracket": {
                     "attempts": attempt,

@@ -73,6 +73,7 @@ DOMAIN_ONLY_TAGS = frozenset({
     "seallink-journal/1",
     "seallink-merkle-leaf/1",
     "seallink-merkle-node/1",
+    "seallink-set-dummy/1",
     "seallink-artifact-id/1",
     "seallink-log-id/1",
     "seallink-log-entry/1",
@@ -698,7 +699,7 @@ def verify_all_vectors(
             checked += 1
             if "log_id_with_predecessor" in alp:
                 lgp = alp["log_id_with_predecessor"]
-                if sl.compute_log_id(
+                if not lgp.get("predecessor_terminal_denials_root") or sl.compute_log_id(
                     lgp["network"],
                     lgp["genesis"],
                     lgp["role"],
@@ -706,8 +707,61 @@ def verify_all_vectors(
                     lgp["registration"],
                     lgp["genesis_seal_outpoint"],
                     predecessor_log_id=lgp["predecessor_log_id"],
+                    predecessor_terminal_denials_root=lgp["predecessor_terminal_denials_root"],
                 ) != lgp["log_id"]:
                     errors.append("wire log_id_with_predecessor mismatch")
+                checked += 1
+            if "salted_set_merkle_256" in alp:
+                sm256 = alp["salted_set_merkle_256"]
+                ent_s = sm256["entry"]
+                got_ld = sl.signing_digest(ent_s).hex()
+                got_ml = sl.tagged_hash("seallink-merkle-leaf/1", bytes.fromhex(got_ld)).hex()
+                pr_s = sm256["proof"]
+                if (
+                    got_ld != sm256["leaf_digest"]
+                    or got_ml != sm256["merkle_leaf"]
+                    or pr_s.get("root") != sm256["root"]
+                    or pr_s.get("leaf_digest") != got_ld
+                    or len(pr_s.get("steps", [])) != sl.FIXED_SALTED_SET_PROOF_STEPS
+                    or not sl.verify_merkle_proof(pr_s)
+                ):
+                    errors.append("wire salted_set_merkle_256 mismatch")
+                checked += 3
+            if "loc_type_frames" in alp:
+                for ltf in alp["loc_type_frames"]:
+                    lt_int = int(ltf["loc_type_byte"])
+                    act_int = int(ltf["action"], 16)
+                    ptr_h = ltf["locator_hex"] or None
+                    enc_f = sl.encode_opreturn(
+                        act_int,
+                        ltf["commitment"],
+                        loc_type=lt_int,
+                        pointer_hex=ptr_h,
+                    )
+                    dec_f = sl.decode_opreturn(enc_f)
+                    if (
+                        enc_f.hex() != ltf["script_pubkey_hex"]
+                        or dec_f["action"] != ltf["action"]
+                        or dec_f["commitment"] != ltf["commitment"]
+                        or dec_f["loc_type"] != f"0x{lt_int:02x}"
+                        or dec_f.get("pointer", "") != ltf["locator_hex"]
+                    ):
+                        errors.append(f"wire loc_type_frames '{ltf['id']}' mismatch")
+                    checked += 1
+            if "x25519_low_order_rejects" in alp:
+                for xlo in alp["x25519_low_order_rejects"]:
+                    if sl.is_valid_x25519_pubkey(xlo):
+                        errors.append(f"wire x25519_low_order_rejects accepted low-order key {xlo}")
+                    checked += 1
+            if "ed25519_mixed_order_R_reject" in alp:
+                em = alp["ed25519_mixed_order_R_reject"]
+                if sl.ed25519_verify(bytes.fromhex(em["msg_hex"]), em["pk_hex"], em["sig_hex"]):
+                    errors.append("wire ed25519_mixed_order_R_reject unexpectedly verified mixed-order R!")
+                checked += 1
+            if "auxpow_bip9_bit8_parent_admit" in alp:
+                ab8 = alp["auxpow_bip9_bit8_parent_admit"]
+                if not sl.verify_namecoin_auxpow(ab8["header_hex"], ab8["auxpow"], network=ab8["network"], height=int(ab8["height"])):
+                    errors.append("wire auxpow_bip9_bit8_parent_admit failed verify_namecoin_auxpow!")
                 checked += 1
             led = alp.get("log_entry_digests")
             if isinstance(led, dict) and isinstance(led.get("input_content_addr"), str):
@@ -1321,6 +1375,41 @@ def main() -> int:
                     if cand_c not in registered_codes:
                         errors.append(f"{py_path.relative_to(ROOT)}:{ln_no}: unregistered refusal code '{cand_c}'")
 
+    # 5d. D14-B01: Automated parity check — SPEC-02 §5.2 loc_type table vs registry/opreturn-actions.json
+    spec02_path = ROOT / "spec" / "SPEC-02-ledger-and-names.md"
+    opret_reg = registries.get("opreturn-actions.json", {})
+    if spec02_path.exists() and isinstance(opret_reg.get("locator_types"), list):
+        spec02_txt = spec02_path.read_text(encoding="utf-8")
+        reg_loc_map = {str(lt["code"]).lower(): str(lt["name"]) for lt in opret_reg["locator_types"]}
+        found_loc_rows: dict[str, str] = {}
+        for m_lt in re.finditer(r"^\|\s*`(0x0[0-9a-f])`\s*\|\s*`([^`]+)`\s*\|", spec02_txt, re.M):
+            found_loc_rows[m_lt.group(1).lower()] = m_lt.group(2)
+        for b_hex, l_name in sorted(reg_loc_map.items()):
+            if found_loc_rows.get(b_hex) != l_name:
+                errors.append(
+                    f"SPEC-02 §5.2 loc_type parity mismatch for {b_hex}: prose has '{found_loc_rows.get(b_hex)}', "
+                    f"registry/opreturn-actions.json has '{l_name}'"
+                )
+
+    # 5e. D14-B03: Automated parity check — SPEC-01 §7 PRECEDENCE vs common.schema.json & seallink_verifier.py
+    spec01_path = ROOT / "spec" / "SPEC-01-wire-and-crypto.md"
+    common_sch = schemas.get("common.schema.json", {})
+    exp_prec = [k for k, _ in sorted(sv.SCHEMA_REFUSAL_PRECEDENCE.items(), key=lambda kv: kv[1])]
+    exp_prec_arrow = " -> ".join(exp_prec)
+    if spec01_path.exists():
+        spec01_txt = spec01_path.read_text(encoding="utf-8")
+        m_prec = re.search(r"Fixed refusal precedence \(`PRECEDENCE`\):[^\n]*\n\s*`([^`]+)`", spec01_txt)
+        if not m_prec:
+            errors.append("SPEC-01 §7 missing machine-checkable Fixed refusal precedence (`PRECEDENCE`) line")
+        else:
+            prose_prec = [tok.strip() for tok in re.split(r"\s*(?:->|→)\s*", m_prec.group(1).strip()) if tok.strip()]
+            if prose_prec != exp_prec:
+                errors.append(
+                    f"SPEC-01 §7 PRECEDENCE mismatch: prose={prose_prec}, seallink_verifier={exp_prec}"
+                )
+    if exp_prec_arrow not in str(common_sch.get("description", "")):
+        errors.append(f"schemas/common.schema.json description PRECEDENCE mismatch (expected '{exp_prec_arrow}')")
+
     # 6. Check all registry files share the same protocol version string AND zero stale prior draft versions remain in normative docs/schemas
     reg_versions = {name: data.get("version") for name, data in registries.items() if "version" in data}
     if len(set(reg_versions.values())) > 1:
@@ -1349,7 +1438,7 @@ def main() -> int:
             vectors[p.name] = data
     if not vectors:
         errors.append("No conformance vector files found under vectors/")
-    # 7b. M-7 / F-12a: Verify every expected_refusal / want_refusal / code field in vectors/*.json is registered!
+    # 7b. M-7 / F-12a / D14-M08: Verify every refusal code AND every rule ID cited in vectors/*.json is registered/declared!
     def _audit_vector_refusals(node: Any, ctx: str) -> None:
         if isinstance(node, dict):
             for rk in ("expected_refusal", "want_refusal", "first_observation_refusal", "subsequent_request_refusal"):
@@ -1359,6 +1448,14 @@ def main() -> int:
             if ctx.startswith("refusal-coverage-matrix.json") and isinstance(node.get("code"), str):
                 if node["code"] not in registered_codes:
                     errors.append(f"{ctx}.code: unregistered refusal code '{node['code']}'")
+            for rfk in ("rule_id", "rule_ids", "rules"):
+                rv_r = node.get(rfk)
+                if isinstance(rv_r, str) and re.fullmatch(r"SL-[A-Z]+-\d{3}", rv_r) and rv_r not in rule_locations:
+                    errors.append(f"{ctx}.{rfk}: undeclared rule ID '{rv_r}'")
+                elif isinstance(rv_r, list):
+                    for r_item in rv_r:
+                        if isinstance(r_item, str) and re.fullmatch(r"SL-[A-Z]+-\d{3}", r_item) and r_item not in rule_locations:
+                            errors.append(f"{ctx}.{rfk}: undeclared rule ID '{r_item}'")
             for k_v, v_v in node.items():
                 _audit_vector_refusals(v_v, f"{ctx}.{k_v}")
         elif isinstance(node, list):

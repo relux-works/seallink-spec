@@ -10193,7 +10193,7 @@
             "type": "seallink-device-entry/1"
           },
           "head": {
-            "merkle_root": "2fd7ac71a51acb7b305c41ae004aadf6f54c4044838f6baae4f4dbb05e45bd49",
+            "merkle_root": "3c21a51949bf77485151df23fd5c19bae668e417780df2868b7b773a9012efc7",
             "network": "main",
             "owner": "id/alice",
             "seq": 1,
@@ -10201,8 +10201,41 @@
           },
           "proof": {
             "leaf_digest": "563a3cee65d2036fd88d7266e2fe651a4054db096592fb9403c028d6dbc44ae4",
-            "root": "2fd7ac71a51acb7b305c41ae004aadf6f54c4044838f6baae4f4dbb05e45bd49",
-            "steps": []
+            "root": "3c21a51949bf77485151df23fd5c19bae668e417780df2868b7b773a9012efc7",
+            "steps": [
+              {
+                "hash": "4bde2d89aaa3af92f89ccb08d7808df654f1d3a15ec4677e1e8e510328871177",
+                "side": "R"
+              },
+              {
+                "hash": "681985dc9d3fcf8db355f8110cc1780d05419d3cbfb5ad87cfb7a3ab55311dd7",
+                "side": "L"
+              },
+              {
+                "hash": "57f8ed1e7b7c2375104fc55bb5aca05c4558f51991ee176fff03c6da987dc469",
+                "side": "L"
+              },
+              {
+                "hash": "243afe045a587708758618032145040baa4009b6bda5d7668b3b27d26e11d1cc",
+                "side": "L"
+              },
+              {
+                "hash": "5148b72076ba778a3baf306d533eb8d9eef77f5ded9616904a858ba16fd613c0",
+                "side": "R"
+              },
+              {
+                "hash": "44aad86e14daa57615be300bb21aa5eebb825b1c47f00bde5ded8d630dbca69f",
+                "side": "R"
+              },
+              {
+                "hash": "42aa6a86a5f141118de82fb5752dcafc90f1e8ecab0be9dd7351d2950d4e7110",
+                "side": "L"
+              },
+              {
+                "hash": "374afc1ba2c03dd2ec25aa5d9ca94f96983271cc3da9c34c9aa688b6a89738e1",
+                "side": "R"
+              }
+            ]
           }
         },
         "is_foreign_service": true
@@ -10601,7 +10634,7 @@
               "type": "seallink-device-entry/1"
             },
             "head": {
-              "merkle_root": "234617fd9fb51e615bd47405e2ec411153c783d3f3ce048d284d6d55a28ed82c",
+              "merkle_root": "2b65457ea6bdea60e5a3ed820bec54fbd8d1d9c1f4903883ac28f833e78b781b",
               "network": "main",
               "owner": "id/alice",
               "seq": 1,
@@ -10609,11 +10642,45 @@
             },
             "proof": {
               "leaf_digest": "dc4b161d234d641c5aa352ba60397cf12dac1fcbb3cb3a39fe204d358eef74ec",
-              "root": "234617fd9fb51e615bd47405e2ec411153c783d3f3ce048d284d6d55a28ed82c",
-              "steps": []
+              "root": "2b65457ea6bdea60e5a3ed820bec54fbd8d1d9c1f4903883ac28f833e78b781b",
+              "steps": [
+                {
+                  "hash": "8107c327f37f03c3347066728b287ddd82215fe76d7f6848e49260683349fa70",
+                  "side": "R"
+                },
+                {
+                  "hash": "1cf8894d83dbc81be2c6f62ece3725b75018ea1b16a256124c3af9a35a74a5b8",
+                  "side": "R"
+                },
+                {
+                  "hash": "dcdfae7a738fd8641fde586520df9d6e5c358dd367c2b017b482314b5e45e59d",
+                  "side": "L"
+                },
+                {
+                  "hash": "93c48a4d959accb381c1d6e4575214400694e23480a5286d671a27dda7834a49",
+                  "side": "R"
+                },
+                {
+                  "hash": "f0889dc1e52b5e78d5650b8f98fa83cda0c1922b5861576bf6e30c7ddfed471a",
+                  "side": "L"
+                },
+                {
+                  "hash": "b262cedb14b2c87103aa5949cd17c8076631225c08f248989082e5db7ae120cb",
+                  "side": "R"
+                },
+                {
+                  "hash": "5cdf775a171ee8ed163ad9818b00914533fb33a4a5ab62b803b4a46b48484ed2",
+                  "side": "L"
+                },
+                {
+                  "hash": "d2274e215b7c3ef91e219f8f89cf5d310a9b03055ca21ee5654454668cc402db",
+                  "side": "L"
+                }
+              ]
             }
           },
           "fields_sha256": "567c04c6ad78f16dc442f4bea6f1b9e37480843b3471629ae63dcd502845cd69",
+          "issuance_txid": "33425504179ee36cecd2de7261e4951d1f7b208afc1f823237df169f15bbc193",
           "phase": "pii_disclosure",
           "route_hops": [
             {
@@ -30241,6 +30308,62 @@
                 }
               ]
             },
+            "id/child-leo-recovered": {
+              "registration": {
+                "txid": "3d08f68d8c1d555d9862602d743d7ed50c7ef64ca250eb30134ac8331c005b2d",
+                "vout": 0
+              },
+              "updates": [
+                {
+                  "confirmed_height": 750010,
+                  "op": "NAME_FIRSTUPDATE",
+                  "output_script_hex": "521669642f6368696c642d6c656f2d7265636f766572656414c3c70a65ce4f1c89cd0238d4f1ea035b07f02cc94c567b226c696e6b223a7b226f726967696e223a2237653065356337313366626136366335306639643335316536666135323630663364623466333137346437306335323564653832306364373766653436663533227d7d6d6d0020b271653fcc7bcd46c8d9709809f6cfddd6c42535187aeb77922e104530249b05",
+                  "owner_policy": {
+                    "kind": "multisig",
+                    "m": 2,
+                    "pks": [
+                      "0205215fa073dba990e1895f092c4b8e3a443884512706e694725ffc8068780dee",
+                      "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe",
+                      "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
+                    ]
+                  },
+                  "txid": "3d08f68d8c1d555d9862602d743d7ed50c7ef64ca250eb30134ac8331c005b2d",
+                  "vout": 0
+                },
+                {
+                  "confirmed_height": 750020,
+                  "op": "NAME_UPDATE",
+                  "output_script_hex": "531669642f6368696c642d6c656f2d7265636f76657265644c567b226c696e6b223a7b226f726967696e223a2237653065356337313366626136366335306639643335316536666135323630663364623466333137346437306335323564653832306364373766653436663533227d7d6d750020b271653fcc7bcd46c8d9709809f6cfddd6c42535187aeb77922e104530249b05",
+                  "owner_policy": {
+                    "kind": "multisig",
+                    "m": 2,
+                    "pks": [
+                      "0205215fa073dba990e1895f092c4b8e3a443884512706e694725ffc8068780dee",
+                      "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe",
+                      "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
+                    ]
+                  },
+                  "prev_input": {
+                    "sighash_bytes": [
+                      1
+                    ],
+                    "txid": "3d08f68d8c1d555d9862602d743d7ed50c7ef64ca250eb30134ac8331c005b2d",
+                    "vout": 0,
+                    "witness_policy": {
+                      "kind": "multisig",
+                      "m": 2,
+                      "pks": [
+                        "0205215fa073dba990e1895f092c4b8e3a443884512706e694725ffc8068780dee",
+                        "0313f3cb9d9836da4e7aae766efeaf1067f09731de2c6c6889c5fc02a06b229abe",
+                        "031de1de583da74b2660d62d9c418a6a70d0fcfb86980dc8d5b189a00639571886"
+                      ]
+                    }
+                  },
+                  "txid": "610b116582a3e56e14bdd00853092d17b3ed496781109100c3ce3fb560e4af7a",
+                  "vout": 0
+                }
+              ]
+            },
             "id/civil-registry": {
               "registration": {
                 "txid": "3aa0187aadf6e7bf0237ac565d4cf0ded24ccd85fc352f6e5cf4cb387a9ad759",
@@ -34789,5 +34912,5 @@
   "suite": "refusal-coverage-matrix",
   "total_covered_codes": 89,
   "total_registered_codes": 89,
-  "version": "1.0.0-draft.13"
+  "version": "1.0.0-draft.14"
 }

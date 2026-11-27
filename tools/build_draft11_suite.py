@@ -1080,6 +1080,10 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
             "opreturn_hex": sl.encode_opreturn(0x0C, sl.object_id(b_rec)).hex(),
             "outputs": {"0": {"script_pubkey_hex": _spk_hex(rb_rc["_rec_pol"])}},
         }
+        rb_rc["chain"]["names"]["id/alice-rec"] = sv.make_name_history(
+            "id/alice-rec", b_rec["registration"], b_rec_pol, {"link": {"origin": rb_rc["_oid"]}},
+            first_height=h_rec_c - 10, update_height=h_rec_c - 5,
+        )
         rb_rc["origin_bundle"]["recovery_bindings"] = [b_rec]
         add(
             f"d11-0x13-0x0c-{label_rc}-wins-no-burn",
@@ -1123,6 +1127,10 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "opreturn_hex": sl.encode_opreturn(0x0C, sl.object_id(b3_rec)).hex(),
         "outputs": {"0": {"script_pubkey_hex": _spk_hex(rb_aw_0c["_rec_pol"])}},
     }
+    rb_aw_0c["chain"]["names"]["id/alice-aw-rescue"] = sv.make_name_history(
+        "id/alice-aw-rescue", b3_rec["registration"], b3_rec_pol, {"link": {"origin": rb_aw_0c["_oid"]}},
+        first_height=749750, update_height=749755,
+    )
     rb_aw_0c["origin_bundle"]["recovery_bindings"] = [b3_rec]
     add(
         "d11-0x13-awaiting-activation-allows-emergency-0x0c-admit",
@@ -1529,30 +1537,37 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-CONT-012: Terminal 0x14 checkpoint (terminal=True, no next_log_vout) admits cleanly.",
     )
 
-    # B2. O(1) log handover on seq == 1 (authenticated against predecessor_terminal_checkpoint, BLK-2 vout=1 + BLK-5 log_id binding!)
-    ho_gen_tx = _h32("d11-ho-gen")
+    # B2. O(1) log handover on seq == 1 (on-chain single-use seal continuation from predecessor terminal vout=1 + denials_root in log_id!)
     ho_cp1_tx = _h32("d11-ho-cp1")
-    ho_gen_op = {"txid": ho_gen_tx, "vout": 0}
+    ho_term_p = {
+        **copy.deepcopy(nlog["cp4_env"]["payload"]),
+        "handover_next_policy": nlog["seal_pol"],
+        "handover_next_vout": 1,
+    }
+    ho_term_env = sl.sign_envelope(ho_term_p, [nlog["iss_role"]["sk"]])
+    ho_gen_op = {"txid": nlog["cp4_tx"], "vout": 1}
     ho_lid = sl.compute_log_id(
         "main", GENESIS_MAIN, "notary", nlog["iss_name"], nlog["iss_reg"], ho_gen_op,
         predecessor_log_id=nlog["log_id"],
+        predecessor_terminal_denials_root=ho_term_p["denials_root"],
     )
     ho_cp1_p = {
         "batch_count": 0, "batch_root": sl.EMPTY_BATCH_ROOT, "checkpoints_root": sl.EMPTY_CHECKPOINTS_ROOT,
         "cumulative_entries_count": 0, "denials_delta_root": sl.EMPTY_BATCH_ROOT,
-        "denials_root": nlog["cp4_env"]["payload"]["denials_root"], "genesis": GENESIS_MAIN,
+        "denials_root": ho_term_p["denials_root"], "genesis": GENESIS_MAIN,
         "genesis_seal_outpoint": ho_gen_op,
         "issuer": nlog["iss_role_pin"], "log_id": ho_lid, "network": "main",
         "next_log_policy": nlog["seal_pol"], "next_log_vout": 1,
-        "predecessor_log_id": nlog["log_id"], "predecessor_terminal_denials_root": nlog["cp4_env"]["payload"]["denials_root"],
+        "predecessor_log_id": nlog["log_id"], "predecessor_terminal_denials_root": ho_term_p["denials_root"],
         "prev_log_outpoint": ho_gen_op, "role": "notary", "seq": 1, "terminal": False,
         "type": "seallink-log-checkpoint/1",
     }
     ho_cp1_env = sl.sign_envelope(ho_cp1_p, [nlog["iss_role"]["sk"]])
     ch_ho = copy.deepcopy(nlog["chain"])
-    ch_ho["txs"][ho_gen_tx] = {"confirmed_height": 749995, "outputs": {"0": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"]), "spent_by_txid": ho_cp1_tx}}}
-    ch_ho["txs"][ho_cp1_tx] = {"block_hash": _h32("d11-ho-blk"), "confirmed_height": 749999, "inputs": [sv.make_segwit_input(ho_gen_tx, 0)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(ho_cp1_env)).hex(), "outputs": {"1": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"])}}}
-    ho_pred_term = {"checkpoint": nlog["cp4_env"], "checkpoint_txid": nlog["cp4_tx"]}
+    ch_ho["txs"][nlog["cp4_tx"]]["opreturn_hex"] = sl.encode_opreturn(0x14, sl.content_addr(ho_term_env)).hex()
+    ch_ho["txs"][nlog["cp4_tx"]]["outputs"] = {"1": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"]), "spent_by_txid": ho_cp1_tx}}
+    ch_ho["txs"][ho_cp1_tx] = {"block_hash": _h32("d11-ho-blk"), "confirmed_height": 749999, "inputs": [sv.make_segwit_input(nlog["cp4_tx"], 1)], "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(ho_cp1_env)).hex(), "outputs": {"1": {"script_pubkey_hex": _spk_hex(nlog["seal_pol"])}}}
+    ho_pred_term = {"checkpoint": ho_term_env, "checkpoint_txid": nlog["cp4_tx"]}
     add(
         "d11-0x14-o1-handover-seq1-admit",
         ["SL-CONT-012"],
@@ -2431,13 +2446,13 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         module="artifact-notarization",
     )
     add(
-        "d11-tier2-spv-non-sighash-all-refuse",
+        "d11-tier2-spv-non-sighash-all-owner-authored-false-admit",
         ["SL-ARTF-005"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_bad_sh]), "pinned_network": "regtest"},
-        "REFUSE",
-        "TICKET_PROOF_INVALID",
-        "SL-ARTF-005: SegWitNameUpdateProof with non-SIGHASH_ALL (0x81) MUST refuse TICKET_PROOF_INVALID.",
+        {"expect_owner_authored": [False], "expected_owner_policy": spv_p2wpkh, "page": _mk_page("id/spv-notary", [proof_bad_sh]), "pinned_network": "regtest"},
+        "ADMIT",
+        None,
+        "SL-ARTF-005 / D14-B08: SegWitNameUpdateProof with non-SIGHASH_ALL (0x81) is consensus-valid and MUST ADMIT with owner_authored=False (exact Tier-1 parity).",
         module="artifact-notarization",
     )
     # Truncated txid_branch (64B / shallow Merkle depth attack!) -> TICKET_PROOF_INVALID
@@ -3288,8 +3303,9 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-ARTF-005: Tier-2 page with wrong genesis refuses CHAIN_MISMATCH.",
         module="artifact-notarization",
     )
+    spv_chained_notary = _kp("spv-chained-notary")
     spv_pair_upds, spv_pair_hdr, spv_pair_reg = _build_same_block_chained_spv_pair(
-        "sameblk", spv_p2wpkh, spv_k1["sk"], "id/spv-chained", "{}", f'{{"link":{{"notary":"{spv_k1["xonly"]}"}}}}', block_height=750010, high_s_second=True
+        "sameblk", spv_p2wpkh, spv_k1["sk"], "id/spv-chained", "{}", f'{{"link":{{"notary":"{spv_chained_notary["xonly"]}"}}}}', block_height=750010, high_s_second=True
     )
     add(
         "d11-mut-tier2-over-limit-refuse",
@@ -4129,15 +4145,15 @@ def add_draft11_conformance_cases(add: Callable[..., None]) -> None:
         "SL-ARTF-006 B3: Non-retarget height 2017 changing nBits (0x203fffff != prev 0x207fffff) refuses TICKET_PROOF_INVALID.",
         module="artifact-notarization",
     )
-    parent_hdr_is_aux = _mine_regtest_hdr(0x00000104, b"\x00" * 32, parent_cb_txid_le, 1795000000 + 605400, 0x207FFFFF)
+    parent_hdr_bip9_bit8 = _mine_regtest_hdr(0x20000100, b"\x00" * 32, parent_cb_txid_le, 1795000000 + 605400, 0x207FFFFF)
     add(
-        "d12-b3-auxpow-parent-is-auxpow-refuse",
+        "d12-b3-auxpow-parent-bip9-bit8-admit",
         ["SL-ARTF-006"],
         "tier2_name_history",
-        {"expected_owner_policy": spv_p2wpkh, "page": _mk_hdr_only_page([{"auxpow": {**aux_proof_ok, "parent_header_hex": parent_hdr_is_aux.hex()}, "header_hex": hdr_2016.hex(), "height": 2016}]), "pinned_network": "regtest"},
-        "REFUSE",
-        "TICKET_PROOF_INVALID",
-        "SL-ARTF-006 B3: AuxPoW parent header with AuxPoW flag 0x100 set MUST refuse TICKET_PROOF_INVALID (!parentBlock.IsAuxpow()).",
+        {"expected_owner_policy": spv_p2wpkh, "page": _mk_hdr_only_page([{"auxpow": {**aux_proof_ok, "parent_header_hex": parent_hdr_bip9_bit8.hex()}, "header_hex": hdr_2016.hex(), "height": 2016}]), "pinned_network": "regtest"},
+        "ADMIT",
+        None,
+        "SL-ARTF-006 / D14-B04: AuxPoW parent header with Bitcoin BIP-9/BIP-320 bit 8 (0x100) set and chain_id != 1 MUST ADMIT (exact Namecoin Core nc28.0 CAuxPow::check parity).",
         module="artifact-notarization",
     )
     parent_hdr_cid1 = _mine_regtest_hdr((0x0001 << 16) | 4, b"\x00" * 32, parent_cb_txid_le, 1795000000 + 605400, 0x207FFFFF)

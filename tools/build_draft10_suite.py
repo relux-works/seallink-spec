@@ -130,7 +130,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     }
     add(
         "d10-b1-reregistered-origin-issuer-same-spelling-refuse",
-        ["SL-ORIG-001", "SL-IDTY-002"],
+        ["SL-ORIG-001", "SL-IDEN-002"],
         "origin_status",
         {
             "chain": of_b1["chain"],
@@ -239,7 +239,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     # H-9: Bearer mail/read missing actual_message_meta or violating size_bytes/sender_domain/action omitted
     add(
         "d10-h9-bearer-mail-read-missing-and-bad-meta-refuse",
-        ["SL-GRNT-013", "SL-PROF-001"],
+        ["SL-GRNT-013", "SL-MAIL-002"],
         "session_lifecycle",
         {
             "executor_cfg": fx_bs["executor_cfg"],
@@ -651,7 +651,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     ch_unreach["node_reachable"] = False
     add(
         "d10-h2-owner-command-node-unreachable-chain-unhealthy",
-        ["SL-LDGR-001", "SL-IDTY-010"],
+        ["SL-LDGR-001", "SL-IDEN-011"],
         "owner_command",
         {"chain": ch_unreach, "command": oc_env, "device_proof": dp_h2[0], "is_foreign_service": False},
         "REFUSE",
@@ -749,7 +749,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     ]:
         add(
             case_id,
-            ["SL-LDGR-010", "SL-IDTY-001"],
+            ["SL-LDGR-010", "SL-IDEN-001"],
             "name_resolve",
             {"chain": _name_hist_with_opret(opret_hex, case_id), "name": "id/alice"},
             want_v,
@@ -777,7 +777,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
 
     add(
         "d10-f3-name-history-opreturns-single-advisory-0x20-admit",
-        ["SL-LDGR-010", "SL-IDTY-001"],
+        ["SL-LDGR-010", "SL-IDEN-001"],
         "name_resolve",
         {
             "chain": _name_hist_with_opreturns_list(
@@ -792,7 +792,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     )
     add(
         "d10-l8-name-history-opreturns-two-slnk-frame-invalid",
-        ["SL-LDGR-010", "SL-IDTY-001"],
+        ["SL-LDGR-010", "SL-IDEN-001"],
         "name_resolve",
         {
             "chain": _name_hist_with_opreturns_list(
@@ -926,7 +926,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     )
     add(
         "d10-h4-grant-issuer-lacks-link-grant-role-changed",
-        ["SL-GRNT-003", "SL-IDTY-001"],
+        ["SL-GRNT-003", "SL-IDEN-001"],
         "invocation",
         {"actual_message_meta": {"folder": "Invoices"}, "bundle": fx_nolg["bundle"], "chain": fx_nolg["chain"], "executor_cfg": fx_nolg["executor_cfg"], "invocation": fx_nolg["invocation"], "journal": {"journal_id": _h32("d10-nolg-j")}},
         "REFUSE",
@@ -1276,6 +1276,11 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         "opreturn_hex": sl.encode_opreturn(0x0C, sl.object_id(b3_rogue)).hex(),
         "outputs": {"0": {"script_pubkey_hex": _spk_hex(of_h6_s4["_rec_pol"])}},
     }
+    of_h6_s4["chain"]["names"][b3_rogue["name"]] = sv.make_name_history(
+        b3_rogue["name"], b3_rogue["registration"], b3_rogue["owner_policy"],
+        {"link": {"origin": of_h6_s4["_origin_id"]}},
+        first_height=749790, update_height=749795,
+    )
     of_h6_s4["origin_bundle"]["recovery_bindings"].append(b3_rogue)
     ad_u = of_h6_s4["chain"]["names"][b2_adult["name"]]["updates"]
     ad_prev = ad_u[-1]
@@ -1470,7 +1475,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     ecfg_no_pin = {k: v for k, v in fx_m7["executor_cfg"].items() if k != "pin"}
     add(
         "d10-m7-mailbox-missing-executor-pin-refuse",
-        ["SL-GRNT-004", "SL-PROF-001"],
+        ["SL-GRNT-004", "SL-MAIL-002"],
         "invocation",
         {"actual_message_meta": {"folder": "Invoices"}, "bundle": fx_m7["bundle"], "chain": fx_m7["chain"], "executor_cfg": ecfg_no_pin, "invocation": fx_m7["invocation"], "journal": {"journal_id": _h32("d10-m7-j")}},
         "REFUSE",
@@ -1775,8 +1780,10 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     gf_p = copy.deepcopy(fx_f10["bundle"]["grants"][0]["payload"])
     gf_p["recipient"] = {"mode": "name", "name": "id/peer-b", "owner_policy": {"kind": "key", "pk": _kp("d10-fed-pb")["comp"]}, "registration": {"txid": _h32("d10-fed-pbr"), "vout": 0}}
     gf_env = sl.sign_envelope(gf_p, [fx_f10["_keys"]["alice_gr"]["sk"]])
+    gf_itx = _h32("d10-fed-gf-0x01")
+    fx_f10["chain"]["txs"][gf_itx] = {"confirmed_height": 750000, "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(gf_env), "grant_id": sl.object_id(gf_p), "type": "seallink-issuance/1"}).hex()).hex(), "outputs": {}}
     cmd_f10 = sl.sign_envelope({"arguments": {"fields_sha256": _h32("d10-fed-f"), "grant_id": sl.object_id(gf_p), "recipient_name": "id/peer-b", "route_mode": "direct"}, "command": "approve-pii-disclosure", "exp": fx_f10["chain"]["now"] + 600, "genesis": GENESIS_MAIN, "iat": fx_f10["chain"]["now"] - 10, "level": 2, "network": "main", "nonce": _h32("d10-fed-n"), "owner": "id/alice", "target_executor": "id/station-a", "type": "seallink-owner-command/1"}, [p256_f10_sk], alg="p256")
-    base_fed_ctx = {"approval_command": cmd_f10, "device_proof": dp_f10[0], "fields_sha256": _h32("d10-fed-f"), "manifests": {am_f10_h: am_f10}, "phase": "pii_disclosure", "route_hops": [{"actor": "id/peer-b", "role": "counterparty"}]}
+    base_fed_ctx = {"approval_command": cmd_f10, "device_proof": dp_f10[0], "fields_sha256": _h32("d10-fed-f"), "issuance_txid": gf_itx, "manifests": {am_f10_h: am_f10}, "phase": "pii_disclosure", "route_hops": [{"actor": "id/peer-b", "role": "counterparty"}]}
     base_fed_pol = {"require_contour_a": True, "trusted_peers": ["id/peer-b", "id/wrong-peer"]}
 
     add("d10-h11-federation-wrong-hop-actor-refuse", ["SL-SERV-004"], "federation", {"chain": fx_f10["chain"], "grant": gf_env, "journal": {"journal_id": _h32("d10-f-j1")}, "peer_ctx": {**base_fed_ctx, "route_hops": [{"actor": "id/wrong-peer", "role": "counterparty"}]}, "policy": base_fed_pol}, "REFUSE", "FEDERATION_POLICY_DENIED", "H-11: Contour A direct route hop actor MUST equal grant.recipient.name.", module="federated-screening")
@@ -1788,7 +1795,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
     ch_f_sp["txs"][gs_tx]["outputs"]["0"]["spent_by_txid"] = _h32("d10-f-sp")
     ch_f_sp["txs"][_h32("d10-f-sp")] = {"confirmed_height": 750003, "inputs": [sv.make_segwit_input(gs_tx, 0)], "outputs": {}}
     add("d10-h12-federation-pii-spent-seal-refuse", ["SL-SERV-004"], "federation", {"chain": ch_f_sp, "grant": gf_env, "journal": {"journal_id": _h32("d10-f-j3")}, "peer_ctx": base_fed_ctx, "policy": base_fed_pol}, "REFUSE", "SEAL_SPENT", "H-12: Federation pii_disclosure MUST enforce live grant revocation seal (SEAL_SPENT).", module="federated-screening")
-    add("d10-m13-federation-pii-missing-device-list-device-unauthorized", ["SL-SERV-004", "SL-IDTY-010"], "federation", {"chain": fx_f10["chain"], "grant": gf_env, "journal": {"journal_id": _h32("d10-f-j4")}, "peer_ctx": {k: v for k, v in base_fed_ctx.items() if k != "device_proof"}, "policy": base_fed_pol}, "REFUSE", "DEVICE_UNAUTHORIZED", "M-13: Federation pii_disclosure omitting device_proof MUST preserve DEVICE_UNAUTHORIZED.", module="federated-screening")
+    add("d10-m13-federation-pii-missing-device-list-device-unauthorized", ["SL-SERV-004", "SL-IDEN-011"], "federation", {"chain": fx_f10["chain"], "grant": gf_env, "journal": {"journal_id": _h32("d10-f-j4")}, "peer_ctx": {k: v for k, v in base_fed_ctx.items() if k != "device_proof"}, "policy": base_fed_pol}, "REFUSE", "DEVICE_UNAUTHORIZED", "M-13: Federation pii_disclosure omitting device_proof MUST preserve DEVICE_UNAUTHORIZED.", module="federated-screening")
     add("d10-m15-federation-missing-journal-refuse", ["SL-SERV-004"], "federation", {"chain": fx_f10["chain"], "grant": gf_env, "peer_ctx": base_fed_ctx, "policy": base_fed_pol}, "REFUSE", "FEDERATION_POLICY_DENIED", "M-15: Federation verification omitting mandatory journal MUST fail closed.", module="federated-screening")
     add("d10-m15-federation-corrupt-journal-lost", ["SL-SERV-004"], "federation", {"chain": fx_f10["chain"], "grant": gf_env, "journal": {"journal_id": _h32("d10-f-j5"), "witness_readable": False}, "peer_ctx": base_fed_ctx, "policy": base_fed_pol}, "REFUSE", "JOURNAL_LOST", "M-15: Federation verification with corrupt journal continuity MUST refuse JOURNAL_LOST.", module="federated-screening")
     gf_wo_p = {**copy.deepcopy(gf_p), "not_after_height": fx_f10["chain"]["tip_height"] + 8, "not_before_height": fx_f10["chain"]["tip_height"] - 2, "revocation": {"mode": "window_only"}}
@@ -1862,7 +1869,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         inp_m: dict[str, Any] = {"bundle": fx_h15["bundle"], "chain": fx_h15["chain"], "executor_cfg": fx_h15["executor_cfg"], "invocation": fx_h15["invocation"], "journal": {"journal_id": _h32(f"d10-h15-{label_m}")}}
         if meta_val is not None:
             inp_m["actual_message_meta"] = meta_val
-        add(f"d10-h15-mail-read-{label_m}", ["SL-PROF-001", "SL-GRNT-004"], "invocation", inp_m, want_v, want_c, desc_m)
+        add(f"d10-h15-mail-read-{label_m}", ["SL-MAIL-002", "SL-GRNT-004"], "invocation", inp_m, want_v, want_c, desc_m)
 
     # =========================================================================
     # 13. Layer 1 Verification Hardening (Post-draft.10 Audit Closures)
@@ -1995,8 +2002,8 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x1b_ok), "credential": sl_cred_env},
         "REFUSE", "ORIGIN_STATUS_INCOMPLETE", "L1 (SPEC-02 §5.2): Future critical_retroactive 0x1b frame at h_frame=750000 MUST fail closed ORIGIN_STATUS_INCOMPLETE even at historical at_height=749999 < h_frame.")
     add("d10-l1-slnk-0x13-malformed-outer-frame-invalid", ["SL-LDGR-010"], "credential",
-        {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x13_bad_outer), "credential": sl_cred_env},
-        "REFUSE", "CHAIN_FRAME_INVALID", "L1 (SPEC-02 §5.2): Truncated outer push on 0x13 MUST refuse CHAIN_FRAME_INVALID before range criticality.")
+        {"anchor_txid": sl_atx_at, "chain": _slnk_chain(frame_0x13_bad_outer), "credential": sl_cred_env},
+        "REFUSE", "CHAIN_FRAME_INVALID", "L1 (SPEC-02 §5.2): Truncated outer push on 0x13 MUST refuse CHAIN_FRAME_INVALID at at_height >= h_frame (forward-only).")
     add("d10-l1-slnk-non-sighash-all-0x1b-inert-admit", ["SL-LDGR-010"], "credential",
         {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x1b_ok, sighash=0x81), "credential": sl_cred_env},
         "ADMIT", None, "H-10 / R12-M3 (SPEC-02 §5.2): Non-SIGHASH_ALL update carrying 0x1b is strictly inert and MUST NOT poison historical eternal credentials.")
@@ -2004,8 +2011,8 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x0b_bad_hc, sighash=0x81), "credential": sl_cred_env},
         "ADMIT", None, "H-10 / R12-M3 (SPEC-02 §5.2): Non-SIGHASH_ALL update carrying malformed/bad-hc 0x0b is strictly inert.")
     add("d10-l1-slnk-sighash-all-0x0b-bad-hc-frame-invalid", ["SL-LDGR-010"], "credential",
-        {"anchor_txid": sl_atx_before, "chain": _slnk_chain(frame_0x0b_bad_hc, sighash=0x01), "credential": sl_cred_env},
-        "REFUSE", "CHAIN_FRAME_INVALID", "SPEC-02 §5.2: Owner-authored SIGHASH_ALL confirmed update carrying 0x0b with h_c > inclusion_height MUST refuse CHAIN_FRAME_INVALID.")
+        {"anchor_txid": sl_atx_at, "chain": _slnk_chain(frame_0x0b_bad_hc, sighash=0x01), "credential": sl_cred_env},
+        "REFUSE", "CHAIN_FRAME_INVALID", "SPEC-02 §5.2: Owner-authored SIGHASH_ALL confirmed update carrying 0x0b with h_c > inclusion_height MUST refuse CHAIN_FRAME_INVALID at at_height >= h_frame (forward-only).")
 
     # L1-5: A -> B -> A role rotation consistency (retired_before_height) + cause-keyed role closures (NAME_ROLE_CHANGED vs 0x0b CRED_ISSUER_CLOSED)
     fx_aba = rm._base_invocation_fixture()
@@ -2435,7 +2442,7 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         "d10-l1-federation-screening-wrong-named-peer-refuse",
         ["SL-SERV-004"],
         "federation",
-        {"chain": fx_f10["chain"], "grant": gf_env, "journal": {"journal_id": _h32("l1-fed-j3")}, "peer_ctx": {"peer_id": "id/peer-other", "phase": "screening"}, "policy": {"trusted_peers": ["id/peer-b", "id/peer-other"]}},
+        {"chain": fx_f10["chain"], "grant": gf_env, "journal": {"journal_id": _h32("l1-fed-j3")}, "peer_ctx": {"issuance_txid": gf_itx, "peer_id": "id/peer-other", "phase": "screening"}, "policy": {"trusted_peers": ["id/peer-b", "id/peer-other"]}},
         "REFUSE",
         "FEDERATION_POLICY_DENIED",
         "L1 (D10-1): Federated screening with named recipient MUST match peer_id == recipient.name (even if peer-other is in trusted_peers).",
@@ -2584,11 +2591,13 @@ def add_draft10_conformance_cases(add: Callable[..., None]) -> None:
         ],
         "payload": w_fed_gp,
     }
+    w_fed_itx = _h32("l1-wfed-0x01")
+    of_wfed["chain"]["txs"][w_fed_itx] = {"confirmed_height": 750096, "opreturn_hex": sl.encode_opreturn(0x01, sl.signing_digest({"genesis": GENESIS_MAIN, "grant_content_addr": sl.content_addr(w_fed_env), "grant_id": sl.object_id(w_fed_gp), "type": "seallink-issuance/1"}).hex()).hex(), "outputs": {}}
     add(
         "d10-l1-federation-ward-screening-admit",
         ["SL-SERV-004", "SL-ORIG-006"],
         "federation",
-        {"chain": of_wfed["chain"], "grant": w_fed_env, "journal": {"journal_id": _h32("l1-wfed-j1")}, "peer_ctx": {"origin_bundle": of_wfed["origin_bundle"], "peer_id": "id/peer-b", "phase": "screening"}, "policy": base_fed_pol, "trusted_origin_issuer_pins": of_wfed["trusted_origin_issuer_pins"]},
+        {"chain": of_wfed["chain"], "grant": w_fed_env, "journal": {"journal_id": _h32("l1-wfed-j1")}, "peer_ctx": {"issuance_txid": w_fed_itx, "origin_bundle": of_wfed["origin_bundle"], "peer_id": "id/peer-b", "phase": "screening"}, "policy": base_fed_pol, "trusted_origin_issuer_pins": of_wfed["trusted_origin_issuer_pins"]},
         "ADMIT",
         None,
         "L1 (D10-1): Ward-origin federated screening with valid guardian_approvals and active origin_bundle admits cleanly.",
