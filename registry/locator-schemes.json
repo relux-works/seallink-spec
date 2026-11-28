@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Safe-by-Design Off-Chain Locator URI Scheme Registry (SPEC-00 §5, SPEC-03 §4). Forward-compatible via Step 8b runtime registry enforcement: forbidden_schemes refuse WIRE_MEMBER, allowed_schemes validate strictly and allow SSRF-guarded fetch, and unrecognized future schemes pass wire validation but MUST NEVER be auto-fetched by older verifiers.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.14",
+  "version": "1.0.0-draft.15",
   "governance": "Registry Update (SPEC-00 §5)",
   "syntax_invariants": {
     "ascii_printable_only": true,

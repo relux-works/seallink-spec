@@ -626,6 +626,23 @@ def _build_log_ecosystem(label: str, *, role: str = "notary", with_4_checkpoints
         item_env = sl.sign_envelope(item_p, [iss_role["sk"]])
         item_id = sl.object_id(item_p)
         denial_key = f"act:{item_id}|*"
+    elif role == "cred":
+        item_p = {
+            "claims": {"degree": "MSc", "honors": True},
+            "credential_kind": "education/diploma",
+            "genesis": GENESIS_MAIN,
+            "issued_at": 1795219000,
+            "issuer": iss_role_pin,
+            "lifecycle": "log_tracked",
+            "log_id": log_id,
+            "network": "main",
+            "not_before_height": 749100,
+            "subject": {"mode": "name", "name_pin": {"name": "id/alice", "owner_policy": base_fx["_alice_owner_pol"], "registration": base_fx["_alice_reg"]}},
+            "type": "seallink-credential/1",
+        }
+        item_env = sl.sign_envelope(item_p, [iss_role["sk"]])
+        item_id = sl.object_id(item_p)
+        denial_key = f"cred:{item_id}|*"
     else:
         item_p = {
             "artifact_identity": art,

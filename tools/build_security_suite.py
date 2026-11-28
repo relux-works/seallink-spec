@@ -19,7 +19,7 @@ import build_refusal_matrix as rm
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.14"
+VERSION = "1.0.0-draft.15"
 GENESIS_MAIN = rm.GENESIS_MAIN
 
 
@@ -217,6 +217,8 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             withdrawal_doc=inp.get("withdrawal_doc"),
             origin_bundle=inp.get("origin_bundle"),
             issuer_origin_bundle=inp.get("issuer_origin_bundle"),
+            log_ctx=inp.get("log_ctx"),
+            allow_reinstatement=inp.get("allow_reinstatement", True),
         )
         return res.verdict, res.refusal_code
     if runner == "issuer_role":
@@ -648,8 +650,21 @@ def execute_security_case(case: dict[str, Any], *, require_jsonschema: bool = Tr
             journal=j,
         )
         return res.verdict, res.refusal_code
-    if runner == "certset_head":
-        res = v.verify_certset_head(inp["head"], inp["statements"], inp["owner_manifest"])
+    if runner == "cert_entry_proof":
+        res = v.verify_cert_entry_proof(inp.get("cert_proof"), inp["statement"], inp["owner_manifest"])
+        return res.verdict, res.refusal_code
+    if runner == "member_entry_proof":
+        ch = sv.ChainView(inp["chain"])
+        j = sv.FencedJournal.from_dict(inp["journal"]) if "journal" in inp else None
+        res = v.verify_member_entry_proof(
+            inp.get("member_proof"),
+            inp["member_pin"],
+            inp["operator_name"],
+            inp["operator_manifest"],
+            ch,
+            journal=j,
+            required_depth=int(inp.get("required_depth", 1)),
+        )
         return res.verdict, res.refusal_code
     if runner == "statement":
         ch = sv.ChainView(inp["chain"])
@@ -1828,6 +1843,8 @@ def build_security_conformance_suite() -> dict[str, Any]:
     bd13.add_draft13_conformance_cases(add)
     import build_draft14_suite as bd14
     bd14.add_draft14_conformance_cases(add)
+    import build_draft15_suite as bd15
+    bd15.add_draft15_conformance_cases(add)
 
     return {
         "suite": "security-conformance",

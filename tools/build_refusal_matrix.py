@@ -20,7 +20,7 @@ import seallink_ref as sl
 import seallink_verifier as sv
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = "1.0.0-draft.14"
+VERSION = "1.0.0-draft.15"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 
 
@@ -83,7 +83,7 @@ def make_salted_auth_set(
     seq: int = 1,
     salt_prefix: str = "auth-salt",
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Build a salted selective-disclosure sets.auth Merkle tree (seallink-auth-set-head/1 + AuthEntryProof list)."""
+    """Build a salted depth-16 selective-disclosure sets.auth Merkle tree (seallink-auth-set-head/1 + AuthEntryProof list)."""
     entries: list[dict[str, Any]] = []
     for idx, spec in enumerate(entries_spec):
         e: dict[str, Any] = {
@@ -96,8 +96,12 @@ def make_salted_auth_set(
             "seal": spec["seal"],
             "type": "seallink-auth-entry/1",
         }
+        if "rp_id" in spec:
+            e["rp_id"] = spec["rp_id"]
+        if "presence_attestation" in spec:
+            e["presence_attestation"] = spec["presence_attestation"]
         entries.append(e)
-    root, proofs_by_dig = sl.build_salted_set_merkle(entries)
+    root, proofs_by_dig = sl.build_salted_set_merkle(entries, depth=sl.FIXED_SALTED_SET_PROOF_STEPS)
     head: dict[str, Any] = {
         "merkle_root": root,
         "network": network,
@@ -120,7 +124,7 @@ def make_salted_device_set(
     seq: int = 1,
     salt_prefix: str = "dev-salt",
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Build a salted selective-disclosure sets.devices Merkle tree (seallink-device-set-head/1 + DeviceEntryProof list)."""
+    """Build a salted depth-16 selective-disclosure sets.devices Merkle tree (seallink-device-set-head/1 + DeviceEntryProof list)."""
     entries: list[dict[str, Any]] = []
     for idx, spec in enumerate(entries_spec):
         e: dict[str, Any] = {
@@ -135,14 +139,95 @@ def make_salted_device_set(
             "seal": spec["seal"],
             "type": "seallink-device-entry/1",
         }
+        if "rp_id" in spec:
+            e["rp_id"] = spec["rp_id"]
+        if "presence_attestation" in spec:
+            e["presence_attestation"] = spec["presence_attestation"]
         entries.append(e)
-    root, proofs_by_dig = sl.build_salted_set_merkle(entries)
+    root, proofs_by_dig = sl.build_salted_set_merkle(entries, depth=sl.FIXED_SALTED_SET_PROOF_STEPS)
     head: dict[str, Any] = {
         "merkle_root": root,
         "network": network,
         "owner": owner_name,
         "seq": seq,
         "type": "seallink-device-set-head/1",
+    }
+    entry_proofs = [
+        {"entry": e, "head": head, "proof": proofs_by_dig[sl.signing_digest(e).hex()]}
+        for e in entries
+    ]
+    return head, entry_proofs
+
+
+def make_salted_cert_set(
+    owner_name: str,
+    statements: list[dict[str, Any]],
+    *,
+    network: str = "main",
+    seq: int = 1,
+    salt_prefix: str = "cert-salt",
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Build a salted depth-20 selective-disclosure sets.certs Merkle tree (seallink-cert-set-head/1 + CertEntryProof list)."""
+    entries: list[dict[str, Any]] = []
+    for idx, stmt in enumerate(statements):
+        sp = stmt["payload"]
+        e: dict[str, Any] = {
+            "network": sp["network"],
+            "owner": owner_name,
+            "salt": _h32(f"{salt_prefix}:{owner_name}:{seq}:{idx}:{sl.object_id(sp)}"),
+            "seq": sp["seq"],
+            "statement_content_addr": sl.content_addr(stmt),
+            "statement_id": sl.object_id(sp),
+            "statement_kind": sp["statement_kind"],
+            "type": "seallink-cert-entry/1",
+        }
+        entries.append(e)
+    root, proofs_by_dig = sl.build_salted_set_merkle(entries, depth=sl.FIXED_CERT_SET_PROOF_STEPS)
+    head: dict[str, Any] = {
+        "merkle_root": root,
+        "network": network,
+        "owner": owner_name,
+        "seq": seq,
+        "type": "seallink-cert-set-head/1",
+    }
+    entry_proofs = [
+        {"entry": e, "head": head, "proof": proofs_by_dig[sl.signing_digest(e).hex()]}
+        for e in entries
+    ]
+    return head, entry_proofs
+
+
+def make_salted_member_set(
+    owner_name: str,
+    members_spec: list[dict[str, Any]],
+    *,
+    network: str = "main",
+    seq: int = 1,
+    salt_prefix: str = "member-salt",
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Build a salted depth-34 selective-disclosure sets.members Merkle tree (seallink-member-set-head/1 + MemberEntryProof list)."""
+    entries: list[dict[str, Any]] = []
+    for idx, spec in enumerate(members_spec):
+        e: dict[str, Any] = {
+            "name": spec["name"],
+            "network": spec.get("network", network),
+            "owner": spec.get("owner", owner_name),
+            "owner_policy": spec["owner_policy"],
+            "registration": spec["registration"],
+            "salt": spec.get("salt", _h32(f"{salt_prefix}:{owner_name}:{seq}:{idx}:{spec['name']}")),
+            "seal": spec["seal"],
+            "type": "seallink-member-entry/1",
+        }
+        if "roles" in spec:
+            e["roles"] = list(spec["roles"])
+        entries.append(e)
+    root, proofs_by_dig = sl.build_salted_set_merkle(entries, depth=sl.FIXED_MEMBER_SET_PROOF_STEPS)
+    head: dict[str, Any] = {
+        "merkle_root": root,
+        "network": network,
+        "owner": owner_name,
+        "seq": seq,
+        "type": "seallink-member-set-head/1",
     }
     entry_proofs = [
         {"entry": e, "head": head, "proof": proofs_by_dig[sl.signing_digest(e).hex()]}

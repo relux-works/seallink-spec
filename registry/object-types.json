@@ -1,12 +1,13 @@
 {
   "$comment": "SealLink v1.0 Canonical Object Type Registry. Authoritative SSOT for object types, byte limits, signing roles, and schema targets. Signing domain tag equals the exact type string under SPEC-01.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.14",
+  "version": "1.0.0-draft.15",
   "reserved_internal_domains": [
     "seallink-clause/1",
     "seallink-journal/1",
     "seallink-merkle-leaf/1",
     "seallink-merkle-node/1",
+    "seallink-set-mask/1",
     "seallink-artifact-id/1",
     "seallink-log-id/1",
     "seallink-log-entry/1",
@@ -26,7 +27,7 @@
       "max_bytes": 65536,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json",
-      "description": "Name-pinned operational manifest: off-chain set heads (card, certs, salted Merkle auth & devices, members), self-service declaration, pinned labeled providers, optional role-policy preimages (verified against on-chain link.<role> hashes), and notary/release log bindings."
+      "description": "Name-pinned operational manifest: off-chain set heads (card, salted sparse Merkle auth, devices, certs, and members), self-service declaration, pinned labeled providers, optional role-policy preimages (verified against on-chain link.<role> hashes), and cred/notary/release log bindings."
     },
     {
       "type": "seallink-card/1",
@@ -44,7 +45,7 @@
       "max_bytes": 4096,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/AuthSetHead",
-      "description": "Manifest-pinned fixed-256-leaf salted Merkle root head committing to an actor's foreign-service authentication keys (sets.auth) with CSPRNG dummy-leaf size-hiding selective disclosure (proof.steps length == 8)."
+      "description": "Manifest-pinned depth-16 (2^16 = 65,536-slot) size-hiding salted sparse masked Merkle root head committing to an actor's foreign-service authentication keys (sets.auth; proof.steps length == 16)."
     },
     {
       "type": "seallink-auth-entry/1",
@@ -53,7 +54,7 @@
       "max_bytes": 4096,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/AuthEntry",
-      "description": "Salted leaf entry inside sets.auth (BIP-340 H_tag domain-separated leaf digest, alg in {bip340, p256, ed25519}, individual disposable fast-revocation seal)."
+      "description": "Salted leaf entry inside sets.auth (BIP-340 H_tag domain-separated leaf digest, alg in {bip340, p256, ed25519, ssh-ed25519, fido2-es256, fido2-eddsa}, optional rp_id and presence_attestation, individual disposable fast-revocation seal)."
     },
     {
       "type": "seallink-device-set-head/1",
@@ -62,7 +63,7 @@
       "max_bytes": 4096,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/DeviceSetHead",
-      "description": "Manifest-pinned fixed-256-leaf salted Merkle root head committing to an actor's owner control-plane devices (sets.devices) with CSPRNG dummy-leaf size-hiding selective disclosure (proof.steps length == 8)."
+      "description": "Manifest-pinned depth-16 (2^16 = 65,536-slot) size-hiding salted sparse masked Merkle root head committing to an actor's owner control-plane devices (sets.devices; proof.steps length == 16)."
     },
     {
       "type": "seallink-device-entry/1",
@@ -71,25 +72,43 @@
       "max_bytes": 4096,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/DeviceEntry",
-      "description": "Salted leaf entry inside sets.devices (BIP-340 H_tag domain-separated leaf digest, alg in {bip340, p256, ed25519}, presence claim, L0-L2 ceiling, individual disposable fast-revocation seal)."
+      "description": "Salted leaf entry inside sets.devices (BIP-340 H_tag domain-separated leaf digest, alg in {bip340, p256, ed25519, ssh-ed25519, fido2-es256, fido2-eddsa}, optional rp_id, presence claim, optional presence_attestation, L0-L2 ceiling, individual disposable fast-revocation seal)."
     },
     {
-      "type": "seallink-members-list/1",
+      "type": "seallink-member-set-head/1",
       "signed": false,
       "auth_mechanism": "manifest_sha256_pin",
-      "max_bytes": 1048576,
+      "max_bytes": 4096,
       "owning_spec": "SPEC-03",
-      "schema": "schemas/manifest.schema.json#/$defs/MembersList",
-      "description": "Manifest-pinned list of managed/member names with owner policy pins, optional free role tags, and per-entry revocation seals."
+      "schema": "schemas/manifest.schema.json#/$defs/MemberSetHead",
+      "description": "Manifest-pinned depth-34 (2^34 ~ 17.18 billion slots) size-hiding salted sparse masked Merkle root head committing to managed/member actor entries (sets.members; proof.steps length == 34)."
     },
     {
-      "type": "seallink-certset-head/1",
+      "type": "seallink-member-entry/1",
+      "signed": false,
+      "auth_mechanism": "merkle_inclusion_in_manifest_set",
+      "max_bytes": 4096,
+      "owning_spec": "SPEC-03",
+      "schema": "schemas/manifest.schema.json#/$defs/MemberEntry",
+      "description": "Salted leaf entry inside sets.members committing one managed/member actor pin (name, registration, owner_policy), optional free RoleTag roles[], and individual disposable fast-revocation seal."
+    },
+    {
+      "type": "seallink-cert-set-head/1",
       "signed": false,
       "auth_mechanism": "manifest_sha256_pin",
       "max_bytes": 4096,
       "owning_spec": "SPEC-03",
       "schema": "schemas/manifest.schema.json#/$defs/CertSetHead",
-      "description": "Manifest-pinned head committing to an actor's complete set of self-issued key-binding, identity-link, profile-section, and configuration statements."
+      "description": "Manifest-pinned depth-20 (2^20 = 1,048,576 slots) size-hiding salted sparse masked Merkle root head committing to an actor's active statement entries (sets.certs; proof.steps length == 20)."
+    },
+    {
+      "type": "seallink-cert-entry/1",
+      "signed": false,
+      "auth_mechanism": "merkle_inclusion_in_manifest_set",
+      "max_bytes": 4096,
+      "owning_spec": "SPEC-03",
+      "schema": "schemas/manifest.schema.json#/$defs/CertEntry",
+      "description": "Salted leaf entry inside sets.certs committing one active seallink-statement/1 (statement_kind, statement_id, statement_content_addr, seq) for size-hiding selective disclosure of public and private statements."
     },
     {
       "type": "seallink-statement/1",
@@ -224,7 +243,7 @@
       "max_bytes": 65536,
       "owning_spec": "SPEC-05",
       "schema": "schemas/credential.schema.json#/$defs/Credential",
-      "description": "General third-party verifiable credential (eternal or revocable), anchored by signed-form content address (0x09) and bounded by compromise height h_c (0x0b)."
+      "description": "General third-party verifiable credential issued by any link.cred certifier (eternal 0x09, revocable 0x09 + seal, or log_tracked 0x14 transparency/denial log), bounded by compromise height h_c (0x0b)."
     },
     {
       "type": "seallink-credential-withdrawal/1",
@@ -251,7 +270,7 @@
       "max_bytes": 65536,
       "owning_spec": "SPEC-05",
       "schema": "schemas/credential.schema.json#/$defs/NotaryAct",
-      "description": "General notary act (contract notarization, document copy, fact attestation, optional child-grant attestation, or artifact-notarization), supporting eternal (0x04), revocable (0x04 + seal), and log_tracked (0x14 transparency/denial log) lifecycles."
+      "description": "General notary/arbiter act (contract-notarization, certified-copy, fact-attestation, child-within-parent, artifact-notarization, or contract-ruling), supporting eternal (0x04), revocable (0x04 + seal), and log_tracked (0x14 transparency/denial log) lifecycles."
     },
     {
       "type": "seallink-grant/1",
@@ -260,7 +279,7 @@
       "max_bytes": 65536,
       "owning_spec": "SPEC-06",
       "schema": "schemas/grant.schema.json",
-      "description": "Universal revocable (or root-only short-lived window_only) capability grant: unilateral by default, optionally contract-bound, signed via signatures or ward guardian_approvals[], with 7-predicate Constraint Algebra, separate additive quotas, and bounded depth-2 re-delegation."
+      "description": "Universal revocable (or root-only short-lived window_only) capability grant: unilateral by default, optionally contract-bound, optional calendar not_after_unix, device-capable key/group recipients (bip340/p256/ed25519/ssh-ed25519/fido2-*), signed via signatures or ward guardian_approvals[], with 7-predicate Constraint Algebra, separate additive quotas, and bounded depth-2 re-delegation."
     },
     {
       "type": "seallink-issuance/1",
@@ -323,30 +342,30 @@
       "max_bytes": 65536,
       "owning_spec": "SPEC-05",
       "schema": "schemas/log.schema.json#/$defs/ReleaseRecord",
-      "description": "Publisher-signed software or artifact release attestation under link.release, binding product_id, version_str, monotonic release_seq, canonical artifact_identity, and target_sha256, anchored via 0x09 (eternal) or 0x14 (log_tracked)."
+      "description": "Publisher-signed versioned digital artifact release attestation (software, books, media, datasets, AI model weights) under link.release, binding product_id, version_str, monotonic release_seq, canonical artifact_identity, and target_sha256, anchored via 0x09 (eternal) or 0x14 (log_tracked)."
     },
     {
       "type": "seallink-log-checkpoint/1",
       "signed": true,
-      "signer_roles": ["notary", "release"],
+      "signer_roles": ["notary", "release", "cred"],
       "max_bytes": 16384,
       "owning_spec": "SPEC-05",
       "schema": "schemas/log.schema.json#/$defs/LogCheckpoint",
-      "description": "UTXO-chained transparency and denial log checkpoint anchored by OP_RETURN 0x14 committing batch_root, denials_delta_root, Fixed-Depth-256 SMT denials_root, and acyclic RFC 9162 checkpoints_root over predecessors 1..(seq-1)."
+      "description": "UTXO-chained transparency and denial log checkpoint for notary, release, or cred logs anchored by OP_RETURN 0x14 committing batch_root, denials_delta_root, Fixed-Depth-256 SMT denials_root, and acyclic RFC 9162 checkpoints_root over predecessors 1..(seq-1)."
     },
     {
       "type": "seallink-log-revocation/1",
       "signed": true,
-      "signer_roles": ["notary", "release"],
+      "signer_roles": ["notary", "release", "cred"],
       "max_bytes": 8192,
       "owning_spec": "SPEC-05",
       "schema": "schemas/log.schema.json#/$defs/LogRevocation",
-      "description": "Signed denial/revocation entry recorded in a notary or release log SMT under key act:<id>|*, rel:<id>|*, or target:<target_id>|* (including mandatory fail -> target: entries)."
+      "description": "Signed denial/revocation entry recorded in a notary, release, or cred log SMT under key act:<id>|*, rel:<id>|*, cred:<id>|*, or target:<target_id>|* (strictly role-scoped)."
     },
     {
       "type": "seallink-log-reinstatement/1",
       "signed": true,
-      "signer_roles": ["notary", "release"],
+      "signer_roles": ["notary", "release", "cred"],
       "max_bytes": 8192,
       "owning_spec": "SPEC-05",
       "schema": "schemas/log.schema.json#/$defs/LogReinstatement",
@@ -359,7 +378,7 @@
       "max_bytes": 65536,
       "owning_spec": "SPEC-05",
       "schema": "schemas/log.schema.json#/$defs/LogFraudProof",
-      "description": "Publicly verifiable 4-mode fraud proof (equivocation, revocation_omission, illegal_reversion, invalid_checkpoint_chain) permanently closing a compromised notary or release log_id with NOTARY_LOG_COMPROMISED."
+      "description": "Publicly verifiable 4-mode fraud proof (equivocation, revocation_omission, illegal_reversion, invalid_checkpoint_chain) permanently closing a compromised notary, release, or cred log_id with NOTARY_LOG_COMPROMISED."
     },
     {
       "type": "seallink-ticket/1",

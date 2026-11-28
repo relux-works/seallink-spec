@@ -10193,7 +10193,7 @@
             "type": "seallink-device-entry/1"
           },
           "head": {
-            "merkle_root": "3c21a51949bf77485151df23fd5c19bae668e417780df2868b7b773a9012efc7",
+            "merkle_root": "24df4b1186596fc923806c4d3cf064cb409d346a888f927faba2bf11f2d24882",
             "network": "main",
             "owner": "id/alice",
             "seq": 1,
@@ -10201,38 +10201,70 @@
           },
           "proof": {
             "leaf_digest": "563a3cee65d2036fd88d7266e2fe651a4054db096592fb9403c028d6dbc44ae4",
-            "root": "3c21a51949bf77485151df23fd5c19bae668e417780df2868b7b773a9012efc7",
+            "root": "24df4b1186596fc923806c4d3cf064cb409d346a888f927faba2bf11f2d24882",
             "steps": [
               {
-                "hash": "4bde2d89aaa3af92f89ccb08d7808df654f1d3a15ec4677e1e8e510328871177",
+                "hash": "557560530d4a2be97488200ed67a54dd213e4634d07fe8155babef33ee62029c",
+                "side": "L"
+              },
+              {
+                "hash": "abc3949bc3f99cafaae7fb8a795e5e1c2e8518336b7d6c2ad035c01ee0a1a77b",
+                "side": "L"
+              },
+              {
+                "hash": "dbb2372326bd5411154e12881d26f1646f248a4222ef5862137be5b95904aaa0",
+                "side": "L"
+              },
+              {
+                "hash": "b4981f4fdb827205f0dd8548f795ba60406e5de588e3a012149050249bd499c4",
+                "side": "L"
+              },
+              {
+                "hash": "2d68b501a9ac30b8f60cd7442d6b880cdc1918a6f7c3eb58795c9ea570eb603d",
                 "side": "R"
               },
               {
-                "hash": "681985dc9d3fcf8db355f8110cc1780d05419d3cbfb5ad87cfb7a3ab55311dd7",
+                "hash": "bb25532059ca56e060fc44bad950c20bf23cbad8200453a8015f3276348d97c6",
                 "side": "L"
               },
               {
-                "hash": "57f8ed1e7b7c2375104fc55bb5aca05c4558f51991ee176fff03c6da987dc469",
+                "hash": "f57da354030bb6da08f18fdbc11845c48ef05767a247920781bd1675eb6ec9d2",
                 "side": "L"
               },
               {
-                "hash": "243afe045a587708758618032145040baa4009b6bda5d7668b3b27d26e11d1cc",
-                "side": "L"
-              },
-              {
-                "hash": "5148b72076ba778a3baf306d533eb8d9eef77f5ded9616904a858ba16fd613c0",
+                "hash": "f807de97f9f8ec22465aa5723718e9855e6bb9d454614e157a357ad83a597b7b",
                 "side": "R"
               },
               {
-                "hash": "44aad86e14daa57615be300bb21aa5eebb825b1c47f00bde5ded8d630dbca69f",
-                "side": "R"
-              },
-              {
-                "hash": "42aa6a86a5f141118de82fb5752dcafc90f1e8ecab0be9dd7351d2950d4e7110",
+                "hash": "95647705b1a3ac66d03a1a41bad951df3110a7aaf4e8fc379f09a541e72608e9",
                 "side": "L"
               },
               {
-                "hash": "374afc1ba2c03dd2ec25aa5d9ca94f96983271cc3da9c34c9aa688b6a89738e1",
+                "hash": "b64090517c9d014ce62548a79b6ee1320147253f0bb11ef844e086b343af58e0",
+                "side": "L"
+              },
+              {
+                "hash": "6987bb5f84eff17f2cb4a440831548669b6ab3b50e91c3c02d2334f9f6db41b5",
+                "side": "R"
+              },
+              {
+                "hash": "9c12de4e249abf76fab4f80fb46287afb5889912c5f3a583fb8cfed30bf988af",
+                "side": "R"
+              },
+              {
+                "hash": "3186eef677b88c2b82cb10c02bfd90ab85c97d3a6ccb0ba37223d5a6bb415651",
+                "side": "R"
+              },
+              {
+                "hash": "402f6cdc466a5be91a9fcecd11e58186f13ace2e179bd1e41f018ea16227049a",
+                "side": "R"
+              },
+              {
+                "hash": "485d95bb737f268ee9c348930b68231934948ba496e3e194780611b56c3460da",
+                "side": "R"
+              },
+              {
+                "hash": "9ee7e1bc8c0afddca53c5d4e457c1eda1668371b0206ba8463b43a4a8c1a8c9c",
                 "side": "R"
               }
             ]
@@ -10634,7 +10666,7 @@
               "type": "seallink-device-entry/1"
             },
             "head": {
-              "merkle_root": "2b65457ea6bdea60e5a3ed820bec54fbd8d1d9c1f4903883ac28f833e78b781b",
+              "merkle_root": "99afe6352bed1e07c07b3c187a4eb3bf12420f434d0f5f872516b087d306d1ba",
               "network": "main",
               "owner": "id/alice",
               "seq": 1,
@@ -10642,39 +10674,71 @@
             },
             "proof": {
               "leaf_digest": "dc4b161d234d641c5aa352ba60397cf12dac1fcbb3cb3a39fe204d358eef74ec",
-              "root": "2b65457ea6bdea60e5a3ed820bec54fbd8d1d9c1f4903883ac28f833e78b781b",
+              "root": "99afe6352bed1e07c07b3c187a4eb3bf12420f434d0f5f872516b087d306d1ba",
               "steps": [
                 {
-                  "hash": "8107c327f37f03c3347066728b287ddd82215fe76d7f6848e49260683349fa70",
+                  "hash": "a2a9e4ccb0eda0d318f481d2b9785aefb10f3bf48c01fdf65106a35e7f18abc6",
                   "side": "R"
                 },
                 {
-                  "hash": "1cf8894d83dbc81be2c6f62ece3725b75018ea1b16a256124c3af9a35a74a5b8",
+                  "hash": "be6c9331cf513509909fb6379348322f4546090ea6ae4c9de7904f02cd6fe234",
                   "side": "R"
                 },
                 {
-                  "hash": "dcdfae7a738fd8641fde586520df9d6e5c358dd367c2b017b482314b5e45e59d",
+                  "hash": "906586825cca8c7ec64e3e8f8054ebd262a6bd2119916411a5e242b71d805416",
                   "side": "L"
                 },
                 {
-                  "hash": "93c48a4d959accb381c1d6e4575214400694e23480a5286d671a27dda7834a49",
+                  "hash": "f51e39cc49ac74cdeb358e7089f111ad4b336844542a4ad755348544d6aca7c2",
+                  "side": "L"
+                },
+                {
+                  "hash": "6e4cf9984786378a55b15d4dee6da2383cf266142d3ff9d6a17c2aad193f3a75",
+                  "side": "L"
+                },
+                {
+                  "hash": "19fd3b0a55ba80e491c70b499838f2fee16dacdc8c5714ddc45b264729e456e2",
                   "side": "R"
                 },
                 {
-                  "hash": "f0889dc1e52b5e78d5650b8f98fa83cda0c1922b5861576bf6e30c7ddfed471a",
-                  "side": "L"
-                },
-                {
-                  "hash": "b262cedb14b2c87103aa5949cd17c8076631225c08f248989082e5db7ae120cb",
+                  "hash": "ea456514e3f622ba5e5664863c8bb1661ee8c75793f63316b9b829a951ebb243",
                   "side": "R"
                 },
                 {
-                  "hash": "5cdf775a171ee8ed163ad9818b00914533fb33a4a5ab62b803b4a46b48484ed2",
+                  "hash": "dee045bb90aa9d1dbe968859e8566b627f519a1b2bf1dd61d1d9a0b027ee2fda",
+                  "side": "R"
+                },
+                {
+                  "hash": "8e04081086fcf6aa659a63f985e31a719289ec3be3e7ffe81708b6ff01bd11f5",
+                  "side": "R"
+                },
+                {
+                  "hash": "ce16a51e936b1761fefec568190499dfe0bfaa89e69712d28357a920e9465a7e",
+                  "side": "R"
+                },
+                {
+                  "hash": "52d9054de01818f22df44c82052bbf097ad98c753a85829d4084400f0630a6a8",
                   "side": "L"
                 },
                 {
-                  "hash": "d2274e215b7c3ef91e219f8f89cf5d310a9b03055ca21ee5654454668cc402db",
+                  "hash": "a1269eb8742787fccf133d203d9f2601078f5ed56111c66b44a7f7d2422bb640",
+                  "side": "R"
+                },
+                {
+                  "hash": "73ab1f9143974a17419964faddab0df0f93deb0ebdb85186efbc75e043b7204a",
+                  "side": "R"
+                },
+                {
+                  "hash": "51737d1619c8413cd022db1c2a6749f6232630d90bc46fbfd9a855f3732b286a",
                   "side": "L"
+                },
+                {
+                  "hash": "e1935dfd41a608fdf5271fe394b653ef406b6389835b524852e38542f241e9c4",
+                  "side": "L"
+                },
+                {
+                  "hash": "4077361f0e8380ba8b47a55d00977c99f5818bebfae70aa742a03a19c42d413e",
+                  "side": "R"
                 }
               ]
             }
@@ -34912,5 +34976,5 @@
   "suite": "refusal-coverage-matrix",
   "total_covered_codes": 89,
   "total_registered_codes": 89,
-  "version": "1.0.0-draft.14"
+  "version": "1.0.0-draft.15"
 }

@@ -192,62 +192,94 @@
     "salted_set_merkle_256": {
       "entry": {
         "alg": "bip340",
-        "key": "2859909d150f5aba970555cb76a2c308025438f3aeb6639d5b4672c7f36a1ea6",
+        "key": "e3069a26d09757392d77abd8e96d8d94cb559426f67d6511f25151d991fa9ace",
         "label": "golden-login",
         "network": "main",
         "owner": "id/alice-golden",
-        "salt": "47648534de363ceef693a91fbccca25e296f5a40ff9cd2d81446f6bd44e008c2",
+        "salt": "d18cb12312dba726dfbe0801c9abb4cebf59788b315f3c290b87e3afe7322999",
         "seal": {
           "script_policy": {
             "kind": "key",
-            "pk": "03f7d78771be35be4e4da5ab58dac5c4fb232ffc943db9c4e8c8488731ad0b535e"
+            "pk": "0245df8ba5927873df0e2f72a0e98c928fc6fd3b976ccb204663aacc7b0b28e42a"
           },
-          "txid": "305c97a32468ba335af092ebf2777bf189aaf1cfc40e0c2a7c2fb6901fa19dfe",
+          "txid": "31f7ff2e66e33d684b563d36922ee130127533e5eecfe0790975bb32ed070806",
           "vout": 0
         },
         "type": "seallink-auth-entry/1"
       },
-      "leaf_digest": "be86c2a4a01d7e541c8d26c5a3176d7783d5db0fa251a7f9a41fcc07d4e0f258",
-      "merkle_leaf": "9549788adaa35b5a6e7f10ef9f7586177df587eb8505c4d4c0ed6440da432c67",
+      "leaf_digest": "d6f06f94f98863cd199900b666f8ae34fd5c0cdda84eb626cb3b4a682511d3f7",
+      "merkle_leaf": "f59b987560f6be30369c38f450c2e336f7250b066b2a1f819a822e8ba558050f",
       "proof": {
-        "leaf_digest": "be86c2a4a01d7e541c8d26c5a3176d7783d5db0fa251a7f9a41fcc07d4e0f258",
-        "root": "a048d09cd3d50234645190700e898fdce847ebd05d227c12f8f0eeca1d73a175",
+        "leaf_digest": "d6f06f94f98863cd199900b666f8ae34fd5c0cdda84eb626cb3b4a682511d3f7",
+        "root": "ca0615eaa7673ccf8892e58a2b932a5edf5ffa65bdf1205c14c5634adb5f0ad3",
         "steps": [
           {
-            "hash": "2350ebc01b93cd87893050aca0084a0c8e525743c7e164dd22beb0f79a348377",
+            "hash": "1f5a11a1c2e3871631d6a0dcef15119ba21577a3eec5337e7bd0b6beeac2424e",
+            "side": "L"
+          },
+          {
+            "hash": "2c2b27a1b6f40eb5bcbc81cc59313acf5137aafa3ab73d385fc117818f2551f9",
             "side": "R"
           },
           {
-            "hash": "d05dc5624e0f5fecf9093cbc58a653f0d6d38e63f0c0e4449ed42082ab6db2b7",
+            "hash": "0a1e6f5bc5393f6a4b4fa6190a2b3c9a078ff981ac529739b8c03952176d2987",
             "side": "L"
           },
           {
-            "hash": "f00fad23dc832a0fefc6a87ef9e5ab8c98ad48eea0b11a66449ae37c56de9e7e",
+            "hash": "455c3eb1438909b46e4b70213cad160c0e47e3088dad02a31160d3b0c8e07c0b",
             "side": "L"
           },
           {
-            "hash": "bfcd545dd2b225be3b7015c37244ab3cc33f80e836d2eb17d7f46f44edd5056d",
+            "hash": "e46866eec23c473beb06d8d84ef4eb9e277dbef72b906c3db4b66a326aaf0b8f",
             "side": "R"
           },
           {
-            "hash": "b8820650fa2ea195a4a9c35be3566fb852dcc3055bc7f389500c9ee0e60b67dc",
-            "side": "L"
-          },
-          {
-            "hash": "44507ea86b10fef502b041c7ebc62eea5afc978b7d289a892aa876969716620d",
-            "side": "L"
-          },
-          {
-            "hash": "1619d2a34336db90b2bdb29d812ac0d4a8bfc7a5de49c3d26820984499e0dfdb",
+            "hash": "e5b889b280606a2d9a0fda6807a3c6dcad581764ca2aabffbc80705a16f667a8",
             "side": "R"
           },
           {
-            "hash": "e1cbc6b3cd59da69ed9e8ece74ba6f4cf71f884d786bf1aa8922a80df0d0982e",
+            "hash": "4b319106330248e7a0bc5d617a20b5024fa4d1b13fb439687794bd8da8a663f9",
             "side": "L"
+          },
+          {
+            "hash": "820bdb5a8a121c251eb69b81f516b656b2b3cc02e3460f3258f2f0d63be8a144",
+            "side": "L"
+          },
+          {
+            "hash": "bd287bd5731d2684a07c8bdb6970eb37834f0ed30228e043eccccd914c3bf90e",
+            "side": "L"
+          },
+          {
+            "hash": "5440c4402c03d8c2e3597cf884aa558aad8f390aab73fdc8b85935dddf6af9c9",
+            "side": "L"
+          },
+          {
+            "hash": "640dd8072c1edf82af3472a27c7a0ca961b824167d18acc460e66139d245c161",
+            "side": "R"
+          },
+          {
+            "hash": "779002a1f0b339fd8b21805ed162ff02881ff9712e9eb141112df0e71d6d62c8",
+            "side": "R"
+          },
+          {
+            "hash": "324afb5e23c388507891a847e53344f5f4cb40ff0aa6937000bd9f25226802b0",
+            "side": "R"
+          },
+          {
+            "hash": "9f10470c55b34bd11f5f45ff8a531bed02c707033b56576455e1c3fd2e3014cd",
+            "side": "L"
+          },
+          {
+            "hash": "fe36a258bbff315c13b25e3b2799d6adfa33e2d1cd9c671ae2a4dbb4d3e86dfe",
+            "side": "L"
+          },
+          {
+            "hash": "763ce9f7b1b200e117958002663f2da25e5a19ebe5bd9486636ba368ce671861",
+            "side": "R"
           }
         ]
       },
-      "root": "a048d09cd3d50234645190700e898fdce847ebd05d227c12f8f0eeca1d73a175"
+      "root": "ca0615eaa7673ccf8892e58a2b932a5edf5ffa65bdf1205c14c5634adb5f0ad3"
     },
     "smt256_fixed_depth": {
       "D0": "6b26dc4fb4e9c68e1003ac32049cb6272da6e3d9f9196a114862fc6cf6ad6ca2",
@@ -383,6 +415,90 @@
       "schema": "schemas/invocation.schema.json#/$defs/OwnerCommand",
       "signing_digest": "325a1f40fab87d4d46814677c50d9be221b25b943a70d065b9405eea0620992a"
     },
+    "owner_command_fido2_eddsa": {
+      "canonical_jcs": "{\"payload\":{\"arguments\":{\"scope\":\"all\"},\"command\":\"keyholder-halt\",\"exp\":1795220300,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"level\":2,\"network\":\"main\",\"nonce\":\"f16a58575890c51981b86587f682a5d6256dd04d939072a18699cd5388c67f29\",\"owner\":\"id/alice\",\"target_executor\":\"id/station-a\",\"type\":\"seallink-owner-command/1\"},\"signatures\":{\"policy\":{\"alg\":\"fido2-eddsa\",\"m\":1,\"pks\":[\"b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187\"],\"rp_id\":\"seallink.local\"},\"sigs\":[{\"authenticator_data_hex\":\"1f27299f221254a51a39d1f8b526087dc3e409175b2a409d3edf76a062c65f540100000001\",\"client_data_hex\":\"7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a2246453030363633794f555f534c6f4c6c3239374c79657a3670786555632d6f3639386e747756764f774945222c226f726967696e223a2268747470733a2f2f7365616c6c696e6b2e6c6f63616c227d\",\"pk\":\"b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187\",\"sig\":\"ee9d5e49b1821eac754d24d30b33cfb6391e78ce65389e893d8c95e7a0e5eb015dda978c926875bc1b50aac8ad4b5a6e1f69bad53a905e5d48540b00a4d31f01\"}]}}",
+      "content_addr": "f0daf90b2ee10ba2cb038af231597fd3ba156041657d317f11d5c2a5eeb103bd",
+      "object": {
+        "payload": {
+          "arguments": {
+            "scope": "all"
+          },
+          "command": "keyholder-halt",
+          "exp": 1795220300,
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "iat": 1795220000,
+          "level": 2,
+          "network": "main",
+          "nonce": "f16a58575890c51981b86587f682a5d6256dd04d939072a18699cd5388c67f29",
+          "owner": "id/alice",
+          "target_executor": "id/station-a",
+          "type": "seallink-owner-command/1"
+        },
+        "signatures": {
+          "policy": {
+            "alg": "fido2-eddsa",
+            "m": 1,
+            "pks": [
+              "b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187"
+            ],
+            "rp_id": "seallink.local"
+          },
+          "sigs": [
+            {
+              "authenticator_data_hex": "1f27299f221254a51a39d1f8b526087dc3e409175b2a409d3edf76a062c65f540100000001",
+              "client_data_hex": "7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a2246453030363633794f555f534c6f4c6c3239374c79657a3670786555632d6f3639386e747756764f774945222c226f726967696e223a2268747470733a2f2f7365616c6c696e6b2e6c6f63616c227d",
+              "pk": "b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187",
+              "sig": "ee9d5e49b1821eac754d24d30b33cfb6391e78ce65389e893d8c95e7a0e5eb015dda978c926875bc1b50aac8ad4b5a6e1f69bad53a905e5d48540b00a4d31f01"
+            }
+          ]
+        }
+      },
+      "object_id": "149f72dd5d69feafcdf9ecf51a4d4c469a291c1f29bcc71b1367da2da0273b52",
+      "schema": "schemas/invocation.schema.json#/$defs/OwnerCommand",
+      "signing_digest": "144d34ebadf2394fd22e82e5dbdecbc9ecfaa7179473ea3af7c9edc15bcec081"
+    },
+    "owner_command_fido2_es256": {
+      "canonical_jcs": "{\"payload\":{\"arguments\":{\"scope\":\"all\"},\"command\":\"keyholder-halt\",\"exp\":1795220300,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"level\":2,\"network\":\"main\",\"nonce\":\"87ce812ec9c78bb6e1f0b4b41c0591918becb519cbee2d337dba88fd2c7f5afb\",\"owner\":\"id/alice\",\"target_executor\":\"id/station-a\",\"type\":\"seallink-owner-command/1\"},\"signatures\":{\"policy\":{\"alg\":\"fido2-es256\",\"m\":1,\"pks\":[\"02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba\"],\"rp_id\":\"seallink.local\"},\"sigs\":[{\"authenticator_data_hex\":\"1f27299f221254a51a39d1f8b526087dc3e409175b2a409d3edf76a062c65f540500000001\",\"client_data_hex\":\"7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a22614968467a344b37536972756d506e47306d537a67583541314844725858465a436b6237784a6433677645222c226f726967696e223a2268747470733a2f2f7365616c6c696e6b2e6c6f63616c227d\",\"pk\":\"02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba\",\"sig\":\"1332b34965d04b138b7ca7a6601b7dbf6120cb6bfbabe7363ca85c8922a5cc6412e239912cb227ce0259d0ccbd26d5bb116044764c43bcafab346cb6c169fd43\"}]}}",
+      "content_addr": "423652cac3e775514c29b3a1aad341542d84f966d313b73872d2fe872e59ba36",
+      "object": {
+        "payload": {
+          "arguments": {
+            "scope": "all"
+          },
+          "command": "keyholder-halt",
+          "exp": 1795220300,
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "iat": 1795220000,
+          "level": 2,
+          "network": "main",
+          "nonce": "87ce812ec9c78bb6e1f0b4b41c0591918becb519cbee2d337dba88fd2c7f5afb",
+          "owner": "id/alice",
+          "target_executor": "id/station-a",
+          "type": "seallink-owner-command/1"
+        },
+        "signatures": {
+          "policy": {
+            "alg": "fido2-es256",
+            "m": 1,
+            "pks": [
+              "02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba"
+            ],
+            "rp_id": "seallink.local"
+          },
+          "sigs": [
+            {
+              "authenticator_data_hex": "1f27299f221254a51a39d1f8b526087dc3e409175b2a409d3edf76a062c65f540500000001",
+              "client_data_hex": "7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a22614968467a344b37536972756d506e47306d537a67583541314844725858465a436b6237784a6433677645222c226f726967696e223a2268747470733a2f2f7365616c6c696e6b2e6c6f63616c227d",
+              "pk": "02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba",
+              "sig": "1332b34965d04b138b7ca7a6601b7dbf6120cb6bfbabe7363ca85c8922a5cc6412e239912cb227ce0259d0ccbd26d5bb116044764c43bcafab346cb6c169fd43"
+            }
+          ]
+        }
+      },
+      "object_id": "2b529a263c1bdb6ee5373d3e526d99997c8875c082da3a5d029f920e89981256",
+      "schema": "schemas/invocation.schema.json#/$defs/OwnerCommand",
+      "signing_digest": "688845cf82bb4a2aee98f9c6d264b3817e40d470eb5d71590a46fbc4977782f1"
+    },
     "owner_command_p256_low_s": {
       "canonical_jcs": "{\"payload\":{\"arguments\":{\"scope\":\"all\"},\"command\":\"keyholder-halt\",\"exp\":1795220300,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"level\":2,\"network\":\"main\",\"nonce\":\"0d220e68d9460699bcd997a17c7a8aa0c0535ae2c39b7950e1b8dd39668fa699\",\"owner\":\"id/alice\",\"target_executor\":\"id/station-a\",\"type\":\"seallink-owner-command/1\"},\"signatures\":{\"policy\":{\"alg\":\"p256\",\"m\":1,\"pks\":[\"02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba\"]},\"sigs\":[{\"pk\":\"02f3e69444b0a0f56bee14e5b325957cc05ebbceb0238103e81ba534d3a37bbbba\",\"sig\":\"87d98ba50ae94b13720500b3e64c5a8fcc183c8ab234fe3051fd294a560e87da030932c37d3e803983b153a8be8a09e056a5b6270102287eaace2d04e0e5b5a6\"}]}}",
       "content_addr": "3c32bcddae10af34b9d79148bb476c5dcbfee81387ff7e581224b8faf4c45d1a",
@@ -421,6 +537,45 @@
       "object_id": "d6c7f491bf3fae97ead2e8c5d2ce289b6a314877b3088d19c79bd55632a1cf91",
       "schema": "schemas/invocation.schema.json#/$defs/OwnerCommand",
       "signing_digest": "b5f87e28509ca5434631b32d4b3a4a507d85d65e63472c3966f198420be8aa7a"
+    },
+    "owner_command_ssh_ed25519": {
+      "canonical_jcs": "{\"payload\":{\"arguments\":{\"scope\":\"all\"},\"command\":\"keyholder-halt\",\"exp\":1795220300,\"genesis\":\"000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770\",\"iat\":1795220000,\"level\":2,\"network\":\"main\",\"nonce\":\"661e5dddcf5ffda0144a0ed423e643f922cd264f4038a36906ea4f765fb6c346\",\"owner\":\"id/alice\",\"target_executor\":\"id/station-a\",\"type\":\"seallink-owner-command/1\"},\"signatures\":{\"policy\":{\"alg\":\"ssh-ed25519\",\"m\":1,\"pks\":[\"b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187\"]},\"sigs\":[{\"pk\":\"b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187\",\"sig\":\"9cae13b1dfee3468dcd3dc8d7ec4f08d3be48a8bed231dd2fd832c890b2dbd6a7e1a19fab19efa2dfcb1c7010dbd997730cb26fd533a9090205e6e029553cf0d\"}]}}",
+      "content_addr": "c716f973bfa13361f2c893350887c14e1048357b82aac4e3117391a6be0b8691",
+      "object": {
+        "payload": {
+          "arguments": {
+            "scope": "all"
+          },
+          "command": "keyholder-halt",
+          "exp": 1795220300,
+          "genesis": "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770",
+          "iat": 1795220000,
+          "level": 2,
+          "network": "main",
+          "nonce": "661e5dddcf5ffda0144a0ed423e643f922cd264f4038a36906ea4f765fb6c346",
+          "owner": "id/alice",
+          "target_executor": "id/station-a",
+          "type": "seallink-owner-command/1"
+        },
+        "signatures": {
+          "policy": {
+            "alg": "ssh-ed25519",
+            "m": 1,
+            "pks": [
+              "b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187"
+            ]
+          },
+          "sigs": [
+            {
+              "pk": "b9b6bc5fdf4d1d1d2559ff9676d7649e81b1b4d38563e5086c832b2f679b5187",
+              "sig": "9cae13b1dfee3468dcd3dc8d7ec4f08d3be48a8bed231dd2fd832c890b2dbd6a7e1a19fab19efa2dfcb1c7010dbd997730cb26fd533a9090205e6e029553cf0d"
+            }
+          ]
+        }
+      },
+      "object_id": "c0274501579e95d205384d33c93d358b8b296f33fb9d1cf51903da2db0191e93",
+      "schema": "schemas/invocation.schema.json#/$defs/OwnerCommand",
+      "signing_digest": "007a8ec60fbb7d51ed8e67aeb86d8488fa40627774aa85f7bfee900e27f20197"
     },
     "rule": "SL-WIRE-012"
   },
@@ -1529,5 +1684,5 @@
     ],
     "rule": "SL-WIRE-011"
   },
-  "version": "1.0.0-draft.14"
+  "version": "1.0.0-draft.15"
 }

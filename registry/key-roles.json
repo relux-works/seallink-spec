@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Key Role & Custody Registry (SPEC-03). Coherent with registry/object-types.json (verified by tools/speclint.py).",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.14",
+  "version": "1.0.0-draft.15",
   "namecoin_coin_type": 7,
   "roles": [
     {
@@ -54,10 +54,10 @@
       "scheme": "BIP-340 Schnorr",
       "pubkey_encoding": "xonly_64hex",
       "custody_tier": "isolated_signer_with_presence",
-      "derivation_recommendation": "Dedicated isolated key outside wallet accounts",
+      "derivation_recommendation": "Dedicated isolated key outside wallet accounts for any credential or origin certifier (institutions, companies certifying their agents, universities, civil registries, etc.)",
       "published_in": "Name value link.cred (direct x-only pubkey or ThresholdPolicy SHA-256 pin)",
-      "allowed_operations": ["seallink-origin/1", "seallink-guardian/1", "seallink-guardian-roster/1", "seallink-capacity/1", "seallink-end/1", "seallink-credential/1"],
-      "forbidden_operations": ["seallink-grant/1", "seallink-notary/1", "chain_transactions", "seallink-auth-challenge/1"]
+      "allowed_operations": ["seallink-origin/1", "seallink-guardian/1", "seallink-guardian-roster/1", "seallink-capacity/1", "seallink-end/1", "seallink-credential/1", "seallink-log-checkpoint/1", "seallink-log-revocation/1", "seallink-log-reinstatement/1"],
+      "forbidden_operations": ["seallink-grant/1", "seallink-notary/1", "seallink-release/1", "chain_transactions", "seallink-auth-challenge/1"]
     },
     {
       "role": "notary",
@@ -65,7 +65,7 @@
       "scheme": "BIP-340 Schnorr",
       "pubkey_encoding": "xonly_64hex",
       "custody_tier": "isolated_signer_with_presence",
-      "derivation_recommendation": "Dedicated isolated key outside wallet accounts (native BIP-340 HSM or enclave; never HashiCorp Vault Transit)",
+      "derivation_recommendation": "Dedicated isolated key outside wallet accounts for any attestor, auditor, notary, or contract arbiter (native BIP-340 HSM or enclave; never HashiCorp Vault Transit)",
       "published_in": "Name value link.notary (direct x-only pubkey or ThresholdPolicy SHA-256 pin)",
       "allowed_operations": ["seallink-notary/1", "seallink-log-checkpoint/1", "seallink-log-revocation/1", "seallink-log-reinstatement/1"],
       "forbidden_operations": ["seallink-grant/1", "seallink-credential/1", "seallink-release/1", "chain_transactions", "seallink-auth-challenge/1"]
@@ -76,7 +76,7 @@
       "scheme": "BIP-340 Schnorr",
       "pubkey_encoding": "xonly_64hex",
       "custody_tier": "isolated_signer_with_presence",
-      "derivation_recommendation": "Dedicated isolated software-release signing key outside wallet accounts (native BIP-340 HSM or enclave)",
+      "derivation_recommendation": "Dedicated isolated versioned-artifact release signing key outside wallet accounts (software, books, media, datasets, AI weights; native BIP-340 HSM or enclave)",
       "published_in": "Name value link.release (direct x-only pubkey or ThresholdPolicy SHA-256 pin)",
       "allowed_operations": ["seallink-release/1", "seallink-log-checkpoint/1", "seallink-log-revocation/1", "seallink-log-reinstatement/1"],
       "forbidden_operations": ["seallink-grant/1", "seallink-credential/1", "seallink-notary/1", "chain_transactions", "seallink-auth-challenge/1"]
@@ -84,22 +84,22 @@
     {
       "role": "auth",
       "curve": "P-256 | Ed25519 | secp256k1",
-      "scheme": "ECDSA-P256 (low-S) | Ed25519 | BIP-340",
+      "scheme": "ECDSA-P256 (low-S) | Ed25519 | BIP-340 | ssh-ed25519 (SSHSIG) | fido2-es256 | fido2-eddsa",
       "pubkey_encoding": "alg_tagged_hex",
       "custody_tier": "hardware_device_or_isolated_signer",
-      "derivation_recommendation": "Hardware security enclave (Secure Enclave / StrongBox / TPM / HSM raw-digest P-256 or Ed25519 key) or isolated hot signer seed m/84'/7'/2'/0/i (isolated from funding 0' and dynamic pool 10+; standard WebAuthn passkeys wrap authenticatorData and require a future WebAuthn wrapper SLIP rather than raw-digest signing)",
-      "published_in": "seallink-auth-entry/1 (salted Merkle inclusion in manifest sets.auth -> seallink-auth-set-head/1)",
+      "derivation_recommendation": "Hardware security enclave (Secure Enclave / StrongBox / TPM / YubiKey FIDO2 passkey / OpenSSH ssh-agent) or isolated hot signer seed m/84'/7'/2'/0/i (isolated from funding 0' and dynamic pool 10+)",
+      "published_in": "seallink-auth-entry/1 (salted sparse Merkle inclusion in manifest sets.auth -> seallink-auth-set-head/1)",
       "allowed_operations": ["seallink-auth-challenge/1", "seallink-auth-upgrade/1"],
       "forbidden_operations": ["seallink-grant/1", "seallink-assent/1", "seallink-owner-command/1", "chain_transactions"]
     },
     {
       "role": "recipient",
-      "curve": "secp256k1",
-      "scheme": "BIP-340 Schnorr",
-      "pubkey_encoding": "xonly_64hex",
+      "curve": "secp256k1 | P-256 | Ed25519",
+      "scheme": "BIP-340 Schnorr | ECDSA-P256 (low-S) | Ed25519 | ssh-ed25519 | fido2-es256 | fido2-eddsa",
+      "pubkey_encoding": "alg_tagged_hex",
       "custody_tier": "hot_service_or_keyholder",
-      "derivation_recommendation": "Per-task ephemeral key or dedicated request key pinned in grant.recipient",
-      "published_in": "seallink-grant/1 recipient (key, name's nostr/request key, or group threshold)",
+      "derivation_recommendation": "Per-task ephemeral key, hardware enclave/FIDO2/SSH key, or dedicated request key pinned in grant.recipient",
+      "published_in": "seallink-grant/1 recipient (key, name's nostr/request key, or DeviceThresholdPolicy group)",
       "allowed_operations": ["seallink-invocation/1", "seallink-session-open/1"],
       "forbidden_operations": ["seallink-grant/1", "seallink-origin/1", "seallink-credential/1"]
     },
@@ -209,18 +209,18 @@
       "pubkey_encoding": "compressed_66hex",
       "custody_tier": "ephemeral_csprng_destroyed_after_presign",
       "derivation_recommendation": "CSPRNG ONLY — NEVER BIP-39 derived; destroy private key immediately after recording pre-signed tx_revoke",
-      "published_in": "seallink-auth-entry/1 seal, seallink-device-entry/1 seal, seallink-members-list/1 entry seal, optional seallink-statement/1 seal",
+      "published_in": "seallink-auth-entry/1 seal, seallink-device-entry/1 seal, seallink-member-entry/1 seal, optional seallink-statement/1 seal",
       "allowed_operations": ["One pre-signed fast-revocation transaction with P2A CPFP anchor output"],
       "forbidden_operations": ["seed_derivation", "key_retention_after_presign"]
     },
     {
       "role": "device",
       "curve": "P-256 | Ed25519 | secp256k1",
-      "scheme": "ECDSA-P256 (low-S) | Ed25519 | BIP-340",
+      "scheme": "ECDSA-P256 (low-S) | Ed25519 | BIP-340 | ssh-ed25519 (SSHSIG) | fido2-es256 | fido2-eddsa",
       "pubkey_encoding": "alg_tagged_hex",
       "custody_tier": "hardware_device",
-      "derivation_recommendation": "Generated inside hardware enclave or device keystore (non-exportable for L2)",
-      "published_in": "seallink-device-entry/1 (salted Merkle inclusion in manifest sets.devices -> seallink-device-set-head/1)",
+      "derivation_recommendation": "Generated inside hardware enclave, FIDO2 token, or device keystore (non-exportable for L2; use fido2-es256 / fido2-eddsa with presence_attestation='up'|'uv' for cryptographically attested physical presence)",
+      "published_in": "seallink-device-entry/1 (salted sparse Merkle inclusion in manifest sets.devices -> seallink-device-set-head/1)",
       "allowed_operations": ["seallink-owner-command/1", "seallink-statement/1"],
       "forbidden_operations": ["seallink-auth-challenge/1", "seallink-grant/1", "seallink-assent/1", "chain_transactions"]
     },
@@ -253,9 +253,9 @@
       "pubkey_encoding": "compressed_66hex",
       "custody_tier": "isolated_signer_with_presence",
       "derivation_recommendation": "Dedicated isolated ECDSA HSM/KMS account strictly separated from hot funding keys",
-      "published_in": "manifest.notary.log.genesis_seal, manifest.release.log.genesis_seal, and seallink-log-checkpoint/1 next_log_policy",
+      "published_in": "manifest.notary.log.genesis_seal, manifest.release.log.genesis_seal, manifest.cred.log.genesis_seal, and seallink-log-checkpoint/1 next_log_policy",
       "allowed_operations": ["LOG_CHECKPOINT (0x14)"],
-      "forbidden_operations": ["seallink-grant/1", "seallink-notary/1", "seallink-release/1", "ordinary_fee_funding"]
+      "forbidden_operations": ["seallink-grant/1", "seallink-notary/1", "seallink-release/1", "seallink-credential/1", "ordinary_fee_funding"]
     },
     {
       "role": "notary_seal",

@@ -442,7 +442,30 @@ def _normalize_policy(p: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {"m": p["m"], "pks": list(p["pks"])}
     if "alg" in p and p["alg"] != "bip340":
         out["alg"] = p["alg"]
+    if "rp_id" in p:
+        out["rp_id"] = p["rp_id"]
     return out
+
+
+def _rp_id_matches_service(rp_id: str, service_id: str) -> bool:
+    """Verify FIDO2 rp_id matches or is a suffix domain of service_id."""
+    host = service_id
+    if host.startswith("https://"):
+        host = host[len("https://") :].split("/", 1)[0].split(":", 1)[0]
+    host_l = host.lower()
+    return host_l == rp_id or host_l.endswith("." + rp_id)
+
+
+def _recipient_expected_policy(rcpt: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """Derive expected DeviceThresholdPolicy and optional required presence_attestation from grant.recipient(key|group)."""
+    if rcpt["mode"] == "key":
+        pol: dict[str, Any] = {"m": 1, "pks": [rcpt["key"]]}
+        if "alg" in rcpt:
+            pol["alg"] = rcpt["alg"]
+        if "rp_id" in rcpt:
+            pol["rp_id"] = rcpt["rp_id"]
+        return pol, rcpt.get("presence_attestation")
+    return rcpt["threshold"], rcpt.get("presence_attestation")
 
 
 def _policy_sha256(p: dict[str, Any]) -> str:
@@ -471,6 +494,9 @@ _CURVE_VALIDATORS: dict[str, Any] = {
     "bip340": sl.is_valid_xonly_pubkey,
     "p256": sl.is_valid_p256_compressed_pubkey,
     "ed25519": sl.is_valid_ed25519_pubkey,
+    "ssh-ed25519": sl.is_valid_ed25519_pubkey,
+    "fido2-es256": sl.is_valid_p256_compressed_pubkey,
+    "fido2-eddsa": sl.is_valid_ed25519_pubkey,
     "x25519": sl.is_valid_x25519_pubkey,
     "secp256k1_comp": sl.is_valid_compressed_pubkey,
 }
@@ -542,8 +568,11 @@ def _collect_curve_key_errors(
                 bad_sig = True
         return bad_key, bad_sig, False
 
-    # 3. Salted AuthEntry/DeviceEntry, AuthChallenge/AuthUpgrade, & transport-binding statement subject
-    if "alg" in obj and "key" in obj and obj.get("type") in ("seallink-auth-entry/1", "seallink-device-entry/1"):
+    # 3. Salted AuthEntry/DeviceEntry, grant.recipient/RecipientRule(key|exact_key), AuthChallenge/AuthUpgrade, & transport-binding statement subject
+    if "alg" in obj and "key" in obj and (
+        obj.get("type") in ("seallink-auth-entry/1", "seallink-device-entry/1")
+        or obj.get("mode") in ("key", "exact_key")
+    ):
         fn = _CURVE_VALIDATORS.get(obj["alg"])
         if fn is not None and not fn(obj["key"]):
             return True, False, False
@@ -2599,8 +2628,9 @@ class Tier1Verifier:
         unpinned_err: str,
         pin_mismatch_err: str,
         journal: FencedJournal | None = None,
+        expected_rp_id: str | None = None,
     ) -> tuple[dict[str, Any] | None, str | None]:
-        """Verify fixed-depth (8-step, 256-leaf) size-hiding salted Merkle entry proof & durable seal state against confirmed manifest.sets.<set_key> (SPEC-03 §3.1/§5, D14-H01, D14-B11)."""
+        """Verify fixed-depth (16-step, 2^16-slot) size-hiding salted sparse Merkle entry proof & durable seal state against confirmed manifest.sets.<set_key> (SPEC-03 §3.1/§5)."""
         set_pin = man.get("sets", {}).get(set_key)
         if not isinstance(set_pin, dict) or not isinstance(entry_proof, dict):
             return None, unpinned_err
@@ -2632,6 +2662,7 @@ class Tier1Verifier:
             or e_res["owner"] != owner_name
             or e_res["alg"] != expected_alg
             or e_res["key"] != expected_key
+            or e_res.get("rp_id") != expected_rp_id
         ):
             return None, unpinned_err
         proof = entry_proof["proof"]
@@ -2640,7 +2671,7 @@ class Tier1Verifier:
             len(proof.get("steps", [])) != sl.FIXED_SALTED_SET_PROOF_STEPS
             or proof.get("leaf_digest") != leaf_digest
             or proof.get("root") != h_res["merkle_root"]
-            or not sl.verify_merkle_proof(proof)
+            or not sl.verify_merkle_proof(proof, max_steps=sl.FIXED_SALTED_SET_PROOF_STEPS)
         ):
             return None, pin_mismatch_err
         # SL-IDEN-003: Disclosed BIP-340 auth/device key MUST be disjoint from owner_policy, all link.* role keys, and nostr
@@ -2795,10 +2826,17 @@ class Tier1Verifier:
             or chain.now >= p["expires_at"]
         ):
             return VerifierResult("REFUSE", "AUTH_CHALLENGE_EXPIRED")
+        sig_rp_id: str | None = None
+        exp_auth_pol: dict[str, Any] = {"alg": p["auth_alg"], "m": 1, "pks": [p["auth_pubkey"]]}
+        if p["auth_alg"] in sl.FIDO2_ALGS:
+            sig_rp_id = challenge_env["signatures"]["policy"].get("rp_id")
+            if not isinstance(sig_rp_id, str) or not _rp_id_matches_service(sig_rp_id, service_id):
+                return VerifierResult("REFUSE", "AUTH_CHALLENGE_INVALID")
+            exp_auth_pol["rp_id"] = sig_rp_id
         ok_sig, code_sig = sl.verify_signature_set(
             sl.signing_digest(p),
             challenge_env["signatures"],
-            expected_policy={"alg": p["auth_alg"], "m": 1, "pks": [p["auth_pubkey"]]},
+            expected_policy=exp_auth_pol,
             obj_type="seallink-auth-challenge/1",
         )
         if not ok_sig:
@@ -2835,7 +2873,7 @@ class Tier1Verifier:
             if merr:
                 return VerifierResult("REFUSE", merr)
             assert man is not None
-            _, aerr = self._verify_salted_set_entry_proof(
+            matched_a, aerr = self._verify_salted_set_entry_proof(
                 auth_proof,
                 set_key="auth",
                 head_type="seallink-auth-set-head/1",
@@ -2850,9 +2888,13 @@ class Tier1Verifier:
                 unpinned_err="AUTH_KEY_UNPINNED",
                 pin_mismatch_err="AUTH_KEY_UNPINNED",
                 journal=journal,
+                expected_rp_id=sig_rp_id,
             )
             if aerr:
                 return VerifierResult("REFUSE", aerr)
+            assert matched_a is not None
+            if not sl.check_signature_set_presence(challenge_env["signatures"], matched_a.get("presence_attestation")):
+                return VerifierResult("REFUSE", "AUTH_CHALLENGE_INVALID")
             out_details["name"] = p["name"]
             out_details["registration"] = copy.deepcopy(nrec["registration"])
             out_details["owner_policy"] = copy.deepcopy(nrec["owner_policy"])
@@ -2925,10 +2967,17 @@ class Tier1Verifier:
             return VerifierResult("REFUSE", "AUTH_KEY_UNPINNED")
         if (p["expires_at"] - p["issued_at"]) > 120 or chain.now < p["issued_at"] or chain.now >= p["expires_at"]:
             return VerifierResult("REFUSE", "AUTH_CHALLENGE_EXPIRED")
+        up_rp_id: str | None = None
+        exp_up_pol: dict[str, Any] = {"alg": expected_provisional_auth_alg, "m": 1, "pks": [expected_provisional_auth_pubkey]}
+        if expected_provisional_auth_alg in sl.FIDO2_ALGS:
+            up_rp_id = upgrade_env["signatures"]["policy"].get("rp_id")
+            if not isinstance(up_rp_id, str) or not _rp_id_matches_service(up_rp_id, expected_service_id):
+                return VerifierResult("REFUSE", "AUTH_CHALLENGE_INVALID")
+            exp_up_pol["rp_id"] = up_rp_id
         ok_sig, code_sig = sl.verify_signature_set(
             sl.signing_digest(p),
             upgrade_env["signatures"],
-            expected_policy={"alg": expected_provisional_auth_alg, "m": 1, "pks": [expected_provisional_auth_pubkey]},
+            expected_policy=exp_up_pol,
             obj_type="seallink-auth-upgrade/1",
         )
         if not ok_sig:
@@ -2966,7 +3015,7 @@ class Tier1Verifier:
         if merr:
             return VerifierResult("REFUSE", merr)
         assert man is not None
-        _, aerr = self._verify_salted_set_entry_proof(
+        matched_u, aerr = self._verify_salted_set_entry_proof(
             auth_proof,
             set_key="auth",
             head_type="seallink-auth-set-head/1",
@@ -2981,9 +3030,13 @@ class Tier1Verifier:
             unpinned_err="AUTH_KEY_UNPINNED",
             pin_mismatch_err="AUTH_KEY_UNPINNED",
             journal=journal,
+            expected_rp_id=up_rp_id,
         )
         if aerr:
             return VerifierResult("REFUSE", aerr)
+        assert matched_u is not None
+        if not sl.check_signature_set_presence(upgrade_env["signatures"], matched_u.get("presence_attestation")):
+            return VerifierResult("REFUSE", "AUTH_CHALLENGE_INVALID")
         jw, jw_err = _append_journal_checked(
             journal,
             "nonce",
@@ -3091,11 +3144,16 @@ class Tier1Verifier:
             unpinned_err="DEVICE_UNAUTHORIZED",
             pin_mismatch_err="MANIFEST_MISMATCH",
             journal=journal,
+            expected_rp_id=sig_pol.get("rp_id"),
         )
         if derr:
             return VerifierResult("REFUSE", derr)
         assert matched is not None
-        if p["level"] > matched["ceiling"] or (p["level"] == 2 and not matched.get("presence", False)):
+        if (
+            p["level"] > matched["ceiling"]
+            or (p["level"] == 2 and not matched.get("presence", False))
+            or not sl.check_signature_set_presence(cmd_env["signatures"], matched.get("presence_attestation"))
+        ):
             return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
         j_writes: list[dict[str, Any]] = []
         if journal is not None and record_nonce:
@@ -5646,8 +5704,10 @@ class Tier1Verifier:
         withdrawal_doc: dict[str, Any] | None = None,
         origin_bundle: dict[str, Any] | None = None,
         issuer_origin_bundle: dict[str, Any] | None = None,
+        log_ctx: dict[str, Any] | None = None,
+        allow_reinstatement: bool = True,
     ) -> VerifierResult:
-        """Execute SPEC-05 §4.2 deterministic 8-step credential verification order (D-6, R2-03, H-4, R3 H8)."""
+        """Execute SPEC-05 §4.2 deterministic 8-step credential verification order (0x09 eternal/revocable & 0x14 log_tracked)."""
         # 1. Wire & closed Draft 2020-12 schema check
         ok_w, w_res = self._verify_object_wire(cred_env, expected_type="seallink-credential/1")
         if not ok_w:
@@ -5663,14 +5723,32 @@ class Tier1Verifier:
         obs_err = self.check_chain_observation(chain, risk_class=2)
         if obs_err:
             return VerifierResult("REFUSE", obs_err)
-        # 4. Signed-form 0x09 anchor (resolved BEFORE subject lookup so eternal subject uses h_anchor! D-6)
-        atx = chain.get_tx(anchor_txid) if anchor_txid else None
-        if self._decode_opreturn_tx(atx, expected_action="0x09", expected_commitment=sl.content_addr(cred_env)) is None:
-            return VerifierResult("REFUSE", "CRED_ANCHOR_MISSING")
-        assert atx is not None
-        h_anchor = atx["confirmed_height"]
-        if chain.tip_height - h_anchor + 1 < self.operator_min_depth:
-            return VerifierResult("REFUSE", "CHAIN_DEPTH_INSUFFICIENT")
+        # 4. Anchor: either 0x14 transparency/denial log (log_tracked) OR signed-form 0x09 anchor (eternal/revocable)
+        lt_det: dict[str, Any] = {}
+        if cp["lifecycle"] == "log_tracked":
+            ok_lt, lt_err, lt_det = self._verify_log_tracked_item(
+                cred_env,
+                cp["log_id"],
+                "cred",
+                cp["issuer"],
+                f"cred:{cred_id}|*",
+                log_ctx,
+                chain,
+                journal=journal,
+                allow_reinstatement=allow_reinstatement,
+                origin_bundle=issuer_origin_bundle,
+            )
+            if not ok_lt:
+                return VerifierResult("REFUSE", lt_err)
+            h_anchor = int(lt_det["head_height"])
+        else:
+            atx = chain.get_tx(anchor_txid) if anchor_txid else None
+            if self._decode_opreturn_tx(atx, expected_action="0x09", expected_commitment=sl.content_addr(cred_env)) is None:
+                return VerifierResult("REFUSE", "CRED_ANCHOR_MISSING")
+            assert atx is not None
+            h_anchor = atx["confirmed_height"]
+            if chain.tip_height - h_anchor + 1 < self.operator_min_depth:
+                return VerifierResult("REFUSE", "CHAIN_DEPTH_INSUFFICIENT")
         # 5. Subject verification: eternal name_pin checked at h_anchor (D-6); mode='origin' MANDATORY origin_bundle (R2-03)!
         subj = cp["subject"]
         if subj.get("mode") == "name":
@@ -5703,20 +5781,21 @@ class Tier1Verifier:
             assert wstate is not None
             if wstate["origin_id"] != subj["origin_id"]:
                 return VerifierResult("REFUSE", "ORIGIN_UNVERIFIED")
-        # 6. Issuer history, owner_policy, link.cred policy (at tip for revocable, at h_anchor for eternal), policy-scoped 0x0b h_c break
-        iss = cp["issuer"]
-        i_err = self.verify_issuer_role_at_height(
-            iss,
-            cred_env,
-            "cred",
-            h_anchor,
-            chain,
-            resolve_at_tip=(cp["lifecycle"] != "eternal"),
-            journal=journal,
-            origin_bundle=issuer_origin_bundle,
-        )
-        if i_err:
-            return VerifierResult("REFUSE", i_err)
+        # 6. Issuer history, owner_policy, link.cred policy (already verified inside _verify_log_tracked_item for log_tracked)
+        if cp["lifecycle"] != "log_tracked":
+            iss = cp["issuer"]
+            i_err = self.verify_issuer_role_at_height(
+                iss,
+                cred_env,
+                "cred",
+                h_anchor,
+                chain,
+                resolve_at_tip=(cp["lifecycle"] != "eternal"),
+                journal=journal,
+                origin_bundle=issuer_origin_bundle,
+            )
+            if i_err:
+                return VerifierResult("REFUSE", i_err)
         # 7. Height window AND calendar not_after_unix check (R3 H8)
         if chain.tip_height < cp["not_before_height"]:
             return VerifierResult("REFUSE", "CRED_WINDOW_CLOSED")
@@ -5756,7 +5835,7 @@ class Tier1Verifier:
             )
             if serr:
                 return VerifierResult("REFUSE", serr)
-        return VerifierResult("ADMIT", None, outcome="executed")
+        return VerifierResult("ADMIT", None, outcome="executed", details=lt_det)
 
     def verify_notary_act(
         self,
@@ -5786,6 +5865,12 @@ class Tier1Verifier:
         if np.get("act_kind") == "artifact-notarization":
             if np["target_sha256"] != sl.artifact_target_id(np["details"]["artifact_identity"]):
                 return VerifierResult("REFUSE", "WIRE_MEMBER")
+        elif np.get("act_kind") == "contract-ruling":
+            det_cr = np["details"]
+            if np["target_sha256"] != det_cr["contract_id"]:
+                return VerifierResult("REFUSE", "WIRE_MEMBER")
+            if "disclosed_clause_indices" in det_cr and det_cr["disclosed_clause_indices"] != sorted(set(det_cr["disclosed_clause_indices"])):
+                return VerifierResult("REFUSE", "WIRE_INTEGER")
         notary_pin = np["notary"]
         if expected_notary_name is not None and notary_pin["name"] != expected_notary_name:
             return VerifierResult("REFUSE", "NOTARY_REQUIRED")
@@ -5874,7 +5959,7 @@ class Tier1Verifier:
         origin_bundle: dict[str, Any] | None = None,
         expected_first_denials_root: str | None = None,
     ) -> tuple[set[str], str | None, dict[str, dict[str, Any]], str | None]:
-        """Iteratively authenticate an O(1) log handover predecessor chain (<= 16 hops, O(n) non-recursive) enforcing on-chain handover_next_policy continuation (L_child.genesis_seal_outpoint == (T_pred, 1)) and returning (valid_pred_lids, first_pred_denials_root, pred_cps_by_lid, err) (BLK-5, D14-B07)."""
+        """Iteratively authenticate an O(1) log handover predecessor chain (<= 256 hops, O(n) non-recursive) enforcing on-chain handover_next_policy continuation (L_child.genesis_seal_outpoint == (T_pred, 1)) and returning (valid_pred_lids, first_pred_denials_root, pred_cps_by_lid, err) (BLK-5, D14-B07)."""
         if start_pred_lid is None:
             return set(), None, {}, None
         pred_items: list[dict[str, Any]] = []
@@ -5883,7 +5968,7 @@ class Tier1Verifier:
         elif isinstance(predecessor_terminal_checkpoint, dict):
             pred_items = [predecessor_terminal_checkpoint]
 
-        # Pass 1: Walk top-down collecting hops (<= 16, cycle-free) and locating oldest anchor (genesis log or journaled head)
+        # Pass 1: Walk top-down collecting hops (<= 256, cycle-free) and locating oldest anchor (genesis log or journaled head)
         hops: list[tuple[str, dict[str, Any], str, dict[str, Any]]] = []
         seen_lids: set[str] = set()
         cur_pred_lid: str | None = start_pred_lid
@@ -5892,7 +5977,7 @@ class Tier1Verifier:
         tail_journal_dr: str | None = None
         pred_cps_by_lid: dict[str, dict[str, Any]] = {}
         while cur_pred_lid is not None:
-            if cur_pred_lid in seen_lids or len(seen_lids) == 16:
+            if cur_pred_lid in seen_lids or len(seen_lids) == 256:
                 return set(), None, {}, "CHAIN_FRAME_INVALID"
             if journal is not None and journal.lookup_closure({"log_id": cur_pred_lid, "role": role, "subject_kind": "log"}) is not None:
                 return set(), None, {}, "NOTARY_LOG_COMPROMISED"
@@ -5946,7 +6031,7 @@ class Tier1Verifier:
                 cur_pred_lid = ex_pred.get("predecessor_log_id")
                 idx += 1
                 while cur_pred_lid is not None:
-                    if cur_pred_lid in seen_lids or len(seen_lids) == 16:
+                    if cur_pred_lid in seen_lids or len(seen_lids) == 256:
                         return set(), None, {}, "CHAIN_FRAME_INVALID"
                     if journal.lookup_closure({"log_id": cur_pred_lid, "role": role, "subject_kind": "log"}) is not None:
                         return set(), None, {}, "NOTARY_LOG_COMPROMISED"
@@ -7862,41 +7947,121 @@ class Tier1Verifier:
                 return VerifierResult("REFUSE", "CHAIN_FRAME_INVALID")
         return VerifierResult("ADMIT", None, outcome="executed", details={"termination_id": sl.object_id(tp)})
 
-    def verify_certset_head(
+    def verify_cert_entry_proof(
         self,
-        head_obj: dict[str, Any],
-        statements: list[dict[str, Any]],
+        cert_proof: dict[str, Any] | None,
+        stmt_env: dict[str, Any],
         owner_manifest: dict[str, Any],
     ) -> VerifierResult:
-        """Verify seallink-certset-head/1 set_sha256 = SHA256(JCS(sorted_content_addrs)), network/owner, & manifest pin (SPEC-03 §3.1, S-19, H-24, D14-H07)."""
-        ok_h, h_res = self._verify_object_wire(head_obj, expected_type="seallink-certset-head/1")
+        """Verify salted depth-20 size-hiding Merkle CertEntryProof pinning seallink-statement/1 to owner_manifest.sets.certs (SPEC-03 §3.1)."""
+        ok_s, s_res = self._verify_object_wire(stmt_env, expected_type="seallink-statement/1")
+        if not ok_s:
+            return VerifierResult("REFUSE", s_res)
+        pin = owner_manifest.get("sets", {}).get("certs")
+        if not isinstance(pin, dict) or not isinstance(cert_proof, dict):
+            return VerifierResult("REFUSE", "MANIFEST_MISMATCH")
+        if set(cert_proof.keys()) != {"head", "entry", "proof"}:
+            return VerifierResult("REFUSE", "WIRE_MEMBER")
+        ok_h, h_res = self._verify_object_wire(cert_proof["head"], expected_type="seallink-cert-set-head/1")
         if not ok_h:
             return VerifierResult("REFUSE", h_res)
-        pin = owner_manifest.get("sets", {}).get("certs")
+        ok_e, e_res = self._verify_object_wire(cert_proof["entry"], expected_type="seallink-cert-entry/1")
+        if not ok_e:
+            return VerifierResult("REFUSE", e_res)
+        if self.enforce_schemas:
+            perr = validate_against_schema(
+                "common.schema.json#/$defs/SetEntryMerkleProof20",
+                cert_proof["proof"],
+                require_jsonschema=self.require_jsonschema,
+            )
+            if perr is not None:
+                return VerifierResult("REFUSE", perr)
+        sp = s_res["payload"]
         if (
-            not pin
-            or sl.content_addr(h_res) != pin.get("sha256")
-            or h_res.get("seq") != pin.get("seq")
-            or h_res.get("network") != owner_manifest.get("network")
-            or h_res.get("issuer_name") != owner_manifest.get("owner")
+            sl.content_addr(h_res) != pin.get("sha256")
+            or h_res["seq"] != pin.get("seq")
+            or h_res["network"] != owner_manifest.get("network")
+            or h_res["owner"] != owner_manifest.get("owner")
+            or e_res["network"] != h_res["network"]
+            or e_res["owner"] != h_res["owner"]
+            or sp["network"] != h_res["network"]
+            or sp["issuer"]["name"] != h_res["owner"]
+            or e_res["statement_kind"] != sp["statement_kind"]
+            or e_res["statement_id"] != sl.object_id(sp)
+            or e_res["statement_content_addr"] != sl.content_addr(s_res)
+            or e_res["seq"] != sp["seq"]
         ):
             return VerifierResult("REFUSE", "MANIFEST_MISMATCH")
-        caddrs: list[str] = []
-        for st in statements:
-            ok_s, s_res = self._verify_object_wire(st, expected_type="seallink-statement/1")
-            if not ok_s:
-                return VerifierResult("REFUSE", s_res)
-            if (
-                s_res["payload"]["network"] != h_res["network"]
-                or s_res["payload"]["issuer"]["name"] != h_res["issuer_name"]
-            ):
-                return VerifierResult("REFUSE", "MANIFEST_MISMATCH")
-            caddrs.append(sl.content_addr(s_res))
-        sorted_caddrs = sorted(set(caddrs))
-        expected_set_sha = sl.sha256(sl._jcs_serialize(sorted_caddrs, None, (), 0).encode("utf-8")).hex()
-        if len(sorted_caddrs) != h_res["count"] or expected_set_sha != h_res["set_sha256"]:
+        proof = cert_proof["proof"]
+        leaf_digest = sl.signing_digest(e_res).hex()
+        if (
+            len(proof.get("steps", [])) != sl.FIXED_CERT_SET_PROOF_STEPS
+            or proof.get("leaf_digest") != leaf_digest
+            or proof.get("root") != h_res["merkle_root"]
+            or not sl.verify_merkle_proof(proof, max_steps=sl.FIXED_CERT_SET_PROOF_STEPS)
+        ):
             return VerifierResult("REFUSE", "MANIFEST_MISMATCH")
-        return VerifierResult("ADMIT", None, outcome="executed", details={"count": len(sorted_caddrs), "set_sha256": expected_set_sha})
+        return VerifierResult("ADMIT", None, outcome="executed", details={"statement_id": e_res["statement_id"], "merkle_root": h_res["merkle_root"]})
+
+    def verify_member_entry_proof(
+        self,
+        member_proof: dict[str, Any] | None,
+        member_pin: dict[str, Any],
+        operator_name: str,
+        operator_manifest: dict[str, Any],
+        chain: ChainView,
+        *,
+        journal: FencedJournal | None = None,
+        required_depth: int = 1,
+    ) -> VerifierResult:
+        """Verify salted depth-34 size-hiding Merkle MemberEntryProof & live seal pinning member_pin to operator_manifest.sets.members (SPEC-03 §3.1)."""
+        pin = operator_manifest.get("sets", {}).get("members")
+        if not isinstance(pin, dict) or not isinstance(member_proof, dict):
+            return VerifierResult("REFUSE", "MANIFEST_MISMATCH")
+        if set(member_proof.keys()) != {"head", "entry", "proof"}:
+            return VerifierResult("REFUSE", "WIRE_MEMBER")
+        ok_h, h_res = self._verify_object_wire(member_proof["head"], expected_type="seallink-member-set-head/1")
+        if not ok_h:
+            return VerifierResult("REFUSE", h_res)
+        ok_e, e_res = self._verify_object_wire(member_proof["entry"], expected_type="seallink-member-entry/1")
+        if not ok_e:
+            return VerifierResult("REFUSE", e_res)
+        if self.enforce_schemas:
+            perr = validate_against_schema(
+                "common.schema.json#/$defs/SetEntryMerkleProof34",
+                member_proof["proof"],
+                require_jsonschema=self.require_jsonschema,
+            )
+            if perr is not None:
+                return VerifierResult("REFUSE", perr)
+        if (
+            sl.content_addr(h_res) != pin.get("sha256")
+            or h_res["seq"] != pin.get("seq")
+            or h_res["network"] != chain.network
+            or h_res["owner"] != operator_name
+            or e_res["network"] != chain.network
+            or e_res["owner"] != operator_name
+            or not _name_pin_equal(e_res, member_pin)
+        ):
+            return VerifierResult("REFUSE", "MANIFEST_MISMATCH")
+        proof = member_proof["proof"]
+        leaf_digest = sl.signing_digest(e_res).hex()
+        if (
+            len(proof.get("steps", [])) != sl.FIXED_MEMBER_SET_PROOF_STEPS
+            or proof.get("leaf_digest") != leaf_digest
+            or proof.get("root") != h_res["merkle_root"]
+            or not sl.verify_merkle_proof(proof, max_steps=sl.FIXED_MEMBER_SET_PROOF_STEPS)
+        ):
+            return VerifierResult("REFUSE", "MANIFEST_MISMATCH")
+        ms_subj = {"outpoint": {"txid": e_res["seal"]["txid"], "vout": e_res["seal"]["vout"]}, "subject_kind": "seal"}
+        if journal is not None and journal.lookup_closure(ms_subj) is not None:
+            return VerifierResult("REFUSE", "SEAL_SPENT")
+        _, serr, _ = self.evaluate_seal(
+            e_res["seal"], chain, required_depth=required_depth, journal=journal, closure_subject=ms_subj
+        )
+        if serr:
+            return VerifierResult("REFUSE", serr)
+        return VerifierResult("ADMIT", None, outcome="executed", details={"member_name": e_res["name"], "roles": list(e_res.get("roles", []))})
 
     _PRIVILEGED_STATEMENT_KINDS = frozenset({"root-rotate", "root-cancel", "migration-accept", "migration-fence"})
 
@@ -8003,17 +8168,20 @@ class Tier1Verifier:
                         unpinned_err="DEVICE_UNAUTHORIZED",
                         pin_mismatch_err="MANIFEST_MISMATCH",
                         journal=journal,
+                        expected_rp_id=sig_pol.get("rp_id"),
                     )
                     if derr:
                         return VerifierResult("REFUSE", derr)
                     assert matched is not None
-                    # Normative device ceiling/presence matrix (D14-B06):
+                    # Normative device ceiling/presence matrix (D14-B06, draft.15 presence_attestation):
                     # - config-section requires ceiling == 2 AND presence == True
                     # - identity-link / transport-binding / profile-section require ceiling >= 1 (blocks L0 read-only escalation)
                     if skind == "config-section":
                         if matched["ceiling"] < 2 or not matched.get("presence", False):
                             return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
                     elif matched["ceiling"] < 1:
+                        return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
+                    if not sl.check_signature_set_presence(stmt_env["signatures"], matched.get("presence_attestation")):
                         return VerifierResult("REFUSE", "DEVICE_UNAUTHORIZED")
                 else:
                     # Default: verify against issuer's live BIP-340 link.grant policy (+ 0x0b compromise cutoff)
@@ -8087,7 +8255,11 @@ class Tier1Verifier:
                 return _name_pin_equal(party["name_pin"], actor_pin)
             return False
         if rmode == "key":
-            return "signing_policy" in party and _normalize_policy(party["signing_policy"]) == {"m": 1, "pks": [actor_pin["key"]]}
+            return (
+                "alg" not in actor_pin
+                and "signing_policy" in party
+                and _normalize_policy(party["signing_policy"]) == {"m": 1, "pks": [actor_pin["key"]]}
+            )
         if rmode == "group":
             return "signing_policy" in party and _normalize_policy(party["signing_policy"]) == _normalize_policy(actor_pin["threshold"])
         return False
@@ -8231,23 +8403,16 @@ class Tier1Verifier:
         if "issuer" not in root_gp:
             return VerifierResult("REFUSE", "GRANT_NOT_DELEGABLE")
 
-        # Step 3b: Early recipient authentication for key/group BEFORE cached-receipt lookup!
+        # Step 3b: Early recipient authentication for key/group (supports bip340, p256, ed25519, ssh-ed25519, fido2-*) BEFORE cached-receipt lookup!
         rcpt_spec = leaf_gp["recipient"]
-        if rcpt_spec["mode"] == "key":
+        if rcpt_spec["mode"] in ("key", "group"):
+            exp_rpol, req_rpres = _recipient_expected_policy(rcpt_spec)
             ok_r, rcode = sl.verify_signature_set(
                 sl.signing_digest(inv_p),
                 inv_env["signatures"],
-                expected_policy={"m": 1, "pks": [rcpt_spec["key"]]},
+                expected_policy=exp_rpol,
                 obj_type="seallink-invocation/1",
-            )
-            if not ok_r:
-                return VerifierResult("REFUSE", rcode)
-        elif rcpt_spec["mode"] == "group":
-            ok_r, rcode = sl.verify_signature_set(
-                sl.signing_digest(inv_p),
-                inv_env["signatures"],
-                expected_policy=rcpt_spec["threshold"],
-                obj_type="seallink-invocation/1",
+                required_presence=req_rpres,
             )
             if not ok_r:
                 return VerifierResult("REFUSE", rcode)
@@ -9067,19 +9232,29 @@ class Tier1Verifier:
                 or leaf_gp.get("executor") != tpl["executor"]
                 or leaf_gp["not_before_height"] < root_gp["not_before_height"]
                 or leaf_gp["not_after_height"] > root_gp["not_after_height"]
+                or (
+                    "not_after_unix" in root_gp
+                    and ("not_after_unix" not in leaf_gp or leaf_gp["not_after_unix"] > root_gp["not_after_unix"])
+                )
             ):
                 return False, VerifierResult("REFUSE", "GRANT_CHILD_WIDER"), {}
-            # B-6: Enforce template.recipient_rule (exact_key, exact_name with registration, member_class) + child_seal_key + capabilities!
+            # B-6: Enforce template.recipient_rule (exact_key, exact_name with registration, member_class via depth-34 MemberEntryProof) + child_seal_key + capabilities!
             rrule = tpl["recipient_rule"]
             rmode_rule = rrule["mode"]
             rcpt_ok = False
             if rmode_rule == "exact_key":
-                rcpt_ok = rcpt_spec.get("mode") == "key" and rcpt_spec.get("key") == rrule["key"]
+                rcpt_ok = (
+                    rcpt_spec.get("mode") == "key"
+                    and rcpt_spec.get("alg") == rrule.get("alg")
+                    and rcpt_spec.get("key") == rrule["key"]
+                    and rcpt_spec.get("rp_id") == rrule.get("rp_id")
+                    and rcpt_spec.get("presence_attestation") == rrule.get("presence_attestation")
+                )
             elif rmode_rule == "exact_name":
                 rcpt_ok = rcpt_spec.get("mode") == "name" and _name_pin_equal(rcpt_spec, rrule)
             elif rmode_rule == "member_class" and rcpt_spec.get("mode") == "name":
                 manifests_b = bundle.get("manifests", {})
-                mlists_b = bundle.get("members_lists", {})
+                mproofs_b = bundle.get("member_proofs", {})
                 for op_pin in rrule.get("operators", []):
                     op_nrec, op_err = self.resolve_name(
                         op_pin["name"],
@@ -9100,21 +9275,14 @@ class Tier1Verifier:
                     mset_pin = op_man.get("sets", {}).get("members")
                     if not mset_pin:
                         continue
-                    mlist = mlists_b.get(mset_pin["sha256"]) or mlists_b.get(op_pin["name"])
-                    if mlist is None:
+                    mproof = mproofs_b.get(mset_pin["sha256"]) or mproofs_b.get(op_pin["name"])
+                    if mproof is None:
                         continue
-                    ok_ml, ml_res = self._verify_object_wire(mlist, expected_type="seallink-members-list/1")
-                    if not ok_ml or sl.content_addr(ml_res) != mset_pin["sha256"] or ml_res.get("seq") != mset_pin["seq"]:
-                        continue
-                    for ment in ml_res.get("entries", []):
-                        if _name_pin_equal(ment, rcpt_spec):
-                            ms_subj = {"outpoint": {"txid": ment["seal"]["txid"], "vout": ment["seal"]["vout"]}, "subject_kind": "seal"}
-                            if journal is not None and journal.lookup_closure(ms_subj) is not None:
-                                continue
-                            if self.evaluate_seal(ment["seal"], chain, required_depth=1, journal=journal, closure_subject=ms_subj)[1] is None:
-                                rcpt_ok = True
-                                break
-                    if rcpt_ok:
+                    m_res = self.verify_member_entry_proof(
+                        mproof, rcpt_spec, op_pin["name"], op_man, chain, journal=journal, required_depth=1
+                    )
+                    if m_res.verdict == "ADMIT":
+                        rcpt_ok = True
                         break
             c_spol = leaf_gp["revocation"]["seal"]["script_policy"]
             seal_key_ok = (
@@ -9132,7 +9300,9 @@ class Tier1Verifier:
             g = grants_by_id[pe["grant_id"]]
             gp = g["payload"]
             gid = pe["grant_id"]
-            if not (gp["not_before_height"] <= chain.tip_height < gp["not_after_height"]):
+            if not (gp["not_before_height"] <= chain.tip_height < gp["not_after_height"]) or (
+                "not_after_unix" in gp and chain.now >= gp["not_after_unix"]
+            ):
                 return False, VerifierResult("REFUSE", "GRANT_WINDOW_CLOSED"), {}
             rev = gp["revocation"]
             if for_session_open and (rev["mode"] != "seal" or rev["kind"] != "revocable"):
@@ -9671,12 +9841,11 @@ class Tier1Verifier:
             if t_err is not None:
                 return VerifierResult("REFUSE", t_err)
 
-        # Verify session-open signature matches grant recipient (H-1a: support 0x13 origin_bundle for named recipient!)
+        # Verify session-open signature matches grant recipient (supports DeviceSignatureSet + 0x13 origin_bundle for named recipient!)
         rcpt = leaf_gp["recipient"]
-        if rcpt["mode"] == "key":
-            exp_pol = {"m": 1, "pks": [rcpt["key"]]}
-        elif rcpt["mode"] == "group":
-            exp_pol = rcpt["threshold"]
+        req_spres: str | None = None
+        if rcpt["mode"] in ("key", "group"):
+            exp_pol, req_spres = _recipient_expected_policy(rcpt)
         else:
             r_ob_s = bundle.get("recipient_origin_bundle") or bundle.get("origin_bundle")
             r_obs_s = bundle.get("origin_bundles_by_oid")
@@ -9702,7 +9871,13 @@ class Tier1Verifier:
         ok_s, scode = (
             (False, "WIRE_SIGNATURE")
             if exp_pol is None
-            else sl.verify_signature_set(sl.signing_digest(sp), o_res["signatures"], expected_policy=exp_pol, obj_type="seallink-session-open/1")
+            else sl.verify_signature_set(
+                sl.signing_digest(sp),
+                o_res["signatures"],
+                expected_policy=exp_pol,
+                obj_type="seallink-session-open/1",
+                required_presence=req_spres,
+            )
         )
         # D8-M7: op == "close" MAY also be signed by the root grant issuer's live link.grant policy!
         if not ok_s and op == "close" and (bg["wstate"] is None or bg["wstate"].get("capacity") != "ward"):
@@ -9887,6 +10062,7 @@ class Tier1Verifier:
             or gp["revocation"]["mode"] != "seal"
             or gp["revocation"]["kind"] != "revocable"
             or not (gp["not_before_height"] <= chain.tip_height < gp["not_after_height"])
+            or ("not_after_unix" in gp and chain.now >= gp["not_after_unix"])
         ):
             return None, None, None, empty_caps
 
@@ -9929,6 +10105,7 @@ class Tier1Verifier:
                 or parent_gp["genesis"] != self.pinned_genesis
                 or "delegate" not in parent_gp
                 or not (parent_gp["not_before_height"] <= chain.tip_height < parent_gp["not_after_height"])
+                or ("not_after_unix" in parent_gp and chain.now >= parent_gp["not_after_unix"])
             ):
                 return None, None, None, empty_caps
             if parent_gp["revocation"]["mode"] == "seal":
@@ -10681,7 +10858,9 @@ class Tier1Verifier:
         if obs_err:
             return VerifierResult("REFUSE", obs_err)
         # D10-1 / H-12 / H5: Mandatory grant height window, revocable UTXO seal (forbidding single_use) + journal seal closure across BOTH phases!
-        if not (gp["not_before_height"] <= chain.tip_height < gp["not_after_height"]):
+        if not (gp["not_before_height"] <= chain.tip_height < gp["not_after_height"]) or (
+            "not_after_unix" in gp and chain.now >= gp["not_after_unix"]
+        ):
             return VerifierResult("REFUSE", "GRANT_WINDOW_CLOSED")
         if gp["revocation"]["mode"] != "seal" or gp["revocation"]["kind"] != "revocable" or not isinstance(gp.get("issuer"), dict):
             return VerifierResult("REFUSE", "FEDERATION_POLICY_DENIED")

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/invocation.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.15/schemas/invocation.schema.json",
   "title": "SealLink v1.0 Invocation, Receipt, Sessions, Auth, Owner Control, Journal & Migration",
   "$defs": {
     "Invocation": {
@@ -44,7 +44,7 @@
             "exp": { "$ref": "common.schema.json#/$defs/Uint53" }
           }
         },
-        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+        "signatures": { "$ref": "common.schema.json#/$defs/DeviceSignatureSet" }
       }
     },
     "Receipt": {
@@ -156,7 +156,7 @@
             }
           ]
         },
-        "signatures": { "$ref": "common.schema.json#/$defs/SignatureSet" }
+        "signatures": { "$ref": "common.schema.json#/$defs/DeviceSignatureSet" }
       }
     },
     "AuthChallenge": {
@@ -220,6 +220,63 @@
                 "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
                 "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
                 "auth_alg": { "const": "ed25519" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "service_id", "nonce", "issued_at", "expires_at", "auth_alg", "auth_pubkey"],
+              "properties": {
+                "type": { "const": "seallink-auth-challenge/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "channel_binding": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "auth_alg": { "const": "ssh-ed25519" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "service_id", "nonce", "issued_at", "expires_at", "auth_alg", "auth_pubkey"],
+              "properties": {
+                "type": { "const": "seallink-auth-challenge/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "channel_binding": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "auth_alg": { "const": "fido2-es256" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/P256Pubkey66" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "service_id", "nonce", "issued_at", "expires_at", "auth_alg", "auth_pubkey"],
+              "properties": {
+                "type": { "const": "seallink-auth-challenge/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "channel_binding": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "auth_alg": { "const": "fido2-eddsa" },
                 "auth_pubkey": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" }
               }
             }
@@ -291,6 +348,69 @@
                 "account_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
                 "name": { "$ref": "common.schema.json#/$defs/NameStr" },
                 "auth_alg": { "const": "ed25519" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" },
+                "firstupdate_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "service_id", "account_id", "name", "auth_alg", "auth_pubkey", "firstupdate_txid", "nonce", "issued_at", "expires_at"],
+              "properties": {
+                "type": { "const": "seallink-auth-upgrade/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "channel_binding": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "account_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "auth_alg": { "const": "ssh-ed25519" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" },
+                "firstupdate_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "service_id", "account_id", "name", "auth_alg", "auth_pubkey", "firstupdate_txid", "nonce", "issued_at", "expires_at"],
+              "properties": {
+                "type": { "const": "seallink-auth-upgrade/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "channel_binding": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "account_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "auth_alg": { "const": "fido2-es256" },
+                "auth_pubkey": { "$ref": "common.schema.json#/$defs/P256Pubkey66" },
+                "firstupdate_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "issued_at": { "$ref": "common.schema.json#/$defs/Uint53" },
+                "expires_at": { "$ref": "common.schema.json#/$defs/Uint53" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "network", "genesis", "service_id", "account_id", "name", "auth_alg", "auth_pubkey", "firstupdate_txid", "nonce", "issued_at", "expires_at"],
+              "properties": {
+                "type": { "const": "seallink-auth-upgrade/1" },
+                "network": { "$ref": "common.schema.json#/$defs/Network" },
+                "genesis": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "service_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "audience": { "type": "string", "minLength": 1, "maxLength": 512, "not": { "pattern": "\n" } },
+                "channel_binding": { "$ref": "common.schema.json#/$defs/Hex64" },
+                "account_id": { "type": "string", "minLength": 1, "maxLength": 255, "not": { "pattern": "\n" } },
+                "name": { "$ref": "common.schema.json#/$defs/NameStr" },
+                "auth_alg": { "const": "fido2-eddsa" },
                 "auth_pubkey": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" },
                 "firstupdate_txid": { "$ref": "common.schema.json#/$defs/Hex64" },
                 "nonce": { "$ref": "common.schema.json#/$defs/Hex64" },
@@ -516,7 +636,7 @@
           "properties": {
             "subject_kind": { "const": "log" },
             "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
-            "role": { "type": "string", "enum": ["notary", "release"] }
+            "role": { "type": "string", "enum": ["notary", "release", "cred"] }
           }
         }
       ]
@@ -924,7 +1044,7 @@
               "description": "Reorg-safe confirmed notary/release log head persisted strictly after confirmation depth >= required_depth and full issuer/log_id authentication.",
               "properties": {
                 "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
-                "role": { "type": "string", "enum": ["notary", "release"] },
+                "role": { "type": "string", "enum": ["notary", "release", "cred"] },
                 "issuer_name": { "$ref": "common.schema.json#/$defs/NameStr" },
                 "issuer_registration": { "$ref": "common.schema.json#/$defs/Outpoint" },
                 "predecessor_log_id": { "$ref": "common.schema.json#/$defs/Hex64" },

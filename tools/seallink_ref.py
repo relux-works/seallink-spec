@@ -15,6 +15,7 @@ Implements normative primitives from SPEC-01, SPEC-02, SPEC-04, SPEC-05, SPEC-06
 
 from __future__ import annotations
 
+import base64
 import functools
 import hashlib
 import hmac
@@ -710,7 +711,20 @@ DEVICE_ALG_ALLOWED_TYPES = frozenset({
     "seallink-statement/1",
     "seallink-auth-challenge/1",
     "seallink-auth-upgrade/1",
+    "seallink-invocation/1",
+    "seallink-session-open/1",
 })
+
+ALL_DEVICE_ALGS = frozenset({
+    "bip340",
+    "p256",
+    "ed25519",
+    "ssh-ed25519",
+    "fido2-es256",
+    "fido2-eddsa",
+})
+FIDO2_ALGS = frozenset({"fido2-es256", "fido2-eddsa"})
+RP_ID_RE = re.compile(r"\A[a-z0-9][a-z0-9./_-]{0,254}\Z")
 
 # --- RFC 8032 Ed25519 (Twisted Edwards: -x^2 + y^2 = 1 + d*x^2*y^2 mod p) ---
 _ED_P = (1 << 255) - 19
@@ -1096,14 +1110,183 @@ def p256_verify_low_s(msg32: bytes, pubkey_hex: str, sig_hex: str) -> bool:
     return pt is not None and (pt[0] % _P256_N) == r
 
 
+def _ssh_string(b: bytes) -> bytes:
+    return struct.pack(">I", len(b)) + b
+
+
+def sshsig_preimage(digest32: bytes) -> bytes:
+    """Canonical OpenSSH PROTOCOL.sshsig preimage (namespace='seallink-v1', reserved='', hash_alg='sha512') over 32-byte signing_digest."""
+    if len(digest32) != 32:
+        raise ValueError("SSHSIG requires 32-byte signing_digest")
+    return (
+        b"SSHSIG"
+        + _ssh_string(b"seallink-v1")
+        + _ssh_string(b"")
+        + _ssh_string(b"sha512")
+        + _ssh_string(hashlib.sha512(digest32).digest())
+    )
+
+
+def ssh_ed25519_sign(msg32: bytes, seed32: bytes) -> str:
+    """Sign 32-byte SealLink digest using canonical OpenSSH SSHSIG wrapper over strict RFC 8032 Ed25519."""
+    return ed25519_sign(sshsig_preimage(msg32), seed32)
+
+
+def ssh_ed25519_verify(msg32: bytes, pubkey_hex: str, sig_hex: str) -> bool:
+    """Verify canonical OpenSSH SSHSIG wrapper over strict RFC 8032 Ed25519."""
+    if len(msg32) != 32:
+        return False
+    return ed25519_verify(sshsig_preimage(msg32), pubkey_hex, sig_hex)
+
+
+def base64url_nopad(b: bytes) -> str:
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
+
+
+def fido2_make_authenticator_data(rp_id: str, flags: int = 0x05, sign_count: int = 1) -> bytes:
+    """Build standard 37-byte WebAuthn/CTAP2 authenticatorData: rpIdHash(32) || flags(1) || signCount(4 BE)."""
+    return sha256(rp_id.encode("utf-8")) + bytes([flags & 0xFF]) + struct.pack(">I", sign_count & 0xFFFFFFFF)
+
+
+def fido2_make_client_data(digest32: bytes, origin: str) -> bytes:
+    """Build WebAuthn clientDataJSON UTF-8 bytes committing base64url(signing_digest) as challenge."""
+    if len(digest32) != 32:
+        raise ValueError("FIDO2 requires 32-byte signing_digest")
+    return json.dumps(
+        {"type": "webauthn.get", "challenge": base64url_nopad(digest32), "origin": origin},
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _fido2_origin_matches_rp_id(origin: str, rp_id: str) -> bool:
+    """For https:// browser origins, enforce RFC-matching host == rp_id or subdomain *.<rp_id>."""
+    if not origin.startswith("https://"):
+        return True
+    rest = origin[len("https://") :]
+    hostport = rest.split("/", 1)[0]
+    if "@" in hostport or not hostport:
+        return False
+    host = hostport.split(":", 1)[0].lower()
+    return host == rp_id or host.endswith("." + rp_id)
+
+
+def fido2_sign_entry(
+    alg: str,
+    digest32: bytes,
+    priv: bytes,
+    rp_id: str,
+    *,
+    origin: str | None = None,
+    flags: int = 0x05,
+    sign_count: int = 1,
+) -> dict[str, str]:
+    """Build a canonical WebAuthn/CTAP2 DeviceSignatureEntry for fido2-es256 or fido2-eddsa."""
+    if alg not in FIDO2_ALGS:
+        raise ValueError(f"Unsupported FIDO2 alg: {alg}")
+    ad = fido2_make_authenticator_data(rp_id, flags=flags, sign_count=sign_count)
+    cd = fido2_make_client_data(digest32, origin if origin is not None else f"https://{rp_id}")
+    signed_msg = ad + sha256(cd)
+    if alg == "fido2-es256":
+        pk = p256_compressed_pubkey(priv)
+        sig = p256_sign_low_s(sha256(signed_msg), priv)
+    else:
+        pk = ed25519_pubkey(priv)
+        sig = ed25519_sign(signed_msg, priv)
+    return {
+        "authenticator_data_hex": ad.hex(),
+        "client_data_hex": cd.hex(),
+        "pk": pk,
+        "sig": sig,
+    }
+
+
+def fido2_verify_entry(
+    alg: str,
+    digest32: bytes,
+    pubkey_hex: str,
+    sig_hex: str,
+    authenticator_data_hex: str,
+    client_data_hex: str,
+    rp_id: str,
+) -> tuple[bool, int]:
+    """Verify WebAuthn/CTAP2 fido2-es256 or fido2-eddsa signature entry; returns (ok, flags_byte)."""
+    if alg not in FIDO2_ALGS or len(digest32) != 32:
+        return False, 0
+    if not (isinstance(authenticator_data_hex, str) and isinstance(client_data_hex, str)):
+        return False, 0
+    if (
+        authenticator_data_hex != authenticator_data_hex.lower()
+        or client_data_hex != client_data_hex.lower()
+        or not (74 <= len(authenticator_data_hex) <= 2048)
+        or len(authenticator_data_hex) % 2 != 0
+        or not (4 <= len(client_data_hex) <= 4096)
+        or len(client_data_hex) % 2 != 0
+    ):
+        return False, 0
+    try:
+        ad = bytes.fromhex(authenticator_data_hex)
+        cd = bytes.fromhex(client_data_hex)
+    except ValueError:
+        return False, 0
+    if ad[:32] != sha256(rp_id.encode("utf-8")):
+        return False, 0
+    flags = ad[32]
+    try:
+        cd_obj = json.loads(cd.decode("utf-8"))
+    except Exception:
+        return False, 0
+    if not isinstance(cd_obj, dict):
+        return False, 0
+    if cd_obj.get("type") != "webauthn.get" or cd_obj.get("challenge") != base64url_nopad(digest32):
+        return False, 0
+    origin = cd_obj.get("origin")
+    if not isinstance(origin, str) or not origin or not _fido2_origin_matches_rp_id(origin, rp_id):
+        return False, 0
+    signed_msg = ad + sha256(cd)
+    if alg == "fido2-es256":
+        ok = p256_verify_low_s(sha256(signed_msg), pubkey_hex, sig_hex)
+    else:
+        ok = ed25519_verify(signed_msg, pubkey_hex, sig_hex)
+    return ok, flags
+
+
+def check_signature_set_presence(sigset: dict[str, Any], required_presence: str | None) -> bool:
+    """Verify hardware-attested FIDO2 presence flags (UP=0x01, UV=0x04) across all sigs[] for required_presence."""
+    if required_presence is None or required_presence == "declared":
+        return True
+    if not isinstance(sigset, dict):
+        return False
+    pol = sigset.get("policy")
+    sigs = sigset.get("sigs")
+    if not isinstance(pol, dict) or pol.get("alg") not in FIDO2_ALGS or not isinstance(sigs, list) or not sigs:
+        return False
+    need_mask = 0x05 if required_presence == "uv" else 0x01
+    for entry in sigs:
+        adh = entry.get("authenticator_data_hex") if isinstance(entry, dict) else None
+        if not isinstance(adh, str) or len(adh) < 74:
+            return False
+        try:
+            flags = bytes.fromhex(adh[64:66])[0]
+        except ValueError:
+            return False
+        if (flags & need_mask) != need_mask:
+            return False
+    return True
+
+
 def sign_envelope(
     payload: dict[str, Any],
     signers: list[bytes],
     policy_pks: list[str] | None = None,
     m: int | None = None,
     alg: str = "bip340",
+    *,
+    rp_id: str | None = None,
+    origin: str | None = None,
+    fido2_flags: int = 0x05,
+    sign_count: int = 1,
 ) -> dict[str, Any]:
-    """Build a canonical signed SealLink envelope supporting bip340, ed25519, and low-S p256."""
+    """Build a canonical signed SealLink envelope supporting bip340, ed25519, p256, ssh-ed25519, fido2-es256, and fido2-eddsa."""
     digest = signing_digest(payload)
     if alg == "bip340":
         pub_fn = xonly_pubkey
@@ -1114,6 +1297,14 @@ def sign_envelope(
     elif alg == "p256":
         pub_fn = p256_compressed_pubkey
         sig_fn = p256_sign_low_s
+    elif alg == "ssh-ed25519":
+        pub_fn = ed25519_pubkey
+        sig_fn = ssh_ed25519_sign
+    elif alg in FIDO2_ALGS:
+        if not isinstance(rp_id, str) or not RP_ID_RE.match(rp_id):
+            raise ValueError(f"FIDO2 alg '{alg}' requires valid rp_id")
+        pub_fn = p256_compressed_pubkey if alg == "fido2-es256" else ed25519_pubkey
+        sig_fn = None
     else:
         raise ValueError(f"Unsupported alg: {alg}")
     derived_pks = [pub_fn(sk) for sk in signers]
@@ -1121,11 +1312,19 @@ def sign_envelope(
     threshold = m if m is not None else len(signers)
     sigs = []
     for sk in sorted(signers, key=pub_fn):
-        pk = pub_fn(sk)
-        sigs.append({"pk": pk, "sig": sig_fn(digest, sk)})
+        if alg in FIDO2_ALGS:
+            assert rp_id is not None
+            sigs.append(fido2_sign_entry(alg, digest, sk, rp_id, origin=origin, flags=fido2_flags, sign_count=sign_count))
+        else:
+            assert sig_fn is not None
+            pk = pub_fn(sk)
+            sigs.append({"pk": pk, "sig": sig_fn(digest, sk)})
     policy: dict[str, Any] = {"m": threshold, "pks": pks}
     if alg != "bip340":
         policy["alg"] = alg
+    if alg in FIDO2_ALGS:
+        assert rp_id is not None
+        policy["rp_id"] = rp_id
     return {"payload": payload, "signatures": {"policy": policy, "sigs": sigs}}
 
 
@@ -1161,22 +1360,31 @@ def verify_signature_set(
     sigset: dict[str, Any],
     expected_policy: dict[str, Any] | None = None,
     obj_type: str | None = None,
+    *,
+    required_presence: str | None = None,
 ) -> tuple[bool, str]:
-    """Verify a SignatureSet (bip340, ed25519, or low-S p256) over `digest`, enforcing SL-WIRE-013."""
+    """Verify a SignatureSet (bip340, p256, ed25519, ssh-ed25519, fido2-es256, fido2-eddsa) over `digest`, enforcing SL-WIRE-013."""
     if not isinstance(sigset, dict) or set(sigset.keys()) != {"policy", "sigs"}:
         return False, "WIRE_SIGNATURE"
     policy = sigset["policy"]
     if not isinstance(policy, dict):
         return False, "WIRE_SIGNATURE"
-    if not set(policy.keys()).issubset({"m", "pks", "alg"}):
+    if not set(policy.keys()).issubset({"m", "pks", "alg", "rp_id"}):
         return False, "WIRE_MEMBER"
     # Canonical single encoding: "alg": "bip340" MUST be omitted (S-1 / SPEC-01 §4.2)
     if "alg" in policy and policy["alg"] == "bip340":
         return False, "WIRE_MEMBER"
     alg = policy.get("alg", "bip340")
-    if alg not in ("bip340", "ed25519", "p256"):
+    if alg not in ALL_DEVICE_ALGS:
         return False, "WIRE_SIGNATURE"
     if alg != "bip340" and obj_type is not None and obj_type not in DEVICE_ALG_ALLOWED_TYPES:
+        return False, "WIRE_MEMBER"
+    is_fido2 = alg in FIDO2_ALGS
+    rp_id = policy.get("rp_id")
+    if is_fido2:
+        if not isinstance(rp_id, str) or not RP_ID_RE.match(rp_id):
+            return False, "WIRE_MEMBER"
+    elif "rp_id" in policy:
         return False, "WIRE_MEMBER"
     pks = policy.get("pks", [])
     m = policy.get("m", 0)
@@ -1192,15 +1400,29 @@ def verify_signature_set(
     elif alg == "ed25519":
         pk_ok_fn = is_valid_ed25519_pubkey
         ver_fn = ed25519_verify
-    else:
+    elif alg == "p256":
         pk_ok_fn = is_valid_p256_compressed_pubkey
         ver_fn = p256_verify_low_s
+    elif alg == "ssh-ed25519":
+        pk_ok_fn = is_valid_ed25519_pubkey
+        ver_fn = ssh_ed25519_verify
+    elif alg == "fido2-es256":
+        pk_ok_fn = is_valid_p256_compressed_pubkey
+        ver_fn = None
+    else:
+        pk_ok_fn = is_valid_ed25519_pubkey
+        ver_fn = None
     for pk in pks:
         if not isinstance(pk, str) or not pk_ok_fn(pk):
             return False, "WIRE_KEY"
     if expected_policy is not None:
         exp_alg = expected_policy.get("alg", "bip340")
-        if exp_alg != alg or expected_policy.get("m") != m or expected_policy.get("pks") != pks:
+        if (
+            exp_alg != alg
+            or expected_policy.get("m") != m
+            or expected_policy.get("pks") != pks
+            or (is_fido2 and expected_policy.get("rp_id") != rp_id)
+        ):
             return False, "WIRE_SIGNATURE"
     sigs = sigset["sigs"]
     if not isinstance(sigs, list):
@@ -1208,16 +1430,31 @@ def verify_signature_set(
     seen: set[str] = set()
     prev_pk: str = ""
     valid = 0
+    expected_entry_keys = {"pk", "sig", "authenticator_data_hex", "client_data_hex"} if is_fido2 else {"pk", "sig"}
+    need_presence_mask = 0x05 if required_presence == "uv" else (0x01 if required_presence == "up" else 0)
+    if need_presence_mask and not is_fido2:
+        return False, "WIRE_SIGNATURE"
     for entry in sigs:
-        if not isinstance(entry, dict) or set(entry.keys()) != {"pk", "sig"}:
+        if not isinstance(entry, dict) or set(entry.keys()) != expected_entry_keys:
             return False, "WIRE_SIGNATURE"
         pk = entry["pk"]
         if not isinstance(pk, str) or pk not in pks or pk in seen or pk <= prev_pk:
             return False, "WIRE_SIGNATURE"
         prev_pk = pk
         seen.add(pk)
-        if not isinstance(entry["sig"], str) or not ver_fn(digest, pk, entry["sig"]):
+        if not isinstance(entry["sig"], str):
             return False, "WIRE_SIGNATURE"
+        if is_fido2:
+            assert rp_id is not None
+            ok_f, flags_f = fido2_verify_entry(
+                alg, digest, pk, entry["sig"], entry["authenticator_data_hex"], entry["client_data_hex"], rp_id
+            )
+            if not ok_f or (need_presence_mask and (flags_f & need_presence_mask) != need_presence_mask):
+                return False, "WIRE_SIGNATURE"
+        else:
+            assert ver_fn is not None
+            if not ver_fn(digest, pk, entry["sig"]):
+                return False, "WIRE_SIGNATURE"
         valid += 1
     if valid < m:
         return False, "WIRE_SIGNATURE"
@@ -1527,7 +1764,7 @@ def compile_script_policy(policy: dict[str, Any]) -> tuple[bytes, bytes | None]:
         if tpl == "guardian_slot_pending":
             delay = policy.get("delay_blocks")
             disp, chal, guard = keys.get("disposer"), keys.get("challenger"), keys.get("guardian")
-            if not isinstance(delay, int) or isinstance(delay, bool) or not (1 <= delay <= 52560):
+            if not isinstance(delay, int) or isinstance(delay, bool) or not (1 <= delay <= 65535):
                 raise ValueError("CHAIN_SCRIPT_UNSUPPORTED")
             if not (is_valid_branch_key_spec(disp) and is_valid_branch_key_spec(chal)
                     and isinstance(guard, str) and is_valid_compressed_pubkey(guard)):
@@ -1857,13 +2094,13 @@ def build_merkle_tree(item_digests: list[str]) -> tuple[str, dict[str, dict[str,
     return root_hex, proofs
 
 
-def verify_merkle_proof(proof: dict[str, Any]) -> bool:
+def verify_merkle_proof(proof: dict[str, Any], *, max_steps: int = 16) -> bool:
     if not isinstance(proof, dict):
         return False
     steps = proof.get("steps")
     leaf = proof.get("leaf_digest")
     root = proof.get("root")
-    if not isinstance(steps, list) or len(steps) > 16 or not isinstance(leaf, str) or not isinstance(root, str):
+    if not isinstance(steps, list) or len(steps) > max_steps or not isinstance(leaf, str) or not isinstance(root, str):
         return False
     try:
         cur = merkle_leaf(leaf)
@@ -1884,55 +2121,106 @@ def verify_merkle_proof(proof: dict[str, Any]) -> bool:
     return cur.hex() == root
 
 
-FIXED_SALTED_SET_TREE_SIZE = 256
-FIXED_SALTED_SET_PROOF_STEPS = 8
+SALTED_SET_DEPTHS: dict[str, int] = {
+    "auth": 16,
+    "devices": 16,
+    "certs": 20,
+    "members": 34,
+}
+FIXED_SALTED_SET_PROOF_STEPS = 16
+FIXED_CERT_SET_PROOF_STEPS = 20
+FIXED_MEMBER_SET_PROOF_STEPS = 34
+
+
+def _salted_set_empty_mask(mask_seed: bytes, level: int, prefix: int) -> bytes:
+    """Pseudorandomly mask an empty subtree at (level, prefix) so proofs leak zero count or occupancy information."""
+    return tagged_hash("seallink-set-mask/1", mask_seed + bytes([level]) + struct.pack(">Q", prefix))
 
 
 def build_salted_set_merkle(
     entries: list[dict[str, Any]],
     *,
-    dummy_digests: list[str] | None = None,
-    pad_seed: bytes | None = None,
+    depth: int = FIXED_SALTED_SET_PROOF_STEPS,
+    mask_seed: bytes | None = None,
 ) -> tuple[str, dict[str, dict[str, Any]]]:
-    """Build fixed-depth (256-leaf padded, exact 8 proof steps) size-hiding salted selective-disclosure Merkle tree
-    for seallink-auth-entry/1 or seallink-device-entry/1 (1..256 real entries; SPEC-03 §1.5, D14-B02, D14-H01).
+    """Build O(N * depth) fixed-depth size-hiding salted sparse masked Merkle tree for
+    sets.auth (depth=16, 65,536 slots), sets.devices (depth=16, 65,536 slots),
+    sets.certs (depth=20, 1,048,576 slots), or sets.members (depth=34, 2^34 slots) (SPEC-03 §3.1).
 
     Each real leaf digest is domain-separated via BIP-340 double-tagged hash:
         leaf_digest = signing_digest(entry) = H_tag(entry['type'], JCS(entry))
-                    = SHA256(SHA256(tag) || SHA256(tag) || JCS(entry))
     and committed as Merkle leaf H_tag('seallink-merkle-leaf/1', leaf_digest).
-    Remaining (256 - len(entries)) positions are padded with independent dummy leaf digests
-    H_tag('seallink-set-dummy/1', csprng_32B) so every SetEntryMerkleProof has exact length 8.
-    Production signers MUST pass fresh CSPRNG dummy_digests or 32B CSPRNG pad_seed; omitting both
-    derives a deterministic seed strictly for reproducible test vector generation.
+    Empty sibling subtrees are masked with H_tag('seallink-set-mask/1', mask_seed || uint8(level) || uint64_be(prefix))
+    so every proof has exact length `depth` and indistinguishable random-looking siblings.
+    Production signers MUST pass a fresh 32-byte CSPRNG mask_seed; omitting it derives a deterministic seed
+    strictly for reproducible test vector generation.
     Returns (merkle_root_hex, proofs_by_real_leaf_digest).
     """
-    if not isinstance(entries, list) or not (1 <= len(entries) <= FIXED_SALTED_SET_TREE_SIZE):
-        raise ValueError("salted set must have 1..256 entries")
+    if not isinstance(entries, list) or not (1 <= depth <= 60):
+        raise ValueError("invalid salted set parameters")
+    max_slots = 1 << depth
+    if len(entries) > max_slots:
+        raise ValueError(f"salted set exceeds 2^{depth} slots")
     real_digests = [signing_digest(e).hex() for e in entries]
     if len(set(real_digests)) != len(real_digests):
         raise ValueError("duplicate salted set entry digest")
-    needed = FIXED_SALTED_SET_TREE_SIZE - len(real_digests)
-    if dummy_digests is not None:
-        if len(dummy_digests) != needed:
-            raise ValueError(f"expected {needed} dummy digests, got {len(dummy_digests)}")
-        pad_list = list(dummy_digests)
-    else:
-        seed = pad_seed
-        if seed is None:
-            seed = tagged_hash(
-                "seallink-test-set-pad-seed/1",
-                b"".join(bytes.fromhex(d) for d in sorted(real_digests)),
-            )
-        pad_list = [
-            tagged_hash("seallink-set-dummy/1", sha256(seed + i.to_bytes(4, "big"))).hex()
-            for i in range(needed)
-        ]
-    all_digests = real_digests + pad_list
-    if len(set(all_digests)) != FIXED_SALTED_SET_TREE_SIZE:
-        raise ValueError("salted set dummy digest collision")
-    root_hex, all_proofs = build_merkle_tree(all_digests)
-    return root_hex, {d: all_proofs[d] for d in real_digests}
+    seed = mask_seed
+    if seed is None:
+        seed = tagged_hash(
+            "seallink-test-set-mask-seed/1",
+            bytes([depth]) + b"".join(bytes.fromhex(d) for d in sorted(real_digests)),
+        )
+    if not real_digests:
+        return _salted_set_empty_mask(seed, depth, 0).hex(), {}
+
+    # Assign each real entry a uniform pseudo-random slot index in [0, 2^depth - 1]
+    mask_bits = max_slots - 1
+    slot_for_digest: dict[str, int] = {}
+    occupied: set[int] = set()
+    for d_hex in sorted(real_digests):
+        pos = int.from_bytes(bytes.fromhex(d_hex)[:8], "big") & mask_bits
+        while pos in occupied:
+            pos = (pos + 1) & mask_bits
+        occupied.add(pos)
+        slot_for_digest[d_hex] = pos
+
+    # Build sparse levels bottom-up in O(N * depth) time and memory
+    cur_level: dict[int, bytes] = {
+        slot_for_digest[d_hex]: tagged_hash("seallink-merkle-leaf/1", bytes.fromhex(d_hex))
+        for d_hex in real_digests
+    }
+    levels: list[dict[int, bytes]] = [cur_level]
+    for lvl in range(depth):
+        nxt_level: dict[int, bytes] = {}
+        parents = {idx >> 1 for idx in cur_level}
+        for p in parents:
+            left_idx = p << 1
+            right_idx = left_idx | 1
+            left_h = cur_level.get(left_idx)
+            if left_h is None:
+                left_h = _salted_set_empty_mask(seed, lvl, left_idx)
+            right_h = cur_level.get(right_idx)
+            if right_h is None:
+                right_h = _salted_set_empty_mask(seed, lvl, right_idx)
+            nxt_level[p] = tagged_hash("seallink-merkle-node/1", left_h + right_h)
+        cur_level = nxt_level
+        levels.append(cur_level)
+
+    root_hex = levels[depth][0].hex()
+    proofs: dict[str, dict[str, Any]] = {}
+    for d_hex in real_digests:
+        idx = slot_for_digest[d_hex]
+        steps: list[dict[str, str]] = []
+        for lvl in range(depth):
+            sib_idx = idx ^ 1
+            sib_h = levels[lvl].get(sib_idx)
+            if sib_h is None:
+                sib_h = _salted_set_empty_mask(seed, lvl, sib_idx)
+            side = "R" if (idx & 1) == 0 else "L"
+            steps.append({"hash": sib_h.hex(), "side": side})
+            idx >>= 1
+        proofs[d_hex] = {"leaf_digest": d_hex, "root": root_hex, "steps": steps}
+    return root_hex, proofs
 
 
 # ============================================================================
@@ -3643,18 +3931,40 @@ def self_test() -> None:
     assert not is_slnk_opreturn(b"\x6a\x05SLSC\x01\x01\x00"), "SLSC prefix MUST be ignored by SLNK verifiers"
     _ae = {"alg": "bip340", "key": xonly_pubkey(sk0), "label": "k1", "network": "main", "owner": "id/a", "salt": _ptr32, "seal": {"script_policy": {"kind": "key", "pk": p1}, "txid": _ptr32, "vout": 0}, "type": "seallink-auth-entry/1"}
     _de = {**_ae, "ceiling": 1, "presence": False, "type": "seallink-device-entry/1"}
-    _mr_a, _pr_a = build_salted_set_merkle([_ae])
-    _mr_d, _pr_d = build_salted_set_merkle([_de])
+    _ce = {"network": "main", "owner": "id/a", "salt": _ptr32, "seq": 1, "statement_content_addr": _ptr32, "statement_id": _ptr32, "statement_kind": "profile-section", "type": "seallink-cert-entry/1"}
+    _me = {"name": "id/bob", "network": "main", "owner": "id/org", "owner_policy": {"kind": "key", "pk": p1}, "registration": {"txid": _ptr32, "vout": 0}, "salt": _ptr32, "seal": {"script_policy": {"kind": "key", "pk": p2}, "txid": _ptr32, "vout": 1}, "type": "seallink-member-entry/1"}
+    _mr_a, _pr_a = build_salted_set_merkle([_ae], depth=16)
+    _mr_d, _pr_d = build_salted_set_merkle([_de], depth=16)
+    _mr_c, _pr_c = build_salted_set_merkle([_ce], depth=20)
+    _mr_m, _pr_m = build_salted_set_merkle([_me], depth=34)
     assert (
         _mr_a != _mr_d
-        and len(_pr_a[signing_digest(_ae).hex()]["steps"]) == FIXED_SALTED_SET_PROOF_STEPS
-        and len(_pr_d[signing_digest(_de).hex()]["steps"]) == FIXED_SALTED_SET_PROOF_STEPS
-        and verify_merkle_proof(_pr_a[signing_digest(_ae).hex()])
-        and verify_merkle_proof(_pr_d[signing_digest(_de).hex()])
+        and len(_pr_a[signing_digest(_ae).hex()]["steps"]) == 16
+        and len(_pr_d[signing_digest(_de).hex()]["steps"]) == 16
+        and len(_pr_c[signing_digest(_ce).hex()]["steps"]) == 20
+        and len(_pr_m[signing_digest(_me).hex()]["steps"]) == 34
+        and verify_merkle_proof(_pr_a[signing_digest(_ae).hex()], max_steps=16)
+        and verify_merkle_proof(_pr_d[signing_digest(_de).hex()], max_steps=16)
+        and verify_merkle_proof(_pr_c[signing_digest(_ce).hex()], max_steps=20)
+        and verify_merkle_proof(_pr_m[signing_digest(_me).hex()], max_steps=34)
     )
+    # draft.15: ssh-ed25519 (SSHSIG) + fido2-es256 / fido2-eddsa + presence_attestation (UP/UV)
+    _ed_s = deterministic_ed25519_seed("self-test-hw-ed")
+    _p256_s = deterministic_p256_privkey("self-test-hw-p256")
+    _hw_payload = {"arguments": {"scope": "all"}, "command": "keyholder-halt", "exp": 200, "genesis": _ptr32, "iat": 100, "level": 2, "network": "main", "nonce": _ptr32, "owner": "id/a", "target_executor": "id/h", "type": "seallink-owner-command/1"}
+    _env_ssh = sign_envelope(_hw_payload, [_ed_s], alg="ssh-ed25519")
+    assert verify_envelope_signatures(_env_ssh) == (True, "OK")
+    assert not check_signature_set_presence(_env_ssh["signatures"], "up")
+    _env_f2_es = sign_envelope(_hw_payload, [_p256_s], alg="fido2-es256", rp_id="seallink.local", fido2_flags=0x05)
+    assert verify_envelope_signatures(_env_f2_es) == (True, "OK")
+    assert check_signature_set_presence(_env_f2_es["signatures"], "uv")
+    _env_f2_ed_up = sign_envelope(_hw_payload, [_ed_s], alg="fido2-eddsa", rp_id="seallink.local", fido2_flags=0x01)
+    assert verify_envelope_signatures(_env_f2_ed_up) == (True, "OK")
+    assert check_signature_set_presence(_env_f2_ed_up["signatures"], "up")
+    assert not check_signature_set_presence(_env_f2_ed_up["signatures"], "uv")
     assert not is_valid_x25519_pubkey("00" * 32) and is_valid_x25519_pubkey("09" + "00" * 31)
 
-    print(f"seallink_ref self_test PASS (BIP-340 + RFC8032 Ed25519 + low-S P-256 + RIPEMD-160 + RFC9162 + SMT256 + BIP66 + CAuxPow + fsverity) | clause_commit={c_hash}")
+    print(f"seallink_ref self_test PASS (BIP-340 + RFC8032 Ed25519 + low-S P-256 + SSHSIG + FIDO2 + SparseMerkle16/20/34 + RIPEMD-160 + RFC9162 + SMT256 + BIP66 + CAuxPow + fsverity) | clause_commit={c_hash}")
 
 
 if __name__ == "__main__":

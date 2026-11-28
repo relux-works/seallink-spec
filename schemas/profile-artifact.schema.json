@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/profile-artifact.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.15/schemas/profile-artifact.schema.json",
   "title": "SealLink v1.0 PROFILE-artifact-v1: Artifact Tickets, Tier-2 SPV SegWitNameUpdateProof, AuxPoW & Gatekeeper Policy",
   "$defs": {
     "AuxPowProof": {
@@ -217,7 +217,7 @@
         "predecessor_chain": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 16,
+          "maxItems": 256,
           "items": { "$ref": "log.schema.json#/$defs/PredecessorTerminalCheckpoint" }
         },
         "act_smt_proof": { "$ref": "log.schema.json#/$defs/SmtProof" },
@@ -239,7 +239,7 @@
         "predecessor_chain": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 16,
+          "maxItems": 256,
           "items": { "$ref": "log.schema.json#/$defs/PredecessorTerminalCheckpoint" }
         },
         "target_smt_proof": { "$ref": "log.schema.json#/$defs/SmtProof" },
@@ -268,7 +268,7 @@
         "release_predecessor_chain": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 16,
+          "maxItems": 256,
           "items": { "$ref": "log.schema.json#/$defs/PredecessorTerminalCheckpoint" }
         },
         "release_smt_proof": { "$ref": "log.schema.json#/$defs/SmtProof" },
@@ -310,7 +310,7 @@
             "properties": {
               "notary_pin": { "$ref": "common.schema.json#/$defs/NamePin" },
               "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
-              "heartbeat_max_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" }
+              "heartbeat_max_blocks": { "type": "integer", "minimum": 1, "maximum": 525600, "x-seallink-refusal": "WIRE_INTEGER" }
             }
           }
         },
@@ -337,7 +337,7 @@
                 "items": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-z0-9._-]+(/[a-z0-9._-]+)*/$", "not": { "pattern": "\n" } }
               },
               "log_id": { "$ref": "common.schema.json#/$defs/Hex64" },
-              "heartbeat_max_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" }
+              "heartbeat_max_blocks": { "type": "integer", "minimum": 1, "maximum": 525600, "x-seallink-refusal": "WIRE_INTEGER" }
             }
           }
         },

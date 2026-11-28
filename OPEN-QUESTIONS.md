@@ -1,6 +1,6 @@
 # SealLink Open Questions and Provisional Parameters
 
-- **Version:** `1.0.0-draft.14`
+- **Version:** `1.0.0-draft.15`
 - **Purpose:** Authoritative registry of every unresolved design item, provisional numeric constant, deferred extension, and unprofiled standard service type. Per `SPEC-00 §5.1`, readers MUST fail closed on any unprofiled `open` construct.
 
 ---
@@ -13,9 +13,10 @@
 | `OQ-002` | `SPEC-02 §1.1` (`SL-LDGR-002`) | `open` | **General Tier 2 light / proof-bundle verifier profile** (`k >= 2` independent UTXO/name proof servers or future authenticated UTXO commitments). | Tier 1 full-node verifier remains required for all effect executors. A dedicated consensus-exact Tier-2 SPV profile for artifact notarization & name-history verification (`seallink-tier2-name-history/1`, `SegWitNameUpdateProof`, Namecoin AuxPoW & retarget) is specified in optional module `PROFILE-artifact-v1.md`; general effect-executor Tier-2 UTXO verification remains post-v1.0. |
 | `OQ-003` | `SPEC-06 §6` (`SL-GRNT-014`) | `open` | **External CAS witness wire protocol** (`advance(journal_id, token, pos, from_commit, to_commit)`). | State machine and fencing invariants are `decided`; interoperable wire transport (e.g., HTTP CAS / Raft / consensus-backed service) remains operator-local until profiled. |
 | `OQ-004` | `SPEC-03 §4` (`SL-IDEN-009`) | `open` | **HTTPS `.well-known` domain-binding verification** (Channel 2 pairing between `id/<label>` and `d/<label>` or DNSSEC/NIP-05). | Channel 0 (inline) and Channel 1 (local cache / configured mirrors) work unconditionally; Channel 2 is optional and hash-pinned only. |
-| `OQ-005` | `SPEC-01 §4.1` (`SL-WIRE-012`) | `open` | **Additional hardware device algorithms** (`fido2-es256`, `fido2-eddsa`, `ssh-ed25519` WebAuthn/SSH wrappers). | v1.0 closes `AuthEntry.alg`, `DeviceEntry.alg`, and `DeviceThresholdPolicy.alg` to `bip340`, `p256`, and `ed25519`. Hardware wrapper formats will be proposed via Optional Module SLIPs with exact canonical challenge framing. |
 | `OQ-006` | `SPEC-02 §6.3` (`SL-LDGR-013`) | `open` | **Production propagation qualification for TRUC v3 / `P2A` (`51024e73`) CPFP revocation.** | Two-node Namecoin Core `nc28.0` regtest 1p1c `submitpackage` + P2P propagation + confirmation is verified both standalone (`conformance/p2a-regtest/`) and end-to-end inside live `Tier1Verifier` Trace 03 (`conformance/traces-regtest/`, covering `minrelaytxfee = 0.001 NMC/1000 vB` and `240`-sat `P2A` dust floor). Independent operator administration, fee competition, and mainnet propagation remain open before `chain-tested` maturity. |
 | `OQ-007` | `SPEC-02 §3.1` (`SL-LDGR-004`) | `open` *(non-blocking)* | **Optional threshold-ECDSA MPC qualification for single-key `P2WPKH` outputs.** | **Resolved for institutional branch roles in `v1.0.0-draft.7`:** `BranchKeySpec` natively supports BOTH single `CompressedPubkey66` AND compact native `P2WSH` `m-of-n` (`2 <= n <= 5`) multisig via offline PSBT for `disposer_pk`, `arbiter_pk`, `challenger_pk`, and `arbiter_or_both.arbiter` (verified live on `nc28.0` alongside `P2WSH` `namepsbt` name outputs). Optional external threshold-ECDSA MPC signing for single-key `P2WPKH` outputs remains an independent deployment option outside the v1.0 wire freeze. |
+
+> **Recently closed:** `OQ-005` (**Hardware device & recipient algorithms**: `ssh-ed25519` `PROTOCOL.sshsig`, `fido2-es256`, and `fido2-eddsa` WebAuthn/CTAP2 with `rp_id` & cryptographic `UP`/`UV` `presence_attestation`) was promoted to `mti_v1` in `v1.0.0-draft.15` (`SPEC-01 §4`, `SPEC-03 §5–§6`, `SPEC-06 §1.2`).
 
 ---
 
@@ -49,5 +50,6 @@ The following standard `service_type` names are reserved with `status = "open"` 
 
 ## 4. Institutional and Scope Boundaries Explicitly Outside v1.0
 
-- **Reversible adult legal capacity (conservatorship):** v1.0 enforces strictly one-way `ward -> autonomous`. Reversible capacity requires a future SLIP addressing judicial contestation and revocation of autonomy.
-- **Cross-chain bridge semantics:** v1.0 binds one `network` + `genesis` per object and verification session.
+- **Reversible adult legal capacity (conservatorship):** v1.0 enforces strictly one-way `ward -> autonomous`. Reversible adult capacity fits cleanly as a future Optional Module SLIP extending the `status_seal` spine and critical forward-only `0x15`–`0x1a` actions (`SPEC-02 §5.2`, `SPEC-04 §7`) addressing judicial contestation and restoration without altering v1.0 wire formats.
+- **Cross-chain bridge semantics:** v1.0 verifiers MAY mount multiple independent ledgers simultaneously via `chains[(network, genesis)] -> ChainView` (`SPEC-02 §1.2`), including future Ledger Binding Profiles using qualified `<chain-slug>:<net>` identifiers; however, every object and verification session binds strictly to one `(network, genesis)` pair with zero cross-chain bridge semantics.
+- **Zero-Knowledge / Unlinkable Credential Presentations (ZK-SNARK / BBS+):** v1.0 uses lightweight salted SHA-256 selective-disclosure commitments (`SPEC-01 §5`) for zero trusted setup and universal auditability; unlinkable ZK proof presentations are cleanly layered as a post-v1.0 Optional Module SLIP.

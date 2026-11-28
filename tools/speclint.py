@@ -73,6 +73,7 @@ DOMAIN_ONLY_TAGS = frozenset({
     "seallink-journal/1",
     "seallink-merkle-leaf/1",
     "seallink-merkle-node/1",
+    "seallink-set-mask/1",
     "seallink-set-dummy/1",
     "seallink-artifact-id/1",
     "seallink-log-id/1",
@@ -657,6 +658,10 @@ def verify_all_vectors(
             dsa = v["device_signature_algorithms"]
             verify_envelope_record(dsa["owner_command_ed25519"], "wire/ed25519", errors)
             verify_envelope_record(dsa["owner_command_p256_low_s"], "wire/p256_low_s", errors)
+            for k_hw in ("owner_command_ssh_ed25519", "owner_command_fido2_es256", "owner_command_fido2_eddsa"):
+                if k_hw in dsa:
+                    verify_envelope_record(dsa[k_hw], f"wire/{k_hw}", errors)
+                    checked += 1
             checked += 2
         if "ed25519_speccheck" in v:
             for ec in v["ed25519_speccheck"]:

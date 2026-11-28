@@ -507,7 +507,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         "PR #1 B-6 closed: child recipient key mismatching template.recipient_rule.exact_key MUST refuse GRANT_CHILD_WIDER.",
     )
 
-    # member_class positive + negative (exercises seallink-members-list/1!)
+    # member_class positive + negative (exercises depth-34 salted Merkle seallink-member-set-head/1 + seallink-member-entry/1!)
     def _member_class_fx(*, include_bob: bool = True) -> dict[str, Any]:
         fx_mc = rm._delegation_fx()
         bob_own, bob_req = _kp("d7-mc-bob-own"), _kp("d7-mc-bob-req")
@@ -522,13 +522,13 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         entries = []
         if include_bob:
             entries.append({"name": "id/bob-member", "owner_policy": bob_opol, "registration": bob_reg, "seal": {"script_policy": bob_seal_pol, "txid": bob_seal_tx, "vout": 0}})
-        mlist = {"entries": entries, "network": "main", "owner": "id/alice", "seq": 1, "type": "seallink-members-list/1"}
+        mhead, mproofs = rm.make_salted_member_set("id/alice", entries)
         al_man = copy.deepcopy(fx_mc["_alice_man"])
-        al_man["sets"] = {"members": {"seq": 1, "sha256": sl.content_addr(mlist)}}
+        al_man["sets"] = {"members": {"seq": 1, "sha256": sl.content_addr(mhead)}}
         al_man_h = sl.content_addr(al_man)
         fx_mc["chain"]["manifests"][al_man_h] = al_man
         fx_mc["bundle"]["manifests"][al_man_h] = al_man
-        fx_mc["bundle"]["members_lists"] = {sl.content_addr(mlist): mlist}
+        fx_mc["bundle"]["member_proofs"] = {sl.content_addr(mhead): mproofs[0]} if mproofs else {}
         fx_mc["chain"]["names"]["id/alice"] = sv.make_name_history(
             "id/alice", fx_mc["_alice_reg"], fx_mc["_alice_owner_pol"],
             {"link": {"grant": fx_mc["_keys"]["alice_gr"]["xonly"]}, "m": {"h": al_man_h, "s": 1}},
@@ -946,15 +946,15 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
     # B-11 & R3-B6: Deterministic x-seallink-refusal Precedence & Cofactorless Ed25519
     # =========================================================================
     gp_b11_md = copy.deepcopy(fx_b1_ctrl["bundle"]["grants"][0]["payload"])
-    gp_b11_md["min_depth"] = 145
+    gp_b11_md["min_depth"] = 1441
     add(
-        "d7-b11-min-depth-145-refuses-wire-integer",
+        "d7-b11-min-depth-1441-refuses-wire-integer",
         ["SL-WIRE-008"],
         "raw_wire",
         {"object": sl.sign_envelope(gp_b11_md, [fx_b1_ctrl["_keys"]["alice_gr"]["sk"]])},
         "REFUSE",
         "WIRE_INTEGER",
-        "PR #1 B-11 closed: RootGrant with min_depth=145 (> 144) MUST refuse WIRE_INTEGER (not WIRE_MEMBER).",
+        "PR #1 B-11 closed: RootGrant with min_depth=1441 (> 1440) MUST refuse WIRE_INTEGER (not WIRE_MEMBER).",
     )
     gp_b11_rk = copy.deepcopy(fx_b1_ctrl["bundle"]["grants"][0]["payload"])
     gp_b11_rk["recipient"] = {"key": "ff" * 32, "mode": "key"}
@@ -1534,8 +1534,7 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
         [fx_st["_keys"]["alice_gr"]["sk"]],
     )
     stmt_exp = sl.sign_envelope({**stmt_ok["payload"], "not_after": fx_st["chain"]["now"]}, [fx_st["_keys"]["alice_gr"]["sk"]])
-    set_sha = sl.sha256(sl._jcs_serialize([sl.content_addr(stmt_ok)], None, (), 0).encode("utf-8")).hex()
-    csh_ok = {"count": 1, "issuer_name": "id/alice", "network": "main", "seq": 1, "set_sha256": set_sha, "type": "seallink-certset-head/1"}
+    csh_ok, cproofs_ok = rm.make_salted_cert_set("id/alice", [stmt_ok])
     al_man_cs = {**copy.deepcopy(fx_st["_alice_man"]), "sets": {"certs": {"seq": 1, "sha256": sl.content_addr(csh_ok)}}}
     add(
         "d7-obj-statement-transport-binding-admit",
@@ -1558,20 +1557,22 @@ def add_draft7_conformance_cases(add: Callable[..., None]) -> None:
     add(
         "d7-obj-certset-head-valid-admit",
         ["SL-IDEN-006"],
-        "certset_head",
-        {"head": csh_ok, "statements": [stmt_ok], "owner_manifest": al_man_cs},
+        "cert_entry_proof",
+        {"cert_proof": cproofs_ok[0], "statement": stmt_ok, "owner_manifest": al_man_cs},
         "ADMIT",
         None,
-        "H-24 / S-19: seallink-certset-head/1 matching manifest sets.certs pin and SHA256(JCS(sorted_statement_caddrs)) admits.",
+        "H-24 / S-19: depth-20 salted Merkle CertEntryProof matching manifest sets.certs pin and statement admits.",
     )
+    cproof_tamp = copy.deepcopy(cproofs_ok[0])
+    cproof_tamp["proof"]["steps"][0]["hash"] = _h32("d7-tampered-cert-sib")
     add(
         "d7-obj-certset-head-tampered-set-refuse",
         ["SL-IDEN-006"],
-        "certset_head",
-        {"head": csh_ok, "statements": [], "owner_manifest": al_man_cs},
+        "cert_entry_proof",
+        {"cert_proof": cproof_tamp, "statement": stmt_ok, "owner_manifest": al_man_cs},
         "REFUSE",
         "MANIFEST_MISMATCH",
-        "H-24 / S-19: seallink-certset-head/1 with missing/tampered statements MUST refuse MANIFEST_MISMATCH.",
+        "H-24 / S-19: CertEntryProof with tampered Merkle sibling MUST refuse MANIFEST_MISMATCH.",
     )
 
     # 6. seallink-migration/1 full 4-step cut-over (MigrationInventory + holder assent + holder manifest + dest migration-accept statement)
@@ -2909,12 +2910,13 @@ def _add_draft7_mutation_and_boundary_cases(add: Callable[..., None]) -> None:
     add("d7-tm-contract-id-mismatch-refuse", ["SL-CONT-005"], "termination", {"chain": fx_vt2["chain"], "contract": c_vt2, "termination": sl.sign_envelope({**tm_p2, "contract_id": _h32("wrong-cid")}, [fx_vt2["_keys"]["alice_gr"]["sk"]])}, "REFUSE", "CONTRACT_ID_MISMATCH", "termination/1 with wrong contract_id refuses CONTRACT_ID_MISMATCH.")
     add("d7-tm-bad-0x08-spend-refuse", ["SL-CONT-005"], "termination", {"chain": fx_vt2["chain"], "contract": c_vt2, "spend_txid": _h32("missing-0x08"), "termination": sl.sign_envelope(tm_p2, [fx_vt2["_keys"]["alice_gr"]["sk"]])}, "REFUSE", "CHAIN_FRAME_INVALID", "termination/1 with missing 0x08 spend refuses CHAIN_FRAME_INVALID.")
 
-    # certset_head missing sets.certs pin
-    csh2 = {"count": 0, "issuer_name": "id/alice", "network": "main", "seq": 1, "set_sha256": sl.sha256(b"[]").hex(), "type": "seallink-certset-head/1"}
-    add("d7-csh-missing-manifest-pin-refuse", ["SL-IDEN-006"], "certset_head", {"head": csh2, "owner_manifest": fx_au2["_alice_man"], "statements": []}, "REFUSE", "MANIFEST_MISMATCH", "certset-head/1 not pinned in owner_manifest.sets.certs refuses MANIFEST_MISMATCH.")
+    # cert_entry_proof missing sets.certs pin
+    st_p2 = {"body_sha256": _h32("d7-stmt-body"), "genesis": GENESIS_MAIN, "issuer": {"name": "id/alice", "owner_policy": fx_au2["_alice_owner_pol"], "registration": fx_au2["_alice_reg"]}, "network": "main", "not_after": now_au + 60, "not_before": now_au, "seq": 1, "statement_kind": "config-section", "subject": {"host_id": "id/station-a", "section": "runtime"}, "type": "seallink-statement/1"}
+    stmt_c2 = sl.sign_envelope(st_p2, [fx_au2["_keys"]["alice_gr"]["sk"]])
+    _csh2, cproofs2 = rm.make_salted_cert_set("id/alice", [stmt_c2])
+    add("d7-csh-missing-manifest-pin-refuse", ["SL-IDEN-006"], "cert_entry_proof", {"cert_proof": cproofs2[0], "owner_manifest": fx_au2["_alice_man"], "statement": stmt_c2}, "REFUSE", "MANIFEST_MISMATCH", "CertEntryProof when owner_manifest lacks sets.certs pin refuses MANIFEST_MISMATCH.")
 
     # statement: CHAIN_MISMATCH, not_after == not_before, not_before == now ADMIT, device_list P-256 ADMIT & unauthorized REFUSE
-    st_p2 = {"body_sha256": _h32("d7-stmt-body"), "genesis": GENESIS_MAIN, "issuer": {"name": "id/alice", "owner_policy": fx_au2["_alice_owner_pol"], "registration": fx_au2["_alice_reg"]}, "network": "main", "not_after": now_au + 60, "not_before": now_au, "seq": 1, "statement_kind": "config-section", "subject": {"host_id": "id/station-a", "section": "runtime"}, "type": "seallink-statement/1"}
     add("d7-stmt-chain-mismatch-refuse", ["SL-IDEN-006"], "statement", {"chain": fx_au2["chain"], "statement": sl.sign_envelope({**st_p2, "genesis": _h32("bad-sg")}, [fx_au2["_keys"]["alice_gr"]["sk"]])}, "REFUSE", "CHAIN_MISMATCH", "statement/1 with wrong genesis refuses CHAIN_MISMATCH.")
     add("d7-bnd-stmt-not-before-eq-now-admit", ["SL-IDEN-006"], "statement", {"chain": fx_au2["chain"], "statement": sl.sign_envelope(st_p2, [fx_au2["_keys"]["alice_gr"]["sk"]])}, "ADMIT", None, "Exact boundary: statement at not_before == chain.now admits (kills <= -> <).")
     add("d7-bnd-stmt-not-after-eq-not-before-refuse", ["SL-IDEN-006"], "statement", {"chain": fx_au2["chain"], "statement": sl.sign_envelope({**st_p2, "not_after": now_au - 10, "not_before": now_au - 10}, [fx_au2["_keys"]["alice_gr"]["sk"]])}, "REFUSE", "INVOKE_TIME_INVALID", "Exact boundary: statement with not_after == not_before refuses INVOKE_TIME_INVALID (kills <= -> <).")

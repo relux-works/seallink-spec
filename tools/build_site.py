@@ -1175,7 +1175,7 @@ def build_site(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build static website & live schema host for seallink.org.")
-    parser.add_argument("--version", default="v1.0.0-draft.14", help="Release version label (e.g. v1.0.0-draft.14)")
+    parser.add_argument("--version", default="v1.0.0-draft.15", help="Release version label (e.g. v1.0.0-draft.15)")
     parser.add_argument("--root", default=str(ROOT), help="Repository root containing spec/, schemas/, registry/, vectors/, tools/")
     parser.add_argument("--out", default=None, help="Output directory for generated static site (default: <root>/site)")
     parser.add_argument(

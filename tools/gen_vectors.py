@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.14.
+Deterministic Conformance Vector Generator for SealLink v1.0.0-draft.15.
 
 Produces nine executable JSON vector suites under vectors/:
   1. wire-jcs-and-hashes.json
@@ -31,7 +31,7 @@ import build_security_suite as sec
 import seallink_ref as sl
 import seallink_verifier as sv
 
-VERSION = "1.0.0-draft.14"
+VERSION = "1.0.0-draft.15"
 GENESIS_MAIN = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
 VECTORS_DIR = ROOT / "vectors"
 
@@ -255,8 +255,14 @@ def build_wire_vectors() -> dict[str, Any]:
     }
     env_cmd_ed25519 = sl.sign_envelope(dev_cmd_payload, [ed_seed], alg="ed25519")
     env_cmd_p256 = sl.sign_envelope({**dev_cmd_payload, "nonce": h32("wire-dev-cmd-nonce-2")}, [p256_sk], alg="p256")
+    env_cmd_ssh = sl.sign_envelope({**dev_cmd_payload, "nonce": h32("wire-dev-cmd-nonce-3")}, [ed_seed], alg="ssh-ed25519")
+    env_cmd_fido2_es = sl.sign_envelope({**dev_cmd_payload, "nonce": h32("wire-dev-cmd-nonce-4")}, [p256_sk], alg="fido2-es256", rp_id="seallink.local", fido2_flags=0x05)
+    env_cmd_fido2_ed = sl.sign_envelope({**dev_cmd_payload, "nonce": h32("wire-dev-cmd-nonce-5")}, [ed_seed], alg="fido2-eddsa", rp_id="seallink.local", fido2_flags=0x01)
     assert sl.verify_envelope_signatures(env_cmd_ed25519)[0]
     assert sl.verify_envelope_signatures(env_cmd_p256)[0]
+    assert sl.verify_envelope_signatures(env_cmd_ssh)[0]
+    assert sl.verify_envelope_signatures(env_cmd_fido2_es)[0]
+    assert sl.verify_envelope_signatures(env_cmd_fido2_ed)[0]
 
     env_cmd_p256_high_s = copy.deepcopy(env_cmd_p256)
     low_sig = env_cmd_p256_high_s["signatures"]["sigs"][0]["sig"]
@@ -311,24 +317,24 @@ def build_wire_vectors() -> dict[str, Any]:
         predecessor_log_id=g_log_id,
         predecessor_terminal_denials_root=g_log_pred_dr,
     )
-    # D14-B02 / D14-H01: Atomic 256-leaf padded salted-Merkle golden vector (exact 8 steps, BIP-340 H_tag)
-    g_sm_auth_k = make_keypair("golden-sm256-auth")
-    g_sm_seal_k = make_keypair("golden-sm256-seal")
+    # draft.15: Atomic depth-16 / depth-20 / depth-34 sparse masked salted-Merkle golden vectors
+    g_sm_auth_k = make_keypair("golden-sm16-auth")
+    g_sm_seal_k = make_keypair("golden-sm16-seal")
     g_sm_entry = {
         "alg": "bip340",
         "key": g_sm_auth_k["xonly_pk"],
         "label": "golden-login",
         "network": "main",
         "owner": "id/alice-golden",
-        "salt": h32("golden-sm256-salt"),
-        "seal": {"script_policy": {"kind": "key", "pk": g_sm_seal_k["compressed_pk"]}, "txid": h32("golden-sm256-seal-tx"), "vout": 0},
+        "salt": h32("golden-sm16-salt"),
+        "seal": {"script_policy": {"kind": "key", "pk": g_sm_seal_k["compressed_pk"]}, "txid": h32("golden-sm16-seal-tx"), "vout": 0},
         "type": "seallink-auth-entry/1",
     }
-    g_sm_root, g_sm_proofs = sl.build_salted_set_merkle([g_sm_entry], pad_seed=b"golden-sm256-dummy")
+    g_sm_root, g_sm_proofs = sl.build_salted_set_merkle([g_sm_entry], depth=16, mask_seed=sl.sha256(b"golden-sm16-mask"))
     g_sm_leaf_digest = sl.signing_digest(g_sm_entry).hex()
     g_sm_merkle_leaf = sl.tagged_hash("seallink-merkle-leaf/1", bytes.fromhex(g_sm_leaf_digest)).hex()
     g_sm_proof_0 = g_sm_proofs[g_sm_leaf_digest]
-    assert len(g_sm_proof_0["steps"]) == sl.FIXED_SALTED_SET_PROOF_STEPS == 8
+    assert len(g_sm_proof_0["steps"]) == sl.FIXED_SALTED_SET_PROOF_STEPS == 16
     # D14-B01: All 6 SLNK loc_type frames (0x00..0x05) matching registry/opreturn-actions.json
     g_lt_frames = []
     for lt_name, lt_act_int, lt_byte, lt_ptr in [
@@ -478,6 +484,9 @@ def build_wire_vectors() -> dict[str, Any]:
             "rule": "SL-WIRE-012",
             "owner_command_ed25519": envelope_record(env_cmd_ed25519, "schemas/invocation.schema.json#/$defs/OwnerCommand"),
             "owner_command_p256_low_s": envelope_record(env_cmd_p256, "schemas/invocation.schema.json#/$defs/OwnerCommand"),
+            "owner_command_ssh_ed25519": envelope_record(env_cmd_ssh, "schemas/invocation.schema.json#/$defs/OwnerCommand"),
+            "owner_command_fido2_es256": envelope_record(env_cmd_fido2_es, "schemas/invocation.schema.json#/$defs/OwnerCommand"),
+            "owner_command_fido2_eddsa": envelope_record(env_cmd_fido2_ed, "schemas/invocation.schema.json#/$defs/OwnerCommand"),
         },
         "ed25519_speccheck": ed_speccheck,
         "journal_commit_vectors": {

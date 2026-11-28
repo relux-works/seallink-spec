@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 OP_RETURN Commitment Framing Registry (SPEC-02). All standard frames fit strictly within Bitcoin/Namecoin MAX_OP_RETURN_RELAY = 83 bytes.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.14",
+  "version": "1.0.0-draft.15",
   "magic_ascii": "SLNK",
   "magic_hex": "534c4e4b",
   "reserved_sibling_prefixes": [
@@ -265,7 +265,7 @@
       "commitment": "content_addr(seallink-log-checkpoint/1)",
       "allowed_locators": ["0x00", "0x01", "0x03", "0x04", "0x05"],
       "owning_spec": "SPEC-05",
-      "description": "Committed when spending the active log_seal UTXO (genesis_seal at seq=1 or previous checkpoint's next_log_vout at seq>=2) to anchor a signed notary or release transparency/denial log checkpoint (batch_root, denials_delta_root, Fixed-Depth-256 SMT denials_root, and acyclic RFC 9162 checkpoints_root)."
+      "description": "Committed when spending the active log_seal UTXO (genesis_seal at seq=1 or previous checkpoint's next_log_vout at seq>=2) to anchor a signed notary, release, or cred transparency/denial log checkpoint (batch_root, denials_delta_root, Fixed-Depth-256 SMT denials_root, and acyclic RFC 9162 checkpoints_root)."
     }
   ]
 }

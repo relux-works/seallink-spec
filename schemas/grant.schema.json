@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/grant.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.15/schemas/grant.schema.json",
   "title": "SealLink v1.0 Universal Grant & Issuance Preparation",
   "oneOf": [
     {
@@ -83,6 +83,60 @@
             {
               "type": "object",
               "additionalProperties": false,
+              "required": ["mode", "alg", "key"],
+              "properties": {
+                "mode": { "const": "key" },
+                "alg": { "const": "p256" },
+                "key": { "$ref": "common.schema.json#/$defs/P256Pubkey66" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode", "alg", "key"],
+              "properties": {
+                "mode": { "const": "key" },
+                "alg": { "const": "ed25519" },
+                "key": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode", "alg", "key"],
+              "properties": {
+                "mode": { "const": "key" },
+                "alg": { "const": "ssh-ed25519" },
+                "key": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode", "alg", "key", "rp_id"],
+              "properties": {
+                "mode": { "const": "key" },
+                "alg": { "const": "fido2-es256" },
+                "key": { "$ref": "common.schema.json#/$defs/P256Pubkey66" },
+                "rp_id": { "$ref": "common.schema.json#/$defs/RpIdStr" },
+                "presence_attestation": { "$ref": "common.schema.json#/$defs/PresenceAttestation" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode", "alg", "key", "rp_id"],
+              "properties": {
+                "mode": { "const": "key" },
+                "alg": { "const": "fido2-eddsa" },
+                "key": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" },
+                "rp_id": { "$ref": "common.schema.json#/$defs/RpIdStr" },
+                "presence_attestation": { "$ref": "common.schema.json#/$defs/PresenceAttestation" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
               "required": ["mode", "name", "registration", "owner_policy"],
               "properties": {
                 "mode": { "const": "name" },
@@ -97,8 +151,22 @@
               "required": ["mode", "threshold"],
               "properties": {
                 "mode": { "const": "group" },
-                "threshold": { "$ref": "common.schema.json#/$defs/ThresholdPolicy" }
-              }
+                "threshold": { "$ref": "common.schema.json#/$defs/DeviceThresholdPolicy" },
+                "presence_attestation": { "$ref": "common.schema.json#/$defs/PresenceAttestation" }
+              },
+              "allOf": [
+                {
+                  "if": { "required": ["presence_attestation"], "properties": { "presence_attestation": { "enum": ["up", "uv"] } } },
+                  "then": {
+                    "properties": {
+                      "threshold": {
+                        "required": ["alg"],
+                        "properties": { "alg": { "enum": ["fido2-es256", "fido2-eddsa"] } }
+                      }
+                    }
+                  }
+                }
+              ]
             }
           ]
         },
@@ -136,11 +204,12 @@
         },
         "not_before_height": { "$ref": "common.schema.json#/$defs/Uint53" },
         "not_after_height": { "$ref": "common.schema.json#/$defs/PositiveUint53" },
+        "not_after_unix": { "$ref": "common.schema.json#/$defs/Uint53" },
         "recent_block": { "$ref": "common.schema.json#/$defs/Hex64" },
         "min_depth": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 144,
+          "maximum": 1440,
           "x-seallink-refusal": "WIRE_INTEGER",
           "description": "Optional issuer-requested minimum confirmation depth for anchor/seal (omitted defaults to 1)."
         },
@@ -384,6 +453,60 @@
           "properties": {
             "mode": { "const": "exact_key" },
             "key": { "$ref": "common.schema.json#/$defs/XOnlyPubkey64" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "alg", "key"],
+          "properties": {
+            "mode": { "const": "exact_key" },
+            "alg": { "const": "p256" },
+            "key": { "$ref": "common.schema.json#/$defs/P256Pubkey66" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "alg", "key"],
+          "properties": {
+            "mode": { "const": "exact_key" },
+            "alg": { "const": "ed25519" },
+            "key": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "alg", "key"],
+          "properties": {
+            "mode": { "const": "exact_key" },
+            "alg": { "const": "ssh-ed25519" },
+            "key": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "alg", "key", "rp_id"],
+          "properties": {
+            "mode": { "const": "exact_key" },
+            "alg": { "const": "fido2-es256" },
+            "key": { "$ref": "common.schema.json#/$defs/P256Pubkey66" },
+            "rp_id": { "$ref": "common.schema.json#/$defs/RpIdStr" },
+            "presence_attestation": { "$ref": "common.schema.json#/$defs/PresenceAttestation" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "alg", "key", "rp_id"],
+          "properties": {
+            "mode": { "const": "exact_key" },
+            "alg": { "const": "fido2-eddsa" },
+            "key": { "$ref": "common.schema.json#/$defs/Ed25519Pubkey64" },
+            "rp_id": { "$ref": "common.schema.json#/$defs/RpIdStr" },
+            "presence_attestation": { "$ref": "common.schema.json#/$defs/PresenceAttestation" }
           }
         },
         {

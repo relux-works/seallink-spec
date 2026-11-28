@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Cryptographic Algorithm Registry (SPEC-00 §5, SPEC-01 §4). Embodies algorithmic neutrality: minimal MTI core for global interoperability plus equal-footing optional modules for national and post-quantum suites.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.14",
+  "version": "1.0.0-draft.15",
   "governance": "Registry Update for reserved-slot/metadata registration; Optional Module SLIP + versioned schema extension for active wire algorithms; Core SLIP for MTI changes (SPEC-00 §5)",
   "algorithms": [
     {
@@ -11,8 +11,8 @@
       "standard": "BIP-340 (Schnorr over secp256k1)",
       "pubkey_bytes": 32,
       "sig_bytes": 64,
-      "wire_encoding": "Lowercase hex; omitted as default in ThresholdPolicy / DeviceThresholdPolicy for canonical single encoding (SL-WIRE-013).",
-      "usage": ["name_role_keys", "grants", "contracts", "credentials", "notary", "release", "logs", "auth", "devices", "owner_command", "statement", "transport_binding"]
+      "wire_encoding": "Lowercase hex; omitted as default in ThresholdPolicy / DeviceThresholdPolicy / grant.recipient(key) for canonical single encoding (SL-WIRE-013).",
+      "usage": ["name_role_keys", "grants", "grant_recipient", "invocation", "session_open", "contracts", "credentials", "notary", "release", "logs", "auth", "devices", "owner_command", "statement", "transport_binding"]
     },
     {
       "id": "p256",
@@ -22,7 +22,7 @@
       "pubkey_bytes": 33,
       "sig_bytes": 64,
       "wire_encoding": "Compressed 33-byte SEC 1 public key; 64-byte raw low-S signature.",
-      "usage": ["auth", "devices", "owner_command", "statement", "transport_binding"]
+      "usage": ["auth", "devices", "owner_command", "statement", "grant_recipient", "invocation", "session_open", "transport_binding"]
     },
     {
       "id": "ed25519",
@@ -32,7 +32,37 @@
       "pubkey_bytes": 32,
       "sig_bytes": 64,
       "wire_encoding": "32-byte compressed Edwards public key; 64-byte signature.",
-      "usage": ["auth", "devices", "owner_command", "statement", "transport_binding"]
+      "usage": ["auth", "devices", "owner_command", "statement", "grant_recipient", "invocation", "session_open", "transport_binding"]
+    },
+    {
+      "id": "ssh-ed25519",
+      "family": "signature",
+      "status": "mti_v1",
+      "standard": "OpenSSH PROTOCOL.sshsig deterministic wrapper (namespace='seallink-v1', reserved='', hash_alg='sha512') over strict RFC 8032 Ed25519",
+      "pubkey_bytes": 32,
+      "sig_bytes": 64,
+      "wire_encoding": "32-byte non-small-order Ed25519 public key; 64-byte raw Ed25519 signature over SSHSIG preimage of SHA-512(signing_digest).",
+      "usage": ["auth", "devices", "owner_command", "statement", "grant_recipient", "invocation", "session_open"]
+    },
+    {
+      "id": "fido2-es256",
+      "family": "signature",
+      "status": "mti_v1",
+      "standard": "W3C WebAuthn / CTAP2 hardware wrapper (rpIdHash + UP/UV flags + clientDataJSON challenge=base64url(signing_digest)) over strict low-S NIST P-256 ECDSA",
+      "pubkey_bytes": 33,
+      "sig_bytes": 64,
+      "wire_encoding": "Compressed 33-byte SEC 1 P-256 public key + policy rp_id; 64-byte low-S r||s signature paired with authenticator_data_hex and client_data_hex.",
+      "usage": ["auth", "devices", "owner_command", "statement", "grant_recipient", "invocation", "session_open"]
+    },
+    {
+      "id": "fido2-eddsa",
+      "family": "signature",
+      "status": "mti_v1",
+      "standard": "W3C WebAuthn / CTAP2 hardware wrapper (rpIdHash + UP/UV flags + clientDataJSON challenge=base64url(signing_digest)) over strict RFC 8032 Ed25519",
+      "pubkey_bytes": 32,
+      "sig_bytes": 64,
+      "wire_encoding": "32-byte non-small-order Ed25519 public key + policy rp_id; 64-byte Ed25519 signature paired with authenticator_data_hex and client_data_hex.",
+      "usage": ["auth", "devices", "owner_command", "statement", "grant_recipient", "invocation", "session_open"]
     },
     {
       "id": "ecdsa-secp256k1-bip66",
@@ -78,6 +108,15 @@
       "digest_bytes": 32,
       "wire_encoding": "64 lowercase hex characters in manifest.service, mirror_endpoints, and transport-binding.",
       "usage": ["tls_pinning", "transport_binding"]
+    },
+    {
+      "id": "sha256-fingerprint",
+      "family": "pin",
+      "status": "mti_v1",
+      "standard": "RFC 9580 OpenPGP v6 32-byte SHA-256 primary key fingerprint",
+      "digest_bytes": 32,
+      "wire_encoding": "64 lowercase hex characters in transport-binding statements.",
+      "usage": ["transport_binding"]
     },
     {
       "id": "ml-dsa-65",

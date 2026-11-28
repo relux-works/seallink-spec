@@ -1,6 +1,6 @@
 # SealLink Conformance Requirements
 
-- **Version:** `1.0.0-draft.14`
+- **Version:** `1.0.0-draft.15`
 - **Status:** `draft`
 - **Normative Language:** [RFC2119], [RFC8174]
 
@@ -46,7 +46,7 @@ The following four subsystems are fully specified, schema-validated, and vector-
 
 ## 3. Reference Verifier Core vs. Production Tier 1 Conformance Boundary
 
-`tools/seallink_verifier.py` serves as the **Reference Verifier Core** for SealLink v1.0: it enforces Draft 2020-12 closed schemas, pure-Python BIP-340 / RFC 8032 Ed25519 / low-S NIST P-256 cryptography, authoritative issuer/guardian/executor key resolution, derived chain-history/witness evaluation over a declarative `ChainView`, and an in-memory hash-chained `FencedJournal`.
+`tools/seallink_verifier.py` serves as the **Reference Verifier Core** for SealLink v1.0: it enforces Draft 2020-12 closed schemas, pure-Python BIP-340 / RFC 8032 Ed25519 / low-S NIST P-256 / OpenSSH `ssh-ed25519` (`PROTOCOL.sshsig`) / WebAuthn CTAP2 `fido2-es256` & `fido2-eddsa` (`UP`/`UV`) cryptography, symmetric depth-16/20/34 sparse masked salted Merkle sets, `role ∈ {"notary","release","cred"}` `0x14` transparency/denial logs, authoritative issuer/guardian/executor key resolution, derived chain-history/witness evaluation over a declarative `ChainView`, and an in-memory hash-chained `FencedJournal`.
 
 A production **Tier 1 Verifier** or **Effect Executor** claiming full operational conformance additionally requires:
 1. A live read-only Namecoin Core (`txindex=1` verified via `getindexinfo`, plus `namehistory=1` or equivalent historical registration archive; reference cold-observer implementation provided in `tools/nc_rpc_adapter.py`) populating `ChainView` directly from confirmed active-chain blocks, UTXOs (`absent_from_utxo` on missing UTXOs), witnesses, multi-registration name histories, schema-driven signed continuation `*_vout` outputs, and local mempool, enforcing full `SPEC-02 §4` opening/closing observation brackets (`require_observation_bracket=True`), closed-bracket `pre_effect_recheck` with unified decision clock before side effects, and atomically merged operational `clock_watermark` / `first_sight_by_hash` state (`clock_mode="operational"` mandatory on `main`);
@@ -59,6 +59,6 @@ A production **Tier 1 Verifier** or **Effect Executor** claiming full operationa
 ## 4. Interoperability Bar for Advancing Specification Maturity
 
 Per `SPEC-00 §5.1`:
-- **`prose` -> `vectors`:** Every registered refusal code (`89/89`) and every canonical object type (`40/40`) is exercised by schema-valid semantic refusal fixtures and raw wire fixtures (with every case in `vectors/refusal-coverage-matrix.json` and `vectors/security-conformance.json` tagged with `"module"`), every `decided` normative rule is explicitly mapped in the rule-coverage audit, negative security/false-admit, restart-recovery, historical re-registration, voluntary-rebind, transparency-log/SMT/fraud, Tier-2 SPV, and exact-boundary regressions plus multi-operator verifier mutation audits pass, and all suites execute live through `tools/seallink_verifier.py` and Draft 2020-12 metaschemas in CI.
+- **`prose` -> `vectors`:** Every registered refusal code (`89/89`) and every canonical object type (`42/42`) is exercised by schema-valid semantic refusal fixtures and raw wire fixtures (with every case in `vectors/refusal-coverage-matrix.json` and `vectors/security-conformance.json` tagged with `"module"`), every `decided` normative rule is explicitly mapped in the rule-coverage audit, negative security/false-admit, restart-recovery, historical re-registration, voluntary-rebind, transparency-log/SMT/fraud (`notary`, `release`, `cred`), hardware wrapper (`ssh-ed25519`, `fido2-es256`, `fido2-eddsa`), Tier-2 SPV, and exact-boundary regressions plus multi-operator verifier mutation audits pass, and all suites execute live through `tools/seallink_verifier.py` and Draft 2020-12 metaschemas in CI.
 - **`vectors` -> `dual-impl`:** At least two independent implementations with disjoint cryptographic and JSON stacks pass 100% of `vectors/` byte-for-byte (identical object IDs, digests, content addresses, refusal codes, and journal commitments).
 - **`dual-impl` -> `chain-tested`:** All seven end-to-end traces (`trace-01`–`trace-05` plus `trace-06` live `0x13 VOLUNTARY_REBIND` `T_offer -> T_rebind` + post-expiry `P2PKH` hijack isolation, and `trace-07` live `0x14 LOG_CHECKPOINT` chain + `seallink-release/1` + `log_tracked` `seallink-notary/1` + SMT revocation + real mined `SegWitNameUpdateProof`) are executed with raw transaction artifacts via a cold read-only observer against a live Namecoin Core `nc28.0` regtest network (reference regtest proofs provided in `conformance/p2a-regtest/` and `conformance/traces-regtest/`) and qualified under production/mainnet conditions across independent implementations.

@@ -248,7 +248,7 @@ def add_draft14_conformance_cases(add: Callable[..., None]) -> None:
         "id/alice",
         [{"alg": "bip340", "key": a1_k["xonly"], "label": "k1", "seal": {"script_policy": as1_pol, "txid": as1_tx, "vout": 0}}],
     )
-    assert len(aps1[0]["proof"]["steps"]) == 8
+    assert len(aps1[0]["proof"]["steps"]) == 16
     man_s1 = rm.bind_sets_manifest(
         fx_s1["chain"], "id/alice", fx_s1["_alice_owner_pol"], fx_s1["_alice_reg"],
         auth_head=ah1, extra_link={"grant": fx_s1["_keys"]["alice_gr"]["xonly"]},
@@ -260,20 +260,20 @@ def add_draft14_conformance_cases(add: Callable[..., None]) -> None:
         "genesis": GENESIS_MAIN, "issued_at": now_s1, "name": "id/alice", "network": "main",
         "nonce": ac1_n, "service_id": "sso.example.org", "type": "seallink-auth-challenge/1",
     }, [a1_k["sk"]])
-    pf_7_steps = copy.deepcopy(aps1[0])
-    pf_7_steps["proof"]["steps"] = pf_7_steps["proof"]["steps"][:7]
+    pf_15_steps = copy.deepcopy(aps1[0])
+    pf_15_steps["proof"]["steps"] = pf_15_steps["proof"]["steps"][:15]
     add(
-        "d14-h01-salted-merkle-proof-under-8-steps-refuse",
+        "d14-h01-salted-merkle-proof-under-16-steps-refuse",
         ["SL-IDEN-010", "SL-WIRE-010"],
         "auth_challenge",
         {
-            "auth_proof": pf_7_steps, "chain": fx_s1["chain"], "challenge": ac1_env,
+            "auth_proof": pf_15_steps, "chain": fx_s1["chain"], "challenge": ac1_env,
             "journal": {"auth_nonces": {ac1_n: {"expires_at": now_s1 + 60, "issued_at": now_s1, "service_id": "sso.example.org", "used": False}}, "journal_id": _h32("s1-j1")},
             "manifests": {man_s1_h: man_s1}, "service_id": "sso.example.org",
         },
         "REFUSE",
         "WIRE_MEMBER",
-        "D14-H01: Fixed 256-leaf salted Merkle proof with fewer than 8 steps MUST refuse WIRE_MEMBER.",
+        "D14-H01: Depth-16 salted sparse Merkle proof with fewer than 16 steps MUST refuse WIRE_MEMBER.",
     )
 
     # 1.4 D14-H02 / D14-H06: Step 8b LocatorUri (forbidden http://, magnet http tracker, unknown future ar://) & SSO empty actions[]
@@ -777,7 +777,7 @@ def add_draft14_conformance_cases(add: Callable[..., None]) -> None:
         "D14-B11: owner_command durably records nonce in FencedJournal and refuses replay with INVOKE_REPLAY across replay_restart.",
     )
 
-    # 2.5 D14-B05: certset_head issuer mismatch (kills L7897!) & private statement with locators -> WIRE_MEMBER
+    # 2.5 D14-B05: cert_entry_proof issuer mismatch & private statement with locators -> WIRE_MEMBER
     st_bob = sl.sign_envelope({
         "body_sha256": _h32("s2-cs-bob"), "genesis": GENESIS_MAIN,
         "issuer": {"name": "id/bob", "owner_policy": fx_s2["_alice_owner_pol"], "registration": fx_s2["_alice_reg"]},
@@ -785,20 +785,16 @@ def add_draft14_conformance_cases(add: Callable[..., None]) -> None:
         "statement_kind": "profile-section", "subject": {"section_kind": "org.seallink.profile/bio"},
         "type": "seallink-statement/1",
     }, [fx_s2["_keys"]["alice_gr"]["sk"]])
-    bob_ca = sl.content_addr(st_bob)
-    cs_head_bad = {
-        "count": 1, "issuer_name": "id/alice", "network": "main", "seq": 1,
-        "set_sha256": sl.sha256(sl._jcs_serialize([bob_ca], None, (), 0).encode("utf-8")).hex(), "type": "seallink-certset-head/1",
-    }
+    cs_head_bad, cs_proofs_bad = rm.make_salted_cert_set("id/alice", [st_bob])
     man_cs_bad = {**copy.deepcopy(man_s2), "sets": {"certs": {"seq": 1, "sha256": sl.content_addr(cs_head_bad)}}}
     add(
         "d14-b05-certset-head-issuer-mismatch-refuse",
         ["SL-IDEN-005"],
-        "certset_head",
-        {"head": cs_head_bad, "owner_manifest": man_cs_bad, "statements": [st_bob]},
+        "cert_entry_proof",
+        {"cert_proof": cs_proofs_bad[0], "owner_manifest": man_cs_bad, "statement": st_bob},
         "REFUSE",
         "MANIFEST_MISMATCH",
-        "D14-B05: verify_certset_head MUST refuse MANIFEST_MISMATCH when a member statement's issuer.name disagrees with head.issuer_name.",
+        "D14-B05: verify_cert_entry_proof MUST refuse MANIFEST_MISMATCH when a statement's issuer.name disagrees with head.owner.",
     )
     st_priv_loc = sl.sign_envelope({
         "body_sha256": _h32("s2-priv-loc"), "genesis": GENESIS_MAIN,
@@ -1587,21 +1583,21 @@ def add_draft14_conformance_cases(add: Callable[..., None]) -> None:
     )
 
     # 4.2 _authenticate_predecessor_chain cycle (kills L5902!), invalid wire pred (kills L5913!), non-terminal pred (kills L5923!)
-    # (a) 17-hop handover chain (16 in predecessor_chain + 17th L0 in journal.log_heads -> exceeds 16-hop limit -> kills L5896 on BOTH refusal-return & wrong-code!)
+    # (a) 257-hop handover chain (256 in predecessor_chain + 257th L0 in journal.log_heads -> exceeds 256-hop limit -> kills L5980 on BOTH refusal-return & wrong-code!)
     ch_17 = copy.deepcopy(ho2["chain"])
     ch_17["txs"][ho2["l0_term_tx"]]["outputs"] = {"1": {"script_pubkey_hex": _spk_hex(eco0["seal_pol"])}}
     prev_lid_17 = eco0["log_id"]
     prev_tx_17 = ho2["l0_term_tx"]
     dr_17 = ho2["l0_dr"]
     hops_17: list[dict[str, Any]] = []
-    for h_i in range(1, 18):
-        cur_tx_17 = _h32(f"d14-17hop-tx-{h_i}")
+    for h_i in range(1, 258):
+        cur_tx_17 = _h32(f"d14-257hop-tx-{h_i}")
         cur_gen_17 = {"txid": prev_tx_17, "vout": 1}
         cur_lid_17 = sl.compute_log_id(
             "main", GENESIS_MAIN, "notary", eco0["iss_name"], eco0["iss_reg"], cur_gen_17,
             predecessor_log_id=prev_lid_17, predecessor_terminal_denials_root=dr_17,
         )
-        is_last = (h_i == 17)
+        is_last = (h_i == 257)
         cp_p_17: dict[str, Any] = {
             "batch_count": 0, "batch_root": sl.EMPTY_BATCH_ROOT, "checkpoints_root": sl.EMPTY_CHECKPOINTS_ROOT,
             "cumulative_entries_count": 0, "denials_delta_root": sl.EMPTY_BATCH_ROOT, "denials_root": dr_17,
@@ -1619,7 +1615,7 @@ def add_draft14_conformance_cases(add: Callable[..., None]) -> None:
         cp_env_17 = sl.sign_envelope(cp_p_17, [eco0["iss_role"]["sk"]])
         ch_17["txs"][prev_tx_17]["outputs"]["1"]["spent_by_txid"] = cur_tx_17
         ch_17["txs"][cur_tx_17] = {
-            "block_hash": _h32(f"d14-17hop-blk-{h_i}"), "confirmed_height": 749994 + h_i,
+            "block_hash": _h32(f"d14-257hop-blk-{h_i}"), "confirmed_height": 749994 + h_i,
             "inputs": [sv.make_segwit_input(prev_tx_17, 1)],
             "opreturn_hex": sl.encode_opreturn(0x14, sl.content_addr(cp_env_17)).hex(),
             "outputs": {"1": {"script_pubkey_hex": _spk_hex(eco0["seal_pol"])}},
@@ -1629,7 +1625,7 @@ def add_draft14_conformance_cases(add: Callable[..., None]) -> None:
         else:
             hops_17.append({"checkpoint": cp_env_17, "checkpoint_txid": cur_tx_17})
         prev_lid_17, prev_tx_17 = cur_lid_17, cur_tx_17
-    rm.sync_chain_tip(ch_17, height=750050)
+    rm.sync_chain_tip(ch_17, height=750300)
     lh_l0_17 = {
         "body": {
             "block_hash": ho2["chain"]["txs"][ho2["l0_term_tx"]]["block_hash"],
@@ -1646,17 +1642,17 @@ def add_draft14_conformance_cases(add: Callable[..., None]) -> None:
         "kind": "log-head",
     }
     add(
-        "d14-b07-pred-chain-17-hops-refuse",
+        "d14-b07-pred-chain-257-hops-refuse",
         ["SL-CONT-012"],
         "log_checkpoint",
         {
             "chain": ch_17, "checkpoint": cp17_env, "checkpoint_txid": cp17_tx,
-            "journal": {"initial_entries": [lh_l0_17], "journal_id": _h32("s4-17hop-j")},
+            "journal": {"initial_entries": [lh_l0_17], "journal_id": _h32("s4-257hop-j")},
             "predecessor_chain": list(reversed(hops_17)),
         },
         "REFUSE",
         "CHAIN_FRAME_INVALID",
-        "D14-B07: Handover chain exceeding 16 predecessor hops (16 presented + 17th in journal) MUST refuse CHAIN_FRAME_INVALID.",
+        "D14-B07: Handover chain exceeding 256 predecessor hops (256 presented + 257th in journal) MUST refuse CHAIN_FRAME_INVALID.",
     )
     # (b) Wire-invalid checkpoint object in predecessor_chain -> CHAIN_FRAME_INVALID (kills L5913!)
     add(

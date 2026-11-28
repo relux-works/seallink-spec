@@ -1,7 +1,7 @@
 {
   "$comment": "SealLink v1.0 Authoritative Action Profile Registry (SPEC-06, SPEC-07, PROFILE-mail-v1, PROFILE-agent-v1). Machine-readable SSOT for action argument/result schemas, target authority rules, mandatory quotas, allowed where-predicates, and guardian event classes. Executors MUST refuse unregistered actions unless explicitly enabled via a local SLIP profile.",
   "protocol": "SealLink",
-  "version": "1.0.0-draft.14",
+  "version": "1.0.0-draft.15",
   "actions": [
     {
       "action": "mail/list",

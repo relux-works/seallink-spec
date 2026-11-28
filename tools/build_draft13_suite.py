@@ -3232,15 +3232,15 @@ def _add_draft13_commit2_symmetry_cases(add: Callable[..., None], fx_ward_rev2: 
         "WIRE_TYPE",
         "Commit 2: Cross-set replay presenting seallink-device-entry/1 as auth_proof.entry MUST refuse WIRE_TYPE.",
     )
-    bad_merkle_schema_pf = {**copy.deepcopy(auth_proofs_4[0]), "proof": {**auth_proofs_4[0]["proof"], "steps": [{"hash": _h32(f"s{i}"), "side": "L"} for i in range(9)]}}
+    bad_merkle_schema_pf = {**copy.deepcopy(auth_proofs_4[0]), "proof": {**auth_proofs_4[0]["proof"], "steps": [{"hash": _h32(f"s{i}"), "side": "L"} for i in range(17)]}}
     add(
-        "d13-c2-auth-proof-steps-over-8-refuse",
+        "d13-c2-auth-proof-steps-over-16-refuse",
         ["SL-IDEN-010", "SL-WIRE-010"],
         "auth_challenge",
         {"auth_proof": bad_merkle_schema_pf, "chain": fx_c2["chain"], "challenge": ac_bip_env, "journal": _ac_j(ac_bip_n, aud="https://app.example.org/oidc"), "manifests": {man_c2_h: man_c2}, "service_id": "sso.example.org"},
         "REFUSE",
         "WIRE_MEMBER",
-        "Commit 2: SetEntryMerkleProof exceeding maxItems=8 steps MUST refuse WIRE_MEMBER.",
+        "Commit 2: SetEntryMerkleProof exceeding maxItems=16 steps MUST refuse WIRE_MEMBER.",
     )
     tampered_sib_pf = copy.deepcopy(auth_proofs_4[0])
     tampered_sib_pf["proof"]["steps"][0]["hash"] = _h32("tampered-auth-sib")
@@ -3377,17 +3377,17 @@ def _add_draft13_commit2_symmetry_cases(add: Callable[..., None], fx_ward_rev2: 
     peer_pol = {"kind": "key", "pk": peer_k["comp"]}
     peer_pin = {"name": "id/org-acme", "owner_policy": peer_pol, "registration": {"txid": _h32("c2-acme-reg"), "vout": 0}}
     ml_ok = {
-        "entries": [{
-            "name": "id/alice", "owner_policy": fx_c2["_alice_owner_pol"], "registration": fx_c2["_alice_reg"],
-            "roles": ["director", "signer.finance"],
-            "seal": {"script_policy": aseal_pol, "txid": aseal_tx, "vout": 0},
-        }],
-        "network": "main", "owner": "id/org-acme", "seq": 1, "type": "seallink-members-list/1",
+        "name": "id/alice", "network": "main", "owner": "id/org-acme",
+        "owner_policy": fx_c2["_alice_owner_pol"], "registration": fx_c2["_alice_reg"],
+        "roles": ["director", "signer.finance"],
+        "salt": _h32("c2-member-salt"),
+        "seal": {"script_policy": aseal_pol, "txid": aseal_tx, "vout": 0},
+        "type": "seallink-member-entry/1",
     }
-    add("d13-c2-members-list-roles-admit", ["SL-IDEN-006"], "raw_wire", {"object": ml_ok}, "ADMIT", None, "Commit 2: seallink-members-list/1 with valid RoleTag array roles[] admits.")
+    add("d13-c2-member-entry-roles-admit", ["SL-IDEN-006"], "raw_wire", {"object": ml_ok}, "ADMIT", None, "Commit 2: seallink-member-entry/1 with valid RoleTag array roles[] admits.")
     ml_bad_role = copy.deepcopy(ml_ok)
-    ml_bad_role["entries"][0]["roles"] = ["UPPERCASE"]
-    add("d13-c2-members-list-invalid-role-tag-refuse", ["SL-WIRE-010"], "raw_wire", {"object": ml_bad_role}, "REFUSE", "WIRE_MEMBER", "Commit 2: seallink-members-list/1 with uppercase RoleTag MUST refuse WIRE_MEMBER.")
+    ml_bad_role["roles"] = ["UPPERCASE"]
+    add("d13-c2-member-entry-invalid-role-tag-refuse", ["SL-WIRE-010"], "raw_wire", {"object": ml_bad_role}, "REFUSE", "WIRE_MEMBER", "Commit 2: seallink-member-entry/1 with uppercase RoleTag MUST refuse WIRE_MEMBER.")
 
     card_ok = {
         "avatar": {"bytes": 16384, "locators": ["https://cdn.example.org/alice.webp", "blossom://cdn.example.org/" + _h32("av1"), "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"], "mime": "image/webp", "sha256": _h32("av1")},

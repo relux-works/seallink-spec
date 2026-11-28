@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/origin.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.15/schemas/origin.schema.json",
   "title": "SealLink v1.0 Origin Certificate (Birth, Materialization, Incorporation)",
   "type": "object",
   "additionalProperties": false,
@@ -37,7 +37,13 @@
               "$ref": "common.schema.json#/$defs/Hex64",
               "description": "Salted selective-disclosure commitment H_tag('seallink-clause/1', salt_32B || JCS({majority_unix: T})) with an independent 32-byte CSPRNG salt. Mandatory for minor person origins; off-chain disclosure MUST accompany guardianship verification."
             },
-            "config_sha256": { "$ref": "common.schema.json#/$defs/Hex64" }
+            "config_sha256": { "$ref": "common.schema.json#/$defs/Hex64" },
+            "identity_commitments": {
+              "type": "object",
+              "maxProperties": 64,
+              "additionalProperties": { "$ref": "common.schema.json#/$defs/Hex64" },
+              "description": "Optional per-attribute salted selective-disclosure commitments H_tag('seallink-clause/1', salt_32B || JCS(claim_obj)) using an independent 32-byte CSPRNG salt per attribute."
+            }
           }
         },
         "guardian_policy": {
@@ -63,7 +69,7 @@
               "$ref": "common.schema.json#/$defs/Seal",
               "description": "both_of_2(disposer_pk, arbiter_pk) seal spent with action 0x0f to advance guardianship revision."
             },
-            "appointment_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" },
+            "appointment_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 65535, "x-seallink-refusal": "WIRE_INTEGER" },
             "quorums": { "$ref": "common.schema.json#/$defs/QuorumMap" },
             "slots": {
               "type": "array",
@@ -106,7 +112,7 @@
                 "mode": { "const": "dual_party_delayed" },
                 "disposer_pk": { "$ref": "common.schema.json#/$defs/BranchKeySpec" },
                 "arbiter_pk": { "$ref": "common.schema.json#/$defs/BranchKeySpec" },
-                "delay_blocks": { "type": "integer", "minimum": 144, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" },
+                "delay_blocks": { "type": "integer", "minimum": 144, "maximum": 525600, "x-seallink-refusal": "WIRE_INTEGER" },
                 "recovery_seal": { "$ref": "common.schema.json#/$defs/Seal" }
               }
             }

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/common.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.15/schemas/common.schema.json",
   "title": "SealLink v1.0 Shared Wire Primitives",
   "description": "Shared primitives with normative x-seallink-refusal class annotations (SPEC-01 §7 deterministic leaf-wins precedence: WIRE_DUPLICATE -> WIRE_STRING -> WIRE_TYPE -> WIRE_MEMBER -> WIRE_INTEGER -> WIRE_KEY -> WIRE_SIGNATURE -> WIRE_CONSTRAINT -> CHAIN_SCRIPT_UNSUPPORTED). Regular expressions follow portable RE2 / ECMA-262 / Rust regex semantics without lookaround.",
   "$defs": {
@@ -83,7 +83,24 @@
     },
     "Network": {
       "type": "string",
-      "enum": ["main", "regtest"]
+      "minLength": 4,
+      "maxLength": 64,
+      "pattern": "^(main|regtest|[a-z][a-z0-9-]{1,31}:[a-z0-9][a-z0-9._-]{0,31})$",
+      "not": { "pattern": "\n" },
+      "description": "Ledger network identifier: 'main' or 'regtest' (Namecoin Binding Profile v1), or qualified '<chain-family>:<net>' (e.g. 'btc:main', 'slchain:main') strictly paired with genesis (CHAIN_MISMATCH)."
+    },
+    "RpIdStr": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[a-z0-9][a-z0-9./_-]{0,254}$",
+      "not": { "pattern": "\n" },
+      "description": "WebAuthn/CTAP2 Relying Party ID (rpId) hashed as SHA256(rp_id) into FIDO2 authenticatorData[0..32]."
+    },
+    "PresenceAttestation": {
+      "type": "string",
+      "enum": ["declared", "up", "uv"],
+      "description": "Presence verification posture: 'declared' (enrollment-time claim), 'up' (FIDO2 authenticatorData UP=1 physical touch), or 'uv' (FIDO2 authenticatorData UP=1 & UV=1 user verification)."
     },
     "NameStr": {
       "type": "string",
@@ -340,7 +357,7 @@
                 "guardian": { "$ref": "#/$defs/CompressedPubkey66" }
               }
             },
-            "delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" }
+            "delay_blocks": { "type": "integer", "minimum": 1, "maximum": 65535, "x-seallink-refusal": "WIRE_INTEGER" }
           }
         }
       ]
@@ -403,7 +420,7 @@
       }
     },
     "DeviceThresholdPolicy": {
-      "description": "Canonical device-capable threshold policy: omits alg for BIP-340 (explicit alg='bip340' forbidden), or specifies alg='p256' (P256Pubkey66) or alg='ed25519' (Ed25519Pubkey64).",
+      "description": "Canonical device-capable threshold policy: omits alg for BIP-340 (explicit alg='bip340' forbidden), or specifies alg in {'p256', 'ed25519', 'ssh-ed25519', 'fido2-es256', 'fido2-eddsa'} (fido2-* requires rp_id).",
       "oneOf": [
         { "$ref": "#/$defs/ThresholdPolicy" },
         {
@@ -437,6 +454,56 @@
               "items": { "$ref": "#/$defs/Ed25519Pubkey64" }
             }
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["alg", "m", "pks"],
+          "properties": {
+            "alg": { "const": "ssh-ed25519" },
+            "m": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
+            "pks": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/Ed25519Pubkey64" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["alg", "m", "pks", "rp_id"],
+          "properties": {
+            "alg": { "const": "fido2-es256" },
+            "m": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
+            "pks": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/P256Pubkey66" }
+            },
+            "rp_id": { "$ref": "#/$defs/RpIdStr" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["alg", "m", "pks", "rp_id"],
+          "properties": {
+            "alg": { "const": "fido2-eddsa" },
+            "m": { "type": "integer", "minimum": 1, "maximum": 32, "x-seallink-refusal": "WIRE_INTEGER" },
+            "pks": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/Ed25519Pubkey64" }
+            },
+            "rp_id": { "$ref": "#/$defs/RpIdStr" }
+          }
         }
       ]
     },
@@ -455,7 +522,27 @@
       "required": ["pk", "sig"],
       "properties": {
         "pk": { "type": "string", "pattern": "^([0-9a-f]{64}|0[23][0-9a-f]{64})$", "not": { "pattern": "\n" }, "x-seallink-refusal": "WIRE_KEY" },
-        "sig": { "$ref": "#/$defs/Sig128" }
+        "sig": { "$ref": "#/$defs/Sig128" },
+        "authenticator_data_hex": {
+          "type": "string",
+          "minLength": 74,
+          "maxLength": 2048,
+          "pattern": "^([0-9a-f]{2})+$",
+          "not": { "pattern": "\n" },
+          "x-seallink-refusal": "WIRE_SIGNATURE"
+        },
+        "client_data_hex": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 4096,
+          "pattern": "^([0-9a-f]{2})+$",
+          "not": { "pattern": "\n" },
+          "x-seallink-refusal": "WIRE_SIGNATURE"
+        }
+      },
+      "dependentRequired": {
+        "authenticator_data_hex": ["client_data_hex"],
+        "client_data_hex": ["authenticator_data_hex"]
       }
     },
     "SignatureSet": {
@@ -477,7 +564,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["policy", "sigs"],
-      "description": "Device-capable SignatureSet (BIP-340, P-256 low-S, or strict canonical Ed25519); sigs MUST be strictly sorted in ascending lexicographical pk order.",
+      "description": "Device-capable SignatureSet (bip340, p256, ed25519, ssh-ed25519, fido2-es256, or fido2-eddsa); sigs MUST be strictly sorted in ascending lexicographical pk order. FIDO2 algorithms require authenticator_data_hex + client_data_hex on every sig entry; non-FIDO2 algorithms forbid them.",
       "properties": {
         "policy": { "$ref": "#/$defs/DeviceThresholdPolicy" },
         "sigs": {
@@ -486,7 +573,40 @@
           "maxItems": 32,
           "items": { "$ref": "#/$defs/DeviceSignatureEntry" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["policy"],
+            "properties": {
+              "policy": {
+                "required": ["alg"],
+                "properties": { "alg": { "enum": ["fido2-es256", "fido2-eddsa"] } }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "sigs": {
+                "items": {
+                  "required": ["authenticator_data_hex", "client_data_hex"],
+                  "x-seallink-refusal": "WIRE_SIGNATURE"
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "sigs": {
+                "items": {
+                  "not": { "anyOf": [{ "required": ["authenticator_data_hex"] }, { "required": ["client_data_hex"] }] },
+                  "x-seallink-refusal": "WIRE_SIGNATURE"
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "GuardianApproval": {
       "type": "object",
@@ -686,14 +806,62 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["leaf_digest", "root", "steps"],
-      "description": "Fixed-depth size-hiding selective-disclosure Merkle inclusion proof (exact length 8 steps over a 256-leaf tree padded with CSPRNG seallink-set-dummy/1 leaves) under seallink-merkle-leaf/1 and seallink-merkle-node/1 for salted sets.auth and sets.devices.",
+      "description": "Fixed-depth size-hiding selective-disclosure sparse masked Merkle inclusion proof (exact 16 steps over 2^16 = 65,536 slots) under seallink-merkle-leaf/1 and seallink-merkle-node/1 for salted sets.auth and sets.devices.",
       "properties": {
         "leaf_digest": { "$ref": "#/$defs/Hex64" },
         "root": { "$ref": "#/$defs/Hex64" },
         "steps": {
           "type": "array",
-          "minItems": 8,
-          "maxItems": 8,
+          "minItems": 16,
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["side", "hash"],
+            "properties": {
+              "side": { "type": "string", "enum": ["L", "R"] },
+              "hash": { "$ref": "#/$defs/Hex64" }
+            }
+          }
+        }
+      }
+    },
+    "SetEntryMerkleProof20": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["leaf_digest", "root", "steps"],
+      "description": "Fixed-depth size-hiding selective-disclosure sparse masked Merkle inclusion proof (exact 20 steps over 2^20 = 1,048,576 slots) under seallink-merkle-leaf/1 and seallink-merkle-node/1 for salted sets.certs.",
+      "properties": {
+        "leaf_digest": { "$ref": "#/$defs/Hex64" },
+        "root": { "$ref": "#/$defs/Hex64" },
+        "steps": {
+          "type": "array",
+          "minItems": 20,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["side", "hash"],
+            "properties": {
+              "side": { "type": "string", "enum": ["L", "R"] },
+              "hash": { "$ref": "#/$defs/Hex64" }
+            }
+          }
+        }
+      }
+    },
+    "SetEntryMerkleProof34": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["leaf_digest", "root", "steps"],
+      "description": "Fixed-depth size-hiding selective-disclosure sparse masked Merkle inclusion proof (exact 34 steps over 2^34 = 17,179,869,184 slots) under seallink-merkle-leaf/1 and seallink-merkle-node/1 for salted sets.members.",
+      "properties": {
+        "leaf_digest": { "$ref": "#/$defs/Hex64" },
+        "root": { "$ref": "#/$defs/Hex64" },
+        "steps": {
+          "type": "array",
+          "minItems": 34,
+          "maxItems": 34,
           "items": {
             "type": "object",
             "additionalProperties": false,

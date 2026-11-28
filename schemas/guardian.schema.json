@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://seallink.org/releases/v1.0.0-draft.14/schemas/guardian.schema.json",
+  "$id": "https://seallink.org/releases/v1.0.0-draft.15/schemas/guardian.schema.json",
   "title": "SealLink v1.0 Name Binding, Guardianship, Roster Transition, Capacity & Subject End",
   "$defs": {
     "NameBinding": {
@@ -160,7 +160,7 @@
                   "description": "MUST be either_of_2(guardian_seal_pk, disposer_pk) created at vout 0 by Stage 2 activation (0x0e)."
                 },
                 "term": { "$ref": "#/$defs/GuardianTerm" },
-                "effective_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" }
+                "effective_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 65535, "x-seallink-refusal": "WIRE_INTEGER" }
               }
             }
           ]
@@ -197,7 +197,7 @@
             "prev_roster_outpoint": { "$ref": "common.schema.json#/$defs/Outpoint" },
             "next_roster_vout": { "$ref": "common.schema.json#/$defs/Vout" },
             "next_roster_policy": { "$ref": "common.schema.json#/$defs/ScriptPolicy" },
-            "effective_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 52560, "x-seallink-refusal": "WIRE_INTEGER" },
+            "effective_delay_blocks": { "type": "integer", "minimum": 1, "maximum": 65535, "x-seallink-refusal": "WIRE_INTEGER" },
             "quorums": { "$ref": "common.schema.json#/$defs/QuorumMap" },
             "slots": {
               "type": "array",
