@@ -255,6 +255,8 @@ STYLE_CSS = """\
   --rule-fg: #0c3d8a;
   --ok-bg: #eaf7ef;
   --ok-fg: #136f3a;
+  --warn-bg: #fef6e4;
+  --warn-fg: #8a5200;
   --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
 }
@@ -272,6 +274,8 @@ STYLE_CSS = """\
     --rule-fg: #79c0ff;
     --ok-bg: #122b1d;
     --ok-fg: #56d364;
+    --warn-bg: #2e2108;
+    --warn-fg: #f0b44c;
   }
 }
 * { box-sizing: border-box; }
@@ -328,6 +332,20 @@ a:hover { text-decoration: underline; }
 .badge-ok {
   background: var(--ok-bg);
   color: var(--ok-fg);
+}
+.badge-warn {
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+.draft-banner {
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--warn-fg);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 0 0 24px;
+  font-size: 0.92rem;
 }
 .nav {
   display: flex;
@@ -551,9 +569,11 @@ def render_page(
         <span class="badge">{html.escape(version)}</span>
       </a>
       <nav class="nav">
-        <a href="/#specifications">Specifications</a>
+        <a href="/#specifications">Core Specs</a>
+        <a href="/#modules">Modules</a>
         <a href="/#profiles">Profiles</a>
-        <a href="/#schemas">Schemas &amp; Registries</a>
+        <a href="/#draft-profiles">Drafts</a>
+        <a href="/#schemas">Schemas</a>
         <a href="/docs/CONFORMANCE.html">Conformance</a>
         <a href="/releases/{html.escape(version)}/seallink-spec-{html.escape(version)}.html">Full HTML / PDF</a>
         <a href="https://github.com/relux-works/seallink-spec" target="_blank" rel="noopener">GitHub</a>
@@ -668,6 +688,8 @@ def build_site(
     # 2. Collect repository artifacts
     spec_files = sorted((root / "spec").glob("SPEC-*.md"))
     profile_files = sorted((root / "profiles").glob("PROFILE-*.md"))
+    draft_profiles_dir = root / "profiles" / "drafts"
+    draft_profile_files = sorted(draft_profiles_dir.glob("PROFILE-*.md")) if draft_profiles_dir.is_dir() else []
     registry_files = sorted((root / "registry").glob("*.json"))
     schema_files = sorted((root / "schemas").glob("*.schema.json"))
     vector_files = sorted((root / "vectors").glob("*.json"))
@@ -688,6 +710,8 @@ def build_site(
     (out_dir / "registry").mkdir(parents=True, exist_ok=True)
     (out_dir / "spec").mkdir(parents=True, exist_ok=True)
     (out_dir / "profiles").mkdir(parents=True, exist_ok=True)
+    if draft_profile_files:
+        (out_dir / "profiles" / "drafts").mkdir(parents=True, exist_ok=True)
     (out_dir / "docs").mkdir(parents=True, exist_ok=True)
 
     # 3. Copy schemas, registries, and vectors verbatim to both /releases/<version>/... and latest aliases.
@@ -741,6 +765,8 @@ def build_site(
         "guides/GUIDE-01-custody-and-signers.md": "/docs/GUIDE-01-custody-and-signers.html",
         "archive/rule-inventory.md": "/docs/rule-inventory.html",
         "profiles/README.md": "/#profiles",
+        "profiles/drafts/README.md": "/#draft-profiles",
+        "drafts/README.md": "/#draft-profiles",
         "registry/": "/#schemas",
         "schemas/": "/#schemas",
         "vectors/": "/#vectors",
@@ -751,6 +777,10 @@ def build_site(
     for pf in profile_files:
         link_map[f"profiles/{pf.name}"] = f"/profiles/{pf.stem}.html"
         link_map[pf.name] = f"/profiles/{pf.stem}.html"
+    for df in draft_profile_files:
+        link_map[f"profiles/drafts/{df.name}"] = f"/profiles/drafts/{df.stem}.html"
+        link_map[f"drafts/{df.name}"] = f"/profiles/drafts/{df.stem}.html"
+        link_map[df.name] = f"/profiles/drafts/{df.stem}.html"
     for rf in registry_files:
         link_map[f"registry/{rf.name}"] = f"/releases/{version}/registry/{rf.name}"
     for sf in schema_files:
@@ -758,7 +788,7 @@ def build_site(
     for vf in vector_files:
         link_map[f"vectors/{vf.name}"] = f"/releases/{version}/vectors/{vf.name}"
 
-    # 5. Render individual HTML pages for specs, profiles, and docs
+    # 5. Render individual HTML pages for specs, profiles, exploratory drafts, and docs
     for sf in spec_files:
         title = bb.first_heading(sf)
         body, toc = markdown_to_html(sf.read_text(encoding="utf-8"), link_map)
@@ -770,6 +800,20 @@ def build_site(
         body, toc = markdown_to_html(pf.read_text(encoding="utf-8"), link_map)
         (out_dir / "profiles" / f"{pf.stem}.html").write_text(
             render_page(title, version, body, toc), encoding="utf-8"
+        )
+    draft_banner_html = (
+        '<div class="draft-banner">'
+        '<strong>Exploratory Draft (Non-Normative):</strong> This extension profile illustrates how a domain protocol '
+        'composes over SealLink v1.0 Core and is a candidate for a post-v1.0 SLIP. It is <strong>not</strong> part '
+        'of the frozen v1.0 Core conformance bar. See <a href="/#profiles">Standard Domain Profiles (v1.0 Decided)</a> '
+        'or <a href="/docs/SLIP-TEMPLATE.html">SLIP Governance</a>.'
+        "</div>\n"
+    )
+    for df in draft_profile_files:
+        title = bb.first_heading(df)
+        body, toc = markdown_to_html(df.read_text(encoding="utf-8"), link_map)
+        (out_dir / "profiles" / "drafts" / f"{df.stem}.html").write_text(
+            render_page(title, version, draft_banner_html + body, toc), encoding="utf-8"
         )
     for src_path, out_name in doc_files:
         if src_path.exists():
@@ -835,7 +879,67 @@ def build_site(
         title = bb.first_heading(pf)
         code_name, desc = title.split(": ", 1) if ": " in title else (pf.stem, title)
         profile_cards.append(
-            f'<div class="card"><h3><a href="/profiles/{pf.stem}.html">{html.escape(code_name)}</a></h3>'
+            f'<div class="card"><div style="margin-bottom:6px;"><span class="badge badge-ok">v1.0 decided &middot; vectors</span></div>'
+            f'<h3><a href="/profiles/{pf.stem}.html">{html.escape(code_name)}</a></h3>'
+            f"<p>{html.escape(desc)}</p></div>"
+        )
+
+    optional_modules_rows = [
+        (
+            "<code>bearer-sessions</code>",
+            '<a href="/spec/SPEC-06-grants-and-delegation.html#5-bearer-sessions-for-non-signing-clients-seallink-session-open1">SPEC-06 &sect;5</a>',
+            "Short-lived (&le; 3600s) CSPRNG bearer sessions (<code>seallink-session-open/1</code>) with mandatory live backing-grant, seal, contract &amp; quota recheck on every use.",
+            '<span class="badge badge-ok">v1.0 decided &middot; vectors</span>',
+        ),
+        (
+            "<code>service-migration</code>",
+            '<a href="/spec/SPEC-07-services-and-portability.html#2-replaceable-services-and-exclusive-cut-over-seallink-migration1">SPEC-07 &sect;2</a>',
+            "Four-step exclusive provider cut-over (<code>seallink-migration/1</code>, <code>migration-fence</code>, confirmed predecessor seal spend, <code>migration-accept</code>, zero-secret inventory).",
+            '<span class="badge badge-ok">v1.0 decided &middot; vectors</span>',
+        ),
+        (
+            "<code>federated-screening</code>",
+            '<a href="/spec/SPEC-07-services-and-portability.html#3-federated-screening-and-progressive-pii-disclosure">SPEC-07 &sect;3</a>',
+            "Two-phase zero-PII screening &amp; L2 presence-gated Contour A single-hop direct PII disclosure (<code>approve-pii-disclosure</code>).",
+            '<span class="badge badge-ok">v1.0 decided &middot; vectors</span>',
+        ),
+        (
+            "<code>artifact-notarization</code>",
+            '<a href="/profiles/PROFILE-artifact-v1.html">PROFILE-artifact-v1</a>',
+            "Decentralized OS/software/content release Gatekeeper (<code>seallink-ticket/1</code>, <code>fsverity-sha256</code>, <code>m-of-n</code> notary quorum) &amp; consensus-exact Namecoin Tier-2 SPV (<code>seallink-tier2-name-history/1</code>).",
+            '<span class="badge badge-ok">v1.0 decided &middot; vectors</span>',
+        ),
+        (
+            "<code>zk-presentations</code> <em>(planned)</em>",
+            '<a href="/spec/SPEC-01-wire-and-crypto.html#5-salted-selective-disclosure-commitments">SPEC-01 &sect;5</a> &middot; <a href="/docs/OPEN-QUESTIONS.html">OPEN-QUESTIONS</a>',
+            "Unlinkable zero-knowledge &amp; BBS+ selective-disclosure presentations layered cleanly atop v1.0 credentials and origins (future Optional Module SLIP).",
+            '<span class="badge badge-warn">planned SLIP</span>',
+        ),
+        (
+            "<code>pqc-and-national-crypto</code> <em>(planned)</em>",
+            f'<a href="/releases/{html.escape(version)}/registry/crypto-algorithms.json">crypto-algorithms.json</a>',
+            "Equal-footing opt-in cryptographic modules for post-quantum (<code>ml-dsa-65</code>, <code>bip340+ml-dsa-65</code>) and national suites (GOST, SM2, Brainpool).",
+            '<span class="badge badge-warn">reserved slots</span>',
+        ),
+        (
+            "<code>reversible-capacity</code> <em>(planned)</em>",
+            '<a href="/spec/SPEC-04-origin-and-guardianship.html">SPEC-04 &sect;7</a> &middot; <a href="/docs/OPEN-QUESTIONS.html">OPEN-QUESTIONS</a>',
+            "Reversible adult legal capacity (conservatorship &amp; restoration) via forward-only <code>status_seal</code> / <code>0x15..0x1a</code> extension SLIP.",
+            '<span class="badge badge-warn">planned SLIP</span>',
+        ),
+    ]
+    module_rows_html = "\n".join(
+        f"<tr><td><strong>{m_tag}</strong></td><td>{m_spec}</td><td>{m_desc}</td><td>{m_badge}</td></tr>"
+        for m_tag, m_spec, m_desc, m_badge in optional_modules_rows
+    )
+
+    draft_profile_cards = []
+    for df in draft_profile_files:
+        title = bb.first_heading(df)
+        code_name, desc = title.split(": ", 1) if ": " in title else (df.stem, title)
+        draft_profile_cards.append(
+            f'<div class="card"><div style="margin-bottom:6px;"><span class="badge badge-warn">exploratory-draft &middot; non-normative</span></div>'
+            f'<h3><a href="/profiles/drafts/{df.stem}.html">{html.escape(code_name)}</a></h3>'
             f"<p>{html.escape(desc)}</p></div>"
         )
 
@@ -893,7 +997,7 @@ def build_site(
   <div class="metric-card"><div class="metric-num">{len(vector_files)}</div><div class="metric-label">Executable Vector Suites</div></div>
 </section>
 
-<h2 id="specifications">Normative Core Specifications</h2>
+<h2 id="specifications">1. Normative Core Specifications</h2>
 <div class="table-wrap">
   <table>
     <thead><tr><th>Document</th><th>Scope</th><th>Maturity</th></tr></thead>
@@ -903,10 +1007,35 @@ def build_site(
   </table>
 </div>
 
-<h2 id="profiles">Standard Domain Profiles</h2>
+<h2 id="modules">2. Optional Conformance Modules</h2>
+<p style="color:var(--fg-muted);">
+  Independently declarable v1.0 conformance modules (<a href="/docs/CONFORMANCE.html"><code>CONFORMANCE.md &sect;1.1</code></a>, fail-closed <code>ACTION_UNSUPPORTED</code> when disabled) plus reserved post-v1.0 SLIP extension slots.
+</p>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Module Tag</th><th>Specification</th><th>Scope</th><th>Status</th></tr></thead>
+    <tbody>
+      {module_rows_html}
+    </tbody>
+  </table>
+</div>
+
+<h2 id="profiles">3. Standard Domain Profiles (v1.0 Decided)</h2>
+<p style="color:var(--fg-muted);">
+  Normative, Draft 2020-12 schema-validated, and vector-verified domain profiles bundled in SealLink v1.0 releases.
+</p>
 <div class="grid-2">
   {"".join(profile_cards)}
 </div>
+{f'''
+<h2 id="draft-profiles">4. Draft &amp; Exploratory Extension Profiles (Non-Normative)</h2>
+<p style="color:var(--fg-muted);">
+  Exploratory design blueprints illustrating real-world protocols built cleanly over SealLink v1.0 Core (candidates for post-v1.0 SLIPs; <strong>not</strong> part of v1.0 Core conformance).
+</p>
+<div class="grid-2">
+  {"".join(draft_profile_cards)}
+</div>
+''' if draft_profile_cards else ""}
 
 <h2 id="schemas">Live JSON Schemas (Draft 2020-12) &amp; Registries</h2>
 <p style="color:var(--fg-muted);">

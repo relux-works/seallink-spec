@@ -1,0 +1,70 @@
+{
+  "version": "1.0.0-draft.15",
+  "status": "exploratory-draft",
+  "description": "Non-normative extensible payment endpoint scheme registry for PROFILE-payment-v1 (updated via lightweight Registry Update without modifying frozen SealLink v1.0 Core schemas).",
+  "crypto_chain_id_standard": "CAIP-2 (without redundant symbol field)",
+  "silent_payment_script_kinds": ["p2wpkh", "p2tr"],
+  "protocols": [
+    {
+      "protocol": "bolt12",
+      "description": "Bitcoin Lightning BOLT 12 reusable offer (`lno1...`).",
+      "required_fields": ["offer"]
+    },
+    {
+      "protocol": "lnurl",
+      "description": "Lightning Address / LNURL-pay endpoint.",
+      "required_fields": ["address"]
+    }
+  ],
+  "traditional_schemes": [
+    {
+      "scheme": "iban",
+      "description": "SEPA / international bank account number (ISO 13616).",
+      "required_fields": ["iban", "account_holder"],
+      "optional_fields": ["bic", "bank_name"]
+    },
+    {
+      "scheme": "sbp",
+      "description": "Faster Payments System (NSPK SBP) phone transfer with explicit bank_ids[] allowlist.",
+      "required_fields": ["phone", "bank_ids"],
+      "optional_fields": ["recipient_hint"],
+      "notes": "bank_ids[] carries official NSPK bank identifiers (e.g. bank100000000004) so the sender selects from the recipient's preferred 1-2 banks."
+    },
+    {
+      "scheme": "paypal",
+      "description": "PayPal handle / email with accepted ISO 4217 currencies.",
+      "required_fields": ["handle"],
+      "optional_fields": ["payee_name"]
+    },
+    {
+      "scheme": "upi",
+      "description": "Unified Payments Interface (India) Virtual Payment Address.",
+      "required_fields": ["vpa"],
+      "optional_fields": ["payee_name"]
+    },
+    {
+      "scheme": "card",
+      "description": "Payment card number (PAN) for direct card-to-card transfers (strictly private visibility recommended).",
+      "required_fields": ["pan", "cardholder_name"],
+      "optional_fields": ["bank_name"]
+    },
+    {
+      "scheme": "pix",
+      "description": "Brazil Pix instant payment key (EVP random key, phone, email, or tax ID).",
+      "required_fields": ["key"],
+      "optional_fields": ["payee_name", "city"]
+    },
+    {
+      "scheme": "mpesa",
+      "description": "M-Pesa mobile money phone / paybill endpoint.",
+      "required_fields": ["msisdn"],
+      "optional_fields": ["paybill", "account_ref", "payee_name"]
+    },
+    {
+      "scheme": "alipay",
+      "description": "Alipay account identifier.",
+      "required_fields": ["account"],
+      "optional_fields": ["payee_name"]
+    }
+  ]
+}
